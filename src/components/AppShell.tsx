@@ -1,0 +1,409 @@
+"use client";
+
+import React, { useState } from "react";
+import Link from "next/link";
+import { usePathname } from "next/navigation";
+import {
+  Search,
+  Sun,
+  Bell,
+  ChevronDown,
+  Scissors,
+  Layers,
+  ShoppingBag,
+  CheckSquare,
+  FileText,
+  Settings,
+  TrendingUp,
+  Cpu,
+  BarChart3,
+  Award,
+  Zap,
+  Activity,
+  ChevronRight,
+  Menu,
+  X
+} from "lucide-react";
+
+export default function AppShell({ children }: { children: React.ReactNode }) {
+  const [isIeOpen, setIsIeOpen] = useState(true); // Dropdown open by default as shown in design image
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const pathname = usePathname();
+
+  // Top navigation tabs
+  const navTabs = [
+    { label: "System", href: "#", hasDropdown: false },
+    { label: "Catalog", href: "#", hasDropdown: false },
+    { label: "Merchandising", href: "#", hasDropdown: false },
+    { label: "Approval", href: "#", hasDropdown: false },
+    { label: "Sampling", href: "#", hasDropdown: false },
+    { label: "Industrial Engineering", href: "#", hasDropdown: true, isActive: true },
+    { label: "ERP Valuation", href: "#", hasDropdown: true },
+    { label: "PPC", href: "#", hasDropdown: true },
+    { label: "Qualify Assurance", href: "#", hasDropdown: true },
+    { label: "PRS Cutting", href: "#", hasDropdown: false },
+    { label: "Piece Rate", href: "#", hasDropdown: false }
+  ];
+
+  return (
+    <div className="min-h-screen bg-[#f8fafc] text-[#1e293b] flex flex-col font-sans selection:bg-indigo-100 selection:text-indigo-900">
+      {/* Primary Header */}
+      <header className="sticky top-0 z-50 bg-white border-b border-[#f1f5f9] px-6 py-3 flex items-center justify-between shadow-sm">
+        {/* Logo block */}
+        <Link href="/" className="flex items-center gap-3 group">
+          <div className="w-10 h-10 rounded-lg bg-[#1e1b4b] flex items-center justify-center font-bold text-white text-base shadow-md group-hover:scale-105 transition-transform duration-200">
+            A9
+          </div>
+          <div className="flex flex-col">
+            <span className="text-sm font-bold text-[#0f172a] leading-tight tracking-tight">AZGARD 9 Ltd</span>
+            <span className="text-[10px] text-[#64748b] leading-none">AZGARD NINE LIMITED ( Manga )</span>
+          </div>
+        </Link>
+
+        {/* Search and Action Bar */}
+        <div className="flex items-center gap-6">
+          {/* Search box */}
+          <div className="relative hidden md:flex items-center">
+            <Search className="absolute left-3 w-4 h-4 text-[#94a3b8]" />
+            <input
+              type="text"
+              placeholder="Search..."
+              className="pl-9 pr-14 py-1.5 w-64 rounded-full border border-[#e2e8f0] text-xs bg-[#f8fafc] text-[#334155] focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] transition-all"
+            />
+            <span className="absolute right-3 text-[10px] font-medium text-[#94a3b8] bg-white border border-[#e2e8f0] px-1.5 py-0.5 rounded shadow-sm pointer-events-none">
+              Ctrl + K
+            </span>
+          </div>
+
+          {/* Quick controls */}
+          <div className="flex items-center gap-3">
+            {/* Theme Toggle */}
+            <button className="p-2 text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] rounded-full transition-colors">
+              <Sun className="w-[18px] h-[18px]" />
+            </button>
+
+            {/* Notification Bell */}
+            <button className="relative p-2 text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] rounded-full transition-colors">
+              <Bell className="w-[18px] h-[18px]" />
+              <span className="absolute top-1 right-1 w-4 h-4 bg-[#ef4444] text-[9px] font-semibold text-white rounded-full flex items-center justify-center border-2 border-white">
+                3
+              </span>
+            </button>
+          </div>
+
+          {/* User Profile */}
+          <div className="flex items-center gap-2 border-l border-[#f1f5f9] pl-6">
+            <div className="w-9 h-9 rounded-full bg-[#1e293b] flex items-center justify-center font-semibold text-white text-xs shadow-inner">
+              AS
+            </div>
+            <div className="hidden lg:flex flex-col text-left">
+              <span className="text-xs font-semibold text-[#0f172a] leading-tight">Admin User</span>
+              <span className="text-[10px] text-[#64748b]">Administrator</span>
+            </div>
+          </div>
+
+          {/* Mobile menu trigger */}
+          <button
+            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="p-2 text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] rounded-lg md:hidden transition-colors"
+          >
+            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+          </button>
+        </div>
+      </header>
+
+      {/* Secondary Top Tab Navigation */}
+      <nav className="bg-white border-b border-[#e2e8f0] px-6 py-2.5 relative z-40">
+        <div className="max-w-[1400px] mx-auto overflow-x-auto scrollbar-none">
+          <div className="flex items-center gap-1.5 min-w-max">
+            {navTabs.map((tab, idx) => {
+              const isTabActive = tab.label === "Industrial Engineering";
+              return (
+                <div key={idx} className="relative">
+                  <button
+                    onClick={() => {
+                      if (tab.label === "Industrial Engineering") {
+                        setIsIeOpen(!isIeOpen);
+                      }
+                    }}
+                    className={`px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                      isTabActive
+                        ? "bg-[#e0e7ff] text-[#4f46e5] shadow-sm font-bold"
+                        : "text-[#475569] hover:bg-[#f8fafc] hover:text-[#0f172a]"
+                    }`}
+                  >
+                    {tab.label}
+                    {tab.hasDropdown && (
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                          isTabActive && isIeOpen ? "rotate-180 text-[#4f46e5]" : "text-[#94a3b8]"
+                        }`}
+                      />
+                    )}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Industrial Engineering Dropdown Menu Overlay - Positioned outside overflow wrapper */}
+        {isIeOpen && (
+          <div className="absolute left-[380px] mt-3 w-[720px] bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] p-6 grid grid-cols-2 divide-x divide-[#f1f5f9] gap-0 animate-fade-in z-50">
+            
+            {/* LEFT COLUMN: BULLETIN & CUTTING and STITCHING */}
+            <div className="pr-6 flex flex-col gap-6">
+              
+              {/* SECTION: BULLETIN & CUTTING */}
+              <div className="flex flex-col gap-2">
+                <h4 className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider mb-2">
+                  Bulletin & Cutting
+                </h4>
+                <Link
+                  href="/industrial-engineering/order-style-bulletin-finish"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center">
+                    <Scissors className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    Pre Order Style Bulletin cutting
+                  </span>
+                </Link>
+                <Link
+                  href="/industrial-engineering/order-style-bulletin-finish"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center">
+                    <Scissors className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    Order Style Bulletin cutting
+                  </span>
+                </Link>
+                <Link
+                  href="/industrial-engineering/order-style-bulletin-finish"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-purple-50 text-purple-500 flex items-center justify-center">
+                    <FileText className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    OSB Cutting (Extra Work Size Wise)
+                  </span>
+                </Link>
+              </div>
+
+              {/* SECTION: STITCHING */}
+              <div className="flex flex-col gap-2 pt-4 border-t border-[#f1f5f9]">
+                <h4 className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider mb-2">
+                  Stitching
+                </h4>
+                <Link
+                  href="/industrial-engineering/order-style-bulletin-finish"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center">
+                    {/* Spool / Cup representation */}
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 3h12M8 3v18M16 3v18M6 21h12M6 8h12M6 12h12M6 16h12" />
+                    </svg>
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    Pre Order Style Bulletin Stitch
+                  </span>
+                </Link>
+                <Link
+                  href="/industrial-engineering/order-style-bulletin-finish"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center">
+                    <FileText className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    Order Style Bulletin Stitch
+                  </span>
+                </Link>
+                <Link
+                  href="/industrial-engineering/order-style-bulletin-finish"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-purple-50 text-purple-500 flex items-center justify-center">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 3h12M8 3v18M16 3v18M6 21h12M6 8h12M6 12h12M6 16h12" />
+                    </svg>
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    OSB Stitching (Extra Work Size Wise)
+                  </span>
+                </Link>
+              </div>
+
+            </div>
+
+            {/* RIGHT COLUMN: FINISHING, G.D.P & G.W.P, and ANALYSIS */}
+            <div className="pl-6 flex flex-col gap-6">
+              
+              {/* SECTION: FINISHING */}
+              <div className="flex flex-col gap-2">
+                <h4 className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider mb-2">
+                  Finishing
+                </h4>
+                <Link
+                  href="/industrial-engineering/order-style-bulletin-finish"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center">
+                    <Scissors className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    Pre Order Style Bulletin Finish
+                  </span>
+                </Link>
+                {/* Highlighted item in UI screenshot */}
+                <Link
+                  href="/industrial-engineering/order-style-bulletin-finish"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center justify-between p-1.5 rounded-xl bg-purple-50 border border-purple-100/50 shadow-sm transition-all"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-8 h-8 rounded-lg bg-white text-purple-600 flex items-center justify-center shadow-sm">
+                      <FileText className="w-4 h-4" />
+                    </span>
+                    <span className="text-xs font-bold text-purple-700 leading-snug">
+                      Order Style Bulletin Finish
+                    </span>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-purple-500 mr-1" />
+                </Link>
+                <Link
+                  href="/industrial-engineering/order-style-bulletin-finish"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center">
+                    <Scissors className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    OSB Finishing (Extra Work Size Wise)
+                  </span>
+                </Link>
+                <Link
+                  href="/industrial-engineering/order-style-bulletin-finish"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center justify-between p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center">
+                      <FileText className="w-4 h-4" />
+                    </span>
+                    <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                      Development Cell
+                    </span>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-[#94a3b8] mr-1" />
+                </Link>
+                <Link
+                  href="/industrial-engineering/barcode-generation-finishing"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center justify-between p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center">
+                      <Layers className="w-4 h-4" />
+                    </span>
+                    <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                      Barcode Generation Finishing
+                    </span>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-[#94a3b8] mr-1" />
+                </Link>
+              </div>
+
+              {/* SECTION: G.D.P & G.W.P */}
+              <div className="flex flex-col gap-2 pt-4 border-t border-[#f1f5f9]">
+                <h4 className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider mb-2">
+                  G.D.P & G.W.P
+                </h4>
+                <Link
+                  href="/industrial-engineering/order-style-bulletin-finish"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-emerald-50 text-emerald-500 flex items-center justify-center">
+                    <FileText className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    Pre Order Style Bulletin G.D.P & G.W.P
+                  </span>
+                </Link>
+                <Link
+                  href="/industrial-engineering/order-style-bulletin-finish"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 3h12M8 3v18M16 3v18M6 21h12M6 8h12M6 12h12M6 16h12" />
+                    </svg>
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    Order Style Bulletin G.D.P & G.W.P
+                  </span>
+                </Link>
+                <Link
+                  href="/industrial-engineering/order-style-bulletin-finish"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center">
+                    <FileText className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    OSB GDP (Extra Work Size Wise)
+                  </span>
+                </Link>
+              </div>
+
+              {/* SECTION: ANALYSIS */}
+              <div className="flex flex-col gap-2 pt-4 border-t border-[#f1f5f9]">
+                <h4 className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider mb-2">
+                  Analysis
+                </h4>
+                <Link
+                  href="#"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center justify-between p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <div className="flex items-center gap-3">
+                    <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center">
+                      <BarChart3 className="w-4 h-4" />
+                    </span>
+                    <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors">
+                      Efficiency
+                    </span>
+                  </div>
+                  <ChevronRight className="w-3.5 h-3.5 text-[#94a3b8] mr-1" />
+                </Link>
+              </div>
+
+            </div>
+
+          </div>
+        )}
+      </nav>
+
+      {/* Main Content Area */}
+      <main className="flex-1 max-w-[1400px] w-full mx-auto p-6 md:p-8 relative">
+        {children}
+      </main>
+    </div>
+  );
+}
