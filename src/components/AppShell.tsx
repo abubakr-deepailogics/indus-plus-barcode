@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 import {
   Search,
   Sun,
@@ -29,6 +30,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [isIeOpen, setIsIeOpen] = useState(true); // Dropdown open by default as shown in design image
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const { user, logout } = useAuth();
+
+  const displayName = user?.displayName || user?.email?.split("@")[0] || "User";
+  const initials = displayName.slice(0, 2).toUpperCase();
 
   // Top navigation tabs
   const navTabs = [
@@ -92,14 +97,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           {/* User Profile */}
-          <div className="flex items-center gap-2 border-l border-[#f1f5f9] pl-6">
+          <div className="flex items-center gap-3 border-l border-[#f1f5f9] pl-6">
             <div className="w-9 h-9 rounded-full bg-[#1e293b] flex items-center justify-center font-semibold text-white text-xs shadow-inner">
-              AS
+              {initials}
             </div>
             <div className="hidden lg:flex flex-col text-left">
-              <span className="text-xs font-semibold text-[#0f172a] leading-tight">Admin User</span>
-              <span className="text-[10px] text-[#64748b]">Administrator</span>
+              <span className="text-xs font-semibold text-[#0f172a] leading-tight">{displayName}</span>
+              <span className="text-[10px] text-[#64748b]">{user?.email}</span>
             </div>
+            <button
+              onClick={() => logout()}
+              className="text-xs font-semibold text-[#64748b] hover:text-[#0f172a] transition-colors"
+            >
+              Logout
+            </button>
           </div>
 
           {/* Mobile menu trigger */}
