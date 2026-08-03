@@ -57,11 +57,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {/* Logo block */}
         <Link href="/" className="flex items-center gap-3 group">
           <div className="w-10 h-10 rounded-lg bg-[#1e1b4b] flex items-center justify-center font-bold text-white text-base shadow-md group-hover:scale-105 transition-transform duration-200">
-            A9
+            IP
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-bold text-[#0f172a] leading-tight tracking-tight">AZGARD 9 Ltd</span>
-            <span className="text-[10px] text-[#64748b] leading-none">AZGARD NINE LIMITED ( Manga )</span>
+            <span className="text-sm font-bold text-[#0f172a] leading-tight tracking-tight">Indus Plus Ltd</span>
+            <span className="text-[10px] text-[#64748b] leading-none">INDUS PLUS LIMITED</span>
           </div>
         </Link>
 

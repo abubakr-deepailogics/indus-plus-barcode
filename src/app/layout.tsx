@@ -16,8 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Azgard 9 Ltd Dashboard",
-  description: "Azgard Nine Limited apparel industrial engineering system.",
+  title: "Indus Plus Ltd Dashboard",
+  description: "Indus Plus Ltd apparel industrial engineering system.",
 };
 
 export default function RootLayout({
