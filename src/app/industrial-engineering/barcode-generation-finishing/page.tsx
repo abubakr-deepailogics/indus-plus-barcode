@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
+import QRCode from "qrcode";
 import {
   Search,
   Printer,
@@ -227,6 +228,49 @@ function Barcode({ value }: { value: string }) {
   );
 }
 
+// React QR Code SVG Component
+function QRCodeSVG({ value }: { value: string }) {
+  const sizePx = 64;
+  const paths: string[] = [];
+  let hasError = false;
+
+  try {
+    const qr = QRCode.create(value, { errorCorrectionLevel: "M" });
+    const size = qr.modules.size;
+    const margin = 4; // Standard quiet zone (4 modules)
+    const totalModules = size + margin * 2;
+    const cellSize = sizePx / totalModules;
+
+    for (let r = 0; r < size; r++) {
+      for (let c = 0; c < size; c++) {
+        if (qr.modules.get(r, c)) {
+          const x = (c + margin) * cellSize;
+          const y = (r + margin) * cellSize;
+          paths.push(`M${x} ${y}h${cellSize}v${cellSize}h-${cellSize}z`);
+        }
+      }
+    }
+  } catch (error) {
+    console.error("QR Generation error", error);
+    hasError = true;
+  }
+
+  if (hasError) {
+    return <div className="w-12 h-12 bg-red-100 flex items-center justify-center text-[7px] text-red-500 font-bold">Error</div>;
+  }
+
+  return (
+    <svg 
+      viewBox={"0 0 " + sizePx + " " + sizePx} 
+      shapeRendering="crispEdges"
+      className="w-12 h-12 bg-white"
+    >
+      <path fill="#ffffff" d={"M0 0h" + sizePx + "v" + sizePx + "H0z"} />
+      <path fill="#000000" d={paths.join(" ")} />
+    </svg>
+  );
+}
+
 // Single Coupon/Label Component
 interface BarcodeCardProps {
   pageIndex: number;
@@ -238,63 +282,132 @@ interface BarcodeCardProps {
 }
 
 function BarcodeCard({ pageIndex, totalPages, styleCode, anlNo, bundle, op }: BarcodeCardProps) {
+  const [copied, setCopied] = useState(false);
   const rateNum = parseFloat(op.rate || "0");
   const qtyNum = bundle.pcs || 0;
   const rsVal = Math.round(rateNum * qtyNum);
 
-  // Dynamic barcode data: style code + bundle number + op number
-  const barcodeValue = `${styleCode}-${bundle.bundleNo}-${op.opNo}`;
+  // 2D QR Code Payload: Strict piped syntax required by scanner parser
+  const qrValue = `${anlNo}|${bundle.bundleNo}|${styleCode}|${bundle.size || "/"}|${op.opNo}|${op.rate}|${qtyNum}`;
+
+  // User-friendly QR code string that displays all info from the ticket image
+  const qrDisplayValue = `Order: ${anlNo}
+Bundle: ${bundle.bundleNo}
+Style: ${styleCode}
+Size: ${bundle.size || "/"}
+Op No: ${op.opNo}
+Op Name: ${op.operationName}
+Card: ${pageIndex}/${totalPages}
+Qty: ${qtyNum}
+Rate: ${op.rate}
+Inc: ${bundle.inseam || "-"}
+Rs: ${rsVal}`;
+
+  // 1D Barcode Payload: {Order}-{Bundle}-{Op_Num}
+  const barcodeValue = `${anlNo}-${bundle.bundleNo}-${op.opNo}`;
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(qrValue);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   return (
-    <div className="barcode-page-break p-4 bg-white border border-gray-300 rounded-lg max-w-[3.5in] mx-auto text-black font-sans my-4 shadow-sm">
-      {/* Top Header */}
-      <div className="flex justify-between items-center mb-1 pb-1">
-        <span className="text-[12px] font-extrabold text-black">Page {pageIndex} of {totalPages}</span>
+    <div className="barcode-card flex flex-col justify-between bg-white text-black font-sans border border-dashed border-[#666666] py-0.5 px-1.5 relative select-none overflow-hidden" style={{ boxSizing: "border-box", height: "100%" }}>
+      {/* Registration Marks / Cut lines in corners */}
+      <div className="absolute top-0 left-0 w-2 h-2 pointer-events-none translate-x-[-50%] translate-y-[-50%] flex items-center justify-center text-[10px] text-gray-400 font-normal font-mono">+</div>
+      <div className="absolute top-0 right-0 w-2 h-2 pointer-events-none translate-x-[50%] translate-y-[-50%] flex items-center justify-center text-[10px] text-gray-400 font-normal font-mono">+</div>
+      <div className="absolute bottom-0 left-0 w-2 h-2 pointer-events-none translate-x-[-50%] translate-y-[50%] flex items-center justify-center text-[10px] text-gray-400 font-normal font-mono">+</div>
+      <div className="absolute bottom-0 right-0 w-2 h-2 pointer-events-none translate-x-[50%] translate-y-[50%] flex items-center justify-center text-[10px] text-gray-400 font-normal font-mono">+</div>
+
+      {/* Header Banner: Solid high-contrast background block displaying B# and Size */}
+      <div className="bg-[#0f172a] text-white px-1.5 py-0.5 flex justify-between items-center font-bold text-[9px] uppercase tracking-wider rounded-sm mb-0.5">
+        <span>B#: {bundle.bundleNo}</span>
+        <span>Size: {bundle.size || "/"}</span>
       </div>
 
-      {/* Info Grid */}
-      <div className="grid grid-cols-3 gap-y-0.5 gap-x-2 text-[10px] mb-2 leading-snug border-t border-b border-dashed border-gray-300 py-1">
-        <div>
-          <span className="text-gray-600 font-semibold">Cut:</span> <span className="font-bold">-</span>
-        </div>
-        <div>
-          <span className="text-gray-600 font-semibold">St:</span> <span className="font-bold">{styleCode}</span>
-        </div>
-        <div>
-          <span className="text-gray-600 font-semibold">Size:</span> <span className="font-bold">{bundle.size || "/"}</span>
+      {/* Body: 2-Column Grid */}
+      <div className="grid grid-cols-12 gap-1.5 flex-1 items-stretch">
+        {/* Left Column (Col span 7): Operational details, Metrics & Scan Note */}
+        <div className="col-span-7 flex flex-col justify-between text-[7.5px] leading-tight">
+          <div className="flex flex-col gap-0.5">
+            <div className="flex items-start gap-1">
+              <span className="bg-[#4f46e5] text-white font-extrabold px-1 rounded-[2px] text-[7px] shrink-0">Op {op.seqNo}</span>
+              <span className="font-extrabold text-[7.5px] text-[#0f172a] uppercase break-words leading-tight" title={op.operationName}>
+                {op.operationName}
+              </span>
+            </div>
+            <div className="mt-0.5 border-t border-gray-100 pt-0.5 flex flex-col gap-0.5">
+              <div>
+                <span className="text-gray-500 font-semibold">Order:</span>{" "}
+                <span className="font-bold text-[#0f172a]">{anlNo}</span>
+              </div>
+              <div>
+                <span className="text-gray-500 font-semibold">St:</span>{" "}
+                <span className="font-bold text-[#0f172a]">{styleCode}</span>
+              </div>
+              <div>
+                <span className="text-gray-500 font-semibold">Card:</span>{" "}
+                <span className="text-gray-600 font-bold">{pageIndex}/{totalPages}</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-col gap-0.5">
+            {/* Metrics */}
+            <div className="w-full text-[7.5px] leading-none flex flex-col gap-0.5 border-t border-dashed border-gray-200 pt-1">
+              <div className="flex justify-between">
+                <span className="text-gray-500 font-semibold">Qty:</span>
+                <span className="font-bold text-[#0f172a]">{qtyNum}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 font-semibold">Rate:</span>
+                <span className="font-bold text-[#0f172a]">{op.rate}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500 font-semibold">Inc:</span>
+                <span className="font-bold text-[#0f172a]">{bundle.inseam || "-"}</span>
+              </div>
+              <div className="flex justify-between text-indigo-700 font-extrabold">
+                <span>Rs:</span>
+                <span>{rsVal}</span>
+              </div>
+            </div>
+
+            {/* Scan Note (Click to copy) - Commented out as requested
+            <div 
+              onClick={handleCopy}
+              className="mt-1 border-t border-dashed border-gray-200 pt-1.5 flex flex-col cursor-pointer group"
+              title="Click to copy raw barcode payload"
+            >
+              <span className="text-gray-400 font-bold text-[7px] uppercase tracking-wide group-hover:text-indigo-600 flex items-center gap-1 transition-colors">
+                Scan Note {copied ? <span className="text-green-600 text-[6.5px] font-extrabold">(Copied!)</span> : <span className="text-[6.5px] text-gray-400">(Click to copy)</span>}
+              </span>
+              <span className="font-mono text-[7px] text-gray-600 bg-gray-50 px-1 py-0.5 rounded break-all border border-gray-100 mt-0.5 leading-none group-hover:bg-indigo-50 group-hover:text-indigo-900 group-hover:border-indigo-200 transition-colors">
+                {qrValue}
+              </span>
+            </div>
+            */}
+          </div>
         </div>
 
-        <div>
-          <span className="text-gray-600 font-semibold">B#</span> <span className="font-bold">{bundle.bundleNo}</span>
-        </div>
-        <div>
-          <span className="text-gray-600 font-semibold">Order:</span> <span className="font-bold">{anlNo}</span>
-        </div>
-        <div>
-          <span className="text-gray-600 font-semibold">Qty:</span> <span className="font-bold">{qtyNum}</span>
-        </div>
-
-        <div>
-          <span className="text-gray-600 font-semibold">Rate:</span> <span className="font-bold">{op.rate}</span>
-        </div>
-        <div>
-          <span className="text-gray-600 font-semibold">Rs:</span> <span className="font-bold">{rsVal}</span>
-        </div>
-        <div>
-          <span className="text-gray-600 font-semibold">Inc:</span> <span className="font-bold">{bundle.inseam || ""}</span>
+        {/* Right Column (Col span 5): QR Code centered vertically */}
+        <div className="col-span-5 flex flex-col justify-center items-end">
+          <div 
+            onClick={handleCopy}
+            className="flex justify-center items-center bg-white p-0.5 rounded shadow-sm border border-gray-100 cursor-pointer hover:scale-105 transition-transform relative group"
+            title="Click to copy raw barcode payload"
+          >
+            <QRCodeSVG value={qrDisplayValue} />
+            {copied && (
+              <div className="absolute inset-0 bg-black/80 flex items-center justify-center rounded">
+                <span className="text-white text-[7.5px] font-bold">Copied!</span>
+              </div>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Barcode section */}
-      <div className="flex flex-col items-center justify-center py-1 bg-white mb-2">
-        <Barcode value={barcodeValue} />
-      </div>
-
-      {/* Footer info */}
-      <div className="flex justify-between items-center text-[10px] font-extrabold pt-1">
-        <span className="uppercase">{op.operationName}</span>
-        <span className="bg-gray-100 px-1.5 py-0.5 rounded">{op.seqNo}</span>
-      </div>
     </div>
   );
 }
@@ -309,7 +422,8 @@ export default function BarcodeGenerationFinishingPage() {
     size: "Legal",
     source: "Automatically Select",
     orientation: "Portrait",
-    margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 }
+    margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 },
+    gridFormat: "3x7"
   });
 
   const handleModalSearch = () => {
@@ -1109,14 +1223,71 @@ export default function BarcodeGenerationFinishingPage() {
             }
             #printable-barcode-area {
               display: block !important;
+              width: 100% !important;
             }
             @page {
               size: ${pageSetup.size === '4x6 Label' ? '4in 6in' : pageSetup.size.toLowerCase()} ${pageSetup.orientation.toLowerCase()};
-              margin: ${pageSetup.margins.top}in ${pageSetup.margins.right}in ${pageSetup.margins.bottom}in ${pageSetup.margins.left}in;
+              margin: 5mm !important;
             }
-            .barcode-page-break {
+            .print-page-container {
+              width: 100% !important;
               page-break-after: always;
               break-after: page;
+              box-sizing: border-box;
+              padding: 2mm;
+              overflow: hidden;
+            }
+            .print-page-container:last-child {
+              page-break-after: avoid !important;
+              break-after: avoid !important;
+            }
+            .print-grid-3x7 {
+              display: grid !important;
+              grid-template-columns: repeat(3, 1fr) !important;
+              grid-template-rows: repeat(7, 1fr) !important;
+              width: 100% !important;
+              height: 100% !important;
+              gap: 0px !important;
+            }
+            .print-grid-3x8 {
+              display: grid !important;
+              grid-template-columns: repeat(3, 1fr) !important;
+              grid-template-rows: repeat(8, 1fr) !important;
+              width: 100% !important;
+              height: 100% !important;
+              gap: 0px !important;
+            }
+            .print-grid-3x6 {
+              display: grid !important;
+              grid-template-columns: repeat(3, 1fr) !important;
+              grid-template-rows: repeat(6, 1fr) !important;
+              width: 100% !important;
+              height: 100% !important;
+              gap: 0px !important;
+            }
+            .print-grid-3x5 {
+              display: grid !important;
+              grid-template-columns: repeat(3, 1fr) !important;
+              grid-template-rows: repeat(5, 1fr) !important;
+              width: 100% !important;
+              height: 100% !important;
+              gap: 0px !important;
+            }
+            .print-grid-3x4 {
+              display: grid !important;
+              grid-template-columns: repeat(3, 1fr) !important;
+              grid-template-rows: repeat(4, 1fr) !important;
+              width: 100% !important;
+              height: 100% !important;
+              gap: 0px !important;
+            }
+            .print-grid-3x3 {
+              display: grid !important;
+              grid-template-columns: repeat(3, 1fr) !important;
+              grid-template-rows: repeat(3, 1fr) !important;
+              width: 100% !important;
+              height: 100% !important;
+              gap: 0px !important;
             }
           }
         `}} />
@@ -1124,22 +1295,56 @@ export default function BarcodeGenerationFinishingPage() {
         {/* Generate dynamic coupon cards */}
         {activeStyle.bundles.filter((b) => b.sel).length > 0 && activeStyle.operations.length > 0 ? (
           (() => {
-            let cardIndex = 1;
             const selectedB = activeStyle.bundles.filter((b) => b.sel);
-            const totalCards = selectedB.length * activeStyle.operations.length;
-            return selectedB.flatMap((bundle) => 
-              activeStyle.operations.map((op) => (
-                <BarcodeCard
-                  key={`${bundle.id}-${op.id}`}
-                  pageIndex={cardIndex++}
-                  totalPages={totalCards}
-                  styleCode={activeStyle.styleCode}
-                  anlNo={activeStyle.anlNo}
-                  bundle={bundle}
-                  op={op}
-                />
-              ))
+            const totalCardsList = selectedB.flatMap((bundle) => 
+              activeStyle.operations.map((op) => ({ bundle, op }))
             );
+            
+            const cardsPerPage = 
+              pageSetup.gridFormat === "3x3" ? 9 :
+              pageSetup.gridFormat === "3x5" ? 15 :
+              pageSetup.gridFormat === "3x6" ? 18 :
+              pageSetup.gridFormat === "3x7" ? 21 :
+              pageSetup.gridFormat === "3x8" ? 24 : 12;
+            const pages: Array<Array<{ bundle: BundleDetailRow, op: OperationsDetailRow, globalIndex: number }>> = [];
+            
+            for (let i = 0; i < totalCardsList.length; i += cardsPerPage) {
+              pages.push(
+                totalCardsList.slice(i, i + cardsPerPage).map((item, localIdx) => ({
+                  ...item,
+                  globalIndex: i + localIdx + 1
+                }))
+              );
+            }
+
+            const getPageHeight = () => {
+              if (pageSetup.size === 'Letter') return '9.8in';
+              if (pageSetup.size === 'A4') return '268mm';
+              if (pageSetup.size === 'Legal') return '12.8in';
+              return '9.8in';
+            };
+
+            return pages.map((pageCards, pageIdx) => (
+              <div 
+                key={pageIdx} 
+                className="print-page-container"
+                style={{ height: getPageHeight(), maxHeight: getPageHeight() }}
+              >
+                <div className={`print-grid-${pageSetup.gridFormat}`}>
+                  {pageCards.map(({ bundle, op, globalIndex }) => (
+                    <BarcodeCard
+                      key={`${bundle.id}-${op.id}`}
+                      pageIndex={globalIndex}
+                      totalPages={totalCardsList.length}
+                      styleCode={activeStyle.styleCode}
+                      anlNo={activeStyle.anlNo}
+                      bundle={bundle}
+                      op={op}
+                    />
+                  ))}
+                </div>
+              </div>
+            ));
           })()
         ) : (
           <div className="p-8 text-center text-gray-500 font-bold border border-gray-300 rounded">
@@ -1147,7 +1352,6 @@ export default function BarcodeGenerationFinishingPage() {
           </div>
         )}
       </div>
-
     </>
   );
 }

@@ -1,33 +1,70 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import {
   Search,
   Sun,
+  Moon,
   Bell,
   ChevronDown,
   Scissors,
-  Layers,
-  ShoppingBag,
-  CheckSquare,
-  FileText,
-  Settings,
-  TrendingUp,
-  Cpu,
-  BarChart3,
-  Award,
-  Zap,
-  Activity,
-  ChevronRight,
+  Layers, FileText, BarChart3, ChevronRight,
   Menu,
   X
 } from "lucide-react";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
-  const [isIeOpen, setIsIeOpen] = useState(true); // Dropdown open by default as shown in design image
+  const [isIeOpen, setIsIeOpen] = useState(false); // Dropdown closed by default
+  const dropdownRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [theme, setTheme] = useState<"light" | "dark">("light");
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
+    const initialTheme = savedTheme || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    if (initialTheme !== "light") {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setTheme(initialTheme);
+    }
+    if (initialTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const nextTheme = theme === "light" ? "dark" : "light";
+    setTheme(nextTheme);
+    localStorage.setItem("theme", nextTheme);
+    if (nextTheme === "dark") {
+      document.documentElement.classList.add("dark");
+    } else {
+      document.documentElement.classList.remove("dark");
+    }
+  };
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (
+        isIeOpen &&
+        dropdownRef.current &&
+        !dropdownRef.current.contains(event.target as Node) &&
+        triggerRef.current &&
+        !triggerRef.current.contains(event.target as Node)
+      ) {
+        setIsIeOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, [isIeOpen]);
+
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const { user, logout } = useAuth();
@@ -37,23 +74,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // Top navigation tabs
   const navTabs = [
-    { label: "System", href: "#", hasDropdown: false },
-    { label: "Catalog", href: "#", hasDropdown: false },
-    { label: "Merchandising", href: "#", hasDropdown: false },
-    { label: "Approval", href: "#", hasDropdown: false },
-    { label: "Sampling", href: "#", hasDropdown: false },
-    { label: "Industrial Engineering", href: "#", hasDropdown: true, isActive: true },
-    { label: "ERP Valuation", href: "#", hasDropdown: true },
-    { label: "PPC", href: "#", hasDropdown: true },
-    { label: "Qualify Assurance", href: "#", hasDropdown: true },
-    { label: "PRS Cutting", href: "#", hasDropdown: false },
-    { label: "Piece Rate", href: "#", hasDropdown: false }
+    { label: "Industrial Engineering", href: "#", hasDropdown: true },
+    { label: "Barcode Generation Finishing", href: "/industrial-engineering/barcode-generation-finishing", hasDropdown: false },
+    { label: "Order Style Bulletin Finish", href: "/industrial-engineering/order-style-bulletin-finish", hasDropdown: false }
   ];
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-[#1e293b] flex flex-col font-sans selection:bg-indigo-100 selection:text-indigo-900">
       {/* Primary Header */}
-      <header className="sticky top-0 z-50 bg-white border-b border-[#f1f5f9] px-6 py-3 flex items-center justify-between shadow-sm">
+      <header className="no-print sticky top-0 z-50 bg-white border-b border-[#f1f5f9] px-6 py-3 flex items-center justify-between shadow-sm">
         {/* Logo block */}
         <Link href="/" className="flex items-center gap-3 group">
           <div className="w-10 h-10 rounded-lg bg-[#1e1b4b] flex items-center justify-center font-bold text-white text-base shadow-md group-hover:scale-105 transition-transform duration-200">
@@ -83,17 +112,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           {/* Quick controls */}
           <div className="flex items-center gap-3">
             {/* Theme Toggle */}
-            <button className="p-2 text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] rounded-full transition-colors">
-              <Sun className="w-[18px] h-[18px]" />
-            </button>
-
-            {/* Notification Bell */}
-            <button className="relative p-2 text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] rounded-full transition-colors">
-              <Bell className="w-[18px] h-[18px]" />
-              <span className="absolute top-1 right-1 w-4 h-4 bg-[#ef4444] text-[9px] font-semibold text-white rounded-full flex items-center justify-center border-2 border-white">
-                3
-              </span>
-            </button>
           </div>
 
           {/* User Profile */}
@@ -124,34 +142,52 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       </header>
 
       {/* Secondary Top Tab Navigation */}
-      <nav className="bg-white border-b border-[#e2e8f0] px-6 py-2.5 relative z-40">
+      <nav className="no-print bg-white border-b border-[#e2e8f0] px-6 py-2.5 relative z-40">
         <div className="max-w-[1400px] mx-auto overflow-x-auto scrollbar-none">
           <div className="flex items-center gap-1.5 min-w-max">
             {navTabs.map((tab, idx) => {
-              const isTabActive = tab.label === "Industrial Engineering";
+              const isTabActive = tab.href !== "#"
+                ? pathname === tab.href
+                : (tab.label === "Industrial Engineering" && isIeOpen);
+
+              const content = (
+                <>
+                  {tab.label}
+                  {tab.hasDropdown && (
+                    <ChevronDown
+                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                        isTabActive && isIeOpen ? "rotate-180 text-[#4f46e5]" : "text-[#94a3b8]"
+                      }`}
+                    />
+                  )}
+                </>
+              );
+
+              const className = `px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                isTabActive
+                  ? "bg-[#e0e7ff] text-[#4f46e5] shadow-sm font-bold"
+                  : "text-[#475569] hover:bg-[#f8fafc] hover:text-[#0f172a]"
+              }`;
+
               return (
                 <div key={idx} className="relative">
-                  <button
-                    onClick={() => {
-                      if (tab.label === "Industrial Engineering") {
-                        setIsIeOpen(!isIeOpen);
-                      }
-                    }}
-                    className={`px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
-                      isTabActive
-                        ? "bg-[#e0e7ff] text-[#4f46e5] shadow-sm font-bold"
-                        : "text-[#475569] hover:bg-[#f8fafc] hover:text-[#0f172a]"
-                    }`}
-                  >
-                    {tab.label}
-                    {tab.hasDropdown && (
-                      <ChevronDown
-                        className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                          isTabActive && isIeOpen ? "rotate-180 text-[#4f46e5]" : "text-[#94a3b8]"
-                        }`}
-                      />
-                    )}
-                  </button>
+                  {tab.href !== "#" ? (
+                    <Link href={tab.href} className={className}>
+                      {content}
+                    </Link>
+                  ) : (
+                    <button
+                      ref={tab.label === "Industrial Engineering" ? triggerRef : undefined}
+                      onClick={() => {
+                        if (tab.label === "Industrial Engineering") {
+                          setIsIeOpen(!isIeOpen);
+                        }
+                      }}
+                      className={className}
+                    >
+                      {content}
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -160,7 +196,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Industrial Engineering Dropdown Menu Overlay - Positioned outside overflow wrapper */}
         {isIeOpen && (
-          <div className="absolute left-[380px] mt-3 w-[720px] bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] p-6 grid grid-cols-2 divide-x divide-[#f1f5f9] gap-0 animate-fade-in z-50">
+          <div
+            ref={dropdownRef}
+            className="absolute left-6 mt-3 w-[720px] bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] p-6 grid grid-cols-2 divide-x divide-[#f1f5f9] gap-0 animate-fade-in z-50"
+          >
             
             {/* LEFT COLUMN: BULLETIN & CUTTING and STITCHING */}
             <div className="pr-6 flex flex-col gap-6">
