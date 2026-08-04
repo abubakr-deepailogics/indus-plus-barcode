@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/context/auth-context";
-import { AppShell } from "@/shared/components/AppShell/AppShell";
+import AppShell from "@/components/AppShell";
 
 const PUBLIC_ROUTES = ["/login", "/signup"];
 
