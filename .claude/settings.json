@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(command -v chromium-cli)",
+      "Read(//private/tmp/claude-502/bundled-skills/2.1.220/**)",
+      "Bash(find / -maxdepth 4 -iname \"chromium-cli*\")",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(grep -n \"print-grid-\\\\${\" \"/Users/work/Documents/company-projects/indus-plus-barcode/src/app/industrial-engineering/barcode-generation-finishing/page.tsx\")",
+      "Bash(npx tsc *)"
+    ]
+  }
+}
