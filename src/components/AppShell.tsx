@@ -5,7 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import {
-  Search,
   Sun,
   Moon,
   Bell,
@@ -85,9 +84,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <header className="no-print sticky top-0 z-50 bg-white border-b border-[#f1f5f9] px-6 py-3 flex items-center justify-between shadow-sm">
         {/* Logo block */}
         <Link href="/" className="flex items-center gap-3 group">
-          <div className="w-10 h-10 rounded-lg bg-[#1e1b4b] flex items-center justify-center font-bold text-white text-base shadow-md group-hover:scale-105 transition-transform duration-200">
-            IP
-          </div>
+          <img
+            src="/logo.png"
+            alt="Indus Plus Logo"
+            className="w-10 h-10 object-contain group-hover:scale-105 transition-transform duration-200"
+          />
           <div className="flex flex-col">
             <span className="text-sm font-bold text-[#0f172a] leading-tight tracking-tight">Indus Plus Ltd</span>
             <span className="text-[10px] text-[#64748b] leading-none">INDUS PLUS LIMITED</span>
@@ -97,7 +98,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {/* Search and Action Bar */}
         <div className="flex items-center gap-6">
           {/* Search box */}
-          <div className="relative hidden md:flex items-center">
+          {/* <div className="relative hidden md:flex items-center">
             <Search className="absolute left-3 w-4 h-4 text-[#94a3b8]" />
             <input
               type="text"
@@ -107,7 +108,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <span className="absolute right-3 text-[10px] font-medium text-[#94a3b8] bg-white border border-[#e2e8f0] px-1.5 py-0.5 rounded shadow-sm pointer-events-none">
               Ctrl + K
             </span>
-          </div>
+          </div> */}
 
           {/* Quick controls */}
           <div className="flex items-center gap-3">

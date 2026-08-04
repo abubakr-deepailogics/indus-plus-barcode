@@ -9,13 +9,7 @@ import {
   RefreshCw,
   Clock,
   Calendar,
-  Check,
-  CheckSquare,
-  Shield,
-  Send,
-  Eye,
-  Trash2,
-  Paperclip,
+  Check, Shield, Eye, Paperclip,
   Plus,
   Monitor,
   RotateCcw,
@@ -582,26 +576,26 @@ export default function OrderStyleBulletinFinishingPage() {
       {/* Operations sequence Grid Table */}
       <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden mt-2">
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse min-w-[1200px]">
+          <table className="w-full text-left border-collapse min-w-[1450px]">
             <thead>
               <tr className="bg-[#f8fafc] border-b border-[#e2e8f0]">
-                <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Section</th>
+                <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider min-w-[155px]">Section</th>
                 <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center w-12">Seq</th>
-                <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider w-24">Seq #Op No</th>
-                <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-[#6366f1]"></span>Op Name</th>
+                <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider min-w-[105px]">Seq #Op No</th>
+                <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider min-w-[170px]"><span className="inline-block w-2 h-2 rounded-full bg-[#6366f1] mr-1"></span>Op Name</th>
                 <th className="px-2 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center w-12">SM</th>
                 <th className="px-2 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center w-12">SAM</th>
                 <th className="px-2 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center w-12">Rate</th>
                 <th className="px-2 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center w-20">Incentive %</th>
-                <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider w-24">MC Type</th>
-                <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider w-20">Folder</th>
+                <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider min-w-[145px]">MC Type</th>
+                <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider min-w-[110px]">Folder</th>
                 <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center w-24">Actions</th>
                 <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Attachment</th>
                 <th className="px-2 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">M/Cs @ 100%</th>
                 <th className="px-2 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">M/Cs @ Pin EFF%</th>
                 <th className="px-2 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Sec. Wise Machine</th>
                 <th className="px-2 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Head Plan Rec EFF %</th>
-                <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Last Op</th>
+                <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider min-w-[90px]">Last Op</th>
                 <th className="px-2 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Ref./del.</th>
                 <th className="px-2 py-3 text-center w-8"></th>
               </tr>

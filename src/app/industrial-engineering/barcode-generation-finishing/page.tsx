@@ -1,23 +1,12 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import Link from "next/link";
+import React, { useState } from "react";
 import QRCode from "qrcode";
 import {
-  Search,
   Printer,
   X,
-  Trash2,
-  CheckCircle,
-  FileText,
-  Clock,
-  Plus,
-  ChevronLeft,
-  ChevronRight,
-  MoreVertical,
-  Layers,
-  HelpCircle,
-  RefreshCw,
+  Trash2, FileText, Layers,
+  HelpCircle
 } from "lucide-react";
 
 // Types for Barcode Finishing Data
@@ -1699,7 +1688,7 @@ export default function BarcodeGenerationFinishingPage() {
                 }}
                 className="bg-[#4f46e5] hover:bg-[#4338ca] text-white px-7 py-2.5 rounded-xl font-bold transition-all shadow-md"
               >
-                OK
+                Print
               </button>
             </div>
           </div>
