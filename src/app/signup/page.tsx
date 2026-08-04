@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { createUserWithEmailAndPassword, updateProfile } from "firebase/auth";
 import { doc, setDoc } from "firebase/firestore";
-import { auth, db } from "@/lib/firebase";
+import { auth, db } from "@/features/auth/services/firebase";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";

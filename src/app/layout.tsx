@@ -1,8 +1,8 @@
 import type { Metadata } from "next";
 import { Plus_Jakarta_Sans, Geist_Mono } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/lib/auth-context";
-import { AuthGuard } from "@/components/auth-guard";
+import { AuthProvider } from "@/features/auth/context/auth-context";
+import { AuthGuard } from "@/features/auth/components/AuthGuard";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-sans",
