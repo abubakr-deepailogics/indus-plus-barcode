@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import type { OperationsDetailRow } from "../types";
 
 interface OperationsDetailTableProps {
@@ -58,21 +57,14 @@ export function OperationsDetailTable({
           </thead>
           <tbody className="divide-y divide-[#f1f5f9]">
             {operations.map((op) => (
-              <tr
-                key={op.id}
-                className="hover:bg-[#f8fafc] transition-colors"
-              >
+              <tr key={op.id} className="hover:bg-[#f8fafc] transition-colors">
                 <td className="py-2">
                   <select className="px-2 py-1 rounded-lg border border-[#e2e8f0] bg-white text-[11px] focus:outline-none">
-                    <option value={op.section}>
-                      {op.section || "Select"}
-                    </option>
+                    <option value={op.section}>{op.section || "Select"}</option>
                     <option value="500 - PRE FINISHING">
                       500 - PRE FINISHING
                     </option>
-                    <option value="501 - FINISHING">
-                      501 - FINISHING
-                    </option>
+                    <option value="501 - FINISHING">501 - FINISHING</option>
                     <option value="502 - PACKING">502 - PACKING</option>
                   </select>
                 </td>
@@ -129,7 +121,11 @@ export function OperationsDetailTable({
                     type="checkbox"
                     checked={op.lastOpSection}
                     onChange={(e) =>
-                      onOperationChange(op.id, "lastOpSection", e.target.checked)
+                      onOperationChange(
+                        op.id,
+                        "lastOpSection",
+                        e.target.checked,
+                      )
                     }
                     className="rounded border-[#e2e8f0] text-[#4f46e5]"
                   />

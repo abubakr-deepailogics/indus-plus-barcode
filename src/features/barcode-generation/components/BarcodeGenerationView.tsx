@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { Trash2, X, Layers } from "lucide-react";
 import { useBarcodeGenerationFacade } from "../hooks/useBarcodeGenerationFacade";
 import { MOCK_BARCODE_STYLES } from "../data/mock-barcode-styles";
@@ -16,7 +15,7 @@ export function BarcodeGenerationView() {
 
   return (
     <>
-      <div className="no-print flex flex-col gap-6 max-w-[1380px] mx-auto text-xs text-[#334155] animate-fade-in relative pb-16">
+      <div className="no-print flex flex-col gap-6 max-w-345 mx-auto text-xs text-[#334155] animate-fade-in relative pb-16">
         {/* Top Breadcrumb */}
         <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-3">
           <div className="flex items-center gap-2 text-xs font-semibold text-[#64748b]">
@@ -72,7 +71,9 @@ export function BarcodeGenerationView() {
             reworkQtyMain={facade.activeStyle.reworkQtyMain}
             onOperationChange={facade.handleOperationChange}
             onRemarksChange={(v) => facade.handleFieldChange("remarks", v)}
-            onReworkQtyMainChange={(v) => facade.handleFieldChange("reworkQtyMain", v)}
+            onReworkQtyMainChange={(v) =>
+              facade.handleFieldChange("reworkQtyMain", v)
+            }
           />
 
           <BundleDetailTable

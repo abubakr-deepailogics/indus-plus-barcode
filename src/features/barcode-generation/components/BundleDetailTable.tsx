@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { HelpCircle } from "lucide-react";
 import type { BundleDetailRow } from "../types";
 
@@ -24,9 +23,7 @@ export function BundleDetailTable({
   return (
     <div className="lg:col-span-6 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
       <div className="flex items-center justify-between border-b border-[#f1f5f9] pb-2">
-        <h3 className="text-sm font-extrabold text-[#4f46e5]">
-          Bundle Detail
-        </h3>
+        <h3 className="text-sm font-extrabold text-[#4f46e5]">Bundle Detail</h3>
         <div className="flex items-center gap-1.5">
           <span className="text-[11px] font-bold text-[#64748b]">
             Complete selection
@@ -86,10 +83,7 @@ export function BundleDetailTable({
           </thead>
           <tbody className="divide-y divide-[#f1f5f9]">
             {bundles.map((bd) => (
-              <tr
-                key={bd.id}
-                className="hover:bg-[#f8fafc] transition-colors"
-              >
+              <tr key={bd.id} className="hover:bg-[#f8fafc] transition-colors">
                 <td className="py-2 font-semibold">
                   <input
                     type="text"

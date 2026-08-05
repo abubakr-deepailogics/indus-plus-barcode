@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { BarcodeEncoderService } from "../services/barcode-encoder.service";
 
 interface BarcodeSVGProps {

@@ -1,6 +1,5 @@
 "use client";
 
-import React from "react";
 import { X, FileText } from "lucide-react";
 import type { PageSetupConfig } from "../types";
 
@@ -22,9 +21,7 @@ export function PageSetupModal({
       <div className="bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] max-w-[500px] w-full p-6 animate-scale-up text-xs text-[#334155] font-sans">
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-4 mb-4 border-b border-gray-100">
-          <h3 className="text-sm font-extrabold text-[#0f172a]">
-            Page Setup
-          </h3>
+          <h3 className="text-sm font-extrabold text-[#0f172a]">Page Setup</h3>
           <button
             onClick={onClose}
             className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors"
@@ -138,7 +135,10 @@ export function PageSetupModal({
                   name="orientation"
                   checked={pageSetup.orientation === "Landscape"}
                   onChange={() =>
-                    onPageSetupChange({ ...pageSetup, orientation: "Landscape" })
+                    onPageSetupChange({
+                      ...pageSetup,
+                      orientation: "Landscape",
+                    })
                   }
                   className="text-[#4f46e5] focus:ring-indigo-500"
                 />
@@ -156,7 +156,10 @@ export function PageSetupModal({
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
               {(["left", "right", "top", "bottom"] as const).map((side) => (
-                <div key={side} className="flex items-center justify-between gap-1">
+                <div
+                  key={side}
+                  className="flex items-center justify-between gap-1"
+                >
                   <span className="font-bold text-gray-500 text-[10px] capitalize">
                     {side}
                   </span>
