@@ -6,7 +6,13 @@
       "Bash(find / -maxdepth 4 -iname \"chromium-cli*\")",
       "Bash(pkill -f \"next dev\")",
       "Bash(grep -n \"print-grid-\\\\${\" \"/Users/work/Documents/company-projects/indus-plus-barcode/src/app/industrial-engineering/barcode-generation-finishing/page.tsx\")",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(command -v sqlcmd)",
+      "Bash(node -e ' *)",
+      "Bash(timeout 60 node -e ' *)",
+      "Bash(docker exec *)",
+      "Bash(npm run *)",
+      "Bash(echo \"started with pid $!\")"
     ]
   }
 }
