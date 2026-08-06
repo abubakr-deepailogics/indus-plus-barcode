@@ -75,7 +75,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const navTabs = [
     { label: "Industrial Engineering", href: "#", hasDropdown: true },
     { label: "Barcode Generation Finishing", href: "/industrial-engineering/barcode-generation-finishing", hasDropdown: false },
-    { label: "Order Style Bulletin Finish", href: "/industrial-engineering/order-style-bulletin-finish", hasDropdown: false }
+    { label: "Order Style Bulletin Finish", href: "/industrial-engineering/order-style-bulletin-finish", hasDropdown: false },
+    { label: "Open Order", href: "/industrial-engineering/open-order", hasDropdown: false }
   ];
 
   return (
