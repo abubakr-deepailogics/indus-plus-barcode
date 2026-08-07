@@ -12,7 +12,10 @@ import {
   Scissors,
   Layers, FileText, BarChart3, ChevronRight,
   Menu,
-  X
+  X,
+  ScanLine,
+  Search as SearchIcon,
+  RotateCcw,
 } from "lucide-react";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -76,7 +79,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     { label: "Industrial Engineering", href: "#", hasDropdown: true },
     { label: "Barcode Generation Finishing", href: "/industrial-engineering/barcode-generation-finishing", hasDropdown: false },
     { label: "Order Style Bulletin Finish", href: "/industrial-engineering/order-style-bulletin-finish", hasDropdown: false },
-    { label: "Open Order", href: "/industrial-engineering/open-order", hasDropdown: false }
+    { label: "Open Order", href: "/industrial-engineering/open-order", hasDropdown: false },
+    { label: "Coupon Scanning", href: "/industrial-engineering/coupon-scanning", hasDropdown: false },
+    { label: "Coupon Tracing", href: "/industrial-engineering/coupon-tracing", hasDropdown: false },
+    { label: "Rework Coupon", href: "/industrial-engineering/rework-coupon", hasDropdown: false }
   ];
 
   return (
@@ -376,6 +382,49 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     </span>
                   </div>
                   <ChevronRight className="w-3.5 h-3.5 text-[#94a3b8] mr-1" />
+                </Link>
+              </div>
+
+              {/* SECTION: COUPONS */}
+              <div className="flex flex-col gap-2 pt-4 border-t border-[#f1f5f9]">
+                <h4 className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider mb-2">
+                  Coupons
+                </h4>
+                <Link
+                  href="/industrial-engineering/coupon-scanning"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-teal-50 text-teal-500 flex items-center justify-center">
+                    <ScanLine className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    Coupon Scanning
+                  </span>
+                </Link>
+                <Link
+                  href="/industrial-engineering/coupon-tracing"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-cyan-50 text-cyan-500 flex items-center justify-center">
+                    <SearchIcon className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    Coupon Tracing
+                  </span>
+                </Link>
+                <Link
+                  href="/industrial-engineering/rework-coupon"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-rose-50 text-rose-500 flex items-center justify-center">
+                    <RotateCcw className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    Rework Coupon
+                  </span>
                 </Link>
               </div>
 

@@ -3,6 +3,7 @@
 import React from "react";
 import type { BarcodeStyleData, BundleDetailRow, OperationsDetailRow, PageSetupConfig } from "../types";
 import { BarcodeCard } from "./BarcodeCard";
+import { buildCouponCards } from "../services/coupon-pairing.service";
 
 interface PrintableBarcodesAreaProps {
   activeStyle: BarcodeStyleData;
@@ -26,33 +27,47 @@ export function PrintableBarcodesArea({
     );
   }
 
-  const totalCardsList = selectedBundles.flatMap((bundle) =>
-    activeStyle.operations.map((op) => ({ bundle, op })),
-  );
+  const pairedCardsList = buildCouponCards(selectedBundles, activeStyle.operations);
 
   const [gridCols, gridRows] = pageSetup.gridFormat
     .split("x")
     .map(Number);
   const cardsPerPage = gridCols * gridRows;
 
+  // Pad each operation's card group up to a multiple of gridCols so a new
+  // operation always starts on a fresh grid row instead of sharing a row
+  // with the tail end of the previous operation's cards.
+  type Slot = { bundle: BundleDetailRow; op: OperationsDetailRow } | null;
+  const totalCardsList: Slot[] = [];
+  for (const op of activeStyle.operations) {
+    const opCards = pairedCardsList.filter((c) => c.op.id === op.id);
+    if (opCards.length === 0) continue;
+    totalCardsList.push(...opCards);
+    const remainder = opCards.length % gridCols;
+    if (remainder !== 0) {
+      totalCardsList.push(...Array(gridCols - remainder).fill(null));
+    }
+  }
+
   const pages: Array<
     Array<{
       bundle: BundleDetailRow;
       op: OperationsDetailRow;
       globalIndex: number;
-    }>
+    } | { blank: true; key: number }>
   > = [];
 
+  let cardCounter = 0;
   for (let i = 0; i < totalCardsList.length; i += cardsPerPage) {
     pages.push(
-      totalCardsList
-        .slice(i, i + cardsPerPage)
-        .map((item, localIdx) => ({
-          ...item,
-          globalIndex: i + localIdx + 1,
-        })),
+      totalCardsList.slice(i, i + cardsPerPage).map((item, localIdx) => {
+        if (item === null) return { blank: true, key: i + localIdx };
+        cardCounter += 1;
+        return { ...item, globalIndex: cardCounter };
+      }),
     );
   }
+  const totalRealCards = pairedCardsList.length;
 
   const getPageHeight = (): string => {
     if (pageSetup.size === "Letter") return "9.8in";
@@ -120,17 +135,21 @@ export function PrintableBarcodesArea({
               gridTemplateRows: `repeat(${gridRows}, 1fr)`,
             }}
           >
-            {pageCards.map(({ bundle, op, globalIndex }) => (
-              <BarcodeCard
-                key={`${bundle.id}-${op.id}`}
-                pageIndex={globalIndex}
-                totalPages={totalCardsList.length}
-                styleCode={activeStyle.styleCode}
-                anlNo={activeStyle.anlNo}
-                bundle={bundle}
-                op={op}
-              />
-            ))}
+            {pageCards.map((card) =>
+              "blank" in card ? (
+                <div key={`blank-${card.key}`} />
+              ) : (
+                <BarcodeCard
+                  key={`${card.bundle.id}-${card.op.id}`}
+                  pageIndex={card.globalIndex}
+                  totalPages={totalRealCards}
+                  styleCode={activeStyle.styleCode}
+                  anlNo={activeStyle.anlNo}
+                  bundle={card.bundle}
+                  op={card.op}
+                />
+              ),
+            )}
           </div>
         </div>
       ))}

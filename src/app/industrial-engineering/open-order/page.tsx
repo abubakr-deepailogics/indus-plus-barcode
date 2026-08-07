@@ -2,8 +2,11 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import React, { useState, useEffect, useRef } from "react";
-import { Search, FileText, Scissors, AlertCircle, Info, Database } from "lucide-react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { Search, FileText, Scissors, AlertCircle, Info, Database, Barcode } from "lucide-react";
+import type { BarcodeStyleData, PageSetupConfig } from "@/features/barcode-generation/types";
+import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
+import { PrintableBarcodesArea } from "@/features/barcode-generation/components/PrintableBarcodesArea";
 
 interface CutDetailRow {
   RowId: number;
@@ -89,6 +92,15 @@ export default function OpenOrderPage() {
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  const [showPageSetupModal, setShowPageSetupModal] = useState(false);
+  const [pageSetup, setPageSetup] = useState<PageSetupConfig>({
+    size: "Legal",
+    source: "Automatically Select",
+    orientation: "Portrait",
+    margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 },
+    gridFormat: "3x10",
+  });
 
   // Debounce logic for search query
   useEffect(() => {
@@ -194,8 +206,75 @@ export default function OpenOrderPage() {
   const activeRecordsCount = activeTab === "cut_report" ? cutDetails.length : styleBulletins.length;
   const isSkeletonActive = isLoading || isTransitioning;
 
+  // Build the coupon-printable style data for the searched work order from
+  // the already-fetched cut detail (bundles) and style bulletin (operations).
+  const activeStyle: BarcodeStyleData | null = useMemo(() => {
+    if (!debouncedQuery || cutDetails.length === 0) return null;
+    const orderCuts = cutDetails;
+
+    const bundles = orderCuts.map((row) => ({
+      id: row.RowId,
+      transId: String(row.Cut ?? "0"),
+      line: "1",
+      bundleNo: String(row.Bundle_Id ?? row.RowId),
+      inseam: String(row.Inseam ?? ""),
+      size: String(row.Size ?? ""),
+      pcs: row.Bundle_Qty ?? 0,
+      sel: true,
+      code: row.Color ?? "",
+    }));
+
+    // Open Order coupons only cover the first 2 operations of the order,
+    // not the full routing — matches how this shop tracks the initial cut/
+    // bundle handoff. Rework Coupon (separate page) covers all operations.
+    const COUPON_OPERATIONS_LIMIT = 2;
+    const operations = styleBulletins
+      .slice()
+      .sort((a, b) => (a.Operation_Sequeance ?? 0) - (b.Operation_Sequeance ?? 0))
+      .slice(0, COUPON_OPERATIONS_LIMIT)
+      .map((row) => ({
+        id: row.RowId,
+        section: row.Section ?? "",
+        seqNo: String(row.Operation_Sequeance ?? ""),
+        opNo: row.Operation_Code ?? "",
+        operationName: row.Operation_Name ?? "",
+        smv: String(row.Smv_Sam ?? ""),
+        rate: String(row.Piece_Rate ?? ""),
+        skills: "",
+        lastOpSection: row.Last_Operation_Section_Wise === 1,
+      }));
+
+    return {
+      anlNo: orderCuts[0].Sale_Order_No ?? debouncedQuery,
+      customer: orderCuts[0].Customer_Name ?? "",
+      // No real style code in this data source — leave blank rather than
+      // mislabeling the work order as a style code (see BarcodeCard "St").
+      styleCode: "",
+      generateBy: "",
+      generateDatetime: "",
+      totalWash: "",
+      generatedCoupons: "",
+      balance: "",
+      generatedBundle: "",
+      notes: "",
+      remarks: "",
+      reworkQtyMain: "",
+      reworkQtyBundle: "",
+      subTotal: "",
+      total: "",
+      operations,
+      bundles,
+    };
+  }, [debouncedQuery, cutDetails, styleBulletins]);
+
+  const handlePrint = () => {
+    setShowPageSetupModal(false);
+    setTimeout(() => window.print(), 300);
+  };
+
   return (
-    <div className="flex flex-col gap-6 max-w-[1400px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
+    <>
+    <div className="no-print flex flex-col gap-6 max-w-[1400px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
       {/* Top Breadcrumb */}
       <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-3">
         <div className="flex items-center gap-2 text-xs font-semibold text-[#64748b]">
@@ -346,6 +425,15 @@ export default function OpenOrderPage() {
                 Showing {activeRecordsCount} records matching Work Order <strong className="text-slate-700">`{debouncedQuery}`</strong>
               </p>
             </div>
+            {activeStyle && (
+              <button
+                onClick={() => setShowPageSetupModal(true)}
+                className="flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs animate-fade-in"
+              >
+                <Barcode className="w-3.5 h-3.5" />
+                <span>Generate Coupons for {debouncedQuery}</span>
+              </button>
+            )}
           </div>
 
           <div className="overflow-x-auto">
@@ -449,5 +537,19 @@ export default function OpenOrderPage() {
         </div>
       )}
     </div>
+
+    {showPageSetupModal && activeStyle && (
+      <PageSetupModal
+        pageSetup={pageSetup}
+        onPageSetupChange={setPageSetup}
+        onClose={() => setShowPageSetupModal(false)}
+        onPrint={handlePrint}
+      />
+    )}
+
+    {activeStyle && (
+      <PrintableBarcodesArea activeStyle={activeStyle} pageSetup={pageSetup} />
+    )}
+    </>
   );
 }

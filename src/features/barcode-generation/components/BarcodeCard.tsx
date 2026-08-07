@@ -7,7 +7,6 @@ import { QRCodeSVG } from "./QRCodeSVG";
 export function BarcodeCard({
   pageIndex,
   totalPages,
-  styleCode,
   anlNo,
   bundle,
   op,
@@ -18,18 +17,18 @@ export function BarcodeCard({
   const rsVal = Math.round(rateNum * qtyNum);
 
   const qrDisplayValue = `Order: ${anlNo}
+Cut: ${bundle.transId}
 Bundle: ${bundle.bundleNo}
-Style: ${styleCode}
 Size: ${bundle.size || "/"}
 Op No: ${op.opNo}
 Op Name: ${op.operationName}
-Card: ${pageIndex}/${totalPages}
+Coupon: ${pageIndex}/${totalPages}
 Qty: ${qtyNum}
 Rate: ${op.rate}
 Inc: ${bundle.inseam || "-"}
 Rs: ${rsVal}`;
 
-  const qrValue = `${anlNo}|${bundle.bundleNo}|${styleCode}|${bundle.size || "/"}|${op.opNo}|${op.rate}|${qtyNum}`;
+  const qrValue = `${anlNo}|${bundle.transId}|${bundle.bundleNo}|${bundle.size || "/"}|${op.opNo}|${op.rate}|${qtyNum}`;
 
   const handleCopy = () => {
     navigator.clipboard.writeText(qrValue);
@@ -58,6 +57,7 @@ Rs: ${rsVal}`;
 
       {/* Header Banner */}
       <div className="bg-[#0f172a] text-white px-1.5 py-0.5 flex justify-between items-center font-bold text-[9px] uppercase tracking-wider rounded-sm mb-0.5">
+        <span>Cut: {bundle.transId}</span>
         <span>B#: {bundle.bundleNo}</span>
         <span>Size: {bundle.size || "/"}</span>
       </div>
@@ -84,11 +84,7 @@ Rs: ${rsVal}`;
                 <span className="font-bold text-[#0f172a]">{anlNo}</span>
               </div>
               <div>
-                <span className="text-gray-500 font-semibold">St:</span>{" "}
-                <span className="font-bold text-[#0f172a]">{styleCode}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 font-semibold">Card:</span>{" "}
+                <span className="text-gray-500 font-semibold">Coupon:</span>{" "}
                 <span className="text-gray-600 font-bold">
                   {pageIndex}/{totalPages}
                 </span>
