@@ -2,13 +2,13 @@
 
 import React from "react";
 import { X } from "lucide-react";
-import type { BarcodeStyleData } from "../types";
+import type { QrCodeStyleData } from "../types";
 
 interface StyleSearchModalProps {
   searchQuery: string;
   onSearchQueryChange: (value: string) => void;
-  filteredStyles: BarcodeStyleData[];
-  allStyles: BarcodeStyleData[];
+  filteredStyles: QrCodeStyleData[];
+  allStyles: QrCodeStyleData[];
   selectedIdx: number;
   onSelectIdx: (idx: number) => void;
   onConfirm: () => void;

@@ -1,10 +1,11 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { RotateCcw, AlertCircle, Barcode } from "lucide-react";
-import type { BarcodeStyleData, PageSetupConfig } from "@/features/barcode-generation/types";
-import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
-import { PrintableBarcodesArea } from "@/features/barcode-generation/components/PrintableBarcodesArea";
+import { RotateCcw, AlertCircle, QrCode } from "lucide-react";
+import type { QrCodeStyleData, PageSetupConfig } from "@/features/qr-code-generation/types";
+import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
+import { PrintableQrCodesArea } from "@/features/qr-code-generation/components/PrintableQrCodesArea";
+import { useGenerateCouponPdf } from "@/features/qr-code-generation/hooks/useGenerateCouponPdf";
 
 interface CutDetailRow {
   RowId: number;
@@ -88,7 +89,7 @@ export default function ReworkCouponPage() {
   // operation was specified, only that operation gets coupons; otherwise
   // every operation of the bundle's order does (no top-2 cap, unlike Open
   // Order — a rework request explicitly wants full routing coverage).
-  const activeStyle: BarcodeStyleData | null = useMemo(() => {
+  const activeStyle: QrCodeStyleData | null = useMemo(() => {
     if (cutDetails.length === 0) return null;
 
     const bundles = cutDetails.map((row) => ({
@@ -148,6 +149,14 @@ export default function ReworkCouponPage() {
   const handlePrint = () => {
     setShowPageSetupModal(false);
     setTimeout(() => window.print(), 300);
+  };
+
+  const { handleGeneratePdf: generatePdf, generatingPdf } = useGenerateCouponPdf(
+    activeStyle ?? { anlNo: "", styleCode: "", bundles: [], operations: [] },
+  );
+  const handleGeneratePdf = async () => {
+    await generatePdf();
+    setShowPageSetupModal(false);
   };
 
   return (
@@ -273,7 +282,7 @@ export default function ReworkCouponPage() {
             onClick={() => setShowPageSetupModal(true)}
             className="flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs"
           >
-            <Barcode className="w-3.5 h-3.5" />
+            <QrCode className="w-3.5 h-3.5" />
             <span>Generate Coupon{activeStyle.operations.length > 1 ? "s" : ""}</span>
           </button>
         </div>
@@ -286,11 +295,13 @@ export default function ReworkCouponPage() {
         onPageSetupChange={setPageSetup}
         onClose={() => setShowPageSetupModal(false)}
         onPrint={handlePrint}
+        onGeneratePdf={handleGeneratePdf}
+        generatingPdf={generatingPdf}
       />
     )}
 
     {activeStyle && (
-      <PrintableBarcodesArea activeStyle={activeStyle} pageSetup={pageSetup} />
+      <PrintableQrCodesArea activeStyle={activeStyle} pageSetup={pageSetup} />
     )}
     </>
   );

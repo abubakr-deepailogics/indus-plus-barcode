@@ -77,7 +77,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Top navigation tabs
   const navTabs = [
     { label: "Industrial Engineering", href: "#", hasDropdown: true },
-    { label: "Barcode Generation Finishing", href: "/industrial-engineering/barcode-generation-finishing", hasDropdown: false },
+    { label: "QR Code Generation Finishing", href: "/industrial-engineering/qr-code-generation-finishing", hasDropdown: false },
     { label: "Order Style Bulletin Finish", href: "/industrial-engineering/order-style-bulletin-finish", hasDropdown: false },
     { label: "Open Order", href: "/industrial-engineering/open-order", hasDropdown: false },
     { label: "Coupon Scanning", href: "/industrial-engineering/coupon-scanning", hasDropdown: false },
@@ -369,7 +369,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <ChevronRight className="w-3.5 h-3.5 text-[#94a3b8] mr-1" />
                 </Link>
                 <Link
-                  href="/industrial-engineering/barcode-generation-finishing"
+                  href="/industrial-engineering/qr-code-generation-finishing"
                   onClick={() => setIsIeOpen(false)}
                   className="flex items-center justify-between p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
                 >
@@ -378,7 +378,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       <Layers className="w-4 h-4" />
                     </span>
                     <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
-                      Barcode Generation Finishing
+                      QR Code Generation Finishing
                     </span>
                   </div>
                   <ChevronRight className="w-3.5 h-3.5 text-[#94a3b8] mr-1" />

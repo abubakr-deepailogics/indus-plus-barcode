@@ -1,17 +1,17 @@
 "use client";
 
 import { Trash2, X, Layers } from "lucide-react";
-import { useBarcodeGenerationFacade } from "../hooks/useBarcodeGenerationFacade";
-import { MOCK_BARCODE_STYLES } from "../data/mock-barcode-styles";
+import { useQrCodeGenerationFacade } from "../hooks/useQrCodeGenerationFacade";
+import { MOCK_QR_CODE_STYLES } from "../data/mock-qr-code-styles";
 import { ParametersPanel } from "./ParametersPanel";
 import { OperationsDetailTable } from "./OperationsDetailTable";
 import { BundleDetailTable } from "./BundleDetailTable";
 import { StyleSearchModal } from "./StyleSearchModal";
 import { PageSetupModal } from "./PageSetupModal";
-import { PrintableBarcodesArea } from "./PrintableBarcodesArea";
+import { PrintableQrCodesArea } from "./PrintableQrCodesArea";
 
-export function BarcodeGenerationView() {
-  const facade = useBarcodeGenerationFacade();
+export function QrCodeGenerationView() {
+  const facade = useQrCodeGenerationFacade();
 
   return (
     <>
@@ -22,7 +22,7 @@ export function BarcodeGenerationView() {
             <span>Industrial Engineering</span>
             <span className="text-[#94a3b8] font-light">/</span>
             <span className="text-[#4f46e5] font-bold">
-              Barcode Generation Finishing
+              QR Code Generation Finishing
             </span>
           </div>
         </div>
@@ -31,10 +31,10 @@ export function BarcodeGenerationView() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
-              Barcode Generation Finishing
+              QR Code Generation Finishing
             </h1>
             <p className="text-[11px] text-[#64748b] mt-0.5">
-              Generate and manage barcode finishing bundles
+              Generate and manage QR code finishing bundles
             </p>
           </div>
 
@@ -108,7 +108,7 @@ export function BarcodeGenerationView() {
             searchQuery={facade.searchQuery}
             onSearchQueryChange={facade.setSearchQuery}
             filteredStyles={facade.filteredStyles}
-            allStyles={MOCK_BARCODE_STYLES}
+            allStyles={MOCK_QR_CODE_STYLES}
             selectedIdx={facade.selectedIdx}
             onSelectIdx={facade.setSelectedIdx}
             onConfirm={facade.handleModalSearch}
@@ -124,11 +124,13 @@ export function BarcodeGenerationView() {
           onPageSetupChange={facade.setPageSetup}
           onClose={() => facade.setShowPageSetupModal(false)}
           onPrint={facade.handlePrint}
+          onGeneratePdf={facade.handleGeneratePdf}
+          generatingPdf={facade.generatingPdf}
         />
       )}
 
-      {/* Printable Barcodes Area */}
-      <PrintableBarcodesArea
+      {/* Printable QR Codes Area */}
+      <PrintableQrCodesArea
         activeStyle={facade.activeStyle}
         pageSetup={facade.pageSetup}
       />

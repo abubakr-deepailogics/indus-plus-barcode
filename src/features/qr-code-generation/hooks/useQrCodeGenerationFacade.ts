@@ -1,17 +1,18 @@
 "use client";
 
 import { useState, useMemo } from "react";
-import type { BarcodeStyleData, PageSetupConfig } from "../types";
-import { MOCK_BARCODE_STYLES } from "../data/mock-barcode-styles";
+import type { QrCodeStyleData, PageSetupConfig } from "../types";
+import { MOCK_QR_CODE_STYLES } from "../data/mock-qr-code-styles";
+import { useGenerateCouponPdf } from "./useGenerateCouponPdf";
 
-interface BarcodeGenerationFacade {
-  activeStyle: BarcodeStyleData;
+interface QrCodeGenerationFacade {
+  activeStyle: QrCodeStyleData;
   showSearchModal: boolean;
   searchQuery: string;
   selectedIdx: number;
   showPageSetupModal: boolean;
   pageSetup: PageSetupConfig;
-  filteredStyles: BarcodeStyleData[];
+  filteredStyles: QrCodeStyleData[];
   handleModalSearch: () => void;
   handleAnlInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   setSearchQuery: (value: string) => void;
@@ -20,16 +21,18 @@ interface BarcodeGenerationFacade {
   setShowPageSetupModal: (show: boolean) => void;
   setPageSetup: (config: PageSetupConfig) => void;
   openSearchModal: () => void;
-  handleFieldChange: (field: keyof BarcodeStyleData, value: string) => void;
+  handleFieldChange: (field: keyof QrCodeStyleData, value: string) => void;
   handleOperationChange: (id: number, field: string, value: boolean) => void;
   handleBundleSelChange: (id: number, checked: boolean) => void;
   handleReworkQtyBundleChange: (value: string) => void;
   handlePrint: () => void;
+  handleGeneratePdf: () => Promise<void>;
+  generatingPdf: boolean;
 }
 
-export function useBarcodeGenerationFacade(): BarcodeGenerationFacade {
-  const [activeStyle, setActiveStyle] = useState<BarcodeStyleData>(
-    MOCK_BARCODE_STYLES[0],
+export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
+  const [activeStyle, setActiveStyle] = useState<QrCodeStyleData>(
+    MOCK_QR_CODE_STYLES[0],
   );
   const [showSearchModal, setShowSearchModal] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
@@ -45,7 +48,7 @@ export function useBarcodeGenerationFacade(): BarcodeGenerationFacade {
 
   const filteredStyles = useMemo(
     () =>
-      MOCK_BARCODE_STYLES.filter(
+      MOCK_QR_CODE_STYLES.filter(
         (s) =>
           s.anlNo.includes(searchQuery) ||
           s.styleCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -55,13 +58,13 @@ export function useBarcodeGenerationFacade(): BarcodeGenerationFacade {
   );
 
   const handleModalSearch = () => {
-    setActiveStyle(MOCK_BARCODE_STYLES[selectedIdx]);
+    setActiveStyle(MOCK_QR_CODE_STYLES[selectedIdx]);
     setShowSearchModal(false);
   };
 
   const handleAnlInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    const found = MOCK_BARCODE_STYLES.find((s) => s.anlNo === value);
+    const found = MOCK_QR_CODE_STYLES.find((s) => s.anlNo === value);
     if (found) {
       setActiveStyle(found);
     } else {
@@ -74,7 +77,7 @@ export function useBarcodeGenerationFacade(): BarcodeGenerationFacade {
     setShowSearchModal(true);
   };
 
-  const handleFieldChange = (field: keyof BarcodeStyleData, value: string) => {
+  const handleFieldChange = (field: keyof QrCodeStyleData, value: string) => {
     setActiveStyle((prev) => ({ ...prev, [field]: value }));
   };
 
@@ -103,6 +106,12 @@ export function useBarcodeGenerationFacade(): BarcodeGenerationFacade {
     }, 300);
   };
 
+  const { handleGeneratePdf: generatePdf, generatingPdf } = useGenerateCouponPdf(activeStyle);
+  const handleGeneratePdf = async () => {
+    await generatePdf();
+    setShowPageSetupModal(false);
+  };
+
   return {
     activeStyle,
     showSearchModal,
@@ -124,5 +133,7 @@ export function useBarcodeGenerationFacade(): BarcodeGenerationFacade {
     handleBundleSelChange,
     handleReworkQtyBundleChange,
     handlePrint,
+    handleGeneratePdf,
+    generatingPdf,
   };
 }

@@ -22,7 +22,7 @@ export interface BundleDetailRow {
   code: string;
 }
 
-export interface BarcodeStyleData {
+export interface QrCodeStyleData {
   anlNo: string;
   customer: string;
   styleCode: string;
@@ -55,7 +55,7 @@ export interface PageSetupConfig {
   gridFormat: string;
 }
 
-export interface BarcodeCardProps {
+export interface QrCodeCardProps {
   pageIndex: number;
   totalPages: number;
   styleCode: string;

@@ -6,7 +6,7 @@ export const MOCK_BULLETIN_STYLES: StyleBulletinData[] = [
     customer: "REIND",
     styleCode: "R0713326",
     planQty: "2000",
-    description: "BARCODE GENERATION FINISHING",
+    description: "QR CODE GENERATION FINISHING",
     styleDescription: "Azgard Nine Limited (Manga) Finishing",
     styleCategory: "Denim / Jeans",
     smdNo: "SMD-57156",

@@ -2,14 +2,14 @@
 
 import React from "react";
 import { Printer, Layers } from "lucide-react";
-import type { BarcodeStyleData } from "../types";
+import type { QrCodeStyleData } from "../types";
 
 interface ParametersPanelProps {
-  activeStyle: BarcodeStyleData;
+  activeStyle: QrCodeStyleData;
   onAnlInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onOpenSearchModal: () => void;
   onOpenPageSetupModal: () => void;
-  onFieldChange: (field: keyof BarcodeStyleData, value: string) => void;
+  onFieldChange: (field: keyof QrCodeStyleData, value: string) => void;
 }
 
 export function ParametersPanel({

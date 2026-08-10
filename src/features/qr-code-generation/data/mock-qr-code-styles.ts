@@ -1,8 +1,8 @@
 import type { OperationsDetailRow } from "../types";
 import type { BundleDetailRow } from "../types";
-import type { BarcodeStyleData } from "../types";
+import type { QrCodeStyleData } from "../types";
 
-export const MOCK_BARCODE_STYLES: BarcodeStyleData[] = [
+export const MOCK_QR_CODE_STYLES: QrCodeStyleData[] = [
   {
     anlNo: "57156",
     customer: "REIND",

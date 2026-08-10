@@ -8,6 +8,8 @@ interface PageSetupModalProps {
   onPageSetupChange: (config: PageSetupConfig) => void;
   onClose: () => void;
   onPrint: () => void;
+  onGeneratePdf: () => void;
+  generatingPdf: boolean;
 }
 
 export function PageSetupModal({
@@ -15,6 +17,8 @@ export function PageSetupModal({
   onPageSetupChange,
   onClose,
   onPrint,
+  onGeneratePdf,
+  generatingPdf,
 }: PageSetupModalProps) {
   return (
     <div className="no-print fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -55,7 +59,7 @@ export function PageSetupModal({
               </div>
               <div className="flex flex-col gap-1 w-full items-center">
                 <div className="h-3 w-full bg-gray-300/60 rounded flex items-center justify-center text-[5px] text-gray-500 font-bold font-mono">
-                  BARCODE
+                  QR CODE
                 </div>
               </div>
               <div className="h-1.5 w-4/12 bg-gray-300 rounded self-end" />
@@ -191,6 +195,13 @@ export function PageSetupModal({
             className="bg-white border border-[#e2e8f0] text-gray-600 px-5 py-2.5 rounded-xl font-bold hover:bg-[#f8fafc] transition-colors"
           >
             Cancel
+          </button>
+          <button
+            onClick={onGeneratePdf}
+            disabled={generatingPdf}
+            className="bg-white border border-[#4f46e5] text-[#4f46e5] px-5 py-2.5 rounded-xl font-bold hover:bg-[#eef2ff] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {generatingPdf ? "Generating…" : "Generate PDF"}
           </button>
           <button
             onClick={onPrint}

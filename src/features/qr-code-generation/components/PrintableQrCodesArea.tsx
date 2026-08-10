@@ -1,27 +1,27 @@
 "use client";
 
 import React from "react";
-import type { BarcodeStyleData, BundleDetailRow, OperationsDetailRow, PageSetupConfig } from "../types";
-import { BarcodeCard } from "./BarcodeCard";
+import type { QrCodeStyleData, BundleDetailRow, OperationsDetailRow, PageSetupConfig } from "../types";
+import { QrCodeCard } from "./QrCodeCard";
 import { buildCouponCards } from "../services/coupon-pairing.service";
 
-interface PrintableBarcodesAreaProps {
-  activeStyle: BarcodeStyleData;
+interface PrintableQrCodesAreaProps {
+  activeStyle: QrCodeStyleData;
   pageSetup: PageSetupConfig;
 }
 
-export function PrintableBarcodesArea({
+export function PrintableQrCodesArea({
   activeStyle,
   pageSetup,
-}: PrintableBarcodesAreaProps) {
+}: PrintableQrCodesAreaProps) {
   const selectedBundles = activeStyle.bundles.filter((b) => b.sel);
   const hasContent = selectedBundles.length > 0 && activeStyle.operations.length > 0;
 
   if (!hasContent) {
     return (
-      <div id="printable-barcode-area" className="hidden print:block">
+      <div id="printable-qr-code-area" className="hidden print:block">
         <div className="p-8 text-center text-gray-500 font-bold border border-gray-300 rounded">
-          No bundles selected or no operations found to print barcodes.
+          No bundles selected or no operations found to print QR codes.
         </div>
       </div>
     );
@@ -77,7 +77,7 @@ export function PrintableBarcodesArea({
   };
 
   return (
-    <div id="printable-barcode-area" className="hidden print:block">
+    <div id="printable-qr-code-area" className="hidden print:block">
       <style
         dangerouslySetInnerHTML={{
           __html: `
@@ -91,7 +91,7 @@ export function PrintableBarcodesArea({
             .no-print {
               display: none !important;
             }
-            #printable-barcode-area {
+            #printable-qr-code-area {
               display: block !important;
               width: 100% !important;
             }
@@ -139,7 +139,7 @@ export function PrintableBarcodesArea({
               "blank" in card ? (
                 <div key={`blank-${card.key}`} />
               ) : (
-                <BarcodeCard
+                <QrCodeCard
                   key={`${card.bundle.id}-${card.op.id}`}
                   pageIndex={card.globalIndex}
                   totalPages={totalRealCards}

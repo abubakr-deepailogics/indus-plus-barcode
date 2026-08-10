@@ -1,16 +1,16 @@
 "use client";
 
 import React, { useState } from "react";
-import type { BarcodeCardProps } from "../types";
+import type { QrCodeCardProps } from "../types";
 import { QRCodeSVG } from "./QRCodeSVG";
 
-export function BarcodeCard({
+export function QrCodeCard({
   pageIndex,
   totalPages,
   anlNo,
   bundle,
   op,
-}: BarcodeCardProps) {
+}: QrCodeCardProps) {
   const [copied, setCopied] = useState(false);
   const rateNum = parseFloat(op.rate || "0");
   const qtyNum = bundle.pcs || 0;
@@ -38,7 +38,7 @@ Rs: ${rsVal}`;
 
   return (
     <div
-      className="barcode-card flex flex-col justify-start bg-white text-black font-sans border border-dashed border-[#666666] py-0.5 px-1.5 relative select-none overflow-hidden"
+      className="qr-code-card flex flex-col justify-start bg-white text-black font-sans border border-dashed border-[#666666] py-0.5 px-1.5 relative select-none overflow-hidden"
       style={{ boxSizing: "border-box", height: "100%" }}
     >
       {/* Registration Marks */}
@@ -122,7 +122,7 @@ Rs: ${rsVal}`;
           <div
             onClick={handleCopy}
             className="flex justify-center items-center bg-white p-0.5 rounded shadow-sm border border-gray-100 cursor-pointer hover:scale-105 transition-transform relative group"
-            title="Click to copy raw barcode payload"
+            title="Click to copy raw QR code payload"
           >
             <QRCodeSVG value={qrDisplayValue} />
             {copied && (
