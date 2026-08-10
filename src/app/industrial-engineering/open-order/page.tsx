@@ -7,6 +7,9 @@ import { Search, FileText, Scissors, AlertCircle, Info, Database, Barcode } from
 import type { BarcodeStyleData, PageSetupConfig } from "@/features/barcode-generation/types";
 import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
 import { PrintableBarcodesArea } from "@/features/barcode-generation/components/PrintableBarcodesArea";
+import { ColumnDef } from "@tanstack/react-table";
+import { DataTable } from "@/components/ui/data-table/data-table";
+import { DataTableColumnHeader } from "@/components/ui/data-table/column-header";
 
 interface CutDetailRow {
   RowId: number;
@@ -79,6 +82,193 @@ function TableSkeleton({ columnsCount }: { columnsCount: number }) {
 }
 
 export default function OpenOrderPage() {
+  const cutReportColumns = useMemo<ColumnDef<CutDetailRow>[]>(() => [
+    {
+      accessorKey: "RowId",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Row ID" onFilterClick={() => {}} />,
+      cell: ({ row }) => <span className="font-semibold text-slate-900">{row.original.RowId}</span>,
+      size: 60,
+    },
+    {
+      accessorKey: "Sale_Order_No",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Sale Order No" onFilterClick={() => {}} />,
+      cell: ({ row }) => <span className="font-medium">{row.original.Sale_Order_No}</span>,
+      size: 110,
+    },
+    {
+      accessorKey: "Customer_Name",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Customer" onFilterClick={() => {}} />,
+      size: 110,
+    },
+    {
+      accessorKey: "Work_Order",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Work Order" onFilterClick={() => {}} />,
+      size: 110,
+    },
+    {
+      accessorKey: "Order_Qty_After_Add",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Order Qty" onFilterClick={() => {}} />,
+      cell: ({ row }) => <div className="text-right font-semibold">{row.original.Order_Qty_After_Add}</div>,
+      size: 90,
+    },
+    {
+      accessorKey: "Inseam",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Inseam" onFilterClick={() => {}} />,
+      cell: ({ row }) => <div className="text-center">{row.original.Inseam}</div>,
+      size: 70,
+    },
+    {
+      accessorKey: "Size",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Size" onFilterClick={() => {}} />,
+      cell: ({ row }) => <div className="text-center font-bold">{row.original.Size}</div>,
+      size: 70,
+    },
+    {
+      accessorKey: "Color",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Color" onFilterClick={() => {}} />,
+      size: 100,
+    },
+    {
+      accessorKey: "Fabric_Code_Main_Body",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Fabric Code" onFilterClick={() => {}} />,
+      cell: ({ row }) => <span className="text-slate-500">{row.original.Fabric_Code_Main_Body}</span>,
+      size: 140,
+    },
+    {
+      accessorKey: "Wash",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Wash" onFilterClick={() => {}} />,
+      size: 100,
+    },
+    {
+      accessorKey: "Cut",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Cut" onFilterClick={() => {}} />,
+      cell: ({ row }) => <div className="text-center font-semibold text-indigo-600">{row.original.Cut}</div>,
+      size: 70,
+    },
+    {
+      accessorKey: "Bundle_Id",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Bundle ID" onFilterClick={() => {}} />,
+      cell: ({ row }) => <div className="text-center font-mono">{row.original.Bundle_Id}</div>,
+      size: 100,
+    },
+    {
+      accessorKey: "Bundle_Qty",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Bundle Qty" onFilterClick={() => {}} />,
+      cell: ({ row }) => <div className="text-right font-bold">{row.original.Bundle_Qty}</div>,
+      size: 90,
+    },
+    {
+      accessorKey: "Shade",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Shade" onFilterClick={() => {}} />,
+      cell: ({ row }) => <div className="text-center font-bold text-indigo-600">{row.original.Shade}</div>,
+      size: 70,
+    },
+    {
+      accessorKey: "Shrinkage",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Shrinkage" onFilterClick={() => {}} />,
+      cell: ({ row }) => <div className="text-center font-mono">{row.original.Shrinkage}</div>,
+      size: 80,
+    },
+  ], []);
+
+  const styleBulletinColumns = useMemo<ColumnDef<StyleBulletinRow>[]>(() => [
+    {
+      accessorKey: "RowId",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Row ID" onFilterClick={() => {}} />,
+      cell: ({ row }) => <span className="font-semibold text-slate-900">{row.original.RowId}</span>,
+      size: 60,
+    },
+    {
+      accessorKey: "Sale_order_No",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Sale Order No" onFilterClick={() => {}} />,
+      cell: ({ row }) => <span className="font-medium">{row.original.Sale_order_No}</span>,
+      size: 110,
+    },
+    {
+      accessorKey: "Customer_Name",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Customer" onFilterClick={() => {}} />,
+      size: 110,
+    },
+    {
+      accessorKey: "Order_No",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Order No" onFilterClick={() => {}} />,
+      size: 110,
+    },
+    {
+      accessorKey: "Operation_Code",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Op Code" onFilterClick={() => {}} />,
+      cell: ({ row }) => <span className="font-mono text-purple-600">{row.original.Operation_Code}</span>,
+      size: 85,
+    },
+    {
+      accessorKey: "Operation_Name",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Op Name" onFilterClick={() => {}} />,
+      cell: ({ row }) => <span className="font-medium text-slate-700">{row.original.Operation_Name}</span>,
+      size: 180,
+    },
+    {
+      accessorKey: "Section",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Section" onFilterClick={() => {}} />,
+      cell: ({ row }) => <span className="text-slate-500">{row.original.Section}</span>,
+      size: 100,
+    },
+    {
+      accessorKey: "Operation_Sequeance",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Sequence" onFilterClick={() => {}} />,
+      cell: ({ row }) => <div className="text-center font-bold text-slate-700">{row.original.Operation_Sequeance}</div>,
+      size: 80,
+    },
+    {
+      accessorKey: "Machine_Type",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Machine Type" onFilterClick={() => {}} />,
+      size: 110,
+    },
+    {
+      accessorKey: "Piece_Rate",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Piece Rate" onFilterClick={() => {}} />,
+      cell: ({ row }) => <div className="text-right font-semibold">{row.original.Piece_Rate}</div>,
+      size: 90,
+    },
+    {
+      accessorKey: "Smv_Sam",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="SMV / SAM" onFilterClick={() => {}} />,
+      cell: ({ row }) => <div className="text-right font-semibold text-purple-600">{row.original.Smv_Sam}</div>,
+      size: 90,
+    },
+    {
+      accessorKey: "First_Operation_Section_Wise",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="First Op (Sec)" onFilterClick={() => {}} />,
+      cell: ({ row }) => (
+        <div className="text-center">
+          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+            row.original.First_Operation_Section_Wise === 1
+              ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+              : "bg-slate-50 text-slate-400"
+          }`}>
+            {row.original.First_Operation_Section_Wise === 1 ? "Yes" : "No"}
+          </span>
+        </div>
+      ),
+      size: 90,
+    },
+    {
+      accessorKey: "Last_Operation_Section_Wise",
+      header: ({ column }) => <DataTableColumnHeader column={column} title="Last Op (Sec)" onFilterClick={() => {}} />,
+      cell: ({ row }) => (
+        <div className="text-center">
+          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+            row.original.Last_Operation_Section_Wise === 1
+              ? "bg-amber-50 text-amber-700 border border-amber-100"
+              : "bg-slate-50 text-slate-400"
+          }`}>
+            {row.original.Last_Operation_Section_Wise === 1 ? "Yes" : "No"}
+          </span>
+        </div>
+      ),
+      size: 90,
+    },
+  ], []);
+
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"cut_report" | "style_bulletin">("cut_report");
@@ -295,7 +485,7 @@ export default function OpenOrderPage() {
       </div>
 
       {/* Search Bar Panel */}
-      <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm relative z-50">
+      <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm relative z-20">
         <div ref={containerRef} className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
           <div className="relative flex-grow">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94a3b8]" />
@@ -415,8 +605,9 @@ export default function OpenOrderPage() {
           </div>
         </div>
       ) : (
-        <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden animate-fade-in">
-          <div className="border-b border-[#e2e8f0] px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-[#fafafa]">
+        <div className="flex flex-col gap-4 animate-fade-in">
+          {/* Header Panel */}
+          <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm bg-[#fafafa]">
             <div>
               <h3 className="text-sm font-bold text-[#0f172a]">
                 {activeTab === "cut_report" ? "Order PO Cut Detail" : "Order Style Bulletin"}
@@ -428,7 +619,7 @@ export default function OpenOrderPage() {
             {activeStyle && (
               <button
                 onClick={() => setShowPageSetupModal(true)}
-                className="flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs animate-fade-in"
+                className="flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs"
               >
                 <Barcode className="w-3.5 h-3.5" />
                 <span>Generate Coupons for {debouncedQuery}</span>
@@ -436,104 +627,12 @@ export default function OpenOrderPage() {
             )}
           </div>
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse min-w-max">
-              <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
-                <tr>
-                  {activeTab === "cut_report" ? (
-                    <>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Row ID</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Sale Order No</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Customer</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Work Order</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-right">Order Qty</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Inseam</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Size</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Color</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Fabric Code</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Wash</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Cut</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Bundle ID</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-right">Bundle Qty</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Shade</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Shrinkage</th>
-                    </>
-                  ) : (
-                    <>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Row ID</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Sale Order No</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Customer</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Order No</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Op Code</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Op Name</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Section</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Sequence</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Machine Type</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-right">Piece Rate</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-right">SMV / SAM</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">First Op (Sec)</th>
-                      <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Last Op (Sec)</th>
-                    </>
-                  )}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-[#f1f5f9]">
-                {activeTab === "cut_report"
-                  ? cutDetails.map((row) => (
-                      <tr key={row.RowId} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 font-semibold text-slate-900">{row.RowId}</td>
-                        <td className="px-4 py-3 font-medium">{row.Sale_Order_No}</td>
-                        <td className="px-4 py-3">{row.Customer_Name}</td>
-                        <td className="px-4 py-3">{row.Work_Order}</td>
-                        <td className="px-4 py-3 text-right font-semibold">{row.Order_Qty_After_Add}</td>
-                        <td className="px-4 py-3 text-center">{row.Inseam}</td>
-                        <td className="px-4 py-3 text-center font-bold">{row.Size}</td>
-                        <td className="px-4 py-3">{row.Color}</td>
-                        <td className="px-4 py-3 text-slate-500">{row.Fabric_Code_Main_Body}</td>
-                        <td className="px-4 py-3">{row.Wash}</td>
-                        <td className="px-4 py-3 text-center font-semibold text-indigo-600">{row.Cut}</td>
-                        <td className="px-4 py-3 text-center font-mono">{row.Bundle_Id}</td>
-                        <td className="px-4 py-3 text-right font-bold">{row.Bundle_Qty}</td>
-                        <td className="px-4 py-3 text-center font-bold text-indigo-600">{row.Shade}</td>
-                        <td className="px-4 py-3 text-center font-mono">{row.Shrinkage}</td>
-                      </tr>
-                    ))
-                  : styleBulletins.map((row) => (
-                      <tr key={row.RowId} className="hover:bg-slate-50 transition-colors">
-                        <td className="px-4 py-3 font-semibold text-slate-900">{row.RowId}</td>
-                        <td className="px-4 py-3 font-medium">{row.Sale_order_No}</td>
-                        <td className="px-4 py-3">{row.Customer_Name}</td>
-                        <td className="px-4 py-3">{row.Order_No}</td>
-                        <td className="px-4 py-3 font-mono text-purple-600">{row.Operation_Code}</td>
-                        <td className="px-4 py-3 font-medium text-slate-700">{row.Operation_Name}</td>
-                        <td className="px-4 py-3 text-slate-500">{row.Section}</td>
-                        <td className="px-4 py-3 text-center font-bold text-slate-700">{row.Operation_Sequeance}</td>
-                        <td className="px-4 py-3">{row.Machine_Type}</td>
-                        <td className="px-4 py-3 text-right font-semibold">{row.Piece_Rate}</td>
-                        <td className="px-4 py-3 text-right font-semibold text-purple-600">{row.Smv_Sam}</td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            row.First_Operation_Section_Wise === 1
-                              ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                              : "bg-slate-50 text-slate-400"
-                          }`}>
-                            {row.First_Operation_Section_Wise === 1 ? "Yes" : "No"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                            row.Last_Operation_Section_Wise === 1
-                              ? "bg-amber-50 text-amber-700 border border-amber-100"
-                              : "bg-slate-50 text-slate-400"
-                          }`}>
-                            {row.Last_Operation_Section_Wise === 1 ? "Yes" : "No"}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-              </tbody>
-            </table>
-          </div>
+          {/* DataTable Component */}
+          {activeTab === "cut_report" ? (
+            <DataTable columns={cutReportColumns} data={cutDetails} />
+          ) : (
+            <DataTable columns={styleBulletinColumns} data={styleBulletins} />
+          )}
         </div>
       )}
     </div>
