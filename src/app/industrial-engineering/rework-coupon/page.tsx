@@ -125,7 +125,8 @@ export default function ReworkCouponPage() {
     if (operations.length === 0) return null;
 
     return {
-      anlNo: cutDetails[0].Sale_Order_No ?? workOrder,
+      workOrder: cutDetails[0].Work_Order ?? workOrder,
+      saleOrderNo: cutDetails[0].Sale_Order_No ?? "",
       customer: cutDetails[0].Customer_Name ?? "",
       styleCode: "",
       generateBy: "",
@@ -146,7 +147,7 @@ export default function ReworkCouponPage() {
   }, [cutDetails, styleBulletins, operationCode, cut, bundleId, workOrder]);
 
   const { handleGeneratePdf: generatePdf, generatingPdf } = useGenerateCouponPdf(
-    activeStyle ?? { anlNo: "", styleCode: "", bundles: [], operations: [] },
+    activeStyle ?? { workOrder: "", saleOrderNo: "", styleCode: "", bundles: [], operations: [] },
   );
   const handleGeneratePdf = async () => {
     await generatePdf();

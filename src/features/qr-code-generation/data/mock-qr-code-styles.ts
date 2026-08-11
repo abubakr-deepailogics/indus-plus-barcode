@@ -4,7 +4,8 @@ import type { QrCodeStyleData } from "../types";
 
 export const MOCK_QR_CODE_STYLES: QrCodeStyleData[] = [
   {
-    anlNo: "57156",
+    workOrder: "57156",
+    saleOrderNo: "SO-57156",
     customer: "REIND",
     styleCode: "R0713326",
     generateBy: "FR5159",
@@ -157,7 +158,8 @@ export const MOCK_QR_CODE_STYLES: QrCodeStyleData[] = [
     ],
   },
   {
-    anlNo: "38920",
+    workOrder: "38920",
+    saleOrderNo: "SO-38920",
     customer: "LEVI'S",
     styleCode: "L5012480",
     generateBy: "FR7844",
@@ -222,7 +224,8 @@ export const MOCK_QR_CODE_STYLES: QrCodeStyleData[] = [
     ],
   },
   {
-    anlNo: "90412",
+    workOrder: "90412",
+    saleOrderNo: "SO-90412",
     customer: "GAP SOURCING",
     styleCode: "G804599",
     generateBy: "FR3312",

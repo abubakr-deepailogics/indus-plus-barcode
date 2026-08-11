@@ -14,7 +14,7 @@ interface QrCodeGenerationFacade {
   pageSetup: PageSetupConfig;
   filteredStyles: QrCodeStyleData[];
   handleModalSearch: () => void;
-  handleAnlInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  handleWorkOrderInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   setSearchQuery: (value: string) => void;
   setSelectedIdx: (idx: number) => void;
   setShowSearchModal: (show: boolean) => void;
@@ -49,7 +49,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     () =>
       MOCK_QR_CODE_STYLES.filter(
         (s) =>
-          s.anlNo.includes(searchQuery) ||
+          s.workOrder.includes(searchQuery) ||
           s.styleCode.toLowerCase().includes(searchQuery.toLowerCase()) ||
           s.customer.toLowerCase().includes(searchQuery.toLowerCase()),
       ),
@@ -61,13 +61,13 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     setShowSearchModal(false);
   };
 
-  const handleAnlInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleWorkOrderInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
-    const found = MOCK_QR_CODE_STYLES.find((s) => s.anlNo === value);
+    const found = MOCK_QR_CODE_STYLES.find((s) => s.workOrder === value);
     if (found) {
       setActiveStyle(found);
     } else {
-      setActiveStyle((prev) => ({ ...prev, anlNo: value }));
+      setActiveStyle((prev) => ({ ...prev, workOrder: value }));
     }
   };
 
@@ -113,7 +113,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     pageSetup,
     filteredStyles,
     handleModalSearch,
-    handleAnlInputChange,
+    handleWorkOrderInputChange,
     setSearchQuery,
     setSelectedIdx,
     setShowSearchModal,

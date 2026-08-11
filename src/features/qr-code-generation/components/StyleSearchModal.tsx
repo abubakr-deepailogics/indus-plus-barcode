@@ -58,7 +58,7 @@ export function StyleSearchModal({
             <thead>
               <tr className="bg-[#f8fafc] border-b border-[#e2e8f0]">
                 <th className="px-4 py-2.5 text-[10px] font-bold text-[#64748b] uppercase tracking-wider w-24">
-                  ANL No
+                  Work Order
                 </th>
                 <th className="px-4 py-2.5 text-[10px] font-bold text-[#64748b] uppercase tracking-wider w-28">
                   Customer
@@ -71,7 +71,7 @@ export function StyleSearchModal({
             <tbody>
               {filteredStyles.map((style) => (
                 <tr
-                  key={style.anlNo}
+                  key={style.workOrder}
                   onClick={() => onSelectIdx(allStyles.indexOf(style))}
                   className={`hover:bg-indigo-50/30 cursor-pointer transition-colors ${
                     selectedIdx === allStyles.indexOf(style)
@@ -86,7 +86,7 @@ export function StyleSearchModal({
                       onChange={() => onSelectIdx(allStyles.indexOf(style))}
                       className="text-[#4f46e5]"
                     />
-                    <span>{style.anlNo}</span>
+                    <span>{style.workOrder}</span>
                   </td>
                   <td className="px-4 py-3 text-xs font-medium text-[#64748b]">
                     {style.customer}

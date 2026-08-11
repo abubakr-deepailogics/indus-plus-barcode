@@ -692,7 +692,8 @@ export default function OpenOrderPage() {
       }));
 
     return {
-      anlNo: orderCuts[0].Sale_Order_No ?? debouncedQuery,
+      workOrder: orderCuts[0].Work_Order ?? debouncedQuery,
+      saleOrderNo: orderCuts[0].Sale_Order_No ?? "",
       customer: orderCuts[0].Customer_Name ?? "",
       // No real style code in this data source — leave blank rather than
       // mislabeling the work order as a style code (see QrCodeCard "St").
@@ -716,7 +717,7 @@ export default function OpenOrderPage() {
 
   const { handleGeneratePdf: generatePdf, generatingPdf } =
     useGenerateCouponPdf(
-      activeStyle ?? { anlNo: "", styleCode: "", bundles: [], operations: [] },
+      activeStyle ?? { workOrder: "", saleOrderNo: "", styleCode: "", bundles: [], operations: [] },
     );
   const handleGeneratePdf = async () => {
     await generatePdf();

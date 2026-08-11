@@ -1,11 +1,14 @@
 "use client";
 
-import React, { useState } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+
+import React, { useState, useEffect } from "react";
 import { Search, Construction, Download, FileText } from "lucide-react";
 
 interface PdfBatch {
   Id: number;
-  AnlNo: string;
+  WorkOrder: string;
+  SaleOrderNo: string | null;
   StyleCode: string;
   CardCount: number;
   CreatedAt: string;
@@ -16,17 +19,15 @@ export default function CouponTracingPage() {
   const [batches, setBatches] = useState<PdfBatch[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [hasSearched, setHasSearched] = useState(false);
 
-  const handleTrace = async () => {
-    const anlNo = code.trim();
-    if (!anlNo || isLoading) return;
-
+  const fetchBatches = async (workOrder: string) => {
     setIsLoading(true);
     setErrorMsg("");
-    setHasSearched(true);
     try {
-      const res = await fetch(`/api/qr-code-generation/pdf?anl_no=${encodeURIComponent(anlNo)}`);
+      const url = workOrder
+        ? `/api/qr-code-generation/pdf?work_order=${encodeURIComponent(workOrder)}`
+        : "/api/qr-code-generation/pdf";
+      const res = await fetch(url);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to look up generated PDFs.");
       setBatches(data.batches || []);
@@ -37,6 +38,13 @@ export default function CouponTracingPage() {
       setIsLoading(false);
     }
   };
+
+  // Show every generated PDF on load; searching re-scopes to one work order.
+  useEffect(() => {
+    fetchBatches("");
+  }, []);
+
+  const handleTrace = () => fetchBatches(code.trim());
 
   return (
     <div className="flex flex-col gap-6 max-w-[900px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
@@ -84,8 +92,9 @@ export default function CouponTracingPage() {
         </div>
       )}
 
-      {/* Generated QR-code PDF batches for the searched work order */}
-      {hasSearched && !errorMsg && (
+      {/* Generated QR-code PDF batches — all of them by default, scoped to
+          one work order after a search. */}
+      {!errorMsg && (
         <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden">
           <div className="border-b border-[#e2e8f0] px-5 py-4 bg-[#fafafa]">
             <h3 className="text-sm font-bold text-[#0f172a]">Generated QR Code PDFs</h3>
@@ -93,17 +102,24 @@ export default function CouponTracingPage() {
           <table className="w-full text-left border-collapse">
             <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
               <tr>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Style Code</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Work Order</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Sale Order No</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Coupons</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Generated At</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-right">Download</th>
               </tr>
             </thead>
             <tbody>
-              {batches.length === 0 ? (
+              {isLoading ? (
                 <tr>
-                  <td colSpan={4} className="px-4 py-6 text-center text-[#94a3b8]">
-                    No generated PDFs found for this order.
+                  <td colSpan={5} className="px-4 py-6 text-center text-[#94a3b8]">
+                    Loading…
+                  </td>
+                </tr>
+              ) : batches.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-[#94a3b8]">
+                    No generated PDFs found{code.trim() ? " for this order" : ""}.
                   </td>
                 </tr>
               ) : (
@@ -111,8 +127,9 @@ export default function CouponTracingPage() {
                   <tr key={batch.Id} className="border-b border-[#f1f5f9] last:border-0">
                     <td className="px-4 py-3 font-semibold text-[#0f172a] flex items-center gap-2">
                       <FileText className="w-3.5 h-3.5 text-[#94a3b8]" />
-                      {batch.StyleCode || "—"}
+                      {batch.WorkOrder}
                     </td>
+                    <td className="px-4 py-3 text-[#334155]">{batch.SaleOrderNo || "—"}</td>
                     <td className="px-4 py-3 text-[#334155]">{batch.CardCount}</td>
                     <td className="px-4 py-3 text-[#334155]">
                       {new Date(batch.CreatedAt).toLocaleString()}

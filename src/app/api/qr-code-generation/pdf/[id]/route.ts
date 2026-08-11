@@ -18,7 +18,7 @@ export async function GET(
       .request()
       .input("id", sql.Int, id)
       .query(
-        `SELECT AnlNo, Pdf FROM dbo.QrCode_Pdf_Batch WHERE Id = @id`,
+        `SELECT WorkOrder, Pdf FROM dbo.QrCode_Pdf_Batch WHERE Id = @id`,
       );
 
     const row = result.recordset[0];
@@ -29,7 +29,7 @@ export async function GET(
     return new Response(row.Pdf, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="coupons-${row.AnlNo}-${id}.pdf"`,
+        "Content-Disposition": `attachment; filename="coupons-${row.WorkOrder}-${id}.pdf"`,
       },
     });
   } catch (err: unknown) {

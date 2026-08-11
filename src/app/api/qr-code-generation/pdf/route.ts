@@ -3,7 +3,8 @@ import { generateCouponPdf } from "@/features/qr-code-generation/services/pdf-ge
 import type { BundleDetailRow, OperationsDetailRow } from "@/features/qr-code-generation/types";
 
 interface GenerateRequestBody {
-  anlNo: string;
+  workOrder: string;
+  saleOrderNo: string;
   styleCode: string;
   bundles: BundleDetailRow[];
   operations: OperationsDetailRow[];
@@ -14,13 +15,14 @@ interface GenerateRequestBody {
 // re-rendering thousands of QR codes every time.
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<GenerateRequestBody>;
-  const { anlNo, styleCode, bundles, operations } = body;
+  const { workOrder, saleOrderNo, styleCode, bundles, operations } = body;
 
   // styleCode is only a display label in the PDF header — some sources
   // (e.g. Open Order) have no real style code and legitimately send "".
-  if (!anlNo || !Array.isArray(bundles) || !Array.isArray(operations)) {
+  // saleOrderNo is likewise best-effort — not every source has one.
+  if (!workOrder || !Array.isArray(bundles) || !Array.isArray(operations)) {
     return Response.json(
-      { error: "anlNo, bundles, and operations are all required." },
+      { error: "workOrder, bundles, and operations are all required." },
       { status: 400 },
     );
   }
@@ -35,7 +37,8 @@ export async function POST(request: Request) {
 
   try {
     const { buffer, cardCount } = await generateCouponPdf({
-      anlNo,
+      workOrder,
+      saleOrderNo: saleOrderNo ?? "",
       styleCode: styleCode ?? "",
       bundles: selectedBundles,
       operations,
@@ -44,14 +47,15 @@ export async function POST(request: Request) {
     const pool = await getPool();
     const result = await pool
       .request()
-      .input("anlNo", sql.NVarChar, anlNo)
+      .input("workOrder", sql.NVarChar, workOrder)
+      .input("saleOrderNo", sql.NVarChar, saleOrderNo || null)
       .input("styleCode", sql.NVarChar, styleCode ?? "")
       .input("cardCount", sql.Int, cardCount)
       .input("pdf", sql.VarBinary(sql.MAX), buffer)
       .query(
-        `INSERT INTO dbo.QrCode_Pdf_Batch (AnlNo, StyleCode, CardCount, Pdf)
+        `INSERT INTO dbo.QrCode_Pdf_Batch (WorkOrder, SaleOrderNo, StyleCode, CardCount, Pdf)
          OUTPUT INSERTED.Id, INSERTED.CreatedAt
-         VALUES (@anlNo, @styleCode, @cardCount, @pdf)`,
+         VALUES (@workOrder, @saleOrderNo, @styleCode, @cardCount, @pdf)`,
       );
 
     const row = result.recordset[0];
@@ -67,26 +71,32 @@ export async function POST(request: Request) {
   }
 }
 
-// Lists past batches for an order so the UI can offer re-download without
-// regenerating.
+// Lists past batches so the UI can offer re-download without regenerating.
+// No work_order → lists every batch (most recent first); with work_order →
+// scoped to that order.
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const anlNo = searchParams.get("anl_no") || "";
-  if (!anlNo) {
-    return Response.json({ error: "anl_no is required." }, { status: 400 });
-  }
+  const workOrder = searchParams.get("work_order") || "";
 
   try {
     const pool = await getPool();
-    const result = await pool
-      .request()
-      .input("anlNo", sql.NVarChar, anlNo)
-      .query(
-        `SELECT Id, AnlNo, StyleCode, CardCount, CreatedAt
-         FROM dbo.QrCode_Pdf_Batch
-         WHERE AnlNo = @anlNo
-         ORDER BY CreatedAt DESC`,
-      );
+    const result = workOrder
+      ? await pool
+          .request()
+          .input("workOrder", sql.NVarChar, workOrder)
+          .query(
+            `SELECT Id, WorkOrder, SaleOrderNo, StyleCode, CardCount, CreatedAt
+             FROM dbo.QrCode_Pdf_Batch
+             WHERE WorkOrder = @workOrder
+             ORDER BY CreatedAt DESC`,
+          )
+      : await pool
+          .request()
+          .query(
+            `SELECT TOP 200 Id, WorkOrder, SaleOrderNo, StyleCode, CardCount, CreatedAt
+             FROM dbo.QrCode_Pdf_Batch
+             ORDER BY CreatedAt DESC`,
+          );
     return Response.json({ batches: result.recordset });
   } catch (err: unknown) {
     console.error("PDF batch list error:", err);

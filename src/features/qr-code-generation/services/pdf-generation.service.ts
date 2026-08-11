@@ -12,7 +12,8 @@ import { buildCouponCards } from "./coupon-pairing.service";
 const FONT_PATH = path.join(process.cwd(), "src/assets/fonts/Roboto-Regular.ttf");
 
 interface GeneratePdfParams {
-  anlNo: string;
+  workOrder: string;
+  saleOrderNo: string;
   styleCode: string;
   bundles: BundleDetailRow[];
   operations: OperationsDetailRow[];
@@ -28,7 +29,8 @@ const GRID_ROWS = 10;
 const CARDS_PER_PAGE = GRID_COLS * GRID_ROWS;
 
 export async function generateCouponPdf({
-  anlNo,
+  workOrder,
+  saleOrderNo,
   styleCode,
   bundles,
   operations,
@@ -74,7 +76,7 @@ export async function generateCouponPdf({
     const rsVal = Math.round(rateNum * qtyNum);
 
     const qrDisplayValue = [
-      `Order: ${anlNo}`,
+      `Order: ${workOrder}`,
       `Cut: ${bundle.transId}`,
       `Bundle: ${bundle.bundleNo}`,
       `Size: ${bundle.size || "/"}`,
@@ -120,11 +122,23 @@ export async function generateCouponPdf({
     const textX = cardX + 5;
     let y = cardY + 4;
 
-    // Header band: style/order, shaded so it reads as its own group.
-    doc.rect(cardX, cardY, cardW, 12).fillColor("#eef2ff").fill();
+    // Header band: style/order + card counter on the same row (counter is
+    // small and right-aligned here, not crammed into the footer next to
+    // the QR where it used to overlap the qty text).
+    const headerH = saleOrderNo ? 20 : 12;
+    doc.rect(cardX, cardY, cardW, headerH).fillColor("#eef2ff").fill();
+    const counterText = `${pageIndex}/${totalCards}`;
+    const counterWidth = 28;
     doc.fillColor("#1e293b").fontSize(6.5)
-      .text(`${styleCode || anlNo}`, textX, y, { width: textWidth, height: 12, ellipsis: true });
-    y = cardY + 15;
+      .text(`${styleCode || workOrder}`, textX, y, { width: textWidth - counterWidth, height: 12, ellipsis: true });
+    doc.fillColor("#64748b").fontSize(5)
+      .text(counterText, textX + textWidth - counterWidth, y + 1, { width: counterWidth, align: "right" });
+    if (saleOrderNo) {
+      y += 8;
+      doc.fillColor("#475569").fontSize(5.5)
+        .text(`SO: ${saleOrderNo}`, textX, y, { width: textWidth, ellipsis: true });
+    }
+    y = cardY + headerH + 3;
 
     // Cut/bundle/size/inseam — one grouped 2x2 block, same identity family.
     const colW = textWidth / 2;
@@ -134,28 +148,25 @@ export async function generateCouponPdf({
     y += 9;
     doc.text(`Size: ${bundle.size || "/"}`, textX, y, { width: colW });
     doc.text(`Inseam: ${bundle.inseam || "-"}`, textX + colW, y, { width: colW });
-    y += 12;
-
-    // Operation band — its own row, separated with a hairline.
-    doc.moveTo(textX, y - 2).lineTo(textX + textWidth, y - 2).strokeColor("#e2e8f0").lineWidth(0.5).stroke();
-    doc.fillColor("#000000").fontSize(6)
-      .text(`Op ${op.opNo}: ${op.operationName}`, textX, y, { width: textWidth, height: 16, ellipsis: true });
-    y += 17;
+    y += 11;
 
     // Qty/rate/amount footer band — the money group, visually anchored to
     // the card bottom regardless of how tall the operation text ran.
     const footerY = cardY + cardH - 12;
+
+    // Operation band — its own row, separated with a hairline. Height is
+    // clipped to whatever room is actually left above the footer, so a
+    // taller header (e.g. sale order line) never pushes this into the
+    // qty/amount row below.
+    const opTextH = Math.max(footerY - y - 4, 8);
+    doc.moveTo(textX, y - 2).lineTo(textX + textWidth, y - 2).strokeColor("#e2e8f0").lineWidth(0.5).stroke();
+    doc.fillColor("#000000").fontSize(6)
+      .text(`Op ${op.opNo}: ${op.operationName}`, textX, y, { width: textWidth, height: opTextH, ellipsis: true });
     doc.moveTo(textX, footerY - 2).lineTo(textX + textWidth, footerY - 2).strokeColor("#e2e8f0").lineWidth(0.5).stroke();
     doc.fillColor("#334155").fontSize(5.5)
-      .text(`Qty ${qtyNum} x ${op.rate}`, textX, footerY, { width: textWidth * 0.6 });
+      .text(`Qty ${qtyNum} x ${op.rate || "?"}`, textX, footerY, { width: textWidth * 0.6 });
     doc.fillColor("#1e293b").fontSize(6.5)
       .text(`Rs ${rsVal}`, textX + textWidth * 0.6, footerY - 1, { width: textWidth * 0.4, align: "right" });
-
-    doc.fillColor("#94a3b8").fontSize(5)
-      .text(`${pageIndex}/${totalCards}`, cardX + cardW - qrSize - 6 - 24, cardY + cardH - 8, {
-        width: 24,
-        align: "right",
-      });
 
     doc.image(qrPng, cardX + cardW - qrSize - 4, cardY + (cardH - qrSize) / 2, {
       width: qrSize,

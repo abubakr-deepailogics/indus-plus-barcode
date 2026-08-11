@@ -23,7 +23,8 @@ export interface BundleDetailRow {
 }
 
 export interface QrCodeStyleData {
-  anlNo: string;
+  workOrder: string;
+  saleOrderNo: string;
   customer: string;
   styleCode: string;
   generateBy: string;
@@ -59,7 +60,7 @@ export interface QrCodeCardProps {
   pageIndex: number;
   totalPages: number;
   styleCode: string;
-  anlNo: string;
+  workOrder: string;
   bundle: BundleDetailRow;
   op: OperationsDetailRow;
 }

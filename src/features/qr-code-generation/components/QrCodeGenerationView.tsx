@@ -56,7 +56,7 @@ export function QrCodeGenerationView() {
         {/* Main Parameters Panel */}
         <ParametersPanel
           activeStyle={facade.activeStyle}
-          onAnlInputChange={facade.handleAnlInputChange}
+          onWorkOrderInputChange={facade.handleWorkOrderInputChange}
           onOpenSearchModal={facade.openSearchModal}
           onOpenPageSetupModal={() => facade.setShowPageSetupModal(true)}
           onFieldChange={facade.handleFieldChange}

@@ -6,7 +6,7 @@ import type { QrCodeStyleData } from "../types";
 
 interface ParametersPanelProps {
   activeStyle: QrCodeStyleData;
-  onAnlInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onWorkOrderInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
   onOpenSearchModal: () => void;
   onOpenPageSetupModal: () => void;
   onFieldChange: (field: keyof QrCodeStyleData, value: string) => void;
@@ -14,7 +14,7 @@ interface ParametersPanelProps {
 
 export function ParametersPanel({
   activeStyle,
-  onAnlInputChange,
+  onWorkOrderInputChange,
   onOpenSearchModal,
   onOpenPageSetupModal,
   onFieldChange,
@@ -24,13 +24,13 @@ export function ParametersPanel({
       <div className="lg:col-span-10 grid grid-cols-1 md:grid-cols-4 gap-4">
         <div className="flex flex-col gap-1.5">
           <label className="font-bold text-[#475569] text-[11px]">
-            ANL#
+            Work Order
           </label>
           <div className="flex gap-1">
             <input
               type="text"
-              value={activeStyle.anlNo}
-              onChange={onAnlInputChange}
+              value={activeStyle.workOrder}
+              onChange={onWorkOrderInputChange}
               className="flex-1 px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-[#f8fafc] font-semibold focus:outline-none"
             />
             <button
