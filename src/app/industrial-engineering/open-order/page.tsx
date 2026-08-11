@@ -527,6 +527,38 @@ export default function OpenOrderPage() {
   );
   const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
   const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState<"all" | "washing" | "sewing" | "finishing">("all");
+
+  const getDepartment = (row: StyleBulletinRow): "washing" | "sewing" | "finishing" => {
+    const section = (row.Section || "").toLowerCase();
+    const opName = (row.Operation_Name || "").toLowerCase();
+    
+    if (section.includes("wash") || opName.includes("wash")) return "washing";
+    
+    if (
+      section.includes("finish") ||
+      section.includes("pack") ||
+      section.includes("press") ||
+      section.includes("iron") ||
+      section.includes("quality") ||
+      section.includes("carton") ||
+      opName.includes("finish") ||
+      opName.includes("pack") ||
+      opName.includes("press") ||
+      opName.includes("iron") ||
+      opName.includes("quality") ||
+      opName.includes("carton")
+    ) {
+      return "finishing";
+    }
+    
+    return "sewing";
+  };
+
+  const filteredStyleBulletins = useMemo(() => {
+    if (selectedDeptFilter === "all") return styleBulletins;
+    return styleBulletins.filter((row) => getDepartment(row) === selectedDeptFilter);
+  }, [styleBulletins, selectedDeptFilter]);
   const [isLoading, setIsLoading] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -597,6 +629,7 @@ export default function OpenOrderPage() {
   // Fetch data from API only when the active (committed) search query
   // changes — typing alone must not refetch/replace the table.
   useEffect(() => {
+    setSelectedDeptFilter("all");
     if (!activeSearchQuery) {
       setCutDetails([]);
       setStyleBulletins([]);
@@ -637,6 +670,7 @@ export default function OpenOrderPage() {
   // Handle Tab changes with simulated smooth skeleton transition
   const handleTabChange = (tab: "cut_report" | "style_bulletin") => {
     if (tab === activeTab) return;
+    setSelectedDeptFilter("all");
     setIsTransitioning(true);
     // Brief transition period to show skeleton loader
     setTimeout(() => {
@@ -913,7 +947,47 @@ export default function OpenOrderPage() {
             {activeTab === "cut_report" ? (
               <DataTable columns={cutReportColumns} data={cutDetails} />
             ) : (
-              <DataTable columns={styleBulletinColumns} data={styleBulletins} />
+              <DataTable
+                columns={styleBulletinColumns}
+                data={filteredStyleBulletins}
+                toolbarChildren={
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDeptFilter(selectedDeptFilter === "washing" ? "all" : "washing")}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                        selectedDeptFilter === "washing"
+                          ? "bg-red-50 text-red-600 border-red-200"
+                          : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      washing
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDeptFilter(selectedDeptFilter === "sewing" ? "all" : "sewing")}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                        selectedDeptFilter === "sewing"
+                          ? "bg-amber-50 text-amber-600 border-amber-200"
+                          : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      sewing
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDeptFilter(selectedDeptFilter === "finishing" ? "all" : "finishing")}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                        selectedDeptFilter === "finishing"
+                          ? "bg-purple-50 text-purple-600 border-purple-200"
+                          : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      finishing
+                    </button>
+                  </div>
+                }
+              />
             )}
           </div>
         )}

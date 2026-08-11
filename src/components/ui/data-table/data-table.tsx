@@ -24,12 +24,14 @@ interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
   data: TData[];
   isLoading?: boolean;
+  toolbarChildren?: React.ReactNode;
 }
 
 export function DataTable<TData, TValue>({
   columns,
   data,
   isLoading = false,
+  toolbarChildren,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -180,7 +182,7 @@ export function DataTable<TData, TValue>({
   return (
     <div className="w-full space-y-4">
       {/* Top Toolbar containing Search input and the "Columns" hide/show dropdown menu */}
-      <div className="flex items-center justify-between gap-3">
+      <div className="flex items-center justify-start gap-3 flex-wrap">
         <div className="relative w-64">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
           <input
@@ -191,6 +193,7 @@ export function DataTable<TData, TValue>({
             className="w-full pl-9 pr-3 py-2 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
           />
         </div>
+        {toolbarChildren}
         <DropdownMenu>
           <DropdownMenuTrigger className="flex items-center gap-1 bg-white hover:bg-[#f8fafc]/80 text-[#475569] border border-[#e2e8f0] px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs ml-auto hover:text-[#0f172a] focus:outline-none">
             <span>Columns</span>
