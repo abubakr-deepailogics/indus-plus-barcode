@@ -521,7 +521,7 @@ export default function OpenOrderPage() {
   );
 
   const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedQuery, setDebouncedQuery] = useState("");
+  const [activeSearchQuery, setActiveSearchQuery] = useState("");
   const [activeTab, setActiveTab] = useState<"cut_report" | "style_bulletin">(
     "cut_report",
   );
@@ -544,17 +544,6 @@ export default function OpenOrderPage() {
     margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 },
     gridFormat: "3x10",
   });
-
-  // Debounce logic for search query
-  useEffect(() => {
-    const handler = setTimeout(() => {
-      setDebouncedQuery(searchQuery);
-    }, 500);
-
-    return () => {
-      clearTimeout(handler);
-    };
-  }, [searchQuery]);
 
   // Fetch autocomplete suggestions as user types
   useEffect(() => {
@@ -599,12 +588,16 @@ export default function OpenOrderPage() {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape") {
       setShowSuggestions(false);
+    } else if (e.key === "Enter") {
+      setActiveSearchQuery(searchQuery);
+      setShowSuggestions(false);
     }
   };
 
-  // Fetch data from API on debounced query changes
+  // Fetch data from API only when the active (committed) search query
+  // changes — typing alone must not refetch/replace the table.
   useEffect(() => {
-    if (!debouncedQuery) {
+    if (!activeSearchQuery) {
       setCutDetails([]);
       setStyleBulletins([]);
       setHasSearched(false);
@@ -617,7 +610,7 @@ export default function OpenOrderPage() {
       setHasSearched(true);
       try {
         const response = await fetch(
-          `/api/open-order?work_order=${encodeURIComponent(debouncedQuery)}`,
+          `/api/open-order?work_order=${encodeURIComponent(activeSearchQuery)}`,
         );
         if (!response.ok) {
           const errData = await response.json();
@@ -639,7 +632,7 @@ export default function OpenOrderPage() {
     };
 
     fetchData();
-  }, [debouncedQuery]);
+  }, [activeSearchQuery]);
 
   // Handle Tab changes with simulated smooth skeleton transition
   const handleTabChange = (tab: "cut_report" | "style_bulletin") => {
@@ -659,7 +652,7 @@ export default function OpenOrderPage() {
   // Build the coupon-printable style data for the searched work order from
   // the already-fetched cut detail (bundles) and style bulletin (operations).
   const activeStyle: QrCodeStyleData | null = useMemo(() => {
-    if (!debouncedQuery || cutDetails.length === 0) return null;
+    if (!activeSearchQuery || cutDetails.length === 0) return null;
     const orderCuts = cutDetails;
 
     const bundles = orderCuts.map((row) => ({
@@ -692,7 +685,7 @@ export default function OpenOrderPage() {
       }));
 
     return {
-      workOrder: orderCuts[0].Work_Order ?? debouncedQuery,
+      workOrder: orderCuts[0].Work_Order ?? activeSearchQuery,
       saleOrderNo: orderCuts[0].Sale_Order_No ?? "",
       customer: orderCuts[0].Customer_Name ?? "",
       // No real style code in this data source — leave blank rather than
@@ -713,7 +706,7 @@ export default function OpenOrderPage() {
       operations,
       bundles,
     };
-  }, [debouncedQuery, cutDetails, styleBulletins]);
+  }, [activeSearchQuery, cutDetails, styleBulletins]);
 
   const { handleGeneratePdf: generatePdf, generatingPdf } =
     useGenerateCouponPdf(
@@ -775,7 +768,7 @@ export default function OpenOrderPage() {
                       key={suggestion}
                       onClick={() => {
                         setSearchQuery(suggestion);
-                        setDebouncedQuery(suggestion);
+                        setActiveSearchQuery(suggestion);
                         setShowSuggestions(false);
                       }}
                       className="w-full text-left px-4 py-2.5 hover:bg-indigo-50/50 text-slate-700 hover:text-[#4f46e5] font-semibold transition-all text-xs cursor-pointer block"
@@ -788,7 +781,7 @@ export default function OpenOrderPage() {
             </div>
             <button
               onClick={() => {
-                setDebouncedQuery(searchQuery);
+                setActiveSearchQuery(searchQuery);
                 setShowSuggestions(false);
               }}
               className="flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm cursor-pointer animate-fade-in"
@@ -865,7 +858,7 @@ export default function OpenOrderPage() {
               </h3>
               <p className="text-xs text-[#64748b] mt-1">
                 We couldn&apos;t find any records for work order{" "}
-                <strong className="text-slate-800">`{debouncedQuery}`</strong>{" "}
+                <strong className="text-slate-800">`{activeSearchQuery}`</strong>{" "}
                 in the{" "}
                 {activeTab === "cut_report" ? "Cut Detail" : "Style Bulletin"}{" "}
                 table.
@@ -902,7 +895,7 @@ export default function OpenOrderPage() {
                 </h3>
                 <p className="text-[10px] text-[#64748b] mt-0.5">
                   Showing {activeRecordsCount} records matching Work Order{" "}
-                  <strong className="text-slate-700">`{debouncedQuery}`</strong>
+                  <strong className="text-slate-700">`{activeSearchQuery}`</strong>
                 </p>
               </div>
               {activeStyle && (
@@ -911,7 +904,7 @@ export default function OpenOrderPage() {
                   className="flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs"
                 >
                   <QrCode className="w-3.5 h-3.5" />
-                  <span>Generate Coupons for {debouncedQuery}</span>
+                  <span>Generate Coupons for {activeSearchQuery}</span>
                 </button>
               )}
             </div>
