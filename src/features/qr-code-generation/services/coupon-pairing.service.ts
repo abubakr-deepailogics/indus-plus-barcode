@@ -8,13 +8,13 @@ export interface CouponCard {
 /**
  * Builds one coupon card per bundle per operation (full cross product of
  * whatever bundles/operations are passed in — callers decide how many
- * operations belong in the run, e.g. open-order caps to the first 2,
- * rework-coupon can pass just one or all of them). Cards are ordered
+ * operations belong in the run, e.g. rework-coupon can pass just one or
+ * all of them). Cards are ordered
  * operation-major: all cards for op1 (across every bundle, cut-sorted)
  * come first, then all cards for op2, etc. Within an operation, bundles
  * are cut-major (grouped by `transId`, sorted ascending). Input order is
  * not relied upon — the DB query has no guaranteed ORDER BY on cut, but
- * operations are expected pre-sorted by Operation_Sequeance (done at the
+ * operations are expected pre-sorted by Operation_Sequence (done at the
  * fetch layer).
  *
  * Example: cut1 has B1,B2 / cut2 has B3, operations op1,op2 →

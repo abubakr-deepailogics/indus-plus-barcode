@@ -1,10 +1,42 @@
 "use client";
 
 import React, { useState } from "react";
-import { Search, Construction } from "lucide-react";
+import { Search, Construction, Download, FileText } from "lucide-react";
+
+interface PdfBatch {
+  Id: number;
+  AnlNo: string;
+  StyleCode: string;
+  CardCount: number;
+  CreatedAt: string;
+}
 
 export default function CouponTracingPage() {
   const [code, setCode] = useState("");
+  const [batches, setBatches] = useState<PdfBatch[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const handleTrace = async () => {
+    const anlNo = code.trim();
+    if (!anlNo || isLoading) return;
+
+    setIsLoading(true);
+    setErrorMsg("");
+    setHasSearched(true);
+    try {
+      const res = await fetch(`/api/qr-code-generation/pdf?anl_no=${encodeURIComponent(anlNo)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to look up generated PDFs.");
+      setBatches(data.batches || []);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "An unexpected error occurred.");
+      setBatches([]);
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-6 max-w-[900px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
@@ -31,18 +63,76 @@ export default function CouponTracingPage() {
             type="text"
             value={code}
             onChange={(e) => setCode(e.target.value)}
+            onKeyDown={(e) => e.key === "Enter" && handleTrace()}
             placeholder="Coupon code, bundle ID, or work order"
             className="flex-grow px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
           />
           <button
-            disabled
-            className="flex items-center justify-center gap-2 bg-[#4f46e5] text-white px-5 py-2.5 rounded-xl font-bold shadow-sm opacity-40 cursor-not-allowed"
+            onClick={handleTrace}
+            disabled={!code.trim() || isLoading}
+            className="flex items-center justify-center gap-2 bg-[#4f46e5] text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:bg-[#4338ca] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Search className="w-3.5 h-3.5" />
-            <span>Trace</span>
+            <span>{isLoading ? "Searching…" : "Trace"}</span>
           </button>
         </div>
       </div>
+
+      {errorMsg && (
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-2xl p-4 text-xs font-semibold">
+          {errorMsg}
+        </div>
+      )}
+
+      {/* Generated QR-code PDF batches for the searched work order */}
+      {hasSearched && !errorMsg && (
+        <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden">
+          <div className="border-b border-[#e2e8f0] px-5 py-4 bg-[#fafafa]">
+            <h3 className="text-sm font-bold text-[#0f172a]">Generated QR Code PDFs</h3>
+          </div>
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
+              <tr>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Style Code</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Coupons</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Generated At</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-right">Download</th>
+              </tr>
+            </thead>
+            <tbody>
+              {batches.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="px-4 py-6 text-center text-[#94a3b8]">
+                    No generated PDFs found for this order.
+                  </td>
+                </tr>
+              ) : (
+                batches.map((batch) => (
+                  <tr key={batch.Id} className="border-b border-[#f1f5f9] last:border-0">
+                    <td className="px-4 py-3 font-semibold text-[#0f172a] flex items-center gap-2">
+                      <FileText className="w-3.5 h-3.5 text-[#94a3b8]" />
+                      {batch.StyleCode || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-[#334155]">{batch.CardCount}</td>
+                    <td className="px-4 py-3 text-[#334155]">
+                      {new Date(batch.CreatedAt).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-right">
+                      <a
+                        href={`/api/qr-code-generation/pdf/${batch.Id}`}
+                        className="inline-flex items-center gap-1.5 text-[#4f46e5] font-bold hover:underline"
+                      >
+                        <Download className="w-3.5 h-3.5" />
+                        Download
+                      </a>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {/* Placeholder results table shape */}
       <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden opacity-60">

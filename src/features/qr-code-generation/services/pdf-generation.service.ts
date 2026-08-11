@@ -18,10 +18,14 @@ interface GeneratePdfParams {
   operations: OperationsDetailRow[];
 }
 
-// One page per card, laid out simply (label-per-page) — this is the
-// server-side render used to produce a storable PDF, independent of the
-// on-screen grid print layout in PrintableQrCodesArea.
-const PAGE_SIZE: [number, number] = [288, 216]; // 4in x 3in in points (72pt/in)
+// US Letter, points (72pt/in). Grid: 4 cols x 10 rows = 40 cards/page —
+// matches the density of a typical printed coupon sheet (small card,
+// registration marks at corners for cutting).
+const PAGE_SIZE: [number, number] = [612, 792];
+const PAGE_MARGIN = 18;
+const GRID_COLS = 4;
+const GRID_ROWS = 10;
+const CARDS_PER_PAGE = GRID_COLS * GRID_ROWS;
 
 export async function generateCouponPdf({
   anlNo,
@@ -32,7 +36,13 @@ export async function generateCouponPdf({
   const cards = buildCouponCards(bundles, operations);
   const totalCards = cards.length;
 
-  const doc = new PDFDocument({ size: PAGE_SIZE, margin: 12, bufferPages: false, font: FONT_PATH });
+  const usableWidth = PAGE_SIZE[0] - PAGE_MARGIN * 2;
+  const usableHeight = PAGE_SIZE[1] - PAGE_MARGIN * 2;
+  const cellWidth = usableWidth / GRID_COLS;
+  const cellHeight = usableHeight / GRID_ROWS;
+  const qrSize = Math.min(cellHeight - 30, cellWidth * 0.36);
+
+  const doc = new PDFDocument({ size: PAGE_SIZE, margin: 0, bufferPages: false, font: FONT_PATH });
   const chunks: Buffer[] = [];
   doc.on("data", (chunk: Buffer) => chunks.push(chunk));
   const done = new Promise<Buffer>((resolve, reject) => {
@@ -40,16 +50,24 @@ export async function generateCouponPdf({
     doc.on("error", reject);
   });
 
-  // ponytail: cards are rendered and flushed one at a time rather than all
-  // held as PDFKit objects at once, so memory stays flat for thousands of
+  // ponytail: cards are rendered and flushed one at a time (not held as
+  // PDFKit objects all at once), so memory stays flat for thousands of
   // cards. If this needs to run against tens of thousands, move to a
-  // streaming HTTP response instead of buffering the whole PDF in memory
-  // before the DB insert.
+  // streaming HTTP response instead of buffering the whole PDF before
+  // the DB insert.
   for (let i = 0; i < cards.length; i++) {
     const { bundle, op } = cards[i];
     const pageIndex = i + 1;
+    const posOnPage = i % CARDS_PER_PAGE;
 
-    if (i > 0) doc.addPage();
+    if (i > 0 && posOnPage === 0) doc.addPage();
+
+    const col = posOnPage % GRID_COLS;
+    const row = Math.floor(posOnPage / GRID_COLS);
+    const cellX = PAGE_MARGIN + col * cellWidth;
+    const cellY = PAGE_MARGIN + row * cellHeight;
+    const padX = cellX + 6;
+    const padY = cellY + 6;
 
     const rateNum = parseFloat(op.rate || "0");
     const qtyNum = bundle.pcs || 0;
@@ -60,12 +78,12 @@ export async function generateCouponPdf({
       `Cut: ${bundle.transId}`,
       `Bundle: ${bundle.bundleNo}`,
       `Size: ${bundle.size || "/"}`,
+      `Inseam: ${bundle.inseam || "-"}`,
       `Op No: ${op.opNo}`,
       `Op Name: ${op.operationName}`,
       `Coupon: ${pageIndex}/${totalCards}`,
       `Qty: ${qtyNum}`,
       `Rate: ${op.rate}`,
-      `Inc: ${bundle.inseam || "-"}`,
       `Rs: ${rsVal}`,
     ].join("\n");
 
@@ -75,12 +93,74 @@ export async function generateCouponPdf({
       width: 150,
     });
 
-    doc.fontSize(9).text(`${styleCode}  |  Order: ${anlNo}`, { continued: false });
-    doc.fontSize(8).text(`Cut: ${bundle.transId}   Bundle: ${bundle.bundleNo}   Size: ${bundle.size || "/"}`);
-    doc.text(`Op ${op.opNo}: ${op.operationName}`);
-    doc.text(`Qty: ${qtyNum}   Rate: ${op.rate}   Rs: ${rsVal}`);
-    doc.text(`Coupon ${pageIndex}/${totalCards}`);
-    doc.image(qrPng, doc.page.width - 162, 12, { width: 150, height: 150 });
+    // Solid outer card border (dashed cut-line just outside it) so each
+    // coupon reads as one boxed unit instead of loose text on a grid line.
+    doc.dash(2, { space: 2 })
+      .rect(cellX, cellY, cellWidth, cellHeight)
+      .strokeColor("#bbbbbb")
+      .stroke()
+      .undash();
+    const cardX = cellX + 2;
+    const cardY = cellY + 2;
+    const cardW = cellWidth - 4;
+    const cardH = cellHeight - 4;
+    doc.rect(cardX, cardY, cardW, cardH).strokeColor("#94a3b8").lineWidth(0.6).stroke();
+
+    // Registration marks at cell corners.
+    doc.strokeColor("#cccccc");
+    for (const [mx, my] of [
+      [cellX, cellY], [cellX + cellWidth, cellY],
+      [cellX, cellY + cellHeight], [cellX + cellWidth, cellY + cellHeight],
+    ]) {
+      doc.moveTo(mx - 3, my).lineTo(mx + 3, my).stroke();
+      doc.moveTo(mx, my - 3).lineTo(mx, my + 3).stroke();
+    }
+
+    const textWidth = cardW - qrSize - 12;
+    const textX = cardX + 5;
+    let y = cardY + 4;
+
+    // Header band: style/order, shaded so it reads as its own group.
+    doc.rect(cardX, cardY, cardW, 12).fillColor("#eef2ff").fill();
+    doc.fillColor("#1e293b").fontSize(6.5)
+      .text(`${styleCode || anlNo}`, textX, y, { width: textWidth, height: 12, ellipsis: true });
+    y = cardY + 15;
+
+    // Cut/bundle/size/inseam — one grouped 2x2 block, same identity family.
+    const colW = textWidth / 2;
+    doc.fillColor("#334155").fontSize(6);
+    doc.text(`Cut: ${bundle.transId}`, textX, y, { width: colW });
+    doc.text(`B#: ${bundle.bundleNo}`, textX + colW, y, { width: colW });
+    y += 9;
+    doc.text(`Size: ${bundle.size || "/"}`, textX, y, { width: colW });
+    doc.text(`Inseam: ${bundle.inseam || "-"}`, textX + colW, y, { width: colW });
+    y += 12;
+
+    // Operation band — its own row, separated with a hairline.
+    doc.moveTo(textX, y - 2).lineTo(textX + textWidth, y - 2).strokeColor("#e2e8f0").lineWidth(0.5).stroke();
+    doc.fillColor("#000000").fontSize(6)
+      .text(`Op ${op.opNo}: ${op.operationName}`, textX, y, { width: textWidth, height: 16, ellipsis: true });
+    y += 17;
+
+    // Qty/rate/amount footer band — the money group, visually anchored to
+    // the card bottom regardless of how tall the operation text ran.
+    const footerY = cardY + cardH - 12;
+    doc.moveTo(textX, footerY - 2).lineTo(textX + textWidth, footerY - 2).strokeColor("#e2e8f0").lineWidth(0.5).stroke();
+    doc.fillColor("#334155").fontSize(5.5)
+      .text(`Qty ${qtyNum} x ${op.rate}`, textX, footerY, { width: textWidth * 0.6 });
+    doc.fillColor("#1e293b").fontSize(6.5)
+      .text(`Rs ${rsVal}`, textX + textWidth * 0.6, footerY - 1, { width: textWidth * 0.4, align: "right" });
+
+    doc.fillColor("#94a3b8").fontSize(5)
+      .text(`${pageIndex}/${totalCards}`, cardX + cardW - qrSize - 6 - 24, cardY + cardH - 8, {
+        width: 24,
+        align: "right",
+      });
+
+    doc.image(qrPng, cardX + cardW - qrSize - 4, cardY + (cardH - qrSize) / 2, {
+      width: qrSize,
+      height: qrSize,
+    });
   }
 
   doc.end();

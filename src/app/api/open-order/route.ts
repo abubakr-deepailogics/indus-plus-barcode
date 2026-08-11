@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     const styleBulletinResult = await pool
       .request()
       .input("wo", sql.NVarChar, workOrder)
-      .query("SELECT * FROM dbo.Order_STyleBulletin WHERE Order_No = @wo ORDER BY Operation_Sequeance ASC");
+      .query("SELECT * FROM dbo.Order_StyleBulletin WHERE Order_No = @wo ORDER BY Operation_Sequence ASC");
 
     return Response.json({
       cutDetails: cutDetailResult.recordset,

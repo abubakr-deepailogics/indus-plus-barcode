@@ -7,7 +7,6 @@ interface PageSetupModalProps {
   pageSetup: PageSetupConfig;
   onPageSetupChange: (config: PageSetupConfig) => void;
   onClose: () => void;
-  onPrint: () => void;
   onGeneratePdf: () => void;
   generatingPdf: boolean;
 }
@@ -16,7 +15,6 @@ export function PageSetupModal({
   pageSetup,
   onPageSetupChange,
   onClose,
-  onPrint,
   onGeneratePdf,
   generatingPdf,
 }: PageSetupModalProps) {
@@ -202,12 +200,6 @@ export function PageSetupModal({
             className="bg-white border border-[#4f46e5] text-[#4f46e5] px-5 py-2.5 rounded-xl font-bold hover:bg-[#eef2ff] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {generatingPdf ? "Generating…" : "Generate PDF"}
-          </button>
-          <button
-            onClick={onPrint}
-            className="bg-[#4f46e5] hover:bg-[#4338ca] text-white px-7 py-2.5 rounded-xl font-bold transition-all shadow-md"
-          >
-            Print
           </button>
         </div>
       </div>

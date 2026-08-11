@@ -8,7 +8,6 @@ import { OperationsDetailTable } from "./OperationsDetailTable";
 import { BundleDetailTable } from "./BundleDetailTable";
 import { StyleSearchModal } from "./StyleSearchModal";
 import { PageSetupModal } from "./PageSetupModal";
-import { PrintableQrCodesArea } from "./PrintableQrCodesArea";
 
 export function QrCodeGenerationView() {
   const facade = useQrCodeGenerationFacade();
@@ -123,17 +122,10 @@ export function QrCodeGenerationView() {
           pageSetup={facade.pageSetup}
           onPageSetupChange={facade.setPageSetup}
           onClose={() => facade.setShowPageSetupModal(false)}
-          onPrint={facade.handlePrint}
           onGeneratePdf={facade.handleGeneratePdf}
           generatingPdf={facade.generatingPdf}
         />
       )}
-
-      {/* Printable QR Codes Area */}
-      <PrintableQrCodesArea
-        activeStyle={facade.activeStyle}
-        pageSetup={facade.pageSetup}
-      />
     </>
   );
 }

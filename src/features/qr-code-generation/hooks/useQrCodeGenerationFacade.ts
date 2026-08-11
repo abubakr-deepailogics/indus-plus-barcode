@@ -25,7 +25,6 @@ interface QrCodeGenerationFacade {
   handleOperationChange: (id: number, field: string, value: boolean) => void;
   handleBundleSelChange: (id: number, checked: boolean) => void;
   handleReworkQtyBundleChange: (value: string) => void;
-  handlePrint: () => void;
   handleGeneratePdf: () => Promise<void>;
   generatingPdf: boolean;
 }
@@ -99,13 +98,6 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     setActiveStyle((prev) => ({ ...prev, reworkQtyBundle: value }));
   };
 
-  const handlePrint = () => {
-    setShowPageSetupModal(false);
-    setTimeout(() => {
-      window.print();
-    }, 300);
-  };
-
   const { handleGeneratePdf: generatePdf, generatingPdf } = useGenerateCouponPdf(activeStyle);
   const handleGeneratePdf = async () => {
     await generatePdf();
@@ -132,7 +124,6 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     handleOperationChange,
     handleBundleSelChange,
     handleReworkQtyBundleChange,
-    handlePrint,
     handleGeneratePdf,
     generatingPdf,
   };

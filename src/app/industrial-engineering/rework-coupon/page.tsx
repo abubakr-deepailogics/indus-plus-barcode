@@ -4,7 +4,6 @@ import React, { useState, useMemo } from "react";
 import { RotateCcw, AlertCircle, QrCode } from "lucide-react";
 import type { QrCodeStyleData, PageSetupConfig } from "@/features/qr-code-generation/types";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
-import { PrintableQrCodesArea } from "@/features/qr-code-generation/components/PrintableQrCodesArea";
 import { useGenerateCouponPdf } from "@/features/qr-code-generation/hooks/useGenerateCouponPdf";
 
 interface CutDetailRow {
@@ -25,7 +24,7 @@ interface StyleBulletinRow {
   Operation_Code?: string;
   Operation_Name?: string;
   Section?: string;
-  Operation_Sequeance?: number;
+  Operation_Sequence?: number;
   Piece_Rate?: number;
   Smv_Sam?: number;
   Last_Operation_Section_Wise?: number;
@@ -106,11 +105,11 @@ export default function ReworkCouponPage() {
 
     const allOperations = styleBulletins
       .slice()
-      .sort((a, b) => (a.Operation_Sequeance ?? 0) - (b.Operation_Sequeance ?? 0))
+      .sort((a, b) => (a.Operation_Sequence ?? 0) - (b.Operation_Sequence ?? 0))
       .map((row) => ({
         id: row.RowId,
         section: row.Section ?? "",
-        seqNo: String(row.Operation_Sequeance ?? ""),
+        seqNo: String(row.Operation_Sequence ?? ""),
         opNo: row.Operation_Code ?? "",
         operationName: row.Operation_Name ?? "",
         smv: String(row.Smv_Sam ?? ""),
@@ -145,11 +144,6 @@ export default function ReworkCouponPage() {
       bundles,
     };
   }, [cutDetails, styleBulletins, operationCode, cut, bundleId, workOrder]);
-
-  const handlePrint = () => {
-    setShowPageSetupModal(false);
-    setTimeout(() => window.print(), 300);
-  };
 
   const { handleGeneratePdf: generatePdf, generatingPdf } = useGenerateCouponPdf(
     activeStyle ?? { anlNo: "", styleCode: "", bundles: [], operations: [] },
@@ -275,7 +269,7 @@ export default function ReworkCouponPage() {
             <h3 className="text-sm font-bold text-[#0f172a]">Bundle Found</h3>
             <p className="text-[11px] text-[#64748b] mt-0.5">
               Cut {cut} · Bundle {bundleId} · {activeStyle.operations.length} operation
-              {activeStyle.operations.length === 1 ? "" : "s"} to print
+              {activeStyle.operations.length === 1 ? "" : "s"}
             </p>
           </div>
           <button
@@ -294,14 +288,9 @@ export default function ReworkCouponPage() {
         pageSetup={pageSetup}
         onPageSetupChange={setPageSetup}
         onClose={() => setShowPageSetupModal(false)}
-        onPrint={handlePrint}
         onGeneratePdf={handleGeneratePdf}
         generatingPdf={generatingPdf}
       />
-    )}
-
-    {activeStyle && (
-      <PrintableQrCodesArea activeStyle={activeStyle} pageSetup={pageSetup} />
     )}
     </>
   );

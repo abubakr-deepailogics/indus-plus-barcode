@@ -22,7 +22,6 @@ import type {
   QrCodeStyleData,
 } from "@/features/qr-code-generation/types";
 import { useGenerateCouponPdf } from "@/features/qr-code-generation/hooks/useGenerateCouponPdf";
-import { PrintableQrCodesArea } from "@/features/qr-code-generation/components/PrintableQrCodesArea";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
 
 interface CutDetailRow {
@@ -45,13 +44,13 @@ interface CutDetailRow {
 
 interface StyleBulletinRow {
   RowId: number;
-  Sale_order_No?: string;
+  Sale_Order_No?: string;
   Customer_Name?: string;
   Order_No?: string;
   Operation_Code?: string;
   Operation_Name?: string;
   Section?: string;
-  Operation_Sequeance?: number;
+  Operation_Sequence?: number;
   Machine_Type?: string;
   Piece_Rate?: number;
   Smv_Sam?: number;
@@ -329,7 +328,7 @@ export default function OpenOrderPage() {
         size: 60,
       },
       {
-        accessorKey: "Sale_order_No",
+        accessorKey: "Sale_Order_No",
         header: ({ column }) => (
           <DataTableColumnHeader
             column={column}
@@ -338,7 +337,7 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <span className="font-medium">{row.original.Sale_order_No}</span>
+          <span className="font-medium">{row.original.Sale_Order_No}</span>
         ),
         size: 110,
       },
@@ -411,7 +410,7 @@ export default function OpenOrderPage() {
         size: 100,
       },
       {
-        accessorKey: "Operation_Sequeance",
+        accessorKey: "Operation_Sequence",
         header: ({ column }) => (
           <DataTableColumnHeader
             column={column}
@@ -421,7 +420,7 @@ export default function OpenOrderPage() {
         ),
         cell: ({ row }) => (
           <div className="text-center font-bold text-slate-700">
-            {row.original.Operation_Sequeance}
+            {row.original.Operation_Sequence}
           </div>
         ),
         size: 80,
@@ -675,20 +674,15 @@ export default function OpenOrderPage() {
       code: row.Color ?? "",
     }));
 
-    // Open Order coupons only cover the first 2 operations of the order,
-    // not the full routing — matches how this shop tracks the initial cut/
-    // bundle handoff. Rework Coupon (separate page) covers all operations.
-    const COUPON_OPERATIONS_LIMIT = 2;
     const operations = styleBulletins
       .slice()
       .sort(
-        (a, b) => (a.Operation_Sequeance ?? 0) - (b.Operation_Sequeance ?? 0),
+        (a, b) => (a.Operation_Sequence ?? 0) - (b.Operation_Sequence ?? 0),
       )
-      .slice(0, COUPON_OPERATIONS_LIMIT)
       .map((row) => ({
         id: row.RowId,
         section: row.Section ?? "",
-        seqNo: String(row.Operation_Sequeance ?? ""),
+        seqNo: String(row.Operation_Sequence ?? ""),
         opNo: row.Operation_Code ?? "",
         operationName: row.Operation_Name ?? "",
         smv: String(row.Smv_Sam ?? ""),
@@ -719,11 +713,6 @@ export default function OpenOrderPage() {
       bundles,
     };
   }, [debouncedQuery, cutDetails, styleBulletins]);
-
-  const handlePrint = () => {
-    setShowPageSetupModal(false);
-    setTimeout(() => window.print(), 300);
-  };
 
   const { handleGeneratePdf: generatePdf, generatingPdf } =
     useGenerateCouponPdf(
@@ -941,14 +930,9 @@ export default function OpenOrderPage() {
           pageSetup={pageSetup}
           onPageSetupChange={setPageSetup}
           onClose={() => setShowPageSetupModal(false)}
-          onPrint={handlePrint}
           onGeneratePdf={handleGeneratePdf}
           generatingPdf={generatingPdf}
         />
-      )}
-
-      {activeStyle && (
-        <PrintableQrCodesArea activeStyle={activeStyle} pageSetup={pageSetup} />
       )}
     </>
   );
