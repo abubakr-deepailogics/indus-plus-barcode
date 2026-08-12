@@ -1,15 +1,69 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { QrCodeStyleData } from "../types";
 
-// Shared by every page that offers "Generate PDF" (qr-code-generation,
-// open-order, rework-coupon) — calls the server route once, which stores
-// the PDF (dbo.QrCode_Pdf_Batch) so re-downloads don't regenerate.
+// Shared by every page that offers coupon generation (qr-code-generation,
+// open-order, rework-coupon). Two separate actions:
+// - handleGenerateCoupons: registers coupon rows in the DB only (dedup'd),
+//   no PDF involved.
+// - handleDownloadPdf: renders + stores + downloads the PDF for whatever
+//   coupons exist (also registers any not yet in the DB, so printing never
+//   skips a coupon that generate-coupons hasn't been run for).
 export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrder" | "saleOrderNo" | "styleCode" | "bundles" | "operations">) {
+  const [generatingCoupons, setGeneratingCoupons] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [couponCount, setCouponCount] = useState<number | null>(null);
 
-  const handleGeneratePdf = async () => {
+  const workOrder = activeStyle.workOrder;
+
+  // Distinct coupons already generated for this work order (post-dedup),
+  // shown next to the Generate button. Refetched after every generate.
+  useEffect(() => {
+    if (!workOrder) {
+      setCouponCount(null);
+      return;
+    }
+    let cancelled = false;
+    fetch(`/api/qr-code-generation/pdf?work_order=${encodeURIComponent(workOrder)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!cancelled) setCouponCount(typeof data.couponCount === "number" ? data.couponCount : 0);
+      })
+      .catch(() => {
+        if (!cancelled) setCouponCount(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [workOrder]);
+
+  const handleGenerateCoupons = async () => {
+    setGeneratingCoupons(true);
+    try {
+      const res = await fetch("/api/qr-code-generation/coupons", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workOrder: activeStyle.workOrder,
+          bundles: activeStyle.bundles,
+          operations: activeStyle.operations,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error || "Failed to generate coupons.");
+      }
+      if (typeof data.couponCount === "number") setCouponCount(data.couponCount);
+      alert(`Coupons generated: ${data.couponCount} total for this work order.`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Failed to generate coupons.");
+    } finally {
+      setGeneratingCoupons(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
     setGeneratingPdf(true);
     try {
       const res = await fetch("/api/qr-code-generation/pdf", {
@@ -27,7 +81,7 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
       if (!res.ok) {
         throw new Error(data.error || "Failed to generate PDF.");
       }
-      alert(`PDF generated: ${data.cardCount} coupon${data.cardCount === 1 ? "" : "s"}.`);
+      if (typeof data.couponCount === "number") setCouponCount(data.couponCount);
       window.location.href = `/api/qr-code-generation/pdf/${data.id}`;
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to generate PDF.");
@@ -36,5 +90,5 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
     }
   };
 
-  return { handleGeneratePdf, generatingPdf };
+  return { handleGenerateCoupons, generatingCoupons, handleDownloadPdf, generatingPdf, couponCount };
 }

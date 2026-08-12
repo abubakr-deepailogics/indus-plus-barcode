@@ -87,7 +87,7 @@ export function BundleDetailTable({
                 <td className="py-2 font-semibold">
                   <input
                     type="text"
-                    value={bd.transId}
+                    value={bd.cutNo}
                     readOnly
                     className="w-full px-2 py-1 rounded-lg border border-[#e2e8f0] bg-white text-[11px] focus:outline-none"
                   />

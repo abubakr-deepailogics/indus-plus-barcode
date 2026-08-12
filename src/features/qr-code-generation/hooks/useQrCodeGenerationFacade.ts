@@ -98,9 +98,9 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     setActiveStyle((prev) => ({ ...prev, reworkQtyBundle: value }));
   };
 
-  const { handleGeneratePdf: generatePdf, generatingPdf } = useGenerateCouponPdf(activeStyle);
+  const { handleDownloadPdf: downloadPdf, generatingPdf } = useGenerateCouponPdf(activeStyle);
   const handleGeneratePdf = async () => {
-    await generatePdf();
+    await downloadPdf();
     setShowPageSetupModal(false);
   };
 

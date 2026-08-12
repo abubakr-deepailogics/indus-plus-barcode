@@ -353,7 +353,7 @@ export default function ReworkCouponPage() {
 
     const bundles = cutDetails.map((row) => ({
       id: row.RowId,
-      transId: String(row.Cut ?? cut),
+      cutNo: String(row.Cut ?? cut),
       line: "1",
       bundleNo: String(row.Bundle_Id ?? bundleId),
       inseam: String(row.Inseam ?? ""),
@@ -407,11 +407,11 @@ export default function ReworkCouponPage() {
     };
   }, [cutDetails, styleBulletins, operationCode, cut, bundleId, workOrder, styleVal, remarksVal, reworkQty, customerName]);
 
-  const { handleGeneratePdf: generatePdf, generatingPdf } = useGenerateCouponPdf(
+  const { handleGenerateCoupons, generatingCoupons, handleDownloadPdf: downloadPdf, generatingPdf, couponCount } = useGenerateCouponPdf(
     activeStyle ?? { workOrder: "", saleOrderNo: "", styleCode: "", bundles: [], operations: [] },
   );
   const handleGeneratePdf = async () => {
-    await generatePdf();
+    await downloadPdf();
     setShowPageSetupModal(false);
   };
 
@@ -673,14 +673,30 @@ export default function ReworkCouponPage() {
           </button>
 
           {activeStyle && (
-            <button
-              type="button"
-              onClick={() => setShowPageSetupModal(true)}
-              className="flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-md cursor-pointer text-xs"
-            >
-              <Barcode className="w-3.5 h-3.5" />
-              <span>Generate Coupon{activeStyle.operations.length > 1 ? "s" : ""}</span>
-            </button>
+            <div className="flex items-center gap-3">
+              {couponCount !== null && (
+                <span className="text-[10px] font-semibold text-[#64748b]">
+                  {couponCount} coupon{couponCount === 1 ? "" : "s"} generated
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleGenerateCoupons}
+                disabled={generatingCoupons}
+                className="flex items-center justify-center gap-2 bg-white border border-[#4f46e5] text-[#4f46e5] hover:bg-[#eef2ff] px-5 py-2.5 rounded-xl font-bold transition-all shadow-xs cursor-pointer text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Barcode className="w-3.5 h-3.5" />
+                <span>{generatingCoupons ? "Generating…" : `Generate Coupon${activeStyle.operations.length > 1 ? "s" : ""}`}</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPageSetupModal(true)}
+                className="flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-md cursor-pointer text-xs"
+              >
+                <Barcode className="w-3.5 h-3.5" />
+                <span>Download PDF</span>
+              </button>
+            </div>
           )}
         </div>
       </div>

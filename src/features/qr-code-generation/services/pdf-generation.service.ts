@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import path from "node:path";
 import type { BundleDetailRow, OperationsDetailRow } from "../types";
 import { buildCouponCards } from "./coupon-pairing.service";
+import { buildCouponCode } from "./coupon-code";
 
 // pdfkit's built-in "standard" fonts (Helvetica etc.) read .afm metric
 // files from node_modules at runtime via fs.readFileSync — bundlers that
@@ -74,16 +75,17 @@ export async function generateCouponPdf({
     const rateNum = parseFloat(op.rate || "0");
     const qtyNum = bundle.pcs || 0;
     const rsVal = Math.round(rateNum * qtyNum);
+    const couponCode = buildCouponCode(workOrder, bundle.bundleNo, op.opNo);
 
     const qrDisplayValue = [
+      `Coupon: ${couponCode}`,
       `Order: ${workOrder}`,
-      `Cut: ${bundle.transId}`,
+      `Cut: ${bundle.cutNo}`,
       `Bundle: ${bundle.bundleNo}`,
       `Size: ${bundle.size || "/"}`,
       `Inseam: ${bundle.inseam || "-"}`,
       `Op No: ${op.opNo}`,
       `Op Name: ${op.operationName}`,
-      `Coupon: ${pageIndex}/${totalCards}`,
       `Qty: ${qtyNum}`,
       `Rate: ${op.rate}`,
       `Rs: ${rsVal}`,
@@ -143,7 +145,7 @@ export async function generateCouponPdf({
     // Cut/bundle/size/inseam — one grouped 2x2 block, same identity family.
     const colW = textWidth / 2;
     doc.fillColor("#334155").fontSize(6);
-    doc.text(`Cut: ${bundle.transId}`, textX, y, { width: colW });
+    doc.text(`Cut: ${bundle.cutNo}`, textX, y, { width: colW });
     doc.text(`B#: ${bundle.bundleNo}`, textX + colW, y, { width: colW });
     y += 9;
     doc.text(`Size: ${bundle.size || "/"}`, textX, y, { width: colW });

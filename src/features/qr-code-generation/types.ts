@@ -12,7 +12,7 @@ export interface OperationsDetailRow {
 
 export interface BundleDetailRow {
   id: number;
-  transId: string;
+  cutNo: string;
   line: string;
   bundleNo: string;
   inseam: string;

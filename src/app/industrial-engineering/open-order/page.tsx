@@ -877,7 +877,7 @@ export default function OpenOrderPage() {
 
     const bundles = orderCuts.map((row) => ({
       id: row.RowId,
-      transId: String(row.Cut ?? "0"),
+      cutNo: String(row.Cut ?? "0"),
       line: "1",
       bundleNo: String(row.Bundle_Id ?? row.RowId),
       inseam: String(row.Inseam ?? ""),
@@ -928,12 +928,12 @@ export default function OpenOrderPage() {
     };
   }, [activeSearchQuery, cutDetails, styleBulletins]);
 
-  const { handleGeneratePdf: generatePdf, generatingPdf } =
+  const { handleGenerateCoupons, generatingCoupons, handleDownloadPdf: downloadPdf, generatingPdf, couponCount } =
     useGenerateCouponPdf(
       activeStyle ?? { workOrder: "", saleOrderNo: "", styleCode: "", bundles: [], operations: [] },
     );
   const handleGeneratePdf = async () => {
-    await generatePdf();
+    await downloadPdf();
     setShowPageSetupModal(false);
   };
 
@@ -1419,13 +1419,28 @@ export default function OpenOrderPage() {
                 </p>
               </div>
               {activeStyle && (
-                <button
-                  onClick={() => setShowPageSetupModal(true)}
-                  className="flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs"
-                >
-                  <QrCode className="w-3.5 h-3.5" />
-                  <span>Generate Coupons for {activeSearchQuery}</span>
-                </button>
+                <div className="flex items-center gap-3">
+                  {couponCount !== null && (
+                    <span className="text-[10px] font-semibold text-[#64748b]">
+                      {couponCount} coupon{couponCount === 1 ? "" : "s"} generated
+                    </span>
+                  )}
+                  <button
+                    onClick={handleGenerateCoupons}
+                    disabled={generatingCoupons}
+                    className="flex items-center justify-center gap-2 bg-white border border-[#4f46e5] text-[#4f46e5] hover:bg-[#eef2ff] px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>{generatingCoupons ? "Generating…" : "Generate Coupons"}</span>
+                  </button>
+                  <button
+                    onClick={() => setShowPageSetupModal(true)}
+                    className="flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs"
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    <span>Download PDF for {activeSearchQuery}</span>
+                  </button>
+                </div>
               )}
             </div>
 

@@ -91,7 +91,7 @@ export const MOCK_QR_CODE_STYLES: QrCodeStyleData[] = [
     bundles: [
       {
         id: 1,
-        transId: "T0002451",
+        cutNo: "T0002451",
         line: "1",
         bundleNo: "B0001",
         inseam: "32.29",
@@ -102,7 +102,7 @@ export const MOCK_QR_CODE_STYLES: QrCodeStyleData[] = [
       },
       {
         id: 2,
-        transId: "T0002451",
+        cutNo: "T0002451",
         line: "2",
         bundleNo: "B0002",
         inseam: "32.29",
@@ -113,7 +113,7 @@ export const MOCK_QR_CODE_STYLES: QrCodeStyleData[] = [
       },
       {
         id: 3,
-        transId: "T0002451",
+        cutNo: "T0002451",
         line: "3",
         bundleNo: "B0003",
         inseam: "32.29",
@@ -124,7 +124,7 @@ export const MOCK_QR_CODE_STYLES: QrCodeStyleData[] = [
       },
       {
         id: 4,
-        transId: "T0002451",
+        cutNo: "T0002451",
         line: "4",
         bundleNo: "B0004",
         inseam: "32.29",
@@ -135,7 +135,7 @@ export const MOCK_QR_CODE_STYLES: QrCodeStyleData[] = [
       },
       {
         id: 5,
-        transId: "T0002451",
+        cutNo: "T0002451",
         line: "5",
         bundleNo: "B0005",
         inseam: "32.29",
@@ -146,7 +146,7 @@ export const MOCK_QR_CODE_STYLES: QrCodeStyleData[] = [
       },
       {
         id: 6,
-        transId: "T0002452",
+        cutNo: "T0002452",
         line: "1",
         bundleNo: "B0006",
         inseam: "34.29",
@@ -201,7 +201,7 @@ export const MOCK_QR_CODE_STYLES: QrCodeStyleData[] = [
     bundles: [
       {
         id: 1,
-        transId: "T0008892",
+        cutNo: "T0008892",
         line: "3",
         bundleNo: "B0024",
         inseam: "30.00",
@@ -212,7 +212,7 @@ export const MOCK_QR_CODE_STYLES: QrCodeStyleData[] = [
       },
       {
         id: 2,
-        transId: "T0008892",
+        cutNo: "T0008892",
         line: "4",
         bundleNo: "B0025",
         inseam: "30.00",
@@ -267,7 +267,7 @@ export const MOCK_QR_CODE_STYLES: QrCodeStyleData[] = [
     bundles: [
       {
         id: 1,
-        transId: "T0009124",
+        cutNo: "T0009124",
         line: "1",
         bundleNo: "B0109",
         inseam: "0.00",
@@ -278,7 +278,7 @@ export const MOCK_QR_CODE_STYLES: QrCodeStyleData[] = [
       },
       {
         id: 2,
-        transId: "T0009124",
+        cutNo: "T0009124",
         line: "2",
         bundleNo: "B0110",
         inseam: "0.00",

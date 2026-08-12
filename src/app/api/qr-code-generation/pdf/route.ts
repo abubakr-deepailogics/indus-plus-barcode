@@ -1,5 +1,7 @@
 import { getPool, sql } from "@/lib/db";
 import { generateCouponPdf } from "@/features/qr-code-generation/services/pdf-generation.service";
+import { buildCouponCards } from "@/features/qr-code-generation/services/coupon-pairing.service";
+import { registerCoupons, countCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
 import type { BundleDetailRow, OperationsDetailRow } from "@/features/qr-code-generation/types";
 
 interface GenerateRequestBody {
@@ -45,6 +47,13 @@ export async function POST(request: Request) {
     });
 
     const pool = await getPool();
+
+    // Register each card's coupon identity, skipping ones already
+    // generated for this work order/bundle/operation — reprints never
+    // add rows. Batched (see coupon-registration.service) so thousands
+    // of coupons don't mean thousands of round trips.
+    await registerCoupons(pool, workOrder, buildCouponCards(selectedBundles, operations));
+
     const result = await pool
       .request()
       .input("workOrder", sql.NVarChar, workOrder)
@@ -58,10 +67,15 @@ export async function POST(request: Request) {
          VALUES (@workOrder, @saleOrderNo, @styleCode, @cardCount, @pdf)`,
       );
 
+    // Distinct coupons registered for this work order so far (post-dedup) —
+    // the real "coupons generated" count, not this batch's render size.
+    const couponCount = await countCoupons(pool, workOrder);
+
     const row = result.recordset[0];
     return Response.json({
       id: row.Id,
       cardCount,
+      couponCount,
       createdAt: row.CreatedAt,
     });
   } catch (err: unknown) {
@@ -73,15 +87,16 @@ export async function POST(request: Request) {
 
 // Lists past batches so the UI can offer re-download without regenerating.
 // No work_order → lists every batch (most recent first); with work_order →
-// scoped to that order.
+// scoped to that order, and also returns the distinct coupon count for it.
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = searchParams.get("work_order") || "";
 
   try {
     const pool = await getPool();
-    const result = workOrder
-      ? await pool
+    if (workOrder) {
+      const [batchResult, couponCount] = await Promise.all([
+        pool
           .request()
           .input("workOrder", sql.NVarChar, workOrder)
           .query(
@@ -89,14 +104,19 @@ export async function GET(request: Request) {
              FROM dbo.QrCode_Pdf_Batch
              WHERE WorkOrder = @workOrder
              ORDER BY CreatedAt DESC`,
-          )
-      : await pool
-          .request()
-          .query(
-            `SELECT TOP 200 Id, WorkOrder, SaleOrderNo, StyleCode, CardCount, CreatedAt
-             FROM dbo.QrCode_Pdf_Batch
-             ORDER BY CreatedAt DESC`,
-          );
+          ),
+        countCoupons(pool, workOrder),
+      ]);
+      return Response.json({ batches: batchResult.recordset, couponCount });
+    }
+
+    const result = await pool
+      .request()
+      .query(
+        `SELECT TOP 200 Id, WorkOrder, SaleOrderNo, StyleCode, CardCount, CreatedAt
+         FROM dbo.QrCode_Pdf_Batch
+         ORDER BY CreatedAt DESC`,
+      );
     return Response.json({ batches: result.recordset });
   } catch (err: unknown) {
     console.error("PDF batch list error:", err);

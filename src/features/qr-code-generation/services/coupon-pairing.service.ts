@@ -12,7 +12,7 @@ export interface CouponCard {
  * all of them). Cards are ordered
  * operation-major: all cards for op1 (across every bundle, cut-sorted)
  * come first, then all cards for op2, etc. Within an operation, bundles
- * are cut-major (grouped by `transId`, sorted ascending). Input order is
+ * are cut-major (grouped by `cutNo`, sorted ascending). Input order is
  * not relied upon — the DB query has no guaranteed ORDER BY on cut, but
  * operations are expected pre-sorted by Operation_Sequence (done at the
  * fetch layer).
@@ -29,7 +29,7 @@ export function buildCouponCards(
 
   const sortedBundles = bundles
     .slice()
-    .sort((a, b) => a.transId.localeCompare(b.transId, undefined, { numeric: true }));
+    .sort((a, b) => a.cutNo.localeCompare(b.cutNo, undefined, { numeric: true }));
 
   return operations.flatMap((op) =>
     sortedBundles.map((bundle) => ({ bundle, op })),
@@ -40,9 +40,9 @@ export function buildCouponCards(
 // Verify by pasting `demo()` into a scratch script, e.g.:
 //   npx tsx -e "import('./coupon-pairing.service').then(m => m.demo())"
 export function demo() {
-  const bundle = (transId: string, bundleNo: string): BundleDetailRow => ({
+  const bundle = (cutNo: string, bundleNo: string): BundleDetailRow => ({
     id: Number(bundleNo.slice(1)),
-    transId,
+    cutNo,
     line: "1",
     bundleNo,
     inseam: "0",
