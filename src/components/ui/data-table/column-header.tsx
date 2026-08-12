@@ -1,6 +1,6 @@
 import React from "react";
 import { Column } from "@tanstack/react-table";
-import { MoreVertical, ArrowUp, ArrowDown, Filter } from "lucide-react";
+import { MoreVertical, ArrowUp, ArrowDown } from "lucide-react";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,19 +52,9 @@ export function DataTableColumnHeader<TData, TValue>({
                 <ArrowDown className="h-3.5 w-3.5 text-[#64748b]" />
                 Sort by DESC
               </DropdownMenuItem>
-              <DropdownMenuSeparator className="my-1 border-t border-[#f1f5f9]" />
+              {/* <DropdownMenuSeparator className="my-1 border-t border-[#f1f5f9]" /> */}
             </>
           )}
-          {column.getCanFilter() && (
-            <DropdownMenuItem 
-              onClick={() => onFilterClick(column.id)}
-              className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-slate-700 hover:text-slate-900 rounded-lg cursor-pointer hover:bg-slate-50 transition-colors focus:bg-slate-50 focus:outline-none"
-            >
-              <Filter className="h-3.5 w-3.5 text-[#64748b]" />
-              Filter
-            </DropdownMenuItem>
-          )}
-
         </DropdownMenuContent>
       </DropdownMenu>
     </div>

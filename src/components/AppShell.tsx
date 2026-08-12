@@ -5,9 +5,6 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/features/auth/context/auth-context";
 import {
-  Sun,
-  Moon,
-  Bell,
   ChevronDown,
   Scissors,
   Layers, FileText, BarChart3, ChevronRight,
@@ -15,7 +12,7 @@ import {
   X,
   ScanLine,
   Search as SearchIcon,
-  RotateCcw,
+  RotateCcw
 } from "lucide-react";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -76,7 +73,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // Top navigation tabs
   const navTabs = [
-    { label: "Industrial Engineering", href: "#", hasDropdown: true },
+    // { label: "Industrial Engineering", href: "#", hasDropdown: true },
     { label: "Open Order", href: "/industrial-engineering/open-order", hasDropdown: false },
     { label: "Coupon Scanning", href: "/industrial-engineering/coupon-scanning", hasDropdown: false },
     { label: "Coupon Tracing", href: "/industrial-engineering/coupon-tracing", hasDropdown: false },

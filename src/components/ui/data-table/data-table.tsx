@@ -25,6 +25,7 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
   isLoading?: boolean;
   toolbarChildren?: React.ReactNode;
+  maxHeight?: string;
 }
 
 export function DataTable<TData, TValue>({
@@ -32,6 +33,7 @@ export function DataTable<TData, TValue>({
   data,
   isLoading = false,
   toolbarChildren,
+  maxHeight = "max-h-[350px]",
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -232,7 +234,7 @@ export function DataTable<TData, TValue>({
 
       <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden">
         {/* Directly define the vertical scrollable viewport without wrapper divs that block sticky positioning */}
-        <div className="overflow-auto max-h-[750px]">
+        <div className={`overflow-auto ${maxHeight}`}>
           <table 
             className="text-left border-collapse min-w-max text-xs text-[#334155]"
             style={{
@@ -298,6 +300,28 @@ export function DataTable<TData, TValue>({
                 </tr>
               )}
             </tbody>
+            {table.getFooterGroups()[0]?.headers.some(header => header.column.columnDef.footer) && (
+              <tfoot className="border-t border-[#e2e8f0] bg-[#f8fafc] font-bold text-slate-700 sticky bottom-0 z-10 shadow-[0_-1px_0_0_#e2e8f0]">
+                {table.getFooterGroups().map((footerGroup) => (
+                  <tr key={footerGroup.id}>
+                    {footerGroup.headers.map((header) => (
+                      <td
+                        key={header.id}
+                        className="px-4 py-3 align-middle whitespace-nowrap bg-[#f8fafc]"
+                        style={{ width: header.column.getSize() }}
+                      >
+                        {header.isPlaceholder
+                          ? null
+                          : flexRender(
+                              header.column.columnDef.footer,
+                              header.getContext()
+                            )}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tfoot>
+            )}
           </table>
         </div>
       </div>

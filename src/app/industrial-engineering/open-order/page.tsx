@@ -1,7 +1,5 @@
 "use client";
 
-/* eslint-disable react-hooks/set-state-in-effect */
-
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   Search,
@@ -10,6 +8,8 @@ import {
   AlertCircle,
   Info,
   Database,
+  Paperclip,
+  ChevronDown,
 } from "lucide-react";
 // import type { PageSetupConfig } from "@/features/barcode-generation/types";
 // import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
@@ -52,6 +52,7 @@ interface StyleBulletinRow {
   Section?: string;
   Operation_Sequence?: number;
   Machine_Type?: string;
+  SkillLevel?: string | number;
   Piece_Rate?: number;
   Smv_Sam?: number;
   First_Operation_Section_Wise?: number;
@@ -114,58 +115,6 @@ export default function OpenOrderPage() {
         size: 60,
       },
       {
-        accessorKey: "Sale_Order_No",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Sale Order No"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <span className="font-medium">{row.original.Sale_Order_No}</span>
-        ),
-        size: 110,
-      },
-      {
-        accessorKey: "Customer_Name",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Customer"
-            onFilterClick={() => {}}
-          />
-        ),
-        size: 110,
-      },
-      {
-        accessorKey: "Work_Order",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Work Order"
-            onFilterClick={() => {}}
-          />
-        ),
-        size: 110,
-      },
-      {
-        accessorKey: "Order_Qty_After_Add",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Order Qty"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-right font-semibold">
-            {row.original.Order_Qty_After_Add}
-          </div>
-        ),
-        size: 90,
-      },
-      {
         accessorKey: "Inseam",
         header: ({ column }) => (
           <DataTableColumnHeader
@@ -199,33 +148,6 @@ export default function OpenOrderPage() {
           <DataTableColumnHeader
             column={column}
             title="Color"
-            onFilterClick={() => {}}
-          />
-        ),
-        size: 100,
-      },
-      {
-        accessorKey: "Fabric_Code_Main_Body",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Fabric Code"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <span className="text-slate-500">
-            {row.original.Fabric_Code_Main_Body}
-          </span>
-        ),
-        size: 140,
-      },
-      {
-        accessorKey: "Wash",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Wash"
             onFilterClick={() => {}}
           />
         ),
@@ -325,43 +247,12 @@ export default function OpenOrderPage() {
             {row.original.RowId}
           </span>
         ),
+        footer: () => (
+          <span className="font-bold text-slate-800 uppercase text-[10px] tracking-wider">
+            Total
+          </span>
+        ),
         size: 60,
-      },
-      {
-        accessorKey: "Sale_Order_No",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Sale Order No"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <span className="font-medium">{row.original.Sale_Order_No}</span>
-        ),
-        size: 110,
-      },
-      {
-        accessorKey: "Customer_Name",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Customer"
-            onFilterClick={() => {}}
-          />
-        ),
-        size: 110,
-      },
-      {
-        accessorKey: "Order_No",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Order No"
-            onFilterClick={() => {}}
-          />
-        ),
-        size: 110,
       },
       {
         accessorKey: "Operation_Code",
@@ -437,6 +328,22 @@ export default function OpenOrderPage() {
         size: 110,
       },
       {
+        accessorKey: "SkillLevel",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title="Skill Level"
+            onFilterClick={() => {}}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="text-center font-semibold text-slate-600">
+            {row.original.SkillLevel ?? "-"}
+          </div>
+        ),
+        size: 90,
+      },
+      {
         accessorKey: "Piece_Rate",
         header: ({ column }) => (
           <DataTableColumnHeader
@@ -450,6 +357,13 @@ export default function OpenOrderPage() {
             {row.original.Piece_Rate}
           </div>
         ),
+        footer: ({ table }) => {
+          const total = table.getFilteredRowModel().rows.reduce((sum, row) => {
+            const val = row.original.Piece_Rate;
+            return sum + (val ?? 0);
+          }, 0);
+          return <div className="text-right font-bold text-slate-700">{total.toFixed(4)}</div>;
+        },
         size: 90,
       },
       {
@@ -466,6 +380,13 @@ export default function OpenOrderPage() {
             {row.original.Smv_Sam}
           </div>
         ),
+        footer: ({ table }) => {
+          const total = table.getFilteredRowModel().rows.reduce((sum, row) => {
+            const val = row.original.Smv_Sam;
+            return sum + (val ?? 0);
+          }, 0);
+          return <div className="text-right font-bold text-purple-600">{total.toFixed(2)}</div>;
+        },
         size: 90,
       },
       {
@@ -516,6 +437,54 @@ export default function OpenOrderPage() {
         ),
         size: 90,
       },
+      {
+        id: "Attachment",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title="Attachment"
+            onFilterClick={() => {}}
+          />
+        ),
+        cell: ({ row }) => {
+          const rowId = row.original.RowId;
+          const attachment = rowAttachments[rowId];
+
+          if (attachment) {
+            return (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setPreviewFile({
+                    ...attachment,
+                    rowId,
+                  });
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 border border-indigo-200 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] shadow-sm transition-all cursor-pointer truncate max-w-[150px]"
+                title={`Click to preview: ${attachment.name}`}
+              >
+                <Paperclip className="w-3 h-3 text-indigo-500 shrink-0" />
+                <span className="truncate">{attachment.name}</span>
+              </button>
+            );
+          }
+
+          return (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveRowIdForUpload(rowId);
+                fileInputRef.current?.click();
+              }}
+              className="flex items-center gap-1.5 px-3 py-1.5 border border-[#e2e8f0] rounded-xl bg-white hover:bg-slate-50 hover:text-slate-800 text-slate-600 hover:border-slate-300 font-semibold text-[11px] shadow-sm transition-all cursor-pointer"
+            >
+              <Paperclip className="w-3 h-3 text-slate-400" />
+              <span>Attachment</span>
+            </button>
+          );
+        },
+        size: 130,
+      },
     ],
     [],
   );
@@ -527,12 +496,35 @@ export default function OpenOrderPage() {
   );
   const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
   const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
-  const [selectedDeptFilter, setSelectedDeptFilter] = useState<"all" | "washing" | "sewing" | "finishing">("all");
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState<"all" | "cutting" | "washing" | "sewing" | "finishing">("all");
+  const [selectedSections, setSelectedSections] = useState<string[]>([]);
+  const [selectedMachines, setSelectedMachines] = useState<string[]>([]);
+  const [sectionDropdownOpen, setSectionDropdownOpen] = useState(false);
+  const [machineDropdownOpen, setMachineDropdownOpen] = useState(false);
 
-  const getDepartment = (row: StyleBulletinRow): "washing" | "sewing" | "finishing" => {
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const machineRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (sectionRef.current && !sectionRef.current.contains(event.target as Node)) {
+        setSectionDropdownOpen(false);
+      }
+      if (machineRef.current && !machineRef.current.contains(event.target as Node)) {
+        setMachineDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const getDepartment = (row: StyleBulletinRow): "cutting" | "washing" | "sewing" | "finishing" => {
     const section = (row.Section || "").toLowerCase();
     const opName = (row.Operation_Name || "").toLowerCase();
     
+    if (section.includes("cut") || opName.includes("cut")) return "cutting";
     if (section.includes("wash") || opName.includes("wash")) return "washing";
     
     if (
@@ -555,10 +547,33 @@ export default function OpenOrderPage() {
     return "sewing";
   };
 
+  const uniqueSections = useMemo(() => {
+    const sections = styleBulletins.map((row) => row.Section).filter(Boolean) as string[];
+    return Array.from(new Set(sections));
+  }, [styleBulletins]);
+
+  const uniqueMachines = useMemo(() => {
+    const machines = styleBulletins.map((row) => row.Machine_Type).filter(Boolean) as string[];
+    return Array.from(new Set(machines));
+  }, [styleBulletins]);
+
   const filteredStyleBulletins = useMemo(() => {
-    if (selectedDeptFilter === "all") return styleBulletins;
-    return styleBulletins.filter((row) => getDepartment(row) === selectedDeptFilter);
-  }, [styleBulletins, selectedDeptFilter]);
+    let result = styleBulletins;
+
+    if (selectedDeptFilter !== "all") {
+      result = result.filter((row) => getDepartment(row) === selectedDeptFilter);
+    }
+
+    if (selectedSections.length > 0) {
+      result = result.filter((row) => row.Section && selectedSections.includes(row.Section));
+    }
+
+    if (selectedMachines.length > 0) {
+      result = result.filter((row) => row.Machine_Type && selectedMachines.includes(row.Machine_Type));
+    }
+
+    return result;
+  }, [styleBulletins, selectedDeptFilter, selectedSections, selectedMachines]);
   const [isLoading, setIsLoading] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
@@ -576,6 +591,117 @@ export default function OpenOrderPage() {
     margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 },
     gridFormat: "3x10",
   });
+
+  // Dynamic Input States for Style Bulletin Metadata
+  const [description, setDescription] = useState("");
+  const [styleDescription, setStyleDescription] = useState("");
+  const [styleCategory, setStyleCategory] = useState("");
+  const [smdNo, setSmdNo] = useState("");
+  const [finalSmdNo, setFinalSmdNo] = useState("");
+  const [target, setTarget] = useState("");
+  const [targetUnitMin, setTargetUnitMin] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [pocSam, setPocSam] = useState("");
+  const [pocPieceRate, setPocPieceRate] = useState("");
+  const [headReqd, setHeadReqd] = useState("");
+  const [totalSam, setTotalSam] = useState("");
+  const [totalRate, setTotalRate] = useState("");
+  const [appDate, setAppDate] = useState("");
+  const [appBy, setAppBy] = useState("");
+  const [status, setStatus] = useState("Approved");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState("");
+  const [saveErrorMsg, setSaveErrorMsg] = useState("");
+
+  // State and refs for Style Bulletin attachments
+  const [rowAttachments, setRowAttachments] = useState<
+    Record<number, { name: string; url: string; type: string }>
+  >({});
+  const [activeRowIdForUpload, setActiveRowIdForUpload] = useState<number | null>(null);
+  const [previewFile, setPreviewFile] = useState<{
+    name: string;
+    url: string;
+    type: string;
+    rowId: number;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && activeRowIdForUpload !== null) {
+      const url = URL.createObjectURL(file);
+      setRowAttachments((prev) => ({
+        ...prev,
+        [activeRowIdForUpload]: {
+          name: file.name,
+          url: url,
+          type: file.type,
+        },
+      }));
+      if (previewFile && previewFile.rowId === activeRowIdForUpload) {
+        setPreviewFile({
+          name: file.name,
+          url: url,
+          type: file.type,
+          rowId: activeRowIdForUpload,
+        });
+      }
+    }
+    e.target.value = "";
+    setActiveRowIdForUpload(null);
+  };
+
+  const handleSaveMetadata = async () => {
+    const workOrder = cutDetails[0]?.Work_Order || activeSearchQuery;
+    if (!workOrder) {
+      setSaveErrorMsg("No active Work Order to save.");
+      return;
+    }
+    
+    setIsSaving(true);
+    setSaveSuccessMsg("");
+    setSaveErrorMsg("");
+    
+    try {
+      const response = await fetch("/api/open-order", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          workOrder,
+          description,
+          styleDescription,
+          styleCategory,
+          smdNo,
+          finalSmdNo,
+          target,
+          targetUnitMin,
+          startTime,
+          pocSam,
+          pocPieceRate,
+          headReqd,
+          appDate,
+          appBy,
+          status,
+        }),
+      });
+      
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to save bulletin details.");
+      }
+      
+      setSaveSuccessMsg("Bulletin details saved successfully.");
+      setTimeout(() => setSaveSuccessMsg(""), 4000);
+    } catch (err: any) {
+      console.error("Save error:", err);
+      setSaveErrorMsg(err.message || "Failed to save details.");
+      setTimeout(() => setSaveErrorMsg(""), 5000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   // Fetch autocomplete suggestions as user types
   useEffect(() => {
@@ -630,6 +756,29 @@ export default function OpenOrderPage() {
   // changes — typing alone must not refetch/replace the table.
   useEffect(() => {
     setSelectedDeptFilter("all");
+    setSelectedSections([]);
+    setSelectedMachines([]);
+    
+    // Clear/reset all input fields when activeSearchQuery changes or is empty
+    setDescription("");
+    setStyleDescription("");
+    setStyleCategory("");
+    setSmdNo("");
+    setFinalSmdNo("");
+    setTarget("");
+    setTargetUnitMin("");
+    setStartTime("");
+    setPocSam("");
+    setPocPieceRate("");
+    setHeadReqd("");
+    setTotalSam("");
+    setTotalRate("");
+    setAppDate("");
+    setAppBy("");
+    setStatus("Approved");
+    setRowAttachments({});
+    setPreviewFile(null);
+
     if (!activeSearchQuery) {
       setCutDetails([]);
       setStyleBulletins([]);
@@ -643,7 +792,7 @@ export default function OpenOrderPage() {
       setHasSearched(true);
       try {
         const response = await fetch(
-          `/api/open-order?work_order=${encodeURIComponent(activeSearchQuery)}`,
+          `/api/open-order?work_order=${encodeURIComponent(activeSearchQuery)}&t=${Date.now()}`,
         );
         if (!response.ok) {
           const errData = await response.json();
@@ -654,6 +803,29 @@ export default function OpenOrderPage() {
         const data = await response.json();
         setCutDetails(data.cutDetails || []);
         setStyleBulletins(data.styleBulletins || []);
+        
+        // Compute and set totalSam & totalRate
+        const computedSam = (data.styleBulletins || []).reduce((acc: number, curr: any) => acc + (curr.Smv_Sam ?? 0), 0);
+        const computedRate = (data.styleBulletins || []).reduce((acc: number, curr: any) => acc + (curr.Piece_Rate ?? 0), 0);
+        setTotalSam(computedSam.toFixed(2));
+        setTotalRate(computedRate.toFixed(4));
+
+        if (data.metadata) {
+          setDescription(data.metadata.Description || "");
+          setStyleDescription(data.metadata.Style_Description || "");
+          setStyleCategory(data.metadata.Style_Category || "");
+          setSmdNo(data.metadata.Smd_No || "");
+          setFinalSmdNo(data.metadata.Final_Smd_No || "");
+          setTarget(data.metadata.Target || "");
+          setTargetUnitMin(data.metadata.Target_Unit_Min || "");
+          setStartTime(data.metadata.Start_Time || "");
+          setPocSam(data.metadata.Poc_Sam || "");
+          setPocPieceRate(data.metadata.Poc_Piece_Rate || "");
+          setHeadReqd(data.metadata.Head_Reqd || "");
+          setAppDate(data.metadata.App_Date || "");
+          setAppBy(data.metadata.App_By || "");
+          setStatus(data.metadata.Status || "Approved");
+        }
       } catch (err: unknown) {
         console.error("Fetch error:", err);
         const msg =
@@ -681,6 +853,20 @@ export default function OpenOrderPage() {
 
   const activeRecordsCount =
     activeTab === "cut_report" ? cutDetails.length : styleBulletins.length;
+
+  // Dynamically derive style bulletin metadata from fetched style bulletins and cut details
+  const styleBulletinMetadata = useMemo(() => {
+    const planQty = cutDetails[0]?.Order_Qty_After_Add ?? cutDetails.reduce((acc, curr) => acc + (curr.Bundle_Qty ?? 0), 0);
+
+    return {
+      amNo: cutDetails[0]?.Work_Order || activeSearchQuery || "",
+      customer: cutDetails[0]?.Customer_Name || "",
+      styleCode: styleBulletins[0]?.Sale_Order_No || "",
+      planQty: String(planQty || ""),
+      totalOperations: styleBulletins.length,
+    };
+  }, [styleBulletins, cutDetails, activeSearchQuery]);
+
   const isSkeletonActive = isLoading || isTransitioning;
 
   // Build the coupon-printable style data for the searched work order from
@@ -826,6 +1012,306 @@ export default function OpenOrderPage() {
           </div>
         </div>
 
+        {/* Dynamic Metadata Cards Row */}
+        {hasSearched && cutDetails.length > 0 && (
+          activeTab === "cut_report" ? (
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
+              {/* Card 1: Order Info */}
+              <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
+                <div>
+                  <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Sale Order No</span>
+                  <input
+                    type="text"
+                    readOnly
+                    value={cutDetails[0]?.Sale_Order_No || ""}
+                    className="mt-1.5 w-full px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Work Order</span>
+                  <input
+                    type="text"
+                    readOnly
+                    value={cutDetails[0]?.Work_Order || ""}
+                    className="mt-1.5 w-full px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Card 2: Customer & Qty */}
+              <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
+                <div>
+                  <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Customer</span>
+                  <input
+                    type="text"
+                    readOnly
+                    value={cutDetails[0]?.Customer_Name || ""}
+                    className="mt-1.5 w-full px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Order Qty</span>
+                  <input
+                    type="text"
+                    readOnly
+                    value={cutDetails[0]?.Order_Qty_After_Add || ""}
+                    className="mt-1.5 w-full px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
+                  />
+                </div>
+              </div>
+
+              {/* Card 3: Specifications */}
+              <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
+                <div>
+                  <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Fabric Code</span>
+                  <input
+                    type="text"
+                    readOnly
+                    value={cutDetails[0]?.Fabric_Code_Main_Body || ""}
+                    className="mt-1.5 w-full px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
+                  />
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Wash</span>
+                  <input
+                    type="text"
+                    readOnly
+                    value={cutDetails[0]?.Wash || ""}
+                    className="mt-1.5 w-full px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
+                  />
+                </div>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 animate-fade-in">
+              {/* Left Form Panel: Basic Style Details */}
+              <div className="lg:col-span-3 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-[#475569] text-[10px] uppercase">W/O # &amp; Customer</label>
+                  <input type="text" readOnly value={`${styleBulletinMetadata.amNo} (${styleBulletinMetadata.customer})`} className="px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 font-semibold focus:outline-none" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-[#475569] text-[10px] uppercase">Sale Order No</label>
+                  <input type="text" readOnly value={styleBulletinMetadata.styleCode} className="px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 font-semibold focus:outline-none" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-[#475569] text-[10px] uppercase">Order Qty</label>
+                  <input type="text" readOnly value={styleBulletinMetadata.planQty} className="px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold" />
+                </div>
+             <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-[#475569] text-[10px] uppercase">Fabric Code</label>
+                  <input type="text" readOnly value={cutDetails[0]?.Fabric_Code_Main_Body || ""} className="px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold" />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-[#475569] text-[10px] uppercase">Wash</label>
+                  <input type="text" readOnly value={cutDetails[0]?.Wash || ""} className="px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold" />
+                </div>
+              </div>
+
+              {/* Middle Form Panel 1: SMD Details */}
+              <div className="lg:col-span-2 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-[#475569] text-[10px] uppercase">Description</label>
+                  <input
+                    type="text"
+                    value={description}
+                    onChange={(e) => setDescription(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-[#475569] text-[10px] uppercase">Style Description</label>
+                  <input
+                    type="text"
+                    value={styleDescription}
+                    onChange={(e) => setStyleDescription(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-[#475569] text-[10px] uppercase">Style Category</label>
+                  <input
+                    type="text"
+                    value={styleCategory}
+                    onChange={(e) => setStyleCategory(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-[#475569] text-[10px] uppercase">SMD #</label>
+                  <input
+                    type="text"
+                    value={smdNo}
+                    onChange={(e) => setSmdNo(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-[#475569] text-[10px] uppercase">Final SMD #</label>
+                  <input
+                    type="text"
+                    value={finalSmdNo}
+                    onChange={(e) => setFinalSmdNo(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Middle Form Panel 2: Targets & Piece Rates */}
+              <div className="lg:col-span-3 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="font-bold text-[#475569] text-[10px] uppercase">Target</label>
+                    <input
+                      type="text"
+                      value={target}
+                      onChange={(e) => setTarget(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="font-bold text-[#475569] text-[10px] uppercase">Target Unit/Min</label>
+                    <input
+                      type="text"
+                      value={targetUnitMin}
+                      onChange={(e) => setTargetUnitMin(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-[#475569] text-[10px] uppercase">Start Time</label>
+                  <input
+                    type="text"
+                    value={startTime}
+                    onChange={(e) => setStartTime(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-[#475569] text-[10px] uppercase">POC SAM</label>
+                  <input
+                    type="text"
+                    value={pocSam}
+                    onChange={(e) => setPocSam(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="font-bold text-[#475569] text-[10px] uppercase">POC Piece Rate</label>
+                  <input
+                    type="text"
+                    value={pocPieceRate}
+                    onChange={(e) => setPocPieceRate(e.target.value)}
+                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                  />
+                </div>
+              </div>
+
+              {/* Right Form Panel: SAM Summary & Approvals */}
+              <div className="lg:col-span-4 flex flex-col gap-4">
+                <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm grid grid-cols-3 gap-3">
+                  <div className="flex flex-col gap-1">
+                    <span className="font-bold text-[#64748b] text-[10px] uppercase">Head/Reqd</span>
+                    <input
+                      type="text"
+                      value={headReqd}
+                      onChange={(e) => setHeadReqd(e.target.value)}
+                      className="w-full px-3 py-2 border border-[#e2e8f0] rounded-xl bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all font-semibold text-center"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="font-bold text-[#64748b] text-[10px] uppercase">Total SAM</span>
+                    <input
+                      type="text"
+                      readOnly
+                      value={totalSam}
+                      onChange={(e) => setTotalSam(e.target.value)}
+                      className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 font-semibold focus:outline-none"
+                    />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="font-bold text-[#64748b] text-[10px] uppercase">Total Rate</span>
+                    <input
+                      type="text"
+                      readOnly
+                      value={totalRate}
+                      onChange={(e) => setTotalRate(e.target.value)}
+                      className="w-full px-3 py-2 border border-[#e2e8f0] rounded-xl bg-slate-50 font-semibold focus:outline-none"
+                    />
+                  </div>
+                </div>
+
+                <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="font-bold text-[#475569] text-[10px] uppercase">App Date</label>
+                      <input
+                        type="text"
+                        value={appDate}
+                        onChange={(e) => setAppDate(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all font-semibold text-center"
+                      />
+                    </div>
+                    <div className="flex flex-col gap-1.5">
+                      <label className="font-bold text-[#475569] text-[10px] uppercase">App By</label>
+                      <input
+                        type="text"
+                        value={appBy}
+                        onChange={(e) => setAppBy(e.target.value)}
+                        className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all font-semibold text-center"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center justify-between border-t border-[#f1f5f9] pt-3 mt-1">
+                    <span className="text-[10px] font-bold text-[#94a3b8] uppercase">Status</span>
+                    <select
+                      value={status}
+                      onChange={(e) => setStatus(e.target.value)}
+                      className={`px-3 py-1.5 rounded-xl font-bold border text-xs focus:outline-none transition-all cursor-pointer ${
+                        status === "Approved"
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                          : status === "Pending"
+                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                          : "bg-slate-50 text-slate-700 border-slate-200"
+                      }`}
+                    >
+                      <option value="Approved">Approved</option>
+                      <option value="Pending">Pending</option>
+                      <option value="Draft">Draft</option>
+                    </select>
+                  </div>
+                  {saveSuccessMsg && (
+                    <div className="mt-2 text-[11px] text-center font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg py-1.5 px-3 animate-fade-in">
+                      {saveSuccessMsg}
+                    </div>
+                  )}
+                  {saveErrorMsg && (
+                    <div className="mt-2 text-[11px] text-center font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg py-1.5 px-3 animate-fade-in">
+                      {saveErrorMsg}
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={handleSaveMetadata}
+                    disabled={isSaving}
+                    className="w-full mt-3 bg-[#4f46e5] hover:bg-[#4338ca] disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-2.5 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                  >
+                    {isSaving ? (
+                      <>
+                        <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Saving...</span>
+                      </>
+                    ) : (
+                      <span>Save Bulletin Details</span>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        )}
+
         {/* Tab Switcher */}
         <div className="flex items-center gap-3 mt-1">
           <button
@@ -951,7 +1437,18 @@ export default function OpenOrderPage() {
                 columns={styleBulletinColumns}
                 data={filteredStyleBulletins}
                 toolbarChildren={
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDeptFilter(selectedDeptFilter === "cutting" ? "all" : "cutting")}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                        selectedDeptFilter === "cutting"
+                          ? "bg-sky-50 text-sky-700 border-sky-200"
+                          : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      cutting
+                    </button>
                     <button
                       type="button"
                       onClick={() => setSelectedDeptFilter(selectedDeptFilter === "washing" ? "all" : "washing")}
@@ -985,6 +1482,133 @@ export default function OpenOrderPage() {
                     >
                       finishing
                     </button>
+
+                    {/* Divider vertical bar */}
+                    <div className="w-[1px] h-5 bg-[#e2e8f0] mx-1 self-center" />
+
+                    {/* Section Multi-Select Dropdown */}
+                    <div ref={sectionRef} className="relative z-30">
+                      <button
+                        type="button"
+                        onClick={() => setSectionDropdownOpen(!sectionDropdownOpen)}
+                        className={`flex items-center justify-between gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer min-w-[130px] ${
+                          selectedSections.length > 0
+                            ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                            : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        <span className="truncate max-w-[110px]">
+                          {selectedSections.length === 0
+                            ? "All Sections"
+                            : selectedSections.length === 1
+                            ? selectedSections[0]
+                            : `${selectedSections.length} Sections`}
+                        </span>
+                        <ChevronDown className={`w-3 h-3 transition-transform duration-200 shrink-0 ${sectionDropdownOpen ? "rotate-180 text-indigo-500" : "text-slate-400"}`} />
+                      </button>
+                      
+                      {sectionDropdownOpen && (
+                        <div className="absolute left-0 mt-1.5 w-56 bg-white border border-[#e2e8f0] shadow-xl rounded-xl p-2 z-50 max-h-60 overflow-y-auto animate-fade-in flex flex-col gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedSections([])}
+                            className={`text-left px-2.5 py-1.5 text-[11px] font-bold rounded-lg cursor-pointer transition-colors ${
+                              selectedSections.length === 0
+                                ? "bg-slate-100 text-slate-800"
+                                : "hover:bg-slate-50 text-slate-500 hover:text-slate-700"
+                            }`}
+                          >
+                            All Sections
+                          </button>
+                          <div className="h-[1px] bg-slate-100 my-1" />
+                          {uniqueSections.map(section => {
+                            const isChecked = selectedSections.includes(section);
+                            return (
+                              <label
+                                key={section}
+                                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer text-[11px] font-semibold text-slate-600 hover:text-slate-800 transition-colors select-none"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    setSelectedSections(prev =>
+                                      isChecked
+                                        ? prev.filter(s => s !== section)
+                                        : [...prev, section]
+                                    );
+                                  }}
+                                  className="w-3.5 h-3.5 rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 focus:ring-offset-0 cursor-pointer"
+                                />
+                                <span className="truncate">{section}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Machine Multi-Select Dropdown */}
+                    <div ref={machineRef} className="relative z-30">
+                      <button
+                        type="button"
+                        onClick={() => setMachineDropdownOpen(!machineDropdownOpen)}
+                        className={`flex items-center justify-between gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer min-w-[130px] ${
+                          selectedMachines.length > 0
+                            ? "bg-indigo-50 text-indigo-700 border-indigo-200"
+                            : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        <span className="truncate max-w-[110px]">
+                          {selectedMachines.length === 0
+                            ? "All Machines"
+                            : selectedMachines.length === 1
+                            ? selectedMachines[0]
+                            : `${selectedMachines.length} Machines`}
+                        </span>
+                        <ChevronDown className={`w-3 h-3 transition-transform duration-200 shrink-0 ${machineDropdownOpen ? "rotate-180 text-indigo-500" : "text-slate-400"}`} />
+                      </button>
+                      
+                      {machineDropdownOpen && (
+                        <div className="absolute left-0 mt-1.5 w-56 bg-white border border-[#e2e8f0] shadow-xl rounded-xl p-2 z-50 max-h-60 overflow-y-auto animate-fade-in flex flex-col gap-0.5">
+                          <button
+                            type="button"
+                            onClick={() => setSelectedMachines([])}
+                            className={`text-left px-2.5 py-1.5 text-[11px] font-bold rounded-lg cursor-pointer transition-colors ${
+                              selectedMachines.length === 0
+                                ? "bg-slate-100 text-slate-800"
+                                : "hover:bg-slate-50 text-slate-500 hover:text-slate-700"
+                            }`}
+                          >
+                            All Machines
+                          </button>
+                          <div className="h-[1px] bg-slate-100 my-1" />
+                          {uniqueMachines.map(machine => {
+                            const isChecked = selectedMachines.includes(machine);
+                            return (
+                              <label
+                                key={machine}
+                                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer text-[11px] font-semibold text-slate-600 hover:text-slate-800 transition-colors select-none"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={isChecked}
+                                  onChange={() => {
+                                    setSelectedMachines(prev =>
+                                      isChecked
+                                        ? prev.filter(m => m !== machine)
+                                        : [...prev, machine]
+                                    );
+                                  }}
+                                  className="w-3.5 h-3.5 rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 focus:ring-offset-0 cursor-pointer"
+                                />
+                                <span className="truncate">{machine}</span>
+                              </label>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
                 }
               />
@@ -1001,6 +1625,109 @@ export default function OpenOrderPage() {
           onGeneratePdf={handleGeneratePdf}
           generatingPdf={generatingPdf}
         />
+      )}
+
+      {/* Hidden file input for Attachment upload */}
+      <input
+        type="file"
+        ref={fileInputRef}
+        onChange={handleFileChange}
+        className="hidden"
+        accept="image/*,video/*,application/pdf"
+      />
+
+      {/* Attachment Preview Modal */}
+      {previewFile && (
+        <div className="fixed inset-0 bg-[#0f172a]/60 backdrop-blur-sm z-[999] flex items-center justify-center p-4 animate-fade-in no-print">
+          <div className="bg-white border border-[#e2e8f0] rounded-2xl max-w-2xl w-full shadow-2xl flex flex-col max-h-[85vh] overflow-hidden">
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-[#e2e8f0] px-5 py-4 bg-[#fafafa]">
+              <div className="flex items-center gap-2">
+                <Paperclip className="w-4 h-4 text-[#4f46e5]" />
+                <h3 className="font-bold text-slate-800 text-sm truncate max-w-sm sm:max-w-md">
+                  {previewFile.name}
+                </h3>
+              </div>
+              <button
+                onClick={() => setPreviewFile(null)}
+                className="text-slate-400 hover:text-slate-600 font-bold transition-all text-sm cursor-pointer p-1.5 hover:bg-slate-100 rounded-xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body / Preview Content */}
+            <div className="flex-grow p-6 overflow-y-auto flex items-center justify-center bg-slate-50 min-h-[300px]">
+              {previewFile.type.startsWith("image/") ? (
+                <img
+                  src={previewFile.url}
+                  alt={previewFile.name}
+                  className="max-w-full max-h-[50vh] object-contain rounded-lg shadow-sm"
+                />
+              ) : previewFile.type.startsWith("video/") ? (
+                <video
+                  src={previewFile.url}
+                  controls
+                  className="max-w-full max-h-[50vh] rounded-lg shadow-sm animate-fade-in"
+                />
+              ) : previewFile.type === "application/pdf" ? (
+                <iframe
+                  src={previewFile.url}
+                  title={previewFile.name}
+                  className="w-full h-[50vh] rounded-lg border border-[#e2e8f0]"
+                />
+              ) : (
+                <div className="text-center p-8">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50 flex items-center justify-center mx-auto mb-3">
+                    <Paperclip className="w-6 h-6 text-indigo-600" />
+                  </div>
+                  <p className="text-xs font-semibold text-slate-700 mb-1">
+                    No preview available for this file type
+                  </p>
+                  <p className="text-[10px] text-slate-400">
+                    {previewFile.type || "Unknown file type"}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer Actions */}
+            <div className="border-t border-[#e2e8f0] px-5 py-4 bg-white flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+              <button
+                onClick={() => {
+                  setRowAttachments((prev) => {
+                    const next = { ...prev };
+                    delete next[previewFile.rowId];
+                    return next;
+                  });
+                  setPreviewFile(null);
+                }}
+                className="px-4 py-2 border border-red-200 text-red-600 hover:bg-red-50 rounded-xl font-bold text-xs transition-all cursor-pointer text-center"
+              >
+                Remove Attachment
+              </button>
+
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => {
+                    setActiveRowIdForUpload(previewFile.rowId);
+                    fileInputRef.current?.click();
+                  }}
+                  className="px-4 py-2 border border-[#e2e8f0] text-slate-700 hover:bg-[#f8fafc] rounded-xl font-bold text-xs transition-all cursor-pointer text-center"
+                >
+                  Replace File
+                </button>
+                <a
+                  href={previewFile.url}
+                  download={previewFile.name}
+                  className="px-4 py-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white rounded-xl font-bold text-xs transition-all cursor-pointer text-center flex items-center justify-center gap-1.5"
+                >
+                  <span>Download</span>
+                </a>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
