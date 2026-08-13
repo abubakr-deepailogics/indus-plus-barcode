@@ -40,6 +40,7 @@ export default function CouponTracingPage() {
   const [sectionFilter, setSectionFilter] = useState("");
   const [sectionOptions, setSectionOptions] = useState<string[]>([]);
   const [scannedFilter, setScannedFilter] = useState<(typeof SCANNED_OPTIONS)[number]["value"]>("");
+  const [unscanningCode, setUnscanningCode] = useState("");
 
   const fetchWorkOrderSuggestions = async (query: string) => {
     try {
@@ -135,6 +136,32 @@ export default function CouponTracingPage() {
     else {
       setCoupons([]);
       setCouponTotal(0);
+    }
+  };
+
+  const handleUnscanCoupon = async (couponCode: string) => {
+    if (!window.confirm(`Are you sure you want to unscan coupon: ${couponCode}?`)) {
+      return;
+    }
+    setUnscanningCode(couponCode);
+    try {
+      const response = await fetch("/api/coupons/unscan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ couponCode }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        alert(data.error || "Failed to unscan coupon.");
+      } else {
+        // Refresh current page of coupons
+        await fetchCoupons(tracedWorkOrder, couponPage);
+      }
+    } catch (err) {
+      console.error("Unscan error:", err);
+      alert("An error occurred while unscanning the coupon.");
+    } finally {
+      setUnscanningCode("");
     }
   };
 
@@ -334,15 +361,26 @@ export default function CouponTracingPage() {
                     <td className="px-4 py-3 text-[#334155]">{c.OpNo}</td>
                     <td className="px-4 py-3 text-[#334155]">{c.Section || "—"}</td>
                     <td className="px-4 py-3">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                          c.IsScanned
-                            ? "bg-emerald-50 text-emerald-700"
-                            : "bg-slate-100 text-slate-500"
-                        }`}
-                      >
-                        {c.IsScanned ? "Scanned" : "Not scanned"}
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            c.IsScanned
+                              ? "bg-emerald-50 text-emerald-700"
+                              : "bg-slate-100 text-slate-500"
+                          }`}
+                        >
+                          {c.IsScanned ? "Scanned" : "Not scanned"}
+                        </span>
+                        {c.IsScanned && (
+                          <button
+                            onClick={() => handleUnscanCoupon(c.CouponCode)}
+                            disabled={unscanningCode === c.CouponCode}
+                            className="text-[#ef4444] hover:text-[#dc2626] font-bold text-[10px] px-2 py-1 rounded bg-red-50 hover:bg-red-100 border border-red-100 transition-all cursor-pointer disabled:opacity-50"
+                          >
+                            {unscanningCode === c.CouponCode ? "Unscanning..." : "Unscan"}
+                          </button>
+                        )}
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-[#334155]">
                       {new Date(c.CreatedAt).toLocaleString()}

@@ -1455,34 +1455,31 @@ export default function OpenOrderPage() {
         ) : (
           <div className="flex flex-col gap-4 animate-fade-in">
             {/* Header Panel */}
-            <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm bg-[#fafafa]">
-              <div>
-                <h3 className="text-sm font-bold text-[#0f172a]">
-                  {activeTab === "cut_report"
-                    ? "Order PO Cut Detail"
-                    : "Order Style Bulletin"}
-                </h3>
-                <p className="text-[10px] text-[#64748b] mt-0.5">
-                  Showing {activeRecordsCount} records matching Work Order{" "}
-                  <strong className="text-slate-700">`{activeSearchQuery}`</strong>
-                </p>
-              </div>
-              {activeStyle && (
-                <div className="flex items-center gap-3">
-                  <span className="text-[10px] font-bold text-[#64748b]">
-                    {selectedOpRowIds.size} of {styleBulletins.length} operations selected
-                  </span>
-                  <button
-                    onClick={handleGenerateCoupons}
-                    disabled={generatingCoupons || activeStyle.operations.length === 0}
-                    className="flex items-center justify-center gap-2 bg-white border border-[#4f46e5] text-[#4f46e5] hover:bg-[#eef2ff] px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <QrCode className="w-3.5 h-3.5" />
-                    <span>{generatingCoupons ? "Generating…" : "Generate Coupons"}</span>
-                  </button>
+            {activeTab === "style_bulletin" && (
+              <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm bg-[#fafafa]">
+                <div>
+                  <h3 className="text-sm font-bold text-[#0f172a]">
+                    Order Style Bulletin
+                  </h3>
+                  <p className="text-[10px] text-[#64748b] mt-0.5">
+                    Showing {activeRecordsCount} records matching Work Order{" "}
+                    <strong className="text-slate-700">`{activeSearchQuery}`</strong>
+                  </p>
                 </div>
-              )}
-            </div>
+                {activeStyle && (
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={handleGenerateCoupons}
+                      disabled={generatingCoupons}
+                      className="flex items-center justify-center gap-2 bg-white border border-[#4f46e5] text-[#4f46e5] hover:bg-[#eef2ff] px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      <span>{generatingCoupons ? "Generating…" : "Generate Coupons"}</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* DataTable Component */}
             {activeTab === "cut_report" ? (

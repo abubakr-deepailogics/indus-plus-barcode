@@ -172,7 +172,7 @@ export default function CouponScanningPage() {
           const targetIndex = updatedRows.findIndex((row) => !row.barCode);
           const newRowData = {
             barCode: item.CouponCode || "",
-            anlCode: item.Inseam ? `ANL-${item.Inseam}` : "",
+            anlCode: item.WorkOrder || "",
             cutNo: String(item.CutNo ?? ""),
             category: item.Category || "",
             bundleNo: item.BundleNo || "",
@@ -265,6 +265,55 @@ export default function CouponScanningPage() {
     );
   };
 
+  const handleUnscanCoupon = async (couponCode: string, rowIndex: number) => {
+    if (
+      !window.confirm(`Are you sure you want to unscan coupon: ${couponCode}?`)
+    ) {
+      return;
+    }
+    try {
+      const response = await fetch("/api/coupons/unscan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ couponCode }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setScanError(data.error || "Failed to unscan coupon.");
+      } else {
+        // Reset that row to default empty state
+        setRows((prev) =>
+          prev.map((r) =>
+            r.index === rowIndex
+              ? {
+                  index: rowIndex,
+                  barCode: "",
+                  anlCode: "",
+                  cutNo: "",
+                  category: "",
+                  bundleNo: "",
+                  qty: "",
+                  inseam: "",
+                  sizeCode: "",
+                  sectionCode: "",
+                  sectionName: "",
+                  oprCode: "",
+                  operationName: "",
+                  skillCode: "",
+                  smv: "",
+                  rate: "",
+                  value: "",
+                }
+              : r,
+          ),
+        );
+      }
+    } catch (err) {
+      console.error("Unscan error:", err);
+      setScanError("An error occurred while unscanning the coupon.");
+    }
+  };
+
   const handleSelectWorker = (worker: any) => {
     setEmployeeCode(String(worker.EmployeeID));
     setEmployeeName(worker.FirstName ? worker.FirstName.trim() : "");
@@ -345,7 +394,7 @@ export default function CouponScanningPage() {
                 return {
                   ...row,
                   barCode: code,
-                  anlCode: item.Inseam ? `ANL-${item.Inseam}` : "",
+                  anlCode: item.WorkOrder || "",
                   cutNo: String(item.CutNo ?? ""),
                   category: item.Category || "",
                   bundleNo: item.BundleNo || "",
@@ -743,7 +792,7 @@ export default function CouponScanningPage() {
               {/* Category label row */}
               <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
                 <th
-                  colSpan={14}
+                  colSpan={15}
                   className="py-1.5 px-3 border-r border-slate-200"
                 ></th>
                 <th
@@ -758,17 +807,20 @@ export default function CouponScanningPage() {
                 <th className="py-2 px-2 border-r border-slate-200 text-center w-[40px]">
                   #
                 </th>
+                <th className="py-2 px-2 border-r border-slate-200 text-center w-[80px] text-[#ef4444] uppercase tracking-wider text-[9px] font-bold">
+                  Unscan
+                </th>
                 <th className="py-2 px-3 border-r border-slate-200 w-[140px]">
-                  Bar #
+                  Coupon Code
                 </th>
                 <th className="py-2 px-2 border-r border-slate-200 w-[100px]">
-                  ANL #
+                  W/0 #
                 </th>
                 <th className="py-2 px-2 border-r border-slate-200 w-[100px]">
                   Cut #
                 </th>
                 <th className="py-2 px-2 border-r border-slate-200 text-center w-[60px]">
-                  [A,B,C]
+                  Shade
                 </th>
                 <th className="py-2 px-2 border-r border-slate-200 text-center w-[80px]">
                   Bundle #
@@ -819,6 +871,9 @@ export default function CouponScanningPage() {
                     >
                       <td className="py-3 px-2 border-r border-slate-200 text-center">
                         <div className="h-3 w-4 bg-slate-200 rounded mx-auto" />
+                      </td>
+                      <td className="py-3 px-2 border-r border-slate-200 text-center">
+                        <div className="h-3 w-10 bg-slate-200 rounded mx-auto" />
                       </td>
                       <td className="py-3 px-3 border-r border-slate-200">
                         <div className="h-3 w-24 bg-slate-200 rounded" />
@@ -878,6 +933,21 @@ export default function CouponScanningPage() {
                       {/* # */}
                       <td className="py-1 px-2 border-r border-slate-200 text-center font-bold text-slate-400">
                         {row.index}
+                      </td>
+                      {/* Unscan Action */}
+                      <td className="py-1 px-2 border-r border-slate-200 text-center">
+                        {row.barCode ? (
+                          <button
+                            onClick={() =>
+                              handleUnscanCoupon(row.barCode, row.index)
+                            }
+                            className="text-[#ef4444] hover:text-[#dc2626] font-bold text-[10px] px-1.5 py-0.5 rounded bg-red-50 hover:bg-red-100 border border-red-100 transition-all cursor-pointer"
+                          >
+                            Unscan
+                          </button>
+                        ) : (
+                          "-"
+                        )}
                       </td>
                       {/* Bar # */}
                       <td className="py-1 px-3 border-r border-slate-200 font-semibold text-slate-800">
