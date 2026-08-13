@@ -61,6 +61,7 @@ export async function GET(request: Request) {
   );
   const bundleNo = searchParams.get("bundle_no") || undefined;
   const opNo = searchParams.get("op_no") || undefined;
+  const section = searchParams.get("section") || undefined;
   const scannedParam = searchParams.get("is_scanned");
   const isScanned = scannedParam === null ? undefined : scannedParam === "true";
 
@@ -73,6 +74,7 @@ export async function GET(request: Request) {
     const { rows, total } = await listCoupons(pool, workOrder, page, pageSize, {
       bundleNo,
       opNo,
+      section,
       isScanned,
     });
     return Response.json({ coupons: rows, total, page, pageSize });

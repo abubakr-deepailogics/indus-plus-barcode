@@ -2,18 +2,9 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import React, { useState, useEffect } from "react";
-import { Search, Download, FileText, ChevronLeft, ChevronRight } from "lucide-react";
+import React, { useState, useEffect, useMemo } from "react";
+import { Search, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
-
-interface PdfBatch {
-  Id: number;
-  WorkOrder: string;
-  SaleOrderNo: string | null;
-  StyleCode: string;
-  CardCount: number;
-  CreatedAt: string;
-}
 
 interface CouponRow {
   Id: number;
@@ -21,6 +12,7 @@ interface CouponRow {
   WorkOrder: string;
   BundleNo: string;
   OpNo: string;
+  Section: string | null;
   IsScanned: boolean;
   CreatedAt: string;
 }
@@ -34,8 +26,6 @@ const SCANNED_OPTIONS = [
 
 export default function CouponTracingPage() {
   const [code, setCode] = useState("");
-  const [batches, setBatches] = useState<PdfBatch[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
 
   // Individual coupons for the traced work order — always fetched one page
@@ -47,6 +37,8 @@ export default function CouponTracingPage() {
   const [couponsLoading, setCouponsLoading] = useState(false);
   const [bundleFilter, setBundleFilter] = useState("");
   const [opFilter, setOpFilter] = useState("");
+  const [sectionFilter, setSectionFilter] = useState("");
+  const [sectionOptions, setSectionOptions] = useState<string[]>([]);
   const [scannedFilter, setScannedFilter] = useState<(typeof SCANNED_OPTIONS)[number]["value"]>("");
 
   const fetchWorkOrderSuggestions = async (query: string) => {
@@ -91,27 +83,25 @@ export default function CouponTracingPage() {
     return [];
   };
 
-  const fetchBatches = async (workOrder: string) => {
-    setIsLoading(true);
-    setErrorMsg("");
+  const fetchSectionOptions = async (workOrder: string) => {
+    if (!workOrder) {
+      setSectionOptions([]);
+      return;
+    }
     try {
-      const url = workOrder
-        ? `/api/qr-code-generation/pdf?work_order=${encodeURIComponent(workOrder)}`
-        : "/api/qr-code-generation/pdf";
-      const res = await fetch(url);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to look up generated PDFs.");
-      setBatches(data.batches || []);
+      const response = await fetch(
+        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=section`
+      );
+      setSectionOptions(response.ok ? await response.json() : []);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "An unexpected error occurred.");
-      setBatches([]);
-    } finally {
-      setIsLoading(false);
+      console.error("Section suggestions fetch error:", err);
+      setSectionOptions([]);
     }
   };
 
   const fetchCoupons = async (workOrder: string, page: number) => {
     setCouponsLoading(true);
+    setErrorMsg("");
     try {
       const params = new URLSearchParams({
         work_order: workOrder,
@@ -120,6 +110,7 @@ export default function CouponTracingPage() {
       });
       if (bundleFilter.trim()) params.set("bundle_no", bundleFilter.trim());
       if (opFilter.trim()) params.set("op_no", opFilter.trim());
+      if (sectionFilter) params.set("section", sectionFilter);
       if (scannedFilter) params.set("is_scanned", scannedFilter);
       const res = await fetch(`/api/qr-code-generation/coupons?${params}`);
       const data = await res.json();
@@ -135,16 +126,11 @@ export default function CouponTracingPage() {
     }
   };
 
-  // Show every generated PDF on load; searching re-scopes to one work order.
-  useEffect(() => {
-    fetchBatches("");
-  }, []);
-
   const handleTrace = () => {
     const workOrder = code.trim();
-    fetchBatches(workOrder);
     setTracedWorkOrder(workOrder);
     setCouponPage(1);
+    fetchSectionOptions(workOrder);
     if (workOrder) fetchCoupons(workOrder, 1);
     else {
       setCoupons([]);
@@ -158,6 +144,19 @@ export default function CouponTracingPage() {
     fetchCoupons(tracedWorkOrder, page);
   };
 
+  // Same filters as the table, sent straight to the PDF route — no filter
+  // means "every coupon for this work order". Server renders and streams
+  // the PDF on request; nothing is generated or stored ahead of the click.
+  const couponPdfUrl = useMemo(() => {
+    if (!tracedWorkOrder) return "";
+    const params = new URLSearchParams({ work_order: tracedWorkOrder });
+    if (bundleFilter.trim()) params.set("bundle_no", bundleFilter.trim());
+    if (opFilter.trim()) params.set("op_no", opFilter.trim());
+    if (sectionFilter) params.set("section", sectionFilter);
+    if (scannedFilter) params.set("is_scanned", scannedFilter);
+    return `/api/qr-code-generation/coupons/pdf?${params}`;
+  }, [tracedWorkOrder, bundleFilter, opFilter, sectionFilter, scannedFilter]);
+
   // Any filter change re-queries from page 1 — old page N may no longer
   // exist once the row count shrinks.
   useEffect(() => {
@@ -165,7 +164,7 @@ export default function CouponTracingPage() {
     setCouponPage(1);
     fetchCoupons(tracedWorkOrder, 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bundleFilter, opFilter, scannedFilter]);
+  }, [bundleFilter, opFilter, sectionFilter, scannedFilter]);
 
   return (
     <div className="flex flex-col gap-6 max-w-[900px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
@@ -193,9 +192,9 @@ export default function CouponTracingPage() {
             onChange={setCode}
             onSelect={(val) => {
               setCode(val);
-              fetchBatches(val);
               setTracedWorkOrder(val);
               setCouponPage(1);
+              fetchSectionOptions(val);
               fetchCoupons(val, 1);
             }}
             fetchSuggestions={fetchWorkOrderSuggestions}
@@ -208,11 +207,11 @@ export default function CouponTracingPage() {
           />
           <button
             onClick={handleTrace}
-            disabled={!code.trim() || isLoading}
+            disabled={!code.trim() || couponsLoading}
             className="flex items-center justify-center gap-2 bg-[#4f46e5] text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:bg-[#4338ca] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
           >
             <Search className="w-3.5 h-3.5" />
-            <span>{isLoading ? "Searching…" : "Trace"}</span>
+            <span>{couponsLoading ? "Searching…" : "Trace"}</span>
           </button>
         </div>
       </div>
@@ -220,65 +219,6 @@ export default function CouponTracingPage() {
       {errorMsg && (
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-2xl p-4 text-xs font-semibold">
           {errorMsg}
-        </div>
-      )}
-
-      {/* Generated QR-code PDF batches — all of them by default, scoped to
-          one work order after a search. */}
-      {!errorMsg && (
-        <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden">
-          <div className="border-b border-[#e2e8f0] px-5 py-4 bg-[#fafafa]">
-            <h3 className="text-sm font-bold text-[#0f172a]">Generated QR Code PDFs</h3>
-          </div>
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
-              <tr>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Work Order</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Sale Order No</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Coupons</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Generated At</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-right">Download</th>
-              </tr>
-            </thead>
-            <tbody>
-              {isLoading ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-[#94a3b8]">
-                    Loading…
-                  </td>
-                </tr>
-              ) : batches.length === 0 ? (
-                <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-[#94a3b8]">
-                    No generated PDFs found{code.trim() ? " for this order" : ""}.
-                  </td>
-                </tr>
-              ) : (
-                batches.map((batch) => (
-                  <tr key={batch.Id} className="border-b border-[#f1f5f9] last:border-0">
-                    <td className="px-4 py-3 font-semibold text-[#0f172a] flex items-center gap-2">
-                      <FileText className="w-3.5 h-3.5 text-[#94a3b8]" />
-                      {batch.WorkOrder}
-                    </td>
-                    <td className="px-4 py-3 text-[#334155]">{batch.SaleOrderNo || "—"}</td>
-                    <td className="px-4 py-3 text-[#334155]">{batch.CardCount}</td>
-                    <td className="px-4 py-3 text-[#334155]">
-                      {new Date(batch.CreatedAt).toLocaleString()}
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <a
-                        href={`/api/qr-code-generation/pdf/${batch.Id}`}
-                        className="inline-flex items-center gap-1.5 text-[#4f46e5] font-bold hover:underline"
-                      >
-                        <Download className="w-3.5 h-3.5" />
-                        Download
-                      </a>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
         </div>
       )}
 
@@ -292,9 +232,22 @@ export default function CouponTracingPage() {
             <h3 className="text-sm font-bold text-[#0f172a]">
               Coupons for {tracedWorkOrder}
             </h3>
-            <span className="text-[11px] font-semibold text-[#64748b]">
-              {couponTotal.toLocaleString()} total
-            </span>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-semibold text-[#64748b]">
+                {couponTotal.toLocaleString()} total
+              </span>
+              <a
+                href={couponPdfUrl}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                  couponTotal === 0
+                    ? "bg-slate-100 text-slate-400 pointer-events-none"
+                    : "bg-[#4f46e5] text-white hover:bg-[#4338ca] shadow-sm"
+                }`}
+              >
+                <Download className="w-3.5 h-3.5" />
+                Download PDF
+              </a>
+            </div>
           </div>
 
           {/* Filters — each change re-queries page 1 from the server. */}
@@ -327,6 +280,16 @@ export default function CouponTracingPage() {
               inputClassName="w-full px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
             />
             <select
+              value={sectionFilter}
+              onChange={(e) => setSectionFilter(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+            >
+              <option value="">All Sections</option>
+              {sectionOptions.map((s) => (
+                <option key={s} value={s}>{s}</option>
+              ))}
+            </select>
+            <select
               value={scannedFilter}
               onChange={(e) => setScannedFilter(e.target.value as typeof scannedFilter)}
               className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
@@ -345,6 +308,7 @@ export default function CouponTracingPage() {
                 <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Coupon Code</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Bundle No</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Op No</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Section</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Scanned</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Created At</th>
               </tr>
@@ -352,14 +316,14 @@ export default function CouponTracingPage() {
             <tbody>
               {couponsLoading ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-[#94a3b8]">
+                  <td colSpan={6} className="px-4 py-6 text-center text-[#94a3b8]">
                     Loading…
                   </td>
                 </tr>
               ) : coupons.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="px-4 py-6 text-center text-[#94a3b8]">
-                    No coupons match{bundleFilter || opFilter || scannedFilter ? " these filters" : " this work order yet"}.
+                  <td colSpan={6} className="px-4 py-6 text-center text-[#94a3b8]">
+                    No coupons match{bundleFilter || opFilter || sectionFilter || scannedFilter ? " these filters" : " this work order yet"}.
                   </td>
                 </tr>
               ) : (
@@ -368,6 +332,7 @@ export default function CouponTracingPage() {
                     <td className="px-4 py-3 font-mono text-[#0f172a]">{c.CouponCode}</td>
                     <td className="px-4 py-3 text-[#334155]">{c.BundleNo}</td>
                     <td className="px-4 py-3 text-[#334155]">{c.OpNo}</td>
+                    <td className="px-4 py-3 text-[#334155]">{c.Section || "—"}</td>
                     <td className="px-4 py-3">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${

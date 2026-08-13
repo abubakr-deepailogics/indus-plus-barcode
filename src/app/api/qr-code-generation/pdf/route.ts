@@ -54,8 +54,14 @@ export async function POST(request: Request) {
     // of coupons don't mean thousands of round trips.
     await registerCoupons(pool, workOrder, buildCouponCards(selectedBundles, operations));
 
-    const result = await pool
-      .request()
+    // Explicit timeout override — the driver default (15s) can be too
+    // tight for a large work order's PDF blob (thousands of coupons =
+    // tens of MB) going over the wire in one INSERT. @types/mssql doesn't
+    // declare the per-request conf overload that the JS lib supports
+    // (mssql/lib/base/connection-pool.js `request(conf)`), hence the cast.
+    const result = await (pool.request as (conf?: { requestTimeout: number }) => sql.Request)({
+      requestTimeout: 120_000,
+    })
       .input("workOrder", sql.NVarChar, workOrder)
       .input("saleOrderNo", sql.NVarChar, saleOrderNo || null)
       .input("styleCode", sql.NVarChar, styleCode ?? "")

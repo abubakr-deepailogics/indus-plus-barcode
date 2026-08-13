@@ -231,8 +231,190 @@ export default function OpenOrderPage() {
     [],
   );
 
+  const [searchQuery, setSearchQuery] = useState("");
+  const [activeSearchQuery, setActiveSearchQuery] = useState("");
+  const [activeTab, setActiveTab] = useState<"cut_report" | "style_bulletin">(
+    "cut_report",
+  );
+  const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
+  const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
+  // Operations to include in coupon generation — defaults to "all" (set
+  // whenever a fresh style bulletin loads, see the fetch effect below) so
+  // existing behavior (generate for every operation) is unchanged unless
+  // the user deliberately unchecks some.
+  const [selectedOpRowIds, setSelectedOpRowIds] = useState<Set<number>>(new Set());
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState<"all" | "cutting" | "washing" | "sewing" | "finishing">("all");
+  const [selectedSections, setSelectedSections] = useState<string[]>([]);
+  const [selectedMachines, setSelectedMachines] = useState<string[]>([]);
+  const [sectionDropdownOpen, setSectionDropdownOpen] = useState(false);
+  const [machineDropdownOpen, setMachineDropdownOpen] = useState(false);
+
+  const sectionRef = useRef<HTMLDivElement>(null);
+  const machineRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (sectionRef.current && !sectionRef.current.contains(event.target as Node)) {
+        setSectionDropdownOpen(false);
+      }
+      if (machineRef.current && !machineRef.current.contains(event.target as Node)) {
+        setMachineDropdownOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  }, []);
+
+  const getDepartment = (row: StyleBulletinRow): "cutting" | "washing" | "sewing" | "finishing" => {
+    const section = (row.Section || "").toLowerCase();
+    const opName = (row.Operation_Name || "").toLowerCase();
+    
+    if (section.includes("cut") || opName.includes("cut")) return "cutting";
+    if (section.includes("wash") || opName.includes("wash")) return "washing";
+    
+    if (
+      section.includes("finish") ||
+      section.includes("pack") ||
+      section.includes("press") ||
+      section.includes("iron") ||
+      section.includes("quality") ||
+      section.includes("carton") ||
+      opName.includes("finish") ||
+      opName.includes("pack") ||
+      opName.includes("press") ||
+      opName.includes("iron") ||
+      opName.includes("quality") ||
+      opName.includes("carton")
+    ) {
+      return "finishing";
+    }
+    
+    return "sewing";
+  };
+
+  const uniqueSections = useMemo(() => {
+    const sections = styleBulletins.map((row) => row.Section).filter(Boolean) as string[];
+    return Array.from(new Set(sections));
+  }, [styleBulletins]);
+
+  const uniqueMachines = useMemo(() => {
+    const machines = styleBulletins.map((row) => row.Machine_Type).filter(Boolean) as string[];
+    return Array.from(new Set(machines));
+  }, [styleBulletins]);
+
+  const filteredStyleBulletins = useMemo(() => {
+    let result = styleBulletins;
+
+    if (selectedDeptFilter !== "all") {
+      result = result.filter((row) => getDepartment(row) === selectedDeptFilter);
+    }
+
+    if (selectedSections.length > 0) {
+      result = result.filter((row) => row.Section && selectedSections.includes(row.Section));
+    }
+
+    if (selectedMachines.length > 0) {
+      result = result.filter((row) => row.Machine_Type && selectedMachines.includes(row.Machine_Type));
+    }
+
+    return result;
+  }, [styleBulletins, selectedDeptFilter, selectedSections, selectedMachines]);
+
+  const [isLoading, setIsLoading] = useState(false);
+  const [isTransitioning, setIsTransitioning] = useState(false);
+  const [errorMsg, setErrorMsg] = useState("");
+  const [hasSearched, setHasSearched] = useState(false);
+
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const [showPageSetupModal, setShowPageSetupModal] = useState(false);
+  const [pageSetup, setPageSetup] = useState<PageSetupConfig>({
+    size: "Legal",
+    source: "Automatically Select",
+    orientation: "Portrait",
+    margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 },
+    gridFormat: "3x10",
+  });
+
+  // Dynamic Input States for Style Bulletin Metadata
+  const [description, setDescription] = useState("");
+  const [styleDescription, setStyleDescription] = useState("");
+  const [styleCategory, setStyleCategory] = useState("");
+  const [smdNo, setSmdNo] = useState("");
+  const [finalSmdNo, setFinalSmdNo] = useState("");
+  const [target, setTarget] = useState("");
+  const [targetUnitMin, setTargetUnitMin] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [pocSam, setPocSam] = useState("");
+  const [pocPieceRate, setPocPieceRate] = useState("");
+  const [headReqd, setHeadReqd] = useState("");
+  const [totalSam, setTotalSam] = useState("");
+  const [totalRate, setTotalRate] = useState("");
+  const [appDate, setAppDate] = useState("");
+  const [appBy, setAppBy] = useState("");
+  const [status, setStatus] = useState("Approved");
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveSuccessMsg, setSaveSuccessMsg] = useState("");
+  const [saveErrorMsg, setSaveErrorMsg] = useState("");
+
+  // State and refs for Style Bulletin attachments
+  const [rowAttachments, setRowAttachments] = useState<
+    Record<number, { name: string; url: string; type: string }>
+  >({});
+  const [activeRowIdForUpload, setActiveRowIdForUpload] = useState<number | null>(null);
+  const [previewFile, setPreviewFile] = useState<{
+    name: string;
+    url: string;
+    type: string;
+    rowId: number;
+  } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
   const styleBulletinColumns = useMemo<ColumnDef<StyleBulletinRow>[]>(
     () => [
+      {
+        id: "select",
+        header: () => (
+          <input
+            type="checkbox"
+            checked={
+              filteredStyleBulletins.length > 0 &&
+              filteredStyleBulletins.every((row) => selectedOpRowIds.has(row.RowId))
+            }
+            onChange={(e) => {
+              setSelectedOpRowIds((prev) => {
+                const next = new Set(prev);
+                for (const row of filteredStyleBulletins) {
+                  if (e.target.checked) next.add(row.RowId);
+                  else next.delete(row.RowId);
+                }
+                return next;
+              });
+            }}
+            className="w-3.5 h-3.5 rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 focus:ring-offset-0 cursor-pointer"
+          />
+        ),
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            checked={selectedOpRowIds.has(row.original.RowId)}
+            onChange={(e) => {
+              setSelectedOpRowIds((prev) => {
+                const next = new Set(prev);
+                if (e.target.checked) next.add(row.original.RowId);
+                else next.delete(row.original.RowId);
+                return next;
+              });
+            }}
+            className="w-3.5 h-3.5 rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 focus:ring-offset-0 cursor-pointer"
+          />
+        ),
+        size: 40,
+      },
       {
         accessorKey: "RowId",
         header: ({ column }) => (
@@ -486,145 +668,8 @@ export default function OpenOrderPage() {
         size: 130,
       },
     ],
-    [],
+    [rowAttachments, selectedOpRowIds, filteredStyleBulletins],
   );
-
-  const [searchQuery, setSearchQuery] = useState("");
-  const [activeSearchQuery, setActiveSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"cut_report" | "style_bulletin">(
-    "cut_report",
-  );
-  const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
-  const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
-  const [selectedDeptFilter, setSelectedDeptFilter] = useState<"all" | "cutting" | "washing" | "sewing" | "finishing">("all");
-  const [selectedSections, setSelectedSections] = useState<string[]>([]);
-  const [selectedMachines, setSelectedMachines] = useState<string[]>([]);
-  const [sectionDropdownOpen, setSectionDropdownOpen] = useState(false);
-  const [machineDropdownOpen, setMachineDropdownOpen] = useState(false);
-
-  const sectionRef = useRef<HTMLDivElement>(null);
-  const machineRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (sectionRef.current && !sectionRef.current.contains(event.target as Node)) {
-        setSectionDropdownOpen(false);
-      }
-      if (machineRef.current && !machineRef.current.contains(event.target as Node)) {
-        setMachineDropdownOpen(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  const getDepartment = (row: StyleBulletinRow): "cutting" | "washing" | "sewing" | "finishing" => {
-    const section = (row.Section || "").toLowerCase();
-    const opName = (row.Operation_Name || "").toLowerCase();
-    
-    if (section.includes("cut") || opName.includes("cut")) return "cutting";
-    if (section.includes("wash") || opName.includes("wash")) return "washing";
-    
-    if (
-      section.includes("finish") ||
-      section.includes("pack") ||
-      section.includes("press") ||
-      section.includes("iron") ||
-      section.includes("quality") ||
-      section.includes("carton") ||
-      opName.includes("finish") ||
-      opName.includes("pack") ||
-      opName.includes("press") ||
-      opName.includes("iron") ||
-      opName.includes("quality") ||
-      opName.includes("carton")
-    ) {
-      return "finishing";
-    }
-    
-    return "sewing";
-  };
-
-  const uniqueSections = useMemo(() => {
-    const sections = styleBulletins.map((row) => row.Section).filter(Boolean) as string[];
-    return Array.from(new Set(sections));
-  }, [styleBulletins]);
-
-  const uniqueMachines = useMemo(() => {
-    const machines = styleBulletins.map((row) => row.Machine_Type).filter(Boolean) as string[];
-    return Array.from(new Set(machines));
-  }, [styleBulletins]);
-
-  const filteredStyleBulletins = useMemo(() => {
-    let result = styleBulletins;
-
-    if (selectedDeptFilter !== "all") {
-      result = result.filter((row) => getDepartment(row) === selectedDeptFilter);
-    }
-
-    if (selectedSections.length > 0) {
-      result = result.filter((row) => row.Section && selectedSections.includes(row.Section));
-    }
-
-    if (selectedMachines.length > 0) {
-      result = result.filter((row) => row.Machine_Type && selectedMachines.includes(row.Machine_Type));
-    }
-
-    return result;
-  }, [styleBulletins, selectedDeptFilter, selectedSections, selectedMachines]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [isTransitioning, setIsTransitioning] = useState(false);
-  const [errorMsg, setErrorMsg] = useState("");
-  const [hasSearched, setHasSearched] = useState(false);
-
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const containerRef = useRef<HTMLDivElement>(null);
-
-  const [showPageSetupModal, setShowPageSetupModal] = useState(false);
-  const [pageSetup, setPageSetup] = useState<PageSetupConfig>({
-    size: "Legal",
-    source: "Automatically Select",
-    orientation: "Portrait",
-    margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 },
-    gridFormat: "3x10",
-  });
-
-  // Dynamic Input States for Style Bulletin Metadata
-  const [description, setDescription] = useState("");
-  const [styleDescription, setStyleDescription] = useState("");
-  const [styleCategory, setStyleCategory] = useState("");
-  const [smdNo, setSmdNo] = useState("");
-  const [finalSmdNo, setFinalSmdNo] = useState("");
-  const [target, setTarget] = useState("");
-  const [targetUnitMin, setTargetUnitMin] = useState("");
-  const [startTime, setStartTime] = useState("");
-  const [pocSam, setPocSam] = useState("");
-  const [pocPieceRate, setPocPieceRate] = useState("");
-  const [headReqd, setHeadReqd] = useState("");
-  const [totalSam, setTotalSam] = useState("");
-  const [totalRate, setTotalRate] = useState("");
-  const [appDate, setAppDate] = useState("");
-  const [appBy, setAppBy] = useState("");
-  const [status, setStatus] = useState("Approved");
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccessMsg, setSaveSuccessMsg] = useState("");
-  const [saveErrorMsg, setSaveErrorMsg] = useState("");
-
-  // State and refs for Style Bulletin attachments
-  const [rowAttachments, setRowAttachments] = useState<
-    Record<number, { name: string; url: string; type: string }>
-  >({});
-  const [activeRowIdForUpload, setActiveRowIdForUpload] = useState<number | null>(null);
-  const [previewFile, setPreviewFile] = useState<{
-    name: string;
-    url: string;
-    type: string;
-    rowId: number;
-  } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -758,7 +803,8 @@ export default function OpenOrderPage() {
     setSelectedDeptFilter("all");
     setSelectedSections([]);
     setSelectedMachines([]);
-    
+    setSelectedOpRowIds(new Set());
+
     // Clear/reset all input fields when activeSearchQuery changes or is empty
     setDescription("");
     setStyleDescription("");
@@ -803,7 +849,9 @@ export default function OpenOrderPage() {
         const data = await response.json();
         setCutDetails(data.cutDetails || []);
         setStyleBulletins(data.styleBulletins || []);
-        
+        // Default to every operation selected for coupon generation.
+        setSelectedOpRowIds(new Set((data.styleBulletins || []).map((row: StyleBulletinRow) => row.RowId)));
+
         // Compute and set totalSam & totalRate
         const computedSam = (data.styleBulletins || []).reduce((acc: number, curr: any) => acc + (curr.Smv_Sam ?? 0), 0);
         const computedRate = (data.styleBulletins || []).reduce((acc: number, curr: any) => acc + (curr.Piece_Rate ?? 0), 0);
@@ -888,6 +936,7 @@ export default function OpenOrderPage() {
     }));
 
     const operations = styleBulletins
+      .filter((row) => selectedOpRowIds.has(row.RowId))
       .slice()
       .sort(
         (a, b) => (a.Operation_Sequence ?? 0) - (b.Operation_Sequence ?? 0),
@@ -926,7 +975,7 @@ export default function OpenOrderPage() {
       operations,
       bundles,
     };
-  }, [activeSearchQuery, cutDetails, styleBulletins]);
+  }, [activeSearchQuery, cutDetails, styleBulletins, selectedOpRowIds]);
 
   const { handleGenerateCoupons, generatingCoupons, handleDownloadPdf: downloadPdf, generatingPdf, couponCount } =
     useGenerateCouponPdf(
@@ -1420,9 +1469,12 @@ export default function OpenOrderPage() {
               </div>
               {activeStyle && (
                 <div className="flex items-center gap-3">
+                  <span className="text-[10px] font-bold text-[#64748b]">
+                    {selectedOpRowIds.size} of {styleBulletins.length} operations selected
+                  </span>
                   <button
                     onClick={handleGenerateCoupons}
-                    disabled={generatingCoupons}
+                    disabled={generatingCoupons || activeStyle.operations.length === 0}
                     className="flex items-center justify-center gap-2 bg-white border border-[#4f46e5] text-[#4f46e5] hover:bg-[#eef2ff] px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <QrCode className="w-3.5 h-3.5" />

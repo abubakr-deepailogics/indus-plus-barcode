@@ -38,14 +38,32 @@ export async function GET(request: Request) {
         .input("wo", sql.NVarChar, wo.trim())
         .input("q", sql.NVarChar, `%${query.trim()}%`)
         .query(`
-          SELECT DISTINCT TOP 10 Operation_Code, Operation_Name 
-          FROM dbo.Order_StyleBulletin 
-          WHERE Order_No = @wo 
+          SELECT DISTINCT TOP 10 Operation_Code, Operation_Name
+          FROM dbo.Order_StyleBulletin
+          WHERE Order_No = @wo
             AND (Operation_Code LIKE @q OR Operation_Name LIKE @q)
           ORDER BY Operation_Code
         `);
 
       return Response.json(result.recordset);
+    }
+
+    if (type === "section") {
+      // Sourced from QrCode_Coupon (not Order_StyleBulletin) — Section is
+      // whatever was recorded on the coupon at generation time, so the
+      // filter's options always match what's actually in this work order's
+      // coupons rather than the full style bulletin's section list.
+      const result = await pool
+        .request()
+        .input("wo", sql.NVarChar, wo.trim())
+        .query(`
+          SELECT DISTINCT Section
+          FROM dbo.QrCode_Coupon
+          WHERE WorkOrder = @wo AND Section IS NOT NULL AND Section <> ''
+          ORDER BY Section
+        `);
+
+      return Response.json(result.recordset.map((r) => r.Section as string));
     }
 
     return Response.json([]);
