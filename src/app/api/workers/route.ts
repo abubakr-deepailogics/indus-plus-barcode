@@ -1,0 +1,59 @@
+import { getPool, sql } from "@/lib/db";
+
+export const dynamic = "force-dynamic";
+
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const query = searchParams.get("query") || "";
+  const code = searchParams.get("code") || "";
+
+  if (!query && !code) {
+    return Response.json([]);
+  }
+
+  try {
+    const pool = await getPool();
+
+    // 1. Fetch details for a specific EmployeeID (exact match)
+    if (code) {
+      const codeNum = parseInt(code);
+      if (isNaN(codeNum)) {
+        return Response.json({ error: "Invalid employee code format." }, { status: 400 });
+      }
+
+      const result = await pool
+        .request()
+        .input("code", sql.Int, codeNum)
+        .query(`
+          SELECT TOP 1 EmployeeID, FirstName, DesignationName, ParentDepartment, DepartmentName
+          FROM dbo.Workers
+          WHERE EmployeeID = @code
+        `);
+
+      if (result.recordset.length > 0) {
+        return Response.json(result.recordset[0]);
+      } else {
+        return Response.json(null);
+      }
+    }
+
+    // 2. Fetch autocomplete suggestions matching EmployeeID or FirstName
+    if (query) {
+      const result = await pool
+        .request()
+        .input("q", sql.NVarChar, `%${query.trim()}%`)
+        .query(`
+          SELECT DISTINCT TOP 10 EmployeeID, FirstName, DesignationName, ParentDepartment, DepartmentName
+          FROM dbo.Workers
+          WHERE CAST(EmployeeID AS VARCHAR(50)) LIKE @q OR FirstName LIKE @q
+          ORDER BY EmployeeID
+        `);
+
+      return Response.json(result.recordset);
+    }
+  } catch (err: unknown) {
+    console.error("Workers API error:", err);
+    const msg = err instanceof Error ? err.message : "Internal Server Error";
+    return Response.json({ error: msg }, { status: 500 });
+  }
+}

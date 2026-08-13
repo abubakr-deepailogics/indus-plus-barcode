@@ -674,11 +674,6 @@ export default function ReworkCouponPage() {
 
           {activeStyle && (
             <div className="flex items-center gap-3">
-              {couponCount !== null && (
-                <span className="text-[10px] font-semibold text-[#64748b]">
-                  {couponCount} coupon{couponCount === 1 ? "" : "s"} generated
-                </span>
-              )}
               <button
                 type="button"
                 onClick={handleGenerateCoupons}

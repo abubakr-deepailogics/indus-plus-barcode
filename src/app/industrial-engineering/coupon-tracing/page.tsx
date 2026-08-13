@@ -3,7 +3,8 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import React, { useState, useEffect } from "react";
-import { Search, Construction, Download, FileText, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Download, FileText, ChevronLeft, ChevronRight } from "lucide-react";
+import { Autocomplete } from "@/components/ui/autocomplete";
 
 interface PdfBatch {
   Id: number;
@@ -47,6 +48,48 @@ export default function CouponTracingPage() {
   const [bundleFilter, setBundleFilter] = useState("");
   const [opFilter, setOpFilter] = useState("");
   const [scannedFilter, setScannedFilter] = useState<(typeof SCANNED_OPTIONS)[number]["value"]>("");
+
+  const fetchWorkOrderSuggestions = async (query: string) => {
+    try {
+      const response = await fetch(`/api/open-order/suggestions?query=${encodeURIComponent(query)}`);
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (err) {
+      console.error("Suggestions fetch error:", err);
+    }
+    return [];
+  };
+
+  const fetchBundleSuggestions = async (query: string) => {
+    if (!tracedWorkOrder) return [];
+    try {
+      const response = await fetch(
+        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=bundle&query=${encodeURIComponent(query)}`
+      );
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (err) {
+      console.error("Bundle suggestions fetch error:", err);
+    }
+    return [];
+  };
+
+  const fetchOpSuggestions = async (query: string) => {
+    if (!tracedWorkOrder) return [];
+    try {
+      const response = await fetch(
+        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=operation&query=${encodeURIComponent(query)}`
+      );
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (err) {
+      console.error("Op suggestions fetch error:", err);
+    }
+    return [];
+  };
 
   const fetchBatches = async (workOrder: string) => {
     setIsLoading(true);
@@ -145,13 +188,23 @@ export default function CouponTracingPage() {
 
       <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm">
         <div className="flex items-stretch gap-3">
-          <input
-            type="text"
+          <Autocomplete<string>
             value={code}
-            onChange={(e) => setCode(e.target.value)}
-            onKeyDown={(e) => e.key === "Enter" && handleTrace()}
+            onChange={setCode}
+            onSelect={(val) => {
+              setCode(val);
+              fetchBatches(val);
+              setTracedWorkOrder(val);
+              setCouponPage(1);
+              fetchCoupons(val, 1);
+            }}
+            fetchSuggestions={fetchWorkOrderSuggestions}
+            renderSuggestion={(item) => <span>{item}</span>}
+            getSuggestionValue={(item) => item}
             placeholder="Coupon code, bundle ID, or work order"
-            className="flex-grow px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+            className="flex-grow"
+            inputClassName="w-full px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+            onKeyDown={(e) => e.key === "Enter" && handleTrace()}
           />
           <button
             onClick={handleTrace}
@@ -246,19 +299,32 @@ export default function CouponTracingPage() {
 
           {/* Filters — each change re-queries page 1 from the server. */}
           <div className="flex flex-wrap items-center gap-2 px-5 py-3 border-b border-[#e2e8f0] bg-white">
-            <input
-              type="text"
+            <Autocomplete<string>
               value={bundleFilter}
-              onChange={(e) => setBundleFilter(e.target.value)}
+              onChange={setBundleFilter}
+              onSelect={setBundleFilter}
+              fetchSuggestions={fetchBundleSuggestions}
+              renderSuggestion={(item) => <span>{item}</span>}
+              getSuggestionValue={(item) => item}
               placeholder="Filter by Bundle No"
-              className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all w-40"
+              className="w-40"
+              inputClassName="w-full px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
             />
-            <input
-              type="text"
+            <Autocomplete<any>
               value={opFilter}
-              onChange={(e) => setOpFilter(e.target.value)}
+              onChange={setOpFilter}
+              onSelect={(op) => setOpFilter(op.Operation_Code)}
+              fetchSuggestions={fetchOpSuggestions}
+              renderSuggestion={(op) => (
+                <div className="flex flex-col">
+                  <span className="text-[#4f46e5] font-bold text-[10px]">{op.Operation_Code}</span>
+                  <span className="text-[10px] text-slate-500 truncate">{op.Operation_Name}</span>
+                </div>
+              )}
+              getSuggestionValue={(op) => op.Operation_Code}
               placeholder="Filter by Op No"
-              className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all w-40"
+              className="w-40"
+              inputClassName="w-full px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
             />
             <select
               value={scannedFilter}
@@ -348,18 +414,6 @@ export default function CouponTracingPage() {
           )}
         </div>
       )}
-
-      <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-5 flex items-start gap-3">
-        <Construction className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-        <div>
-          <h4 className="font-bold text-sm">Not wired up yet</h4>
-          <p className="mt-1 text-xs text-amber-700">
-            There&apos;s no coupon-tracking table/API in the database yet, so
-            there&apos;s no scan history to trace. This page is a placeholder
-            for that once the backend exists.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }

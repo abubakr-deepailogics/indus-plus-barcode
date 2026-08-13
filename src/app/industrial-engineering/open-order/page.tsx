@@ -1420,11 +1420,6 @@ export default function OpenOrderPage() {
               </div>
               {activeStyle && (
                 <div className="flex items-center gap-3">
-                  {couponCount !== null && (
-                    <span className="text-[10px] font-semibold text-[#64748b]">
-                      {couponCount} coupon{couponCount === 1 ? "" : "s"} generated
-                    </span>
-                  )}
                   <button
                     onClick={handleGenerateCoupons}
                     disabled={generatingCoupons}
@@ -1432,13 +1427,6 @@ export default function OpenOrderPage() {
                   >
                     <QrCode className="w-3.5 h-3.5" />
                     <span>{generatingCoupons ? "Generating…" : "Generate Coupons"}</span>
-                  </button>
-                  <button
-                    onClick={() => setShowPageSetupModal(true)}
-                    className="flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs"
-                  >
-                    <QrCode className="w-3.5 h-3.5" />
-                    <span>Download PDF for {activeSearchQuery}</span>
                   </button>
                 </div>
               )}
