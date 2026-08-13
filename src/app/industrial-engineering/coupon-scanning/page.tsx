@@ -1,11 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import {
-  Calendar,
-  FileText, TrendingUp,
-  Cpu
-} from "lucide-react";
+import { Calendar, FileText, TrendingUp, Cpu } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
 
 interface ScanningRow {
@@ -63,7 +59,9 @@ export default function CouponScanningPage() {
 
   const fetchWorkerSuggestions = async (query: string) => {
     try {
-      const response = await fetch(`/api/workers?query=${encodeURIComponent(query)}`);
+      const response = await fetch(
+        `/api/workers?query=${encodeURIComponent(query)}`,
+      );
       if (response.ok) {
         return await response.json();
       }
@@ -75,7 +73,9 @@ export default function CouponScanningPage() {
 
   const fetchWorkOrderSuggestions = async (query: string) => {
     try {
-      const response = await fetch(`/api/open-order/suggestions?query=${encodeURIComponent(query)}`);
+      const response = await fetch(
+        `/api/open-order/suggestions?query=${encodeURIComponent(query)}`,
+      );
       if (response.ok) {
         return await response.json();
       }
@@ -89,7 +89,7 @@ export default function CouponScanningPage() {
     if (!workOrder) return [];
     try {
       const response = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=bundle&query=${encodeURIComponent(query)}`
+        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=bundle&query=${encodeURIComponent(query)}`,
       );
       if (response.ok) {
         return await response.json();
@@ -104,7 +104,7 @@ export default function CouponScanningPage() {
     if (!workOrder) return [];
     try {
       const response = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=operation&query=${encodeURIComponent(query)}`
+        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=operation&query=${encodeURIComponent(query)}`,
       );
       if (response.ok) {
         return await response.json();
@@ -134,7 +134,9 @@ export default function CouponScanningPage() {
 
     if (!scanCouponCode.trim() && !workOrder) {
       setScanError("Please select a Work Order or enter a Coupon Code first!");
-      setErrorMessage("Please select a Work Order or enter a Coupon Code first!");
+      setErrorMessage(
+        "Please select a Work Order or enter a Coupon Code first!",
+      );
       setShowErrorModal(true);
       return;
     }
@@ -204,13 +206,17 @@ export default function CouponScanningPage() {
       });
 
       setIsScanning(false);
-      setSuccessMessage(`Coupon(s) scanned successfully! Matched ${items.length} operation(s).`);
+      setSuccessMessage(
+        `Coupon(s) scanned successfully! Matched ${items.length} operation(s).`,
+      );
       setShowSuccessModal(true);
       setScanCouponCode("");
     } catch (err: any) {
       console.error("Coupon lookup error:", err);
       setIsScanning(false);
-      setErrorMessage(err.message || "An unexpected error occurred while scanning.");
+      setErrorMessage(
+        err.message || "An unexpected error occurred while scanning.",
+      );
       setShowErrorModal(true);
     }
   };
@@ -234,10 +240,14 @@ export default function CouponScanningPage() {
       smv: "",
       rate: "",
       value: "",
-    }))
+    })),
   );
 
-  const handleCellChange = (index: number, field: keyof ScanningRow, val: string) => {
+  const handleCellChange = (
+    index: number,
+    field: keyof ScanningRow,
+    val: string,
+  ) => {
     setRows((prev) =>
       prev.map((row) => {
         if (row.index === index) {
@@ -251,11 +261,9 @@ export default function CouponScanningPage() {
           return updatedRow;
         }
         return row;
-      })
+      }),
     );
   };
-
-
 
   const handleSelectWorker = (worker: any) => {
     setEmployeeCode(String(worker.EmployeeID));
@@ -263,18 +271,20 @@ export default function CouponScanningPage() {
     setDepartment(worker.ParentDepartment || worker.DepartmentName || "");
     setDesignation(worker.DesignationName || "");
     setSection(worker.DepartmentName || "");
-
-    setShowEmpSuggestions(false);
   };
 
   // Direct fetch by code (on Enter or Tab press)
-  const handleEmployeeCodeKeyDown = async (e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleEmployeeCodeKeyDown = async (
+    e: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
     if (e.key === "Enter" || e.key === "Tab") {
       const code = e.currentTarget.value.trim();
       if (!code) return;
 
       try {
-        const response = await fetch(`/api/workers?code=${encodeURIComponent(code)}`);
+        const response = await fetch(
+          `/api/workers?code=${encodeURIComponent(code)}`,
+        );
         if (response.ok) {
           const worker = await response.json();
           if (worker) {
@@ -294,7 +304,10 @@ export default function CouponScanningPage() {
   };
 
   // Simulate scanning lookup when Bar # is entered and Enter/Tab is pressed
-  const handleBarcodeKeyDown = async (index: number, e: React.KeyboardEvent<HTMLInputElement>) => {
+  const handleBarcodeKeyDown = async (
+    index: number,
+    e: React.KeyboardEvent<HTMLInputElement>,
+  ) => {
     if (e.key === "Enter" || e.key === "Tab") {
       const code = e.currentTarget.value.trim();
       if (!code) return;
@@ -313,7 +326,7 @@ export default function CouponScanningPage() {
 
       try {
         const response = await fetch(
-          `/api/coupons/scan?barcode=${encodeURIComponent(code)}&wo=${encodeURIComponent(workOrder)}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}`
+          `/api/coupons/scan?barcode=${encodeURIComponent(code)}&wo=${encodeURIComponent(workOrder)}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}`,
         );
         const data = await response.json();
 
@@ -350,20 +363,27 @@ export default function CouponScanningPage() {
                 };
               }
               return row;
-            })
+            }),
           );
         }
       } catch (err: any) {
         console.error("Coupon lookup error:", err);
-        setScanError(err.message || "An unexpected error occurred while scanning.");
+        setScanError(
+          err.message || "An unexpected error occurred while scanning.",
+        );
       }
     }
   };
 
   // Calculate totals
   const totalQty = rows.reduce((sum, row) => sum + (parseInt(row.qty) || 0), 0);
-  const totalRecords = rows.filter((row) => row.barCode.trim().length > 0).length;
-  const totalValue = rows.reduce((sum, row) => sum + (parseFloat(row.value) || 0), 0);
+  const totalRecords = rows.filter(
+    (row) => row.barCode.trim().length > 0,
+  ).length;
+  const totalValue = rows.reduce(
+    (sum, row) => sum + (parseFloat(row.value) || 0),
+    0,
+  );
 
   return (
     <div className="flex flex-col gap-6 w-full text-xs text-[#334155] animate-fade-in pb-16 px-4 max-w-[1400px] mx-auto">
@@ -391,7 +411,9 @@ export default function CouponScanningPage() {
             {/* Column 1 */}
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1 relative">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">Employee Code <span className="text-red-500">*</span></span>
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Employee Code <span className="text-red-500">*</span>
+                </span>
                 <Autocomplete<any>
                   value={employeeCode}
                   onChange={setEmployeeCode}
@@ -400,7 +422,9 @@ export default function CouponScanningPage() {
                   renderSuggestion={(worker) => (
                     <>
                       <div>
-                        <span className="text-[#4f46e5] font-bold mr-2">{worker.EmployeeID}</span>
+                        <span className="text-[#4f46e5] font-bold mr-2">
+                          {worker.EmployeeID}
+                        </span>
                         <span>{worker.FirstName?.trim()}</span>
                       </div>
                       <span className="text-[9px] text-slate-400 font-medium bg-slate-100 px-1.5 py-0.5 rounded uppercase">
@@ -416,7 +440,9 @@ export default function CouponScanningPage() {
                 />
               </div>
               <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">Department</span>
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Department
+                </span>
                 <input
                   type="text"
                   placeholder="Department Name"
@@ -426,7 +452,9 @@ export default function CouponScanningPage() {
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">Designation</span>
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Designation
+                </span>
                 <input
                   type="text"
                   placeholder="Enter designation"
@@ -435,9 +463,11 @@ export default function CouponScanningPage() {
                   className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
                 />
               </label>
-              
-               <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">Dated</span>
+
+              <label className="flex flex-col gap-1">
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Dated
+                </span>
                 <div className="relative">
                   <input
                     type="text"
@@ -448,9 +478,11 @@ export default function CouponScanningPage() {
                   <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer" />
                 </div>
               </label>
-             
+
               <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">Shift</span>
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Shift
+                </span>
                 <input
                   type="text"
                   value={shift}
@@ -462,8 +494,10 @@ export default function CouponScanningPage() {
 
             {/* Column 2 */}
             <div className="flex flex-col gap-3">
-               <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">Employee Name</span>
+              <label className="flex flex-col gap-1">
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Employee Name
+                </span>
                 <input
                   type="text"
                   placeholder="Enter employee name"
@@ -473,7 +507,9 @@ export default function CouponScanningPage() {
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">Section</span>
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Section
+                </span>
                 <input
                   type="text"
                   placeholder="Section Name"
@@ -483,7 +519,9 @@ export default function CouponScanningPage() {
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">Already Daily Scan</span>
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Already Daily Scan
+                </span>
                 <input
                   type="text"
                   readOnly
@@ -494,7 +532,9 @@ export default function CouponScanningPage() {
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">Already Monthly Scan</span>
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Already Monthly Scan
+                </span>
                 <input
                   type="text"
                   readOnly
@@ -505,7 +545,9 @@ export default function CouponScanningPage() {
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">Line I.D</span>
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Line I.D
+                </span>
                 <input
                   type="text"
                   placeholder="Enter line id"
@@ -515,7 +557,9 @@ export default function CouponScanningPage() {
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">Scan By <span className="text-red-500">*</span></span>
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Scan By <span className="text-red-500">*</span>
+                </span>
                 <input
                   type="text"
                   placeholder="Enter scanner"
@@ -528,9 +572,10 @@ export default function CouponScanningPage() {
 
             {/* Column 3 */}
             <div className="flex flex-col gap-3">
-             
               <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">Remarks</span>
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Remarks
+                </span>
                 <input
                   type="text"
                   placeholder="Enter remarks"
@@ -541,7 +586,9 @@ export default function CouponScanningPage() {
               </label>
               <div className="grid grid-cols-2 gap-3">
                 <label className="flex flex-col gap-1">
-                  <span className="font-bold text-[#475569] text-[10px] uppercase">Ani No.</span>
+                  <span className="font-bold text-[#475569] text-[10px] uppercase">
+                    Ani No.
+                  </span>
                   <input
                     type="text"
                     placeholder="Enter ANI no."
@@ -551,7 +598,9 @@ export default function CouponScanningPage() {
                   />
                 </label>
                 <label className="flex flex-col gap-1">
-                  <span className="font-bold text-[#475569] text-[10px] uppercase">Sort Order</span>
+                  <span className="font-bold text-[#475569] text-[10px] uppercase">
+                    Sort Order
+                  </span>
                   <input
                     type="text"
                     placeholder="Enter sort order"
@@ -563,7 +612,9 @@ export default function CouponScanningPage() {
               </div>
 
               <div className="flex flex-col gap-1">
-                <span className="font-bold text-[10px] uppercase text-[#4f46e5]">Coupon Code</span>
+                <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
+                  Coupon Code
+                </span>
                 <input
                   type="text"
                   placeholder="Scan or enter Coupon Code"
@@ -572,11 +623,16 @@ export default function CouponScanningPage() {
                   className="w-full px-3 py-1.5 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
                 />
               </div>
-              
+
               <div className="h-[1px] bg-slate-100 my-2" />
-              
+
               <div className="flex flex-col gap-1 relative">
-                <span className="font-bold text-[10px] uppercase text-[#4f46e5]">Work Order {!scanCouponCode.trim() && <span className="text-red-500">*</span>}</span>
+                <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
+                  Work Order{" "}
+                  {!scanCouponCode.trim() && (
+                    <span className="text-red-500">*</span>
+                  )}
+                </span>
                 <Autocomplete<string>
                   value={workOrder}
                   onChange={setWorkOrder}
@@ -592,10 +648,12 @@ export default function CouponScanningPage() {
                   inputClassName="w-full px-3 py-1.5 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
                 />
               </div>
-              
+
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1 relative">
-                  <span className="font-bold text-[10px] uppercase text-[#4f46e5]">Bundle</span>
+                  <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
+                    Bundle
+                  </span>
                   <Autocomplete<string>
                     value={bundleNo}
                     onChange={setBundleNo}
@@ -607,9 +665,11 @@ export default function CouponScanningPage() {
                     inputClassName="w-full px-3 py-1.5 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
                   />
                 </div>
-                
+
                 <div className="flex flex-col gap-1 relative">
-                  <span className="font-bold text-[10px] uppercase text-[#4f46e5]">Operation No</span>
+                  <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
+                    Operation No
+                  </span>
                   <Autocomplete<any>
                     value={opNo}
                     onChange={setOpNo}
@@ -617,8 +677,12 @@ export default function CouponScanningPage() {
                     fetchSuggestions={fetchOpSuggestions}
                     renderSuggestion={(op) => (
                       <div className="flex flex-col">
-                        <span className="text-[#4f46e5] font-bold text-[10px]">{op.Operation_Code}</span>
-                        <span className="text-[10px] text-slate-500 truncate">{op.Operation_Name}</span>
+                        <span className="text-[#4f46e5] font-bold text-[10px]">
+                          {op.Operation_Code}
+                        </span>
+                        <span className="text-[10px] text-slate-500 truncate">
+                          {op.Operation_Name}
+                        </span>
                       </div>
                     )}
                     getSuggestionValue={(op) => op.Operation_Code}
@@ -627,7 +691,7 @@ export default function CouponScanningPage() {
                   />
                 </div>
               </div>
-              
+
               <button
                 type="button"
                 onClick={handleScanCoupon}
@@ -678,134 +742,209 @@ export default function CouponScanningPage() {
             <thead>
               {/* Category label row */}
               <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                <th colSpan={14} className="py-1.5 px-3 border-r border-slate-200"></th>
-                <th colSpan={3} className="py-1 px-3 text-center text-[9px] uppercase tracking-wider bg-slate-200/60 text-slate-800 border-b border-slate-300">
+                <th
+                  colSpan={14}
+                  className="py-1.5 px-3 border-r border-slate-200"
+                ></th>
+                <th
+                  colSpan={3}
+                  className="py-1 px-3 text-center text-[9px] uppercase tracking-wider bg-slate-200/60 text-slate-800 border-b border-slate-300"
+                >
                   Rate
                 </th>
               </tr>
               {/* Main table headers */}
               <tr className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 text-left">
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[40px]">#</th>
-                <th className="py-2 px-3 border-r border-slate-200 w-[140px]">Bar #</th>
-                <th className="py-2 px-2 border-r border-slate-200 w-[100px]">ANL #</th>
-                <th className="py-2 px-2 border-r border-slate-200 w-[100px]">Cut #</th>
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[60px]">[A,B,C]</th>
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[80px]">Bundle #</th>
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[70px]">Qty</th>
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[80px]">Inseam</th>
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[70px]">Size #</th>
-                <th className="py-2 px-2 border-r border-slate-200 w-[90px]">Section #</th>
-                <th className="py-2 px-3 border-r border-slate-200 w-[130px]">Section Name</th>
-                <th className="py-2 px-2 border-r border-slate-200 w-[90px]">Opr #</th>
-                <th className="py-2 px-3 border-r border-slate-200 w-[180px]">Operation Name</th>
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[60px]">Skill #</th>
-                <th className="py-2 px-2 border-r border-slate-200 text-right w-[80px] bg-slate-100/30">SMV</th>
-                <th className="py-2 px-2 border-r border-slate-200 text-right w-[90px] bg-slate-100/30">Rate</th>
-                <th className="py-2 px-3 text-right w-[100px] bg-indigo-50/20 text-[#4f46e5]">Value</th>
+                <th className="py-2 px-2 border-r border-slate-200 text-center w-[40px]">
+                  #
+                </th>
+                <th className="py-2 px-3 border-r border-slate-200 w-[140px]">
+                  Bar #
+                </th>
+                <th className="py-2 px-2 border-r border-slate-200 w-[100px]">
+                  ANL #
+                </th>
+                <th className="py-2 px-2 border-r border-slate-200 w-[100px]">
+                  Cut #
+                </th>
+                <th className="py-2 px-2 border-r border-slate-200 text-center w-[60px]">
+                  [A,B,C]
+                </th>
+                <th className="py-2 px-2 border-r border-slate-200 text-center w-[80px]">
+                  Bundle #
+                </th>
+                <th className="py-2 px-2 border-r border-slate-200 text-center w-[70px]">
+                  Qty
+                </th>
+                <th className="py-2 px-2 border-r border-slate-200 text-center w-[80px]">
+                  Inseam
+                </th>
+                <th className="py-2 px-2 border-r border-slate-200 text-center w-[70px]">
+                  Size #
+                </th>
+                <th className="py-2 px-2 border-r border-slate-200 w-[90px]">
+                  Section #
+                </th>
+                <th className="py-2 px-3 border-r border-slate-200 w-[130px]">
+                  Section Name
+                </th>
+                <th className="py-2 px-2 border-r border-slate-200 w-[90px]">
+                  Opr #
+                </th>
+                <th className="py-2 px-3 border-r border-slate-200 w-[180px]">
+                  Operation Name
+                </th>
+                <th className="py-2 px-2 border-r border-slate-200 text-center w-[60px]">
+                  Skill #
+                </th>
+                <th className="py-2 px-2 border-r border-slate-200 text-right w-[80px] bg-slate-100/30">
+                  SMV
+                </th>
+                <th className="py-2 px-2 border-r border-slate-200 text-right w-[90px] bg-slate-100/30">
+                  Rate
+                </th>
+                <th className="py-2 px-3 text-right w-[100px] bg-indigo-50/20 text-[#4f46e5]">
+                  Value
+                </th>
               </tr>
             </thead>
 
             {/* Editable row inputs */}
             <tbody>
-              {isScanning ? (
-                Array.from({ length: 6 }).map((_, idx) => (
-                  <tr key={`skeleton-${idx}`} className="animate-pulse bg-white border-b border-slate-100">
-                    <td className="py-3 px-2 border-r border-slate-200 text-center"><div className="h-3 w-4 bg-slate-200 rounded mx-auto" /></td>
-                    <td className="py-3 px-3 border-r border-slate-200"><div className="h-3 w-24 bg-slate-200 rounded" /></td>
-                    <td className="py-3 px-2 border-r border-slate-200"><div className="h-3 w-16 bg-slate-200 rounded" /></td>
-                    <td className="py-3 px-2 border-r border-slate-200"><div className="h-3 w-12 bg-slate-200 rounded" /></td>
-                    <td className="py-3 px-2 border-r border-slate-200 text-center"><div className="h-3 w-8 bg-slate-200 rounded mx-auto" /></td>
-                    <td className="py-3 px-2 border-r border-slate-200 text-center"><div className="h-3 w-16 bg-slate-200 rounded mx-auto" /></td>
-                    <td className="py-3 px-2 border-r border-slate-200 text-center"><div className="h-3 w-10 bg-slate-200 rounded mx-auto" /></td>
-                    <td className="py-3 px-2 border-r border-slate-200 text-center"><div className="h-3 w-12 bg-slate-200 rounded mx-auto" /></td>
-                    <td className="py-3 px-2 border-r border-slate-200 text-center"><div className="h-3 w-10 bg-slate-200 rounded mx-auto" /></td>
-                    <td className="py-3 px-2 border-r border-slate-200"><div className="h-3 w-16 bg-slate-200 rounded" /></td>
-                    <td className="py-3 px-3 border-r border-slate-200"><div className="h-3 w-28 bg-slate-200 rounded" /></td>
-                    <td className="py-3 px-2 border-r border-slate-200"><div className="h-3 w-16 bg-slate-200 rounded" /></td>
-                    <td className="py-3 px-3 border-r border-slate-200"><div className="h-3 w-36 bg-slate-200 rounded" /></td>
-                    <td className="py-3 px-2 border-r border-slate-200 text-center"><div className="h-3 w-8 bg-slate-200 rounded mx-auto" /></td>
-                    <td className="py-3 px-2 border-r border-slate-200 text-right bg-slate-50/50"><div className="h-3 w-12 bg-slate-200 rounded ml-auto" /></td>
-                    <td className="py-3 px-2 border-r border-slate-200 text-right bg-slate-50/50"><div className="h-3 w-12 bg-slate-200 rounded ml-auto" /></td>
-                    <td className="py-3 px-3 text-right bg-indigo-50/10"><div className="h-3 w-14 bg-indigo-200/50 rounded ml-auto" /></td>
-                  </tr>
-                ))
-              ) : (
-                rows.map((row) => (
-                  <tr 
-                  key={row.index}
-                  className="bg-white hover:bg-slate-50/50 border-b border-slate-100 transition-colors"
-                >
-                  {/* # */}
-                  <td className="py-1 px-2 border-r border-slate-200 text-center font-bold text-slate-400">
-                    {row.index}
-                  </td>
-                  {/* Bar # */}
-                  <td className="py-1 px-3 border-r border-slate-200 font-semibold text-slate-800">
-                    {row.barCode || "-"}
-                  </td>
-                  {/* ANL # */}
-                  <td className="py-1 px-3 border-r border-slate-200 font-semibold text-slate-700">
-                    {row.anlCode || "-"}
-                  </td>
-                  {/* Cut # */}
-                  <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
-                    {row.cutNo || "-"}
-                  </td>
-                  {/* [A,B,C] */}
-                  <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
-                    {row.category || "-"}
-                  </td>
-                  {/* Bundle # */}
-                  <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
-                    {row.bundleNo || "-"}
-                  </td>
-                  {/* Qty */}
-                  <td className="py-1 px-2 border-r border-slate-200 text-center font-bold text-[#4f46e5]">
-                    {row.qty || "-"}
-                  </td>
-                  {/* Inseam */}
-                  <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
-                    {row.inseam || "-"}
-                  </td>
-                  {/* Size # */}
-                  <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
-                    {row.sizeCode || "-"}
-                  </td>
-                  {/* Section # */}
-                  <td className="py-1 px-2 border-r border-slate-200 font-semibold text-slate-700">
-                    {row.sectionCode || "-"}
-                  </td>
-                  {/* Section Name */}
-                  <td className="py-1 px-3 border-r border-slate-200 font-semibold text-slate-700">
-                    {row.sectionName || "-"}
-                  </td>
-                  {/* Opr # */}
-                  <td className="py-1 px-2 border-r border-slate-200 font-semibold text-slate-700">
-                    {row.oprCode || "-"}
-                  </td>
-                  {/* Operation Name */}
-                  <td className="py-1 px-3 border-r border-slate-200 font-semibold text-slate-700">
-                    {row.operationName || "-"}
-                  </td>
-                  {/* Skill # */}
-                  <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
-                    {row.skillCode || "-"}
-                  </td>
-                  {/* SMV */}
-                  <td className="py-1 px-2 border-r border-slate-200 text-right bg-slate-50/30 font-semibold text-slate-700">
-                    {row.smv || "-"}
-                  </td>
-                  {/* Rate */}
-                  <td className="py-1 px-2 border-r border-slate-200 text-right bg-slate-50/30 font-semibold text-slate-700">
-                    {row.rate || "-"}
-                  </td>
-                  {/* Value */}
-                  <td className="py-1 px-3 text-right bg-indigo-50/10 text-indigo-700 font-bold">
-                    {row.value || "-"}
-                  </td>
-                </tr>
-                ))
-              )}
+              {isScanning
+                ? Array.from({ length: 6 }).map((_, idx) => (
+                    <tr
+                      key={`skeleton-${idx}`}
+                      className="animate-pulse bg-white border-b border-slate-100"
+                    >
+                      <td className="py-3 px-2 border-r border-slate-200 text-center">
+                        <div className="h-3 w-4 bg-slate-200 rounded mx-auto" />
+                      </td>
+                      <td className="py-3 px-3 border-r border-slate-200">
+                        <div className="h-3 w-24 bg-slate-200 rounded" />
+                      </td>
+                      <td className="py-3 px-2 border-r border-slate-200">
+                        <div className="h-3 w-16 bg-slate-200 rounded" />
+                      </td>
+                      <td className="py-3 px-2 border-r border-slate-200">
+                        <div className="h-3 w-12 bg-slate-200 rounded" />
+                      </td>
+                      <td className="py-3 px-2 border-r border-slate-200 text-center">
+                        <div className="h-3 w-8 bg-slate-200 rounded mx-auto" />
+                      </td>
+                      <td className="py-3 px-2 border-r border-slate-200 text-center">
+                        <div className="h-3 w-16 bg-slate-200 rounded mx-auto" />
+                      </td>
+                      <td className="py-3 px-2 border-r border-slate-200 text-center">
+                        <div className="h-3 w-10 bg-slate-200 rounded mx-auto" />
+                      </td>
+                      <td className="py-3 px-2 border-r border-slate-200 text-center">
+                        <div className="h-3 w-12 bg-slate-200 rounded mx-auto" />
+                      </td>
+                      <td className="py-3 px-2 border-r border-slate-200 text-center">
+                        <div className="h-3 w-10 bg-slate-200 rounded mx-auto" />
+                      </td>
+                      <td className="py-3 px-2 border-r border-slate-200">
+                        <div className="h-3 w-16 bg-slate-200 rounded" />
+                      </td>
+                      <td className="py-3 px-3 border-r border-slate-200">
+                        <div className="h-3 w-28 bg-slate-200 rounded" />
+                      </td>
+                      <td className="py-3 px-2 border-r border-slate-200">
+                        <div className="h-3 w-16 bg-slate-200 rounded" />
+                      </td>
+                      <td className="py-3 px-3 border-r border-slate-200">
+                        <div className="h-3 w-36 bg-slate-200 rounded" />
+                      </td>
+                      <td className="py-3 px-2 border-r border-slate-200 text-center">
+                        <div className="h-3 w-8 bg-slate-200 rounded mx-auto" />
+                      </td>
+                      <td className="py-3 px-2 border-r border-slate-200 text-right bg-slate-50/50">
+                        <div className="h-3 w-12 bg-slate-200 rounded ml-auto" />
+                      </td>
+                      <td className="py-3 px-2 border-r border-slate-200 text-right bg-slate-50/50">
+                        <div className="h-3 w-12 bg-slate-200 rounded ml-auto" />
+                      </td>
+                      <td className="py-3 px-3 text-right bg-indigo-50/10">
+                        <div className="h-3 w-14 bg-indigo-200/50 rounded ml-auto" />
+                      </td>
+                    </tr>
+                  ))
+                : rows.map((row) => (
+                    <tr
+                      key={row.index}
+                      className="bg-white hover:bg-slate-50/50 border-b border-slate-100 transition-colors"
+                    >
+                      {/* # */}
+                      <td className="py-1 px-2 border-r border-slate-200 text-center font-bold text-slate-400">
+                        {row.index}
+                      </td>
+                      {/* Bar # */}
+                      <td className="py-1 px-3 border-r border-slate-200 font-semibold text-slate-800">
+                        {row.barCode || "-"}
+                      </td>
+                      {/* ANL # */}
+                      <td className="py-1 px-3 border-r border-slate-200 font-semibold text-slate-700">
+                        {row.anlCode || "-"}
+                      </td>
+                      {/* Cut # */}
+                      <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
+                        {row.cutNo || "-"}
+                      </td>
+                      {/* [A,B,C] */}
+                      <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
+                        {row.category || "-"}
+                      </td>
+                      {/* Bundle # */}
+                      <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
+                        {row.bundleNo || "-"}
+                      </td>
+                      {/* Qty */}
+                      <td className="py-1 px-2 border-r border-slate-200 text-center font-bold text-[#4f46e5]">
+                        {row.qty || "-"}
+                      </td>
+                      {/* Inseam */}
+                      <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
+                        {row.inseam || "-"}
+                      </td>
+                      {/* Size # */}
+                      <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
+                        {row.sizeCode || "-"}
+                      </td>
+                      {/* Section # */}
+                      <td className="py-1 px-2 border-r border-slate-200 font-semibold text-slate-700">
+                        {row.sectionCode || "-"}
+                      </td>
+                      {/* Section Name */}
+                      <td className="py-1 px-3 border-r border-slate-200 font-semibold text-slate-700">
+                        {row.sectionName || "-"}
+                      </td>
+                      {/* Opr # */}
+                      <td className="py-1 px-2 border-r border-slate-200 font-semibold text-slate-700">
+                        {row.oprCode || "-"}
+                      </td>
+                      {/* Operation Name */}
+                      <td className="py-1 px-3 border-r border-slate-200 font-semibold text-slate-700">
+                        {row.operationName || "-"}
+                      </td>
+                      {/* Skill # */}
+                      <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
+                        {row.skillCode || "-"}
+                      </td>
+                      {/* SMV */}
+                      <td className="py-1 px-2 border-r border-slate-200 text-right bg-slate-50/30 font-semibold text-slate-700">
+                        {row.smv || "-"}
+                      </td>
+                      {/* Rate */}
+                      <td className="py-1 px-2 border-r border-slate-200 text-right bg-slate-50/30 font-semibold text-slate-700">
+                        {row.rate || "-"}
+                      </td>
+                      {/* Value */}
+                      <td className="py-1 px-3 text-right bg-indigo-50/10 text-indigo-700 font-bold">
+                        {row.value || "-"}
+                      </td>
+                    </tr>
+                  ))}
             </tbody>
           </table>
         </div>
@@ -853,17 +992,30 @@ export default function CouponScanningPage() {
             </h3>
             <div className="text-xs text-slate-600 mb-4 bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex flex-col gap-2">
               {scanCouponCode.trim() ? (
-                <div><strong className="text-slate-800">Coupon Code:</strong> {scanCouponCode.trim()}</div>
+                <div>
+                  <strong className="text-slate-800">Coupon Code:</strong>{" "}
+                  {scanCouponCode.trim()}
+                </div>
               ) : (
                 <>
-                  <div><strong className="text-slate-800">Work Order:</strong> {workOrder}</div>
-                  <div><strong className="text-slate-800">Bundle No:</strong> {bundleNo || "All Bundles"}</div>
-                  <div><strong className="text-slate-800">Operation No:</strong> {opNo || "All Operations"}</div>
+                  <div>
+                    <strong className="text-slate-800">Work Order:</strong>{" "}
+                    {workOrder}
+                  </div>
+                  <div>
+                    <strong className="text-slate-800">Bundle No:</strong>{" "}
+                    {bundleNo || "All Bundles"}
+                  </div>
+                  <div>
+                    <strong className="text-slate-800">Operation No:</strong>{" "}
+                    {opNo || "All Operations"}
+                  </div>
                 </>
               )}
             </div>
             <p className="text-xs text-slate-500 mb-6">
-              Are you sure you want to scan this coupon? This will update the database records.
+              Are you sure you want to scan this coupon? This will update the
+              database records.
             </p>
             <div className="flex justify-end gap-2.5">
               <button
@@ -895,9 +1047,7 @@ export default function CouponScanningPage() {
             <h3 className="text-sm font-bold text-slate-800 mb-2">
               Scan Successful
             </h3>
-            <p className="text-xs text-slate-500 mb-6">
-              {successMessage}
-            </p>
+            <p className="text-xs text-slate-500 mb-6">{successMessage}</p>
             <button
               type="button"
               onClick={() => setShowSuccessModal(false)}
