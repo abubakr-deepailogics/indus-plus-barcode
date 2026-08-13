@@ -9,22 +9,37 @@ export async function GET(request: Request) {
   const bundle = searchParams.get("bundle") || "";
   const op = searchParams.get("op") || "";
 
-  if (!wo) {
+  const employeeCode = searchParams.get("employeeCode") || "";
+  const scanBy = searchParams.get("scanBy") || "";
+
+  if (!barcode && !wo) {
     return Response.json(
       { error: "Work Order is required in the header before scanning." },
       { status: 400 }
     );
   }
 
-  if (!barcode && !bundle) {
-    return Response.json(
-      { error: "Either Barcode or Bundle No is required to scan." },
-      { status: 400 }
-    );
-  }
-
   try {
     const pool = await getPool();
+
+    // Auto-migration: Ensure EmployeeCode and ScanBy columns exist in dbo.QrCode_Coupon
+    await pool.request().query(`
+      IF NOT EXISTS (
+        SELECT 1 FROM sys.columns
+        WHERE object_id = OBJECT_ID('dbo.QrCode_Coupon') AND name = 'EmployeeCode'
+      )
+      BEGIN
+        ALTER TABLE dbo.QrCode_Coupon ADD EmployeeCode NVARCHAR(100) NULL;
+      END
+
+      IF NOT EXISTS (
+        SELECT 1 FROM sys.columns
+        WHERE object_id = OBJECT_ID('dbo.QrCode_Coupon') AND name = 'ScanBy'
+      )
+      BEGIN
+        ALTER TABLE dbo.QrCode_Coupon ADD ScanBy NVARCHAR(100) NULL;
+      END
+    `);
 
     // Optimize execution plan by running distinct lookup logic depending on whether barcode is provided.
     // This avoids slow OR queries which prevent index seeks on index tables.
@@ -67,7 +82,7 @@ export async function GET(request: Request) {
         LEFT JOIN dbo.Operations o WITH (NOLOCK)
             ON o.OperationCode = s.Operation_Code
         WHERE c.CouponCode = @barcode 
-          AND c.WorkOrder = @wo
+          AND (@wo = '' OR c.WorkOrder = @wo)
       `
       : `
         SELECT 
@@ -107,7 +122,7 @@ export async function GET(request: Request) {
         LEFT JOIN dbo.Operations o WITH (NOLOCK)
             ON o.OperationCode = s.Operation_Code
         WHERE c.WorkOrder = @wo
-          AND c.BundleNo = @bundle 
+          AND (@bundle = '' OR c.BundleNo = @bundle)
           AND (@op = '' OR c.OpNo = @op)
       `;
 
@@ -141,7 +156,15 @@ export async function GET(request: Request) {
       await pool
         .request()
         .input("barcode", sql.NVarChar, barcode.trim())
-        .query(`UPDATE dbo.QrCode_Coupon SET IsScanned = 1 WHERE CouponCode = @barcode`);
+        .input("employeeCode", sql.NVarChar, employeeCode.trim())
+        .input("scanBy", sql.NVarChar, scanBy.trim())
+        .query(`
+          UPDATE dbo.QrCode_Coupon 
+          SET IsScanned = 1,
+              EmployeeCode = NULLIF(@employeeCode, ''),
+              ScanBy = NULLIF(@scanBy, '') 
+          WHERE CouponCode = @barcode
+        `);
 
       return Response.json(records);
     }
@@ -162,11 +185,15 @@ export async function GET(request: Request) {
       .input("wo", sql.NVarChar, wo.trim())
       .input("bundle", sql.NVarChar, bundle.trim())
       .input("op", sql.NVarChar, op.trim())
+      .input("employeeCode", sql.NVarChar, employeeCode.trim())
+      .input("scanBy", sql.NVarChar, scanBy.trim())
       .query(`
         UPDATE dbo.QrCode_Coupon 
-        SET IsScanned = 1 
+        SET IsScanned = 1,
+            EmployeeCode = NULLIF(@employeeCode, ''),
+            ScanBy = NULLIF(@scanBy, '')
         WHERE WorkOrder = @wo 
-          AND BundleNo = @bundle 
+          AND (@bundle = '' OR BundleNo = @bundle) 
           AND (@op = '' OR OpNo = @op)
           AND IsScanned = 0
       `);

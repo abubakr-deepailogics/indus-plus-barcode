@@ -50,6 +50,7 @@ export default function CouponScanningPage() {
   const [workOrder, setWorkOrder] = useState("");
   const [bundleNo, setBundleNo] = useState("");
   const [opNo, setOpNo] = useState("");
+  const [scanCouponCode, setScanCouponCode] = useState("");
   const [scanError, setScanError] = useState("");
 
   // Scanning state and modals
@@ -117,16 +118,23 @@ export default function CouponScanningPage() {
   const handleScanCoupon = () => {
     setScanError("");
 
-    if (!workOrder) {
-      setScanError("Please select a Work Order first!");
-      setErrorMessage("Please select a Work Order first!");
+    if (!employeeCode.trim()) {
+      setScanError("Please enter or select an Employee Code first!");
+      setErrorMessage("Please enter or select an Employee Code first!");
       setShowErrorModal(true);
       return;
     }
 
-    if (!bundleNo) {
-      setScanError("Please enter Bundle No first!");
-      setErrorMessage("Please enter Bundle No first!");
+    if (!scanBy.trim()) {
+      setScanError("Please enter Scanner Name in Scan By first!");
+      setErrorMessage("Please enter Scanner Name in Scan By first!");
+      setShowErrorModal(true);
+      return;
+    }
+
+    if (!scanCouponCode.trim() && !workOrder) {
+      setScanError("Please select a Work Order or enter a Coupon Code first!");
+      setErrorMessage("Please select a Work Order or enter a Coupon Code first!");
       setShowErrorModal(true);
       return;
     }
@@ -140,9 +148,10 @@ export default function CouponScanningPage() {
     setScanError("");
 
     try {
-      const response = await fetch(
-        `/api/coupons/scan?wo=${encodeURIComponent(workOrder)}&bundle=${encodeURIComponent(bundleNo)}&op=${encodeURIComponent(opNo)}`
-      );
+      const url = scanCouponCode.trim()
+        ? `/api/coupons/scan?barcode=${encodeURIComponent(scanCouponCode.trim())}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}`
+        : `/api/coupons/scan?wo=${encodeURIComponent(workOrder)}&bundle=${encodeURIComponent(bundleNo)}&op=${encodeURIComponent(opNo)}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}`;
+      const response = await fetch(url);
       const data = await response.json();
 
       if (!response.ok) {
@@ -197,6 +206,7 @@ export default function CouponScanningPage() {
       setIsScanning(false);
       setSuccessMessage(`Coupon(s) scanned successfully! Matched ${items.length} operation(s).`);
       setShowSuccessModal(true);
+      setScanCouponCode("");
     } catch (err: any) {
       console.error("Coupon lookup error:", err);
       setIsScanning(false);
@@ -291,14 +301,19 @@ export default function CouponScanningPage() {
 
       setScanError("");
 
-      if (!workOrder) {
-        setScanError("Please select a Work Order first!");
+      if (!employeeCode.trim()) {
+        setScanError("Please enter or select an Employee Code first!");
+        return;
+      }
+
+      if (!scanBy.trim()) {
+        setScanError("Please enter Scanner Name in Scan By first!");
         return;
       }
 
       try {
         const response = await fetch(
-          `/api/coupons/scan?barcode=${encodeURIComponent(code)}&wo=${encodeURIComponent(workOrder)}`
+          `/api/coupons/scan?barcode=${encodeURIComponent(code)}&wo=${encodeURIComponent(workOrder)}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}`
         );
         const data = await response.json();
 
@@ -376,7 +391,7 @@ export default function CouponScanningPage() {
             {/* Column 1 */}
             <div className="flex flex-col gap-3">
               <div className="flex flex-col gap-1 relative">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">Employee Code</span>
+                <span className="font-bold text-[#475569] text-[10px] uppercase">Employee Code <span className="text-red-500">*</span></span>
                 <Autocomplete<any>
                   value={employeeCode}
                   onChange={setEmployeeCode}
@@ -500,7 +515,7 @@ export default function CouponScanningPage() {
                 />
               </label>
               <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">Scan By</span>
+                <span className="font-bold text-[#475569] text-[10px] uppercase">Scan By <span className="text-red-500">*</span></span>
                 <input
                   type="text"
                   placeholder="Enter scanner"
@@ -546,11 +561,22 @@ export default function CouponScanningPage() {
                   />
                 </label>
               </div>
+
+              <div className="flex flex-col gap-1">
+                <span className="font-bold text-[10px] uppercase text-[#4f46e5]">Coupon Code</span>
+                <input
+                  type="text"
+                  placeholder="Scan or enter Coupon Code"
+                  value={scanCouponCode}
+                  onChange={(e) => setScanCouponCode(e.target.value)}
+                  className="w-full px-3 py-1.5 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                />
+              </div>
               
               <div className="h-[1px] bg-slate-100 my-2" />
               
               <div className="flex flex-col gap-1 relative">
-                <span className="font-bold text-[10px] uppercase text-[#4f46e5]">Work Order</span>
+                <span className="font-bold text-[10px] uppercase text-[#4f46e5]">Work Order {!scanCouponCode.trim() && <span className="text-red-500">*</span>}</span>
                 <Autocomplete<string>
                   value={workOrder}
                   onChange={setWorkOrder}
@@ -826,9 +852,15 @@ export default function CouponScanningPage() {
               <span>🔍</span> Confirm Coupon Scan
             </h3>
             <div className="text-xs text-slate-600 mb-4 bg-slate-50 p-3.5 rounded-xl border border-slate-100 flex flex-col gap-2">
-              <div><strong className="text-slate-800">Work Order:</strong> {workOrder}</div>
-              <div><strong className="text-slate-800">Bundle No:</strong> {bundleNo || "All Bundles"}</div>
-              <div><strong className="text-slate-800">Operation No:</strong> {opNo || "All Operations"}</div>
+              {scanCouponCode.trim() ? (
+                <div><strong className="text-slate-800">Coupon Code:</strong> {scanCouponCode.trim()}</div>
+              ) : (
+                <>
+                  <div><strong className="text-slate-800">Work Order:</strong> {workOrder}</div>
+                  <div><strong className="text-slate-800">Bundle No:</strong> {bundleNo || "All Bundles"}</div>
+                  <div><strong className="text-slate-800">Operation No:</strong> {opNo || "All Operations"}</div>
+                </>
+              )}
             </div>
             <p className="text-xs text-slate-500 mb-6">
               Are you sure you want to scan this coupon? This will update the database records.
