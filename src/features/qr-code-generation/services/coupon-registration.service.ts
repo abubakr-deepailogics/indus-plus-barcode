@@ -79,3 +79,72 @@ export async function countCoupons(pool: sql.ConnectionPool, workOrder: string):
     .query(`SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder`);
   return result.recordset[0].total;
 }
+
+export interface CouponListRow {
+  Id: number;
+  CouponCode: string;
+  WorkOrder: string;
+  BundleNo: string;
+  OpNo: string;
+  IsScanned: boolean;
+  CreatedAt: string;
+}
+
+export interface CouponListFilters {
+  bundleNo?: string;
+  opNo?: string;
+  isScanned?: boolean;
+}
+
+// Server-side page of a work order's coupons — a work order can have
+// thousands of rows, so this never loads the full set into the app.
+// Backed by IX_QrCode_Coupon_WorkOrder; OFFSET/FETCH needs an ORDER BY.
+// bundleNo/opNo match by substring (coupons are looked up by partial
+// entry); isScanned is an exact match when provided.
+export async function listCoupons(
+  pool: sql.ConnectionPool,
+  workOrder: string,
+  page: number,
+  pageSize: number,
+  filters: CouponListFilters = {},
+): Promise<{ rows: CouponListRow[]; total: number }> {
+  const conditions = ["WorkOrder = @workOrder"];
+  const request = pool.request().input("workOrder", sql.NVarChar, workOrder);
+
+  if (filters.bundleNo) {
+    conditions.push("BundleNo LIKE @bundleNo");
+    request.input("bundleNo", sql.NVarChar, `%${filters.bundleNo}%`);
+  }
+  if (filters.opNo) {
+    conditions.push("OpNo LIKE @opNo");
+    request.input("opNo", sql.NVarChar, `%${filters.opNo}%`);
+  }
+  if (filters.isScanned !== undefined) {
+    conditions.push("IsScanned = @isScanned");
+    request.input("isScanned", sql.Bit, filters.isScanned);
+  }
+  const where = conditions.join(" AND ");
+
+  const countRequest = pool.request();
+  // Requests can't share the same `request` object once .query() is
+  // pending, so mirror the same inputs onto a second request for COUNT.
+  countRequest.input("workOrder", sql.NVarChar, workOrder);
+  if (filters.bundleNo) countRequest.input("bundleNo", sql.NVarChar, `%${filters.bundleNo}%`);
+  if (filters.opNo) countRequest.input("opNo", sql.NVarChar, `%${filters.opNo}%`);
+  if (filters.isScanned !== undefined) countRequest.input("isScanned", sql.Bit, filters.isScanned);
+
+  const [dataResult, countResult] = await Promise.all([
+    request
+      .input("offset", sql.Int, (page - 1) * pageSize)
+      .input("pageSize", sql.Int, pageSize)
+      .query(`
+        SELECT Id, CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, CreatedAt
+        FROM dbo.QrCode_Coupon
+        WHERE ${where}
+        ORDER BY Id
+        OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
+      `),
+    countRequest.query(`SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE ${where}`),
+  ]);
+  return { rows: dataResult.recordset, total: countResult.recordset[0].total };
+}

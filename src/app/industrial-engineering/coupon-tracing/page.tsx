@@ -3,7 +3,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import React, { useState, useEffect } from "react";
-import { Search, Construction, Download, FileText } from "lucide-react";
+import { Search, Construction, Download, FileText, ChevronLeft, ChevronRight } from "lucide-react";
 
 interface PdfBatch {
   Id: number;
@@ -14,11 +14,39 @@ interface PdfBatch {
   CreatedAt: string;
 }
 
+interface CouponRow {
+  Id: number;
+  CouponCode: string;
+  WorkOrder: string;
+  BundleNo: string;
+  OpNo: string;
+  IsScanned: boolean;
+  CreatedAt: string;
+}
+
+const COUPON_PAGE_SIZE = 50;
+const SCANNED_OPTIONS = [
+  { value: "", label: "All" },
+  { value: "true", label: "Scanned" },
+  { value: "false", label: "Not scanned" },
+] as const;
+
 export default function CouponTracingPage() {
   const [code, setCode] = useState("");
   const [batches, setBatches] = useState<PdfBatch[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
+
+  // Individual coupons for the traced work order — always fetched one page
+  // at a time (a work order can have thousands of coupons).
+  const [tracedWorkOrder, setTracedWorkOrder] = useState("");
+  const [coupons, setCoupons] = useState<CouponRow[]>([]);
+  const [couponTotal, setCouponTotal] = useState(0);
+  const [couponPage, setCouponPage] = useState(1);
+  const [couponsLoading, setCouponsLoading] = useState(false);
+  const [bundleFilter, setBundleFilter] = useState("");
+  const [opFilter, setOpFilter] = useState("");
+  const [scannedFilter, setScannedFilter] = useState<(typeof SCANNED_OPTIONS)[number]["value"]>("");
 
   const fetchBatches = async (workOrder: string) => {
     setIsLoading(true);
@@ -39,12 +67,62 @@ export default function CouponTracingPage() {
     }
   };
 
+  const fetchCoupons = async (workOrder: string, page: number) => {
+    setCouponsLoading(true);
+    try {
+      const params = new URLSearchParams({
+        work_order: workOrder,
+        page: String(page),
+        page_size: String(COUPON_PAGE_SIZE),
+      });
+      if (bundleFilter.trim()) params.set("bundle_no", bundleFilter.trim());
+      if (opFilter.trim()) params.set("op_no", opFilter.trim());
+      if (scannedFilter) params.set("is_scanned", scannedFilter);
+      const res = await fetch(`/api/qr-code-generation/coupons?${params}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load coupons.");
+      setCoupons(data.coupons || []);
+      setCouponTotal(data.total || 0);
+    } catch (err) {
+      setErrorMsg(err instanceof Error ? err.message : "An unexpected error occurred.");
+      setCoupons([]);
+      setCouponTotal(0);
+    } finally {
+      setCouponsLoading(false);
+    }
+  };
+
   // Show every generated PDF on load; searching re-scopes to one work order.
   useEffect(() => {
     fetchBatches("");
   }, []);
 
-  const handleTrace = () => fetchBatches(code.trim());
+  const handleTrace = () => {
+    const workOrder = code.trim();
+    fetchBatches(workOrder);
+    setTracedWorkOrder(workOrder);
+    setCouponPage(1);
+    if (workOrder) fetchCoupons(workOrder, 1);
+    else {
+      setCoupons([]);
+      setCouponTotal(0);
+    }
+  };
+
+  const couponPageCount = Math.max(1, Math.ceil(couponTotal / COUPON_PAGE_SIZE));
+  const goToCouponPage = (page: number) => {
+    setCouponPage(page);
+    fetchCoupons(tracedWorkOrder, page);
+  };
+
+  // Any filter change re-queries from page 1 — old page N may no longer
+  // exist once the row count shrinks.
+  useEffect(() => {
+    if (!tracedWorkOrder) return;
+    setCouponPage(1);
+    fetchCoupons(tracedWorkOrder, 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [bundleFilter, opFilter, scannedFilter]);
 
   return (
     <div className="flex flex-col gap-6 max-w-[900px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
@@ -151,29 +229,125 @@ export default function CouponTracingPage() {
         </div>
       )}
 
-      {/* Placeholder results table shape */}
-      <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden opacity-60">
-        <div className="border-b border-[#e2e8f0] px-5 py-4 bg-[#fafafa]">
-          <h3 className="text-sm font-bold text-[#0f172a]">Scan History</h3>
+      {/* Individual coupons generated for the traced work order — server-
+          paginated (page/page_size against IX_QrCode_Coupon_WorkOrder) so
+          a work order with thousands of coupons never loads them all at
+          once. */}
+      {tracedWorkOrder && (
+        <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden">
+          <div className="border-b border-[#e2e8f0] px-5 py-4 bg-[#fafafa] flex items-center justify-between">
+            <h3 className="text-sm font-bold text-[#0f172a]">
+              Coupons for {tracedWorkOrder}
+            </h3>
+            <span className="text-[11px] font-semibold text-[#64748b]">
+              {couponTotal.toLocaleString()} total
+            </span>
+          </div>
+
+          {/* Filters — each change re-queries page 1 from the server. */}
+          <div className="flex flex-wrap items-center gap-2 px-5 py-3 border-b border-[#e2e8f0] bg-white">
+            <input
+              type="text"
+              value={bundleFilter}
+              onChange={(e) => setBundleFilter(e.target.value)}
+              placeholder="Filter by Bundle No"
+              className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all w-40"
+            />
+            <input
+              type="text"
+              value={opFilter}
+              onChange={(e) => setOpFilter(e.target.value)}
+              placeholder="Filter by Op No"
+              className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all w-40"
+            />
+            <select
+              value={scannedFilter}
+              onChange={(e) => setScannedFilter(e.target.value as typeof scannedFilter)}
+              className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+            >
+              {SCANNED_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <table className="w-full text-left border-collapse">
+            <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
+              <tr>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Coupon Code</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Bundle No</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Op No</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Scanned</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Created At</th>
+              </tr>
+            </thead>
+            <tbody>
+              {couponsLoading ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-[#94a3b8]">
+                    Loading…
+                  </td>
+                </tr>
+              ) : coupons.length === 0 ? (
+                <tr>
+                  <td colSpan={5} className="px-4 py-6 text-center text-[#94a3b8]">
+                    No coupons match{bundleFilter || opFilter || scannedFilter ? " these filters" : " this work order yet"}.
+                  </td>
+                </tr>
+              ) : (
+                coupons.map((c) => (
+                  <tr key={c.Id} className="border-b border-[#f1f5f9] last:border-0">
+                    <td className="px-4 py-3 font-mono text-[#0f172a]">{c.CouponCode}</td>
+                    <td className="px-4 py-3 text-[#334155]">{c.BundleNo}</td>
+                    <td className="px-4 py-3 text-[#334155]">{c.OpNo}</td>
+                    <td className="px-4 py-3">
+                      <span
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                          c.IsScanned
+                            ? "bg-emerald-50 text-emerald-700"
+                            : "bg-slate-100 text-slate-500"
+                        }`}
+                      >
+                        {c.IsScanned ? "Scanned" : "Not scanned"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-[#334155]">
+                      {new Date(c.CreatedAt).toLocaleString()}
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+          {couponTotal > 0 && (
+            <div className="flex items-center justify-between px-5 py-3 border-t border-[#e2e8f0] bg-[#fafafa]">
+              <span className="text-[11px] font-semibold text-[#64748b]">
+                Page {couponPage} of {couponPageCount}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => goToCouponPage(couponPage - 1)}
+                  disabled={couponPage <= 1 || couponsLoading}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-[#475569] font-bold text-xs hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  Prev
+                </button>
+                <button
+                  onClick={() => goToCouponPage(couponPage + 1)}
+                  disabled={couponPage >= couponPageCount || couponsLoading}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-[#475569] font-bold text-xs hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  Next
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
         </div>
-        <table className="w-full text-left border-collapse">
-          <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
-            <tr>
-              <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Operation</th>
-              <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Scanned At</th>
-              <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Scanned By</th>
-              <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr>
-              <td colSpan={4} className="px-4 py-6 text-center text-[#94a3b8]">
-                No data — search above
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
+      )}
 
       <div className="bg-amber-50 border border-amber-200 text-amber-800 rounded-2xl p-5 flex items-start gap-3">
         <Construction className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
