@@ -170,7 +170,7 @@ export default function CouponScanningPage() {
           const targetIndex = updatedRows.findIndex((row) => !row.barCode);
           const newRowData = {
             barCode: item.CouponCode || "",
-            anlCode: item.Inseam ? `ANL-${item.Inseam}` : "",
+            anlCode: item.WorkOrder || "",
             cutNo: String(item.CutNo ?? ""),
             category: item.Category || "",
             bundleNo: item.BundleNo || "",
@@ -255,6 +255,53 @@ export default function CouponScanningPage() {
     );
   };
 
+  const handleUnscanCoupon = async (couponCode: string, rowIndex: number) => {
+    if (!window.confirm(`Are you sure you want to unscan coupon: ${couponCode}?`)) {
+      return;
+    }
+    try {
+      const response = await fetch("/api/coupons/unscan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ couponCode }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        setScanError(data.error || "Failed to unscan coupon.");
+      } else {
+        // Reset that row to default empty state
+        setRows((prev) =>
+          prev.map((r) =>
+            r.index === rowIndex
+              ? {
+                  index: rowIndex,
+                  barCode: "",
+                  anlCode: "",
+                  cutNo: "",
+                  category: "",
+                  bundleNo: "",
+                  qty: "",
+                  inseam: "",
+                  sizeCode: "",
+                  sectionCode: "",
+                  sectionName: "",
+                  oprCode: "",
+                  operationName: "",
+                  skillCode: "",
+                  smv: "",
+                  rate: "",
+                  value: "",
+                }
+              : r
+          )
+        );
+      }
+    } catch (err) {
+      console.error("Unscan error:", err);
+      setScanError("An error occurred while unscanning the coupon.");
+    }
+  };
+
 
 
   const handleSelectWorker = (worker: any) => {
@@ -332,7 +379,7 @@ export default function CouponScanningPage() {
                 return {
                   ...row,
                   barCode: code,
-                  anlCode: item.Inseam ? `ANL-${item.Inseam}` : "",
+                  anlCode: item.WorkOrder || "",
                   cutNo: String(item.CutNo ?? ""),
                   category: item.Category || "",
                   bundleNo: item.BundleNo || "",
@@ -678,7 +725,7 @@ export default function CouponScanningPage() {
             <thead>
               {/* Category label row */}
               <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-                <th colSpan={14} className="py-1.5 px-3 border-r border-slate-200"></th>
+                <th colSpan={15} className="py-1.5 px-3 border-r border-slate-200"></th>
                 <th colSpan={3} className="py-1 px-3 text-center text-[9px] uppercase tracking-wider bg-slate-200/60 text-slate-800 border-b border-slate-300">
                   Rate
                 </th>
@@ -686,10 +733,11 @@ export default function CouponScanningPage() {
               {/* Main table headers */}
               <tr className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 text-left">
                 <th className="py-2 px-2 border-r border-slate-200 text-center w-[40px]">#</th>
-                <th className="py-2 px-3 border-r border-slate-200 w-[140px]">Bar #</th>
-                <th className="py-2 px-2 border-r border-slate-200 w-[100px]">ANL #</th>
+                <th className="py-2 px-2 border-r border-slate-200 text-center w-[80px] text-[#ef4444] uppercase tracking-wider text-[9px] font-bold">Unscan</th>
+                <th className="py-2 px-3 border-r border-slate-200 w-[140px]">Coupon Code</th>
+                <th className="py-2 px-2 border-r border-slate-200 w-[100px]">W/0 #</th>
                 <th className="py-2 px-2 border-r border-slate-200 w-[100px]">Cut #</th>
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[60px]">[A,B,C]</th>
+                <th className="py-2 px-2 border-r border-slate-200 text-center w-[60px]">Shade</th>
                 <th className="py-2 px-2 border-r border-slate-200 text-center w-[80px]">Bundle #</th>
                 <th className="py-2 px-2 border-r border-slate-200 text-center w-[70px]">Qty</th>
                 <th className="py-2 px-2 border-r border-slate-200 text-center w-[80px]">Inseam</th>
@@ -711,6 +759,7 @@ export default function CouponScanningPage() {
                 Array.from({ length: 6 }).map((_, idx) => (
                   <tr key={`skeleton-${idx}`} className="animate-pulse bg-white border-b border-slate-100">
                     <td className="py-3 px-2 border-r border-slate-200 text-center"><div className="h-3 w-4 bg-slate-200 rounded mx-auto" /></td>
+                    <td className="py-3 px-2 border-r border-slate-200 text-center"><div className="h-3 w-10 bg-slate-200 rounded mx-auto" /></td>
                     <td className="py-3 px-3 border-r border-slate-200"><div className="h-3 w-24 bg-slate-200 rounded" /></td>
                     <td className="py-3 px-2 border-r border-slate-200"><div className="h-3 w-16 bg-slate-200 rounded" /></td>
                     <td className="py-3 px-2 border-r border-slate-200"><div className="h-3 w-12 bg-slate-200 rounded" /></td>
@@ -738,6 +787,19 @@ export default function CouponScanningPage() {
                   {/* # */}
                   <td className="py-1 px-2 border-r border-slate-200 text-center font-bold text-slate-400">
                     {row.index}
+                  </td>
+                  {/* Unscan Action */}
+                  <td className="py-1 px-2 border-r border-slate-200 text-center">
+                    {row.barCode ? (
+                      <button
+                        onClick={() => handleUnscanCoupon(row.barCode, row.index)}
+                        className="text-[#ef4444] hover:text-[#dc2626] font-bold text-[10px] px-1.5 py-0.5 rounded bg-red-50 hover:bg-red-100 border border-red-100 transition-all cursor-pointer"
+                      >
+                        Unscan
+                      </button>
+                    ) : (
+                      "-"
+                    )}
                   </td>
                   {/* Bar # */}
                   <td className="py-1 px-3 border-r border-slate-200 font-semibold text-slate-800">
