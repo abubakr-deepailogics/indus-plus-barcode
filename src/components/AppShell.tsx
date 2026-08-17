@@ -74,9 +74,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Top navigation tabs
   const navTabs = [
     // { label: "Industrial Engineering", href: "#", hasDropdown: true },
-    { label: "Open Order", href: "/industrial-engineering/open-order", hasDropdown: false },
-    { label: "Coupon Scanning", href: "/industrial-engineering/coupon-scanning", hasDropdown: false },
+    { label: "Cut Report", href: "/industrial-engineering/cut-report", hasDropdown: false },
+    { label: "Style Bulletin", href: "/industrial-engineering/style-bulletin", hasDropdown: false },
     { label: "Coupon Tracing", href: "/industrial-engineering/coupon-tracing", hasDropdown: false },
+    { label: "Coupon Scanning", href: "/industrial-engineering/coupon-scanning", hasDropdown: false },
     { label: "Rework Coupon", href: "/industrial-engineering/rework-coupon", hasDropdown: false }
   ];
 
