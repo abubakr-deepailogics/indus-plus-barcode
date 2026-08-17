@@ -310,8 +310,6 @@ export default function CouponScanningPage() {
     setDepartment(worker.ParentDepartment || worker.DepartmentName || "");
     setDesignation(worker.DesignationName || "");
     setSection(worker.DepartmentName || "");
-
-    setShowEmpSuggestions(false);
   };
 
   // Direct fetch by code (on Enter or Tab press)

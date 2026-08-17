@@ -676,7 +676,7 @@ export default function ReworkCouponPage() {
             <div className="flex items-center gap-3">
               <button
                 type="button"
-                onClick={handleGenerateCoupons}
+                onClick={() => handleGenerateCoupons()}
                 disabled={generatingCoupons}
                 className="flex items-center justify-center gap-2 bg-white border border-[#4f46e5] text-[#4f46e5] hover:bg-[#eef2ff] px-5 py-2.5 rounded-xl font-bold transition-all shadow-xs cursor-pointer text-xs disabled:opacity-50 disabled:cursor-not-allowed"
               >

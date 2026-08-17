@@ -10,6 +10,9 @@ import {
   Database,
   Paperclip,
   ChevronDown,
+  Layers,
+  ListFilter,
+  X,
 } from "lucide-react";
 // import type { PageSetupConfig } from "@/features/barcode-generation/types";
 // import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
@@ -90,6 +93,216 @@ function TableSkeleton({ columnsCount }: { columnsCount: number }) {
             ))}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+interface GenerateCouponModalProps {
+  workOrder: string;
+  uniqueCuts: string[];
+  fromCut: string;
+  toCut: string;
+  setFromCut: (cut: string) => void;
+  setToCut: (cut: string) => void;
+  filteredBundles: any[];
+  selectedBundleNos: Set<string>;
+  setSelectedBundleNos: React.Dispatch<React.SetStateAction<Set<string>>>;
+  onClose: () => void;
+  onConfirm: () => void;
+  generating: boolean;
+}
+
+function GenerateCouponModal({
+  workOrder,
+  uniqueCuts,
+  fromCut,
+  toCut,
+  setFromCut,
+  setToCut,
+  filteredBundles,
+  selectedBundleNos,
+  setSelectedBundleNos,
+  onClose,
+  onConfirm,
+  generating,
+}: GenerateCouponModalProps) {
+  const allSelected = filteredBundles.length > 0 && filteredBundles.every((b) => selectedBundleNos.has(b.bundleNo));
+
+  const handleToggleAll = () => {
+    if (allSelected) {
+      const next = new Set(selectedBundleNos);
+      filteredBundles.forEach((b) => next.delete(b.bundleNo));
+      setSelectedBundleNos(next);
+    } else {
+      const next = new Set(selectedBundleNos);
+      filteredBundles.forEach((b) => next.add(b.bundleNo));
+      setSelectedBundleNos(next);
+    }
+  };
+
+  const handleToggleRow = (bundleNo: string) => {
+    const next = new Set(selectedBundleNos);
+    if (next.has(bundleNo)) {
+      next.delete(bundleNo);
+    } else {
+      next.add(bundleNo);
+    }
+    setSelectedBundleNos(next);
+  };
+
+  return (
+    <div className="no-print fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] max-w-[600px] w-full p-6 animate-scale-up text-xs text-[#334155] font-sans flex flex-col max-h-[90vh]">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between pb-4 mb-4 border-b border-slate-100 flex-shrink-0">
+          <div>
+            <h3 className="text-sm font-extrabold text-[#0f172a]">Generate Coupons</h3>
+            <p className="text-[10px] text-[#64748b] mt-0.5">
+              Select cut range and bundles for Work Order <span className="font-bold text-indigo-600">{workOrder}</span>
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1 rounded-lg hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-colors cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Cut Range Selection */}
+        <div className="mb-4 bg-slate-50 border border-slate-100 rounded-xl p-4 flex-shrink-0">
+          <div className="flex items-center gap-2 mb-3">
+            <ListFilter className="w-4 h-4 text-[#4f46e5]" />
+            <span className="font-bold text-[#4f46e5] text-[11px] uppercase tracking-wider">
+              Filter Cut Range
+            </span>
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-slate-500 text-[10px] uppercase">From Cut</label>
+              <select
+                value={fromCut}
+                onChange={(e) => setFromCut(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] bg-white font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+              >
+                {uniqueCuts.map((cut) => (
+                  <option key={cut} value={cut}>
+                    Cut {cut}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-slate-500 text-[10px] uppercase">To Cut</label>
+              <select
+                value={toCut}
+                onChange={(e) => setToCut(e.target.value)}
+                className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] bg-white font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 cursor-pointer"
+              >
+                {uniqueCuts.map((cut) => (
+                  <option key={cut} value={cut}>
+                    Cut {cut}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* Bundle Selection Table */}
+        <div className="mb-6 flex flex-col flex-grow overflow-hidden min-h-[200px]">
+          <div className="flex items-center justify-between gap-2 mb-3 flex-shrink-0">
+            <div className="flex items-center gap-2">
+              <Layers className="w-4 h-4 text-[#4f46e5]" />
+              <span className="font-bold text-[#4f46e5] text-[11px] uppercase tracking-wider">
+                Select Bundles ({selectedBundleNos.size} of {filteredBundles.length} selected)
+              </span>
+            </div>
+            {filteredBundles.length > 0 && (
+              <button
+                onClick={handleToggleAll}
+                className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer"
+              >
+                {allSelected ? "Deselect All" : "Select All"}
+              </button>
+            )}
+          </div>
+
+          {filteredBundles.length === 0 ? (
+            <div className="flex-grow border border-dashed border-slate-200 rounded-xl p-8 flex flex-col items-center justify-center gap-2 bg-slate-50/50">
+              <Info className="w-6 h-6 text-slate-400" />
+              <p className="text-slate-500 font-semibold">No bundles found in range</p>
+              <p className="text-[10px] text-slate-400">Try adjusting the from/to cut filters.</p>
+            </div>
+          ) : (
+            <div className="flex-grow overflow-y-auto border border-[#e2e8f0] rounded-xl bg-white shadow-inner">
+              <table className="w-full border-collapse text-left">
+                <thead className="bg-[#f8fafc] border-b border-[#e2e8f0] sticky top-0 z-10">
+                  <tr>
+                    <th className="p-3 w-10">
+                      <input
+                        type="checkbox"
+                        checked={allSelected}
+                        onChange={handleToggleAll}
+                        className="w-3.5 h-3.5 rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer"
+                      />
+                    </th>
+                    <th className="p-3 text-[10px] font-bold text-slate-500 uppercase">Cut</th>
+                    <th className="p-3 text-[10px] font-bold text-slate-500 uppercase">Bundle No</th>
+                    <th className="p-3 text-[10px] font-bold text-slate-500 uppercase">Size</th>
+                    <th className="p-3 text-[10px] font-bold text-slate-500 uppercase text-right">Pcs</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-[#f1f5f9]">
+                  {filteredBundles.map((b) => {
+                    const isChecked = selectedBundleNos.has(b.bundleNo);
+                    return (
+                      <tr
+                        key={b.bundleNo}
+                        onClick={() => handleToggleRow(b.bundleNo)}
+                        className={`hover:bg-slate-50/80 transition-colors cursor-pointer ${
+                          isChecked ? "bg-indigo-50/10" : ""
+                        }`}
+                      >
+                        <td className="p-3" onClick={(e) => e.stopPropagation()}>
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={() => handleToggleRow(b.bundleNo)}
+                            className="w-3.5 h-3.5 rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer"
+                          />
+                        </td>
+                        <td className="p-3 font-semibold text-slate-700">Cut {b.cutNo}</td>
+                        <td className="p-3 font-mono font-bold text-indigo-600">{b.bundleNo}</td>
+                        <td className="p-3 text-slate-600 font-semibold">{b.size}</td>
+                        <td className="p-3 text-right font-bold text-slate-900">{b.pcs}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Modal Actions */}
+        <div className="flex items-center justify-end gap-2 border-t border-slate-100 pt-4 flex-shrink-0">
+          <button
+            onClick={onClose}
+            className="bg-white border border-[#e2e8f0] text-gray-600 px-5 py-2.5 rounded-xl font-bold hover:bg-[#f8fafc] transition-colors cursor-pointer"
+          >
+            Cancel
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={generating || selectedBundleNos.size === 0}
+            className="flex items-center justify-center gap-2 bg-[#4f46e5] border border-[#4f46e5] text-white px-5 py-2.5 rounded-xl font-bold hover:bg-[#4338ca] transition-colors disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          >
+            <QrCode className="w-3.5 h-3.5" />
+            <span>{generating ? "Generating..." : "Generate Coupons"}</span>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -339,6 +552,12 @@ export default function OpenOrderPage() {
     margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 },
     gridFormat: "3x10",
   });
+
+  // States for generating coupons by cut range and bundle selection
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [fromCut, setFromCut] = useState("");
+  const [toCut, setToCut] = useState("");
+  const [selectedBundleNos, setSelectedBundleNos] = useState<Set<string>>(new Set());
 
   // Dynamic Input States for Style Bulletin Metadata
   const [description, setDescription] = useState("");
@@ -977,10 +1196,78 @@ export default function OpenOrderPage() {
     };
   }, [activeSearchQuery, cutDetails, styleBulletins, selectedOpRowIds]);
 
+  const uniqueCuts = useMemo(() => {
+    if (!activeStyle) return [];
+    const cuts = activeStyle.bundles.map((b) => b.cutNo).filter(Boolean);
+    return Array.from(new Set(cuts)).sort((a, b) => {
+      const numA = parseInt(a, 10);
+      const numB = parseInt(b, 10);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b);
+    });
+  }, [activeStyle]);
+
+  const isCutInRange = (cut: string, start: string, end: string) => {
+    if (!start && !end) return true;
+    const val = parseFloat(cut);
+    const startVal = parseFloat(start);
+    const endVal = parseFloat(end);
+    if (!isNaN(val) && !isNaN(startVal) && !isNaN(endVal)) {
+      return val >= startVal && val <= endVal;
+    }
+    if (start && end) return cut >= start && cut <= end;
+    if (start) return cut >= start;
+    if (end) return cut <= end;
+    return true;
+  };
+
+  const filteredBundlesForModal = useMemo(() => {
+    if (!activeStyle) return [];
+    return activeStyle.bundles.filter((b) => isCutInRange(b.cutNo, fromCut, toCut));
+  }, [activeStyle, fromCut, toCut]);
+
+  // Initialize fromCut and toCut when uniqueCuts is loaded
+  useEffect(() => {
+    if (uniqueCuts.length > 0) {
+      setFromCut(uniqueCuts[0]);
+      setToCut(uniqueCuts[uniqueCuts.length - 1]);
+    } else {
+      setFromCut("");
+      setToCut("");
+    }
+  }, [uniqueCuts]);
+
+  // Auto-select bundles inside selected range on range change
+  const prevRangeRef = useRef<string>("");
+  useEffect(() => {
+    const rangeKey = `${fromCut}-${toCut}`;
+    if (rangeKey !== prevRangeRef.current && filteredBundlesForModal.length > 0) {
+      setSelectedBundleNos(new Set(filteredBundlesForModal.map((b) => b.bundleNo)));
+      prevRangeRef.current = rangeKey;
+    }
+  }, [filteredBundlesForModal, fromCut, toCut]);
+
   const { handleGenerateCoupons, generatingCoupons, handleDownloadPdf: downloadPdf, generatingPdf, couponCount } =
     useGenerateCouponPdf(
       activeStyle ?? { workOrder: "", saleOrderNo: "", styleCode: "", bundles: [], operations: [] },
     );
+
+  const handleConfirmGenerateCoupons = async () => {
+    if (!activeStyle || filteredBundlesForModal.length === 0) return;
+    const selectedBundles = filteredBundlesForModal
+      .filter((b) => selectedBundleNos.has(b.bundleNo))
+      .map((b) => ({ ...b, sel: true }));
+
+    if (selectedBundles.length === 0) {
+      alert("Please select at least one bundle to generate coupons.");
+      return;
+    }
+
+    const selectedOperations = activeStyle.operations;
+    await handleGenerateCoupons(selectedBundles, selectedOperations);
+    setShowGenerateModal(false);
+  };
+
   const handleGeneratePdf = async () => {
     await downloadPdf();
     setShowPageSetupModal(false);
@@ -1469,12 +1756,11 @@ export default function OpenOrderPage() {
                 {activeStyle && (
                   <div className="flex items-center gap-3">
                     <button
-                      onClick={handleGenerateCoupons}
-                      disabled={generatingCoupons}
-                      className="flex items-center justify-center gap-2 bg-white border border-[#4f46e5] text-[#4f46e5] hover:bg-[#eef2ff] px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs disabled:opacity-50 disabled:cursor-not-allowed"
+                      onClick={() => setShowGenerateModal(true)}
+                      className="flex items-center justify-center gap-2 bg-white border border-[#4f46e5] text-[#4f46e5] hover:bg-[#eef2ff] px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs"
                     >
                       <QrCode className="w-3.5 h-3.5" />
-                      <span>{generatingCoupons ? "Generating…" : "Generate Coupons"}</span>
+                      <span>Generate Coupons</span>
                     </button>
                   </div>
                 )}
@@ -1676,6 +1962,23 @@ export default function OpenOrderPage() {
           onClose={() => setShowPageSetupModal(false)}
           onGeneratePdf={handleGeneratePdf}
           generatingPdf={generatingPdf}
+        />
+      )}
+
+      {showGenerateModal && activeStyle && (
+        <GenerateCouponModal
+          workOrder={activeStyle.workOrder}
+          uniqueCuts={uniqueCuts}
+          fromCut={fromCut}
+          toCut={toCut}
+          setFromCut={setFromCut}
+          setToCut={setToCut}
+          filteredBundles={filteredBundlesForModal}
+          selectedBundleNos={selectedBundleNos}
+          setSelectedBundleNos={setSelectedBundleNos}
+          onClose={() => setShowGenerateModal(false)}
+          onConfirm={handleConfirmGenerateCoupons}
+          generating={generatingCoupons}
         />
       )}
 

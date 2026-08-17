@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { QrCodeStyleData } from "../types";
+import type { QrCodeStyleData, BundleDetailRow, OperationsDetailRow } from "../types";
 
 // Shared by every page that offers coupon generation (qr-code-generation,
 // open-order, rework-coupon). Two separate actions:
@@ -38,7 +38,10 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
     };
   }, [workOrder]);
 
-  const handleGenerateCoupons = async () => {
+  const handleGenerateCoupons = async (
+    overrideBundles?: BundleDetailRow[],
+    overrideOperations?: OperationsDetailRow[],
+  ) => {
     setGeneratingCoupons(true);
     try {
       const res = await fetch("/api/qr-code-generation/coupons", {
@@ -46,8 +49,8 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workOrder: activeStyle.workOrder,
-          bundles: activeStyle.bundles,
-          operations: activeStyle.operations,
+          bundles: overrideBundles ?? activeStyle.bundles,
+          operations: overrideOperations ?? activeStyle.operations,
         }),
       });
       const data = await res.json();
@@ -63,7 +66,10 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
     }
   };
 
-  const handleDownloadPdf = async () => {
+  const handleDownloadPdf = async (
+    overrideBundles?: BundleDetailRow[],
+    overrideOperations?: OperationsDetailRow[],
+  ) => {
     setGeneratingPdf(true);
     try {
       const res = await fetch("/api/qr-code-generation/pdf", {
@@ -73,8 +79,8 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
           workOrder: activeStyle.workOrder,
           saleOrderNo: activeStyle.saleOrderNo,
           styleCode: activeStyle.styleCode,
-          bundles: activeStyle.bundles,
-          operations: activeStyle.operations,
+          bundles: overrideBundles ?? activeStyle.bundles,
+          operations: overrideOperations ?? activeStyle.operations,
         }),
       });
       const data = await res.json();
