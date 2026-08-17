@@ -1,6 +1,6 @@
 import { getPool } from "@/lib/db";
 import { buildCouponCards } from "@/features/qr-code-generation/services/coupon-pairing.service";
-import { registerCoupons, countCoupons, listCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
+import { registerCoupons, countCoupons, listCoupons, opCodesForDepartment } from "@/features/qr-code-generation/services/coupon-registration.service";
 import type { BundleDetailRow, OperationsDetailRow } from "@/features/qr-code-generation/types";
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -62,6 +62,8 @@ export async function GET(request: Request) {
   const bundleNo = searchParams.get("bundle_no") || undefined;
   const opNo = searchParams.get("op_no") || undefined;
   const section = searchParams.get("section") || undefined;
+  const cutNo = searchParams.get("cut_no") || undefined;
+  const department = searchParams.get("department") || undefined;
   const scannedParam = searchParams.get("is_scanned");
   const isScanned = scannedParam === null ? undefined : scannedParam === "true";
 
@@ -71,10 +73,13 @@ export async function GET(request: Request) {
 
   try {
     const pool = await getPool();
+    const opNoIn = department ? await opCodesForDepartment(pool, workOrder, department) : undefined;
     const { rows, total } = await listCoupons(pool, workOrder, page, pageSize, {
       bundleNo,
       opNo,
       section,
+      cutNo,
+      opNoIn,
       isScanned,
     });
     return Response.json({ coupons: rows, total, page, pageSize });

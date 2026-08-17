@@ -1,7 +1,7 @@
 import { getPool, sql } from "@/lib/db";
 import { generateCouponPdf } from "@/features/qr-code-generation/services/pdf-generation.service";
 import type { CouponCard } from "@/features/qr-code-generation/services/coupon-pairing.service";
-import { listAllCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
+import { listAllCoupons, opCodesForDepartment } from "@/features/qr-code-generation/services/coupon-registration.service";
 import type { BundleDetailRow, OperationsDetailRow } from "@/features/qr-code-generation/types";
 
 // Renders a PDF for coupons already registered against a work order,
@@ -19,6 +19,8 @@ export async function GET(request: Request) {
   const bundleNo = searchParams.get("bundle_no") || undefined;
   const opNo = searchParams.get("op_no") || undefined;
   const section = searchParams.get("section") || undefined;
+  const cutNo = searchParams.get("cut_no") || undefined;
+  const department = searchParams.get("department") || undefined;
   const scannedParam = searchParams.get("is_scanned");
   const isScanned = scannedParam === null ? undefined : scannedParam === "true";
 
@@ -29,7 +31,8 @@ export async function GET(request: Request) {
   try {
     const pool = await getPool();
 
-    const coupons = await listAllCoupons(pool, workOrder, { bundleNo, opNo, section, isScanned });
+    const opNoIn = department ? await opCodesForDepartment(pool, workOrder, department) : undefined;
+    const coupons = await listAllCoupons(pool, workOrder, { bundleNo, opNo, section, cutNo, opNoIn, isScanned });
     if (coupons.length === 0) {
       return Response.json({ error: "No coupons match this work order/filters." }, { status: 404 });
     }

@@ -2,9 +2,10 @@ import { sql } from "@/lib/db";
 import { buildCouponCode } from "./coupon-code";
 import type { CouponCard } from "./coupon-pairing.service";
 
-// 4 params/row (couponCode, workOrder, bundleNo, opNo) — SQL Server caps
-// query params at 2100, so this stays comfortably under that per batch.
-const CHUNK_SIZE = 500;
+// 5 params/row (couponCode, bundleNo, opNo, section, cutNo) + 1 shared
+// workOrder param — SQL Server caps query params at 2100, so this stays
+// comfortably under that per batch (400*5+1 = 2001).
+const CHUNK_SIZE = 400;
 
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -17,6 +18,7 @@ interface CouponRow {
   bundleNo: string;
   opNo: string;
   section: string;
+  cutNo: string;
 }
 
 // INSERT...SELECT WHERE NOT EXISTS against a VALUES rowset — one round
@@ -33,13 +35,14 @@ async function insertCouponBatch(pool: sql.ConnectionPool, workOrder: string, ba
       request.input(`bundle${i}`, sql.NVarChar, row.bundleNo);
       request.input(`op${i}`, sql.NVarChar, row.opNo);
       request.input(`section${i}`, sql.NVarChar, row.section || null);
-      return `(@code${i}, @bundle${i}, @op${i}, @section${i})`;
+      request.input(`cut${i}`, sql.NVarChar, row.cutNo || null);
+      return `(@code${i}, @bundle${i}, @op${i}, @section${i}, @cut${i})`;
     })
     .join(", ");
   await request.input("workOrder", sql.NVarChar, workOrder).query(`
-    INSERT INTO dbo.QrCode_Coupon (CouponCode, WorkOrder, BundleNo, OpNo, Section)
-    SELECT src.CouponCode, @workOrder, src.BundleNo, src.OpNo, src.Section
-    FROM (VALUES ${valueList}) AS src(CouponCode, BundleNo, OpNo, Section)
+    INSERT INTO dbo.QrCode_Coupon (CouponCode, WorkOrder, BundleNo, OpNo, Section, CutNo)
+    SELECT src.CouponCode, @workOrder, src.BundleNo, src.OpNo, src.Section, src.CutNo
+    FROM (VALUES ${valueList}) AS src(CouponCode, BundleNo, OpNo, Section, CutNo)
     WHERE NOT EXISTS (
       SELECT 1 FROM dbo.QrCode_Coupon existing WHERE existing.CouponCode = src.CouponCode
     )
@@ -51,10 +54,11 @@ async function insertCouponBatch(pool: sql.ConnectionPool, workOrder: string, ba
 // coupon. Safe to call repeatedly — codes already registered are skipped.
 export async function registerCoupons(pool: sql.ConnectionPool, workOrder: string, cards: CouponCard[]) {
   const rows = cards.map(({ bundle, op }) => ({
-    couponCode: buildCouponCode(workOrder, bundle.bundleNo, op.opNo),
+    couponCode: buildCouponCode(workOrder, bundle.bundleNo, op.opNo, bundle.cutNo),
     bundleNo: bundle.bundleNo,
     opNo: op.opNo,
     section: op.section,
+    cutNo: bundle.cutNo,
   }));
 
   for (const batch of chunk(rows, CHUNK_SIZE)) {
@@ -87,6 +91,28 @@ export async function countCoupons(pool: sql.ConnectionPool, workOrder: string):
   return result.recordset[0].total;
 }
 
+// Department lives on dbo.Operations, not on the style bulletin coupons are
+// generated from — resolves a department name to the operation codes it
+// covers for this work order, so filtering coupons by department is really
+// "coupons whose OpNo is one of these" (see CouponListFilters.opNoIn).
+export async function opCodesForDepartment(
+  pool: sql.ConnectionPool,
+  workOrder: string,
+  department: string,
+): Promise<string[]> {
+  const result = await pool
+    .request()
+    .input("wo", sql.NVarChar, workOrder)
+    .input("department", sql.NVarChar, department)
+    .query(`
+      SELECT DISTINCT sb.Operation_Code
+      FROM dbo.Order_StyleBulletin sb
+      JOIN dbo.Operations op ON sb.Operation_Code = op.OperationCode
+      WHERE sb.Order_No = @wo AND op.Department = @department
+    `);
+  return result.recordset.map((r) => r.Operation_Code as string);
+}
+
 export interface CouponListRow {
   Id: number;
   CouponCode: string;
@@ -94,6 +120,7 @@ export interface CouponListRow {
   BundleNo: string;
   OpNo: string;
   Section: string | null;
+  CutNo: string | null;
   IsScanned: boolean;
   CreatedAt: string;
 }
@@ -102,6 +129,12 @@ export interface CouponListFilters {
   bundleNo?: string;
   opNo?: string;
   section?: string;
+  cutNo?: string;
+  // Department isn't stored on QrCode_Coupon (it lives on dbo.Operations,
+  // not the style bulletin coupons are generated from) — callers resolve
+  // a department to its operation codes first (see /api/coupons/suggestions
+  // ?type=department and the coupons routes) and filter by that list.
+  opNoIn?: string[];
   isScanned?: boolean;
 }
 
@@ -126,6 +159,23 @@ function applyCouponFilters(request: sql.Request, workOrder: string, filters: Co
   if (filters.section) {
     conditions.push("Section = @section");
     request.input("section", sql.NVarChar, filters.section);
+  }
+  if (filters.cutNo) {
+    conditions.push("CutNo = @cutNo");
+    request.input("cutNo", sql.NVarChar, filters.cutNo);
+  }
+  if (filters.opNoIn) {
+    // Empty array means the caller resolved a filter (e.g. department) to
+    // zero operation codes — that must match nothing, not "no filter".
+    if (filters.opNoIn.length === 0) {
+      conditions.push("1 = 0");
+    } else {
+      const names = filters.opNoIn.map((op, i) => {
+        request.input(`opIn${i}`, sql.NVarChar, op);
+        return `@opIn${i}`;
+      });
+      conditions.push(`OpNo IN (${names.join(", ")})`);
+    }
   }
   if (filters.isScanned !== undefined) {
     conditions.push("IsScanned = @isScanned");
@@ -155,7 +205,7 @@ export async function listCoupons(
       .input("offset", sql.Int, (page - 1) * pageSize)
       .input("pageSize", sql.Int, pageSize)
       .query(`
-        SELECT Id, CouponCode, WorkOrder, BundleNo, OpNo, Section, IsScanned, CreatedAt
+        SELECT Id, CouponCode, WorkOrder, BundleNo, OpNo, Section, CutNo, IsScanned, CreatedAt
         FROM dbo.QrCode_Coupon
         WHERE ${where}
         ORDER BY Id
@@ -176,7 +226,7 @@ export async function listAllCoupons(
   const request = pool.request();
   const where = applyCouponFilters(request, workOrder, filters);
   const result = await request.query(`
-    SELECT Id, CouponCode, WorkOrder, BundleNo, OpNo, Section, IsScanned, CreatedAt
+    SELECT Id, CouponCode, WorkOrder, BundleNo, OpNo, Section, CutNo, IsScanned, CreatedAt
     FROM dbo.QrCode_Coupon
     WHERE ${where}
     ORDER BY Id

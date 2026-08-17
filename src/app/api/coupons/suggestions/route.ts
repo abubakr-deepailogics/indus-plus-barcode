@@ -66,6 +66,41 @@ export async function GET(request: Request) {
       return Response.json(result.recordset.map((r) => r.Section as string));
     }
 
+    if (type === "cut") {
+      // Sourced from QrCode_Coupon (not Order_Po_Cut_Detail) — same
+      // reasoning as Section above: options match what's actually on this
+      // work order's coupons.
+      const result = await pool
+        .request()
+        .input("wo", sql.NVarChar, wo.trim())
+        .query(`
+          SELECT DISTINCT CutNo
+          FROM dbo.QrCode_Coupon
+          WHERE WorkOrder = @wo AND CutNo IS NOT NULL AND CutNo <> ''
+          ORDER BY CutNo
+        `);
+
+      return Response.json(result.recordset.map((r) => r.CutNo as string));
+    }
+
+    if (type === "department") {
+      // Department lives on dbo.Operations, not Order_StyleBulletin/
+      // QrCode_Coupon — join by Operation_Code, scoped to this work order's
+      // own operations only.
+      const result = await pool
+        .request()
+        .input("wo", sql.NVarChar, wo.trim())
+        .query(`
+          SELECT DISTINCT op.Department
+          FROM dbo.Order_StyleBulletin sb
+          JOIN dbo.Operations op ON sb.Operation_Code = op.OperationCode
+          WHERE sb.Order_No = @wo AND op.Department IS NOT NULL AND op.Department <> ''
+          ORDER BY op.Department
+        `);
+
+      return Response.json(result.recordset.map((r) => r.Department as string));
+    }
+
     return Response.json([]);
   } catch (err: unknown) {
     console.error("Suggestions API error:", err);

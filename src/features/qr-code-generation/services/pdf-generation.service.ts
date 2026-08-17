@@ -89,7 +89,7 @@ export async function generateCouponPdf({
     const rateNum = parseFloat(op.rate || "0");
     const qtyNum = bundle.pcs || 0;
     const rsVal = Math.round(rateNum * qtyNum);
-    const couponCode = buildCouponCode(workOrder, bundle.bundleNo, op.opNo);
+    const couponCode = buildCouponCode(workOrder, bundle.bundleNo, op.opNo, bundle.cutNo);
 
     const qrDisplayValue = [
       `Coupon: ${couponCode}`,

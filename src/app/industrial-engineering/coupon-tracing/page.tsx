@@ -13,6 +13,7 @@ interface CouponRow {
   BundleNo: string;
   OpNo: string;
   Section: string | null;
+  CutNo: string | null;
   IsScanned: boolean;
   CreatedAt: string;
 }
@@ -39,6 +40,10 @@ export default function CouponTracingPage() {
   const [opFilter, setOpFilter] = useState("");
   const [sectionFilter, setSectionFilter] = useState("");
   const [sectionOptions, setSectionOptions] = useState<string[]>([]);
+  const [cutFilter, setCutFilter] = useState("");
+  const [cutOptions, setCutOptions] = useState<string[]>([]);
+  const [departmentFilter, setDepartmentFilter] = useState("");
+  const [departmentOptions, setDepartmentOptions] = useState<string[]>([]);
   const [scannedFilter, setScannedFilter] = useState<(typeof SCANNED_OPTIONS)[number]["value"]>("");
   const [unscanningCode, setUnscanningCode] = useState("");
 
@@ -100,6 +105,38 @@ export default function CouponTracingPage() {
     }
   };
 
+  const fetchCutOptions = async (workOrder: string) => {
+    if (!workOrder) {
+      setCutOptions([]);
+      return;
+    }
+    try {
+      const response = await fetch(
+        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=cut`
+      );
+      setCutOptions(response.ok ? await response.json() : []);
+    } catch (err) {
+      console.error("Cut suggestions fetch error:", err);
+      setCutOptions([]);
+    }
+  };
+
+  const fetchDepartmentOptions = async (workOrder: string) => {
+    if (!workOrder) {
+      setDepartmentOptions([]);
+      return;
+    }
+    try {
+      const response = await fetch(
+        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=department`
+      );
+      setDepartmentOptions(response.ok ? await response.json() : []);
+    } catch (err) {
+      console.error("Department suggestions fetch error:", err);
+      setDepartmentOptions([]);
+    }
+  };
+
   const fetchCoupons = async (workOrder: string, page: number) => {
     setCouponsLoading(true);
     setErrorMsg("");
@@ -112,6 +149,8 @@ export default function CouponTracingPage() {
       if (bundleFilter.trim()) params.set("bundle_no", bundleFilter.trim());
       if (opFilter.trim()) params.set("op_no", opFilter.trim());
       if (sectionFilter) params.set("section", sectionFilter);
+      if (cutFilter) params.set("cut_no", cutFilter);
+      if (departmentFilter) params.set("department", departmentFilter);
       if (scannedFilter) params.set("is_scanned", scannedFilter);
       const res = await fetch(`/api/qr-code-generation/coupons?${params}`);
       const data = await res.json();
@@ -132,6 +171,8 @@ export default function CouponTracingPage() {
     setTracedWorkOrder(workOrder);
     setCouponPage(1);
     fetchSectionOptions(workOrder);
+    fetchCutOptions(workOrder);
+    fetchDepartmentOptions(workOrder);
     if (workOrder) fetchCoupons(workOrder, 1);
     else {
       setCoupons([]);
@@ -180,9 +221,11 @@ export default function CouponTracingPage() {
     if (bundleFilter.trim()) params.set("bundle_no", bundleFilter.trim());
     if (opFilter.trim()) params.set("op_no", opFilter.trim());
     if (sectionFilter) params.set("section", sectionFilter);
+    if (cutFilter) params.set("cut_no", cutFilter);
+    if (departmentFilter) params.set("department", departmentFilter);
     if (scannedFilter) params.set("is_scanned", scannedFilter);
     return `/api/qr-code-generation/coupons/pdf?${params}`;
-  }, [tracedWorkOrder, bundleFilter, opFilter, sectionFilter, scannedFilter]);
+  }, [tracedWorkOrder, bundleFilter, opFilter, sectionFilter, cutFilter, departmentFilter, scannedFilter]);
 
   // Any filter change re-queries from page 1 — old page N may no longer
   // exist once the row count shrinks.
@@ -191,7 +234,7 @@ export default function CouponTracingPage() {
     setCouponPage(1);
     fetchCoupons(tracedWorkOrder, 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bundleFilter, opFilter, sectionFilter, scannedFilter]);
+  }, [bundleFilter, opFilter, sectionFilter, cutFilter, departmentFilter, scannedFilter]);
 
   return (
     <div className="flex flex-col gap-6 max-w-[900px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
@@ -222,6 +265,8 @@ export default function CouponTracingPage() {
               setTracedWorkOrder(val);
               setCouponPage(1);
               fetchSectionOptions(val);
+              fetchCutOptions(val);
+              fetchDepartmentOptions(val);
               fetchCoupons(val, 1);
             }}
             fetchSuggestions={fetchWorkOrderSuggestions}
@@ -317,6 +362,26 @@ export default function CouponTracingPage() {
               ))}
             </select>
             <select
+              value={cutFilter}
+              onChange={(e) => setCutFilter(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+            >
+              <option value="">All Cuts</option>
+              {cutOptions.map((c) => (
+                <option key={c} value={c}>{c}</option>
+              ))}
+            </select>
+            <select
+              value={departmentFilter}
+              onChange={(e) => setDepartmentFilter(e.target.value)}
+              className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+            >
+              <option value="">All Departments</option>
+              {departmentOptions.map((d) => (
+                <option key={d} value={d}>{d}</option>
+              ))}
+            </select>
+            <select
               value={scannedFilter}
               onChange={(e) => setScannedFilter(e.target.value as typeof scannedFilter)}
               className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
@@ -336,6 +401,7 @@ export default function CouponTracingPage() {
                 <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Bundle No</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Op No</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Section</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Cut</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Scanned</th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Created At</th>
               </tr>
@@ -343,14 +409,14 @@ export default function CouponTracingPage() {
             <tbody>
               {couponsLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-[#94a3b8]">
+                  <td colSpan={7} className="px-4 py-6 text-center text-[#94a3b8]">
                     Loading…
                   </td>
                 </tr>
               ) : coupons.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-[#94a3b8]">
-                    No coupons match{bundleFilter || opFilter || sectionFilter || scannedFilter ? " these filters" : " this work order yet"}.
+                  <td colSpan={7} className="px-4 py-6 text-center text-[#94a3b8]">
+                    No coupons match{bundleFilter || opFilter || sectionFilter || cutFilter || departmentFilter || scannedFilter ? " these filters" : " this work order yet"}.
                   </td>
                 </tr>
               ) : (
@@ -360,6 +426,7 @@ export default function CouponTracingPage() {
                     <td className="px-4 py-3 text-[#334155]">{c.BundleNo}</td>
                     <td className="px-4 py-3 text-[#334155]">{c.OpNo}</td>
                     <td className="px-4 py-3 text-[#334155]">{c.Section || "—"}</td>
+                    <td className="px-4 py-3 text-[#334155]">{c.CutNo || "—"}</td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-2">
                         <span
