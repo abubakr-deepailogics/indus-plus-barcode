@@ -1,5 +1,6 @@
 "use client";
 
+import React, { useState } from "react";
 import type { OperationsDetailRow } from "../types";
 
 interface OperationsDetailTableProps {
@@ -7,6 +8,7 @@ interface OperationsDetailTableProps {
   remarks: string;
   reworkQtyMain: string;
   onOperationChange: (id: number, field: string, value: boolean) => void;
+  onAllOperationsSelChange: (checked: boolean) => void;
   onRemarksChange: (value: string) => void;
   onReworkQtyMainChange: (value: string) => void;
 }
@@ -16,20 +18,48 @@ export function OperationsDetailTable({
   remarks,
   reworkQtyMain,
   onOperationChange,
+  onAllOperationsSelChange,
   onRemarksChange,
   onReworkQtyMainChange,
 }: OperationsDetailTableProps) {
+  const [isSectionWise, setIsSectionWise] = useState(false);
+
   return (
     <div className="lg:col-span-6 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
-      <h3 className="text-sm font-extrabold text-[#4f46e5] border-b border-[#f1f5f9] pb-2">
-        Operations Detail
-      </h3>
+      <div className="flex items-center justify-between border-b border-[#f1f5f9] pb-2">
+        <h3 className="text-sm font-extrabold text-[#4f46e5]">Operations Detail</h3>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-bold text-[#64748b]">
+              Complete selection
+            </span>
+            <input
+              type="checkbox"
+              onChange={(e) => {
+                onAllOperationsSelChange(e.target.checked);
+              }}
+              className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
+            />
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-bold text-[#64748b]">
+              Section Wise selection
+            </span>
+            <input
+              type="checkbox"
+              checked={isSectionWise}
+              onChange={(e) => setIsSectionWise(e.target.checked)}
+              className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
+            />
+          </div>
+        </div>
+      </div>
 
       <div className="overflow-x-auto">
         <table className="w-full text-left border-collapse min-w-[500px]">
           <thead>
             <tr className="border-b border-[#e2e8f0]">
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
                 Section
               </th>
               <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
@@ -38,7 +68,7 @@ export function OperationsDetailTable({
               <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
                 Op #
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
                 Operation
               </th>
               <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
@@ -47,87 +77,61 @@ export function OperationsDetailTable({
               <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
                 Rate
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">
-                Skills
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+                Inc.
               </th>
               <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
-                Last Op Section
+                Sdl#
+              </th>
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+                Last Op Selection
               </th>
             </tr>
           </thead>
           <tbody className="divide-y divide-[#f1f5f9]">
             {operations.map((op) => (
-              <tr key={op.id} className="hover:bg-[#f8fafc] transition-colors">
-                <td className="py-2">
-                  <select className="px-2 py-1 rounded-lg border border-[#e2e8f0] bg-white text-[11px] focus:outline-none">
-                    <option value={op.section}>{op.section || "Select"}</option>
-                    <option value="500 - PRE FINISHING">
-                      500 - PRE FINISHING
-                    </option>
-                    <option value="501 - FINISHING">501 - FINISHING</option>
-                    <option value="502 - PACKING">502 - PACKING</option>
-                  </select>
+              <tr key={op.id} className="hover:bg-[#f8fafc] border-b border-[#f1f5f9] transition-colors text-[11px] font-semibold text-slate-700">
+                <td className="py-2.5 text-left text-[#64748b] font-bold uppercase">
+                  {op.section}
                 </td>
-                <td className="py-2 text-center">
-                  <input
-                    type="text"
-                    value={op.seqNo}
-                    readOnly
-                    className="w-10 text-center px-1 py-1 rounded-lg border border-[#e2e8f0] bg-white text-[11px] focus:outline-none"
-                  />
+                <td className="py-2.5 text-center text-[#4f46e5] font-bold">
+                  {op.seqNo}
                 </td>
-                <td className="py-2 text-center font-bold text-[#64748b]">
-                  <input
-                    type="text"
-                    value={op.opNo}
-                    readOnly
-                    className="w-14 text-center px-1 py-1 rounded-lg border border-[#e2e8f0] bg-white text-[11px] focus:outline-none"
-                  />
+                <td className="py-2.5 text-center text-purple-600 font-bold font-mono">
+                  {op.opNo}
                 </td>
-                <td className="py-2">
-                  <input
-                    type="text"
-                    value={op.operationName}
-                    readOnly
-                    className="w-full px-2 py-1 rounded-lg border border-[#e2e8f0] bg-white text-[11px] focus:outline-none"
-                  />
+                <td className="py-2.5 text-left text-slate-800 font-medium">
+                  {op.operationName}
                 </td>
-                <td className="py-2 text-center font-semibold">
-                  <input
-                    type="text"
-                    value={op.smv}
-                    readOnly
-                    className="w-12 text-center px-1 py-1 rounded-lg border border-[#e2e8f0] bg-white text-[11px] focus:outline-none"
-                  />
+                <td className="py-2.5 text-center font-bold text-slate-700">
+                  {op.smv}
                 </td>
-                <td className="py-2 text-center font-semibold">
-                  <input
-                    type="text"
-                    value={op.rate}
-                    readOnly
-                    className="w-12 text-center px-1 py-1 rounded-lg border border-[#e2e8f0] bg-white text-[11px] focus:outline-none"
-                  />
+                <td className="py-2.5 text-center font-bold text-slate-700">
+                  {op.rate}
                 </td>
-                <td className="py-2">
-                  <select className="px-2 py-1 rounded-lg border border-[#e2e8f0] bg-white text-[11px] focus:outline-none font-semibold">
-                    <option value={op.skills}>{op.skills}</option>
-                    <option value="Skilled">Skilled</option>
-                    <option value="Semi-Skilled">Semi-Skilled</option>
-                    <option value="Un-Skilled">Un-Skilled</option>
-                  </select>
+                <td className="py-2.5 text-center text-slate-500 font-medium">
+                  {op.inc || "-"}
                 </td>
-                <td className="py-2 text-center">
+                <td className="py-2.5 text-center text-slate-500 font-medium">
+                  {op.sdl || "-"}
+                </td>
+                <td className="py-2.5 text-center">
                   <input
                     type="checkbox"
                     checked={op.lastOpSection}
-                    onChange={(e) =>
-                      onOperationChange(
-                        op.id,
-                        "lastOpSection",
-                        e.target.checked,
-                      )
-                    }
-                    className="rounded border-[#e2e8f0] text-[#4f46e5]"
+                    onChange={(e) => {
+                      const isChecked = e.target.checked;
+                      if (isSectionWise) {
+                        operations.forEach((opItem) => {
+                          if (opItem.section === op.section) {
+                            onOperationChange(opItem.id, "lastOpSection", isChecked);
+                          }
+                        });
+                      } else {
+                        onOperationChange(op.id, "lastOpSection", isChecked);
+                      }
+                    }}
+                    className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
                   />
                 </td>
               </tr>

@@ -1,8 +1,6 @@
 "use client";
 
-import { Trash2, X, Layers } from "lucide-react";
 import { useQrCodeGenerationFacade } from "../hooks/useQrCodeGenerationFacade";
-import { MOCK_QR_CODE_STYLES } from "../data/mock-qr-code-styles";
 import { ParametersPanel } from "./ParametersPanel";
 import { OperationsDetailTable } from "./OperationsDetailTable";
 import { BundleDetailTable } from "./BundleDetailTable";
@@ -21,7 +19,7 @@ export function QrCodeGenerationView() {
             <span>Industrial Engineering</span>
             <span className="text-[#94a3b8] font-light">/</span>
             <span className="text-[#4f46e5] font-bold">
-              QR Code Generation Finishing
+              QR Code Generation
             </span>
           </div>
         </div>
@@ -30,26 +28,11 @@ export function QrCodeGenerationView() {
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div>
             <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
-              QR Code Generation Finishing
+              QR Code Generation
             </h1>
             <p className="text-[11px] text-[#64748b] mt-0.5">
               Generate and manage QR code finishing bundles
             </p>
-          </div>
-
-          <div className="flex items-center gap-2">
-            <button className="flex items-center gap-1.5 bg-white border border-[#e2e8f0] text-red-600 hover:bg-red-50 px-3.5 py-2 rounded-xl font-bold transition-all shadow-sm">
-              <Trash2 className="w-3.5 h-3.5" />
-              Delete Coupons
-            </button>
-            <button className="flex items-center gap-1.5 bg-white border border-[#e2e8f0] text-[#475569] hover:bg-[#f8fafc] px-3.5 py-2 rounded-xl font-bold transition-all shadow-sm">
-              <X className="w-3.5 h-3.5" />
-              Cancel Coupons
-            </button>
-            <button className="flex items-center gap-1.5 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm">
-              <Layers className="w-3.5 h-3.5" />
-              Generate Bundle
-            </button>
           </div>
         </div>
 
@@ -60,28 +43,34 @@ export function QrCodeGenerationView() {
           onOpenSearchModal={facade.openSearchModal}
           onOpenPageSetupModal={() => facade.setShowPageSetupModal(true)}
           onFieldChange={facade.handleFieldChange}
+          onGenerateCoupons={facade.handleGenerateCoupons}
+          generatingCoupons={facade.generatingCoupons}
+          customersList={facade.customersList}
+          workersList={facade.workersList}
         />
 
-        {/* Main Grid: Operations + Bundle Detail */}
+        {/* Main Grid: Bundle Detail (left) + Operations (right) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-2">
-          <OperationsDetailTable
-            operations={facade.activeStyle.operations}
-            remarks={facade.activeStyle.remarks}
-            reworkQtyMain={facade.activeStyle.reworkQtyMain}
-            onOperationChange={facade.handleOperationChange}
-            onRemarksChange={(v) => facade.handleFieldChange("remarks", v)}
-            onReworkQtyMainChange={(v) =>
-              facade.handleFieldChange("reworkQtyMain", v)
-            }
-          />
-
           <BundleDetailTable
             bundles={facade.activeStyle.bundles}
             reworkQtyBundle={facade.activeStyle.reworkQtyBundle}
             subTotal={facade.activeStyle.subTotal}
             total={facade.activeStyle.total}
             onBundleSelChange={facade.handleBundleSelChange}
+            onAllBundlesSelChange={facade.handleAllBundlesSelChange}
             onReworkQtyBundleChange={facade.handleReworkQtyBundleChange}
+          />
+
+          <OperationsDetailTable
+            operations={facade.activeStyle.operations}
+            remarks={facade.activeStyle.remarks}
+            reworkQtyMain={facade.activeStyle.reworkQtyMain}
+            onOperationChange={facade.handleOperationChange}
+            onAllOperationsSelChange={facade.handleAllOperationsSelChange}
+            onRemarksChange={(v) => facade.handleFieldChange("remarks", v)}
+            onReworkQtyMainChange={(v) =>
+              facade.handleFieldChange("reworkQtyMain", v)
+            }
           />
         </div>
 
@@ -107,7 +96,7 @@ export function QrCodeGenerationView() {
             searchQuery={facade.searchQuery}
             onSearchQueryChange={facade.setSearchQuery}
             filteredStyles={facade.filteredStyles}
-            allStyles={MOCK_QR_CODE_STYLES}
+            allStyles={facade.filteredStyles}
             selectedIdx={facade.selectedIdx}
             onSelectIdx={facade.setSelectedIdx}
             onConfirm={facade.handleModalSearch}
