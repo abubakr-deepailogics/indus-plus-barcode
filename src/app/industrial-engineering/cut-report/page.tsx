@@ -2,21 +2,16 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
-  Search,
-  FileText,
-  Scissors,
-  AlertCircle,
+  Search, AlertCircle,
   Info,
   Database,
-  Paperclip,
-  ChevronDown,
+  Paperclip
 } from "lucide-react";
 // import type { PageSetupConfig } from "@/features/barcode-generation/types";
 // import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { DataTableColumnHeader } from "@/components/ui/data-table/column-header";
-import { QrCode } from "lucide-react";
 import type {
   PageSetupConfig,
   QrCodeStyleData,

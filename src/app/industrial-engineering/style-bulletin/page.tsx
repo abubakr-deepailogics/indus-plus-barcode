@@ -115,11 +115,6 @@ export default function OpenOrderPage() {
   const activeTab = "style_bulletin";
   const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
   const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
-  // Operations to include in coupon generation — defaults to "all" (set
-  // whenever a fresh style bulletin loads, see the fetch effect below) so
-  // existing behavior (generate for every operation) is unchanged unless
-  // the user deliberately unchecks some.
-  const [selectedOpRowIds, setSelectedOpRowIds] = useState<Set<number>>(new Set());
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<"all" | "cutting" | "washing" | "sewing" | "finishing">("all");
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
   const [selectedMachines, setSelectedMachines] = useState<string[]>([]);
@@ -144,7 +139,7 @@ export default function OpenOrderPage() {
     };
   }, []);
 
-  const getDepartment = (row: StyleBulletinRow): "cutting" | "washing" | "sewing" | "finishing" => {
+  const getDepartment = useCallback((row: StyleBulletinRow): "cutting" | "washing" | "sewing" | "finishing" => {
     const section = (row.Section || "").toLowerCase();
     const opName = (row.Operation_Name || "").toLowerCase();
     
@@ -169,17 +164,25 @@ export default function OpenOrderPage() {
     }
     
     return "sewing";
-  };
+  }, []);
 
   const uniqueSections = useMemo(() => {
-    const sections = styleBulletins.map((row) => row.Section).filter(Boolean) as string[];
+    let list = styleBulletins;
+    if (selectedDeptFilter !== "all") {
+      list = list.filter((row) => getDepartment(row) === selectedDeptFilter);
+    }
+    const sections = list.map((row) => row.Section).filter(Boolean) as string[];
     return Array.from(new Set(sections));
-  }, [styleBulletins]);
+  }, [styleBulletins, selectedDeptFilter, getDepartment]);
 
   const uniqueMachines = useMemo(() => {
     const machines = styleBulletins.map((row) => row.Machine_Type).filter(Boolean) as string[];
     return Array.from(new Set(machines));
   }, [styleBulletins]);
+
+  useEffect(() => {
+    setSelectedSections([]);
+  }, [selectedDeptFilter]);
 
   const filteredStyleBulletins = useMemo(() => {
     let result = styleBulletins;
@@ -260,45 +263,90 @@ export default function OpenOrderPage() {
   const styleBulletinColumns = useMemo<ColumnDef<StyleBulletinRow>[]>(
     () => [
       {
-        id: "select",
-        header: () => (
-          <input
-            type="checkbox"
-            checked={
-              filteredStyleBulletins.length > 0 &&
-              filteredStyleBulletins.every((row) => selectedOpRowIds.has(row.RowId))
+        accessorKey: "Section",
+        meta: { borderRight: true },
+        header: ({ column }) => {
+          return (
+            <div className="relative flex items-center justify-between gap-1 select-none font-bold text-[#64748b]">
+              <span>Section</span>
+              <div ref={sectionRef} className="relative z-30">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setSectionDropdownOpen(!sectionDropdownOpen);
+                  }}
+                  className={`p-1 rounded hover:bg-slate-100 transition-colors cursor-pointer ${
+                    selectedSections.length > 0 ? "text-indigo-600 font-bold" : "text-slate-400"
+                  }`}
+                >
+                  <ChevronDown className="w-3.5 h-3.5" />
+                </button>
+
+                {sectionDropdownOpen && (
+                  <div className="absolute left-0 mt-1 w-48 bg-white border border-[#e2e8f0] shadow-xl rounded-xl p-2 z-50 max-h-56 overflow-y-auto font-normal text-xs text-[#334155] flex flex-col gap-0.5 normal-case">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setSelectedSections([]);
+                      }}
+                      className={`text-left px-2.5 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer transition-colors ${
+                        selectedSections.length === 0
+                          ? "bg-slate-100 text-slate-800"
+                          : "hover:bg-slate-50 text-slate-500 hover:text-slate-700"
+                      }`}
+                    >
+                      All Sections
+                    </button>
+                    <div className="h-[1px] bg-slate-100 my-1" />
+                    {uniqueSections.map((section) => {
+                      const isChecked = selectedSections.includes(section);
+                      return (
+                        <label
+                          key={section}
+                          onClick={(e) => e.stopPropagation()}
+                          className="flex items-center gap-2 px-2.5 py-1 rounded-lg hover:bg-slate-50 cursor-pointer text-[10px] font-semibold text-slate-600 hover:text-slate-800 transition-colors"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isChecked}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              setSelectedSections((prev) =>
+                                isChecked
+                                  ? prev.filter((s) => s !== section)
+                                  : [...prev, section]
+                              );
+                            }}
+                            className="w-3 h-3 rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 focus:ring-offset-0 cursor-pointer"
+                          />
+                          <span className="truncate">{section}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          );
+        },
+       cell: ({ row, table }) => {
+          const currentVal = row.original.Section;
+          const displayRows = table.getRowModel().rows;
+          const displayIndex = displayRows.findIndex((r) => r.id === row.id);
+          
+          if (displayIndex > 0) {
+            const prevVal = displayRows[displayIndex - 1].original.Section;
+            if (currentVal === prevVal) {
+              return null;
             }
-            onChange={(e) => {
-              setSelectedOpRowIds((prev) => {
-                const next = new Set(prev);
-                for (const row of filteredStyleBulletins) {
-                  if (e.target.checked) next.add(row.RowId);
-                  else next.delete(row.RowId);
-                }
-                return next;
-              });
-            }}
-            className="w-3.5 h-3.5 rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 focus:ring-offset-0 cursor-pointer"
-          />
-        ),
-        cell: ({ row }) => (
-          <input
-            type="checkbox"
-            checked={selectedOpRowIds.has(row.original.RowId)}
-            onChange={(e) => {
-              setSelectedOpRowIds((prev) => {
-                const next = new Set(prev);
-                if (e.target.checked) next.add(row.original.RowId);
-                else next.delete(row.original.RowId);
-                return next;
-              });
-            }}
-            className="w-3.5 h-3.5 rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 focus:ring-offset-0 cursor-pointer"
-          />
-        ),
-        size: 40,
+          }
+          
+          return <span className="text-slate-500">{currentVal}</span>;
+        },
       },
-        {
+      {
         accessorKey: "Operation_Sequence",
         header: ({ column }) => (
           <DataTableColumnHeader
@@ -351,32 +399,7 @@ export default function OpenOrderPage() {
         ),
         size: 260,
       },
-      {
-        accessorKey: "Section",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Section"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <span className="text-slate-500">{row.original.Section}</span>
-        ),
-        size: 100,
-      },
-    
-      {
-        accessorKey: "Machine_Type",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Machine Type"
-            onFilterClick={() => {}}
-          />
-        ),
-        size: 110,
-      },
+     
       {
         accessorKey: "SkillLevel",
         header: ({ column }) => (
@@ -418,6 +441,7 @@ export default function OpenOrderPage() {
       },
       {
         accessorKey: "Smv_Sam",
+        meta: { borderRight: true },
         header: ({ column }) => (
           <DataTableColumnHeader
             column={column}
@@ -439,9 +463,20 @@ export default function OpenOrderPage() {
         },
         size: 90,
       },
+      {
+        accessorKey: "Machine_Type",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title="Machine Type"
+            onFilterClick={() => {}}
+          />
+        ),
+        size: 110,
+      },
 
     ],
-    [rowAttachments, selectedOpRowIds, filteredStyleBulletins],
+    [rowAttachments, filteredStyleBulletins, getDepartment],
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -638,7 +673,6 @@ export default function OpenOrderPage() {
     setSelectedDeptFilter("all");
     setSelectedSections([]);
     setSelectedMachines([]);
-    setSelectedOpRowIds(new Set());
 
     // Clear/reset all input fields when activeSearchQuery changes or is empty
     setDescription("");
@@ -685,8 +719,6 @@ export default function OpenOrderPage() {
         const data = await response.json();
         setCutDetails(data.cutDetails || []);
         setStyleBulletins(data.styleBulletins || []);
-        // Do not pre-select any operations.
-        setSelectedOpRowIds(new Set());
 
         // Compute and set totalSam & totalRate
         const computedSam = (data.styleBulletins || []).reduce((acc: number, curr: any) => acc + (curr.Smv_Sam ?? 0), 0);
@@ -760,7 +792,6 @@ export default function OpenOrderPage() {
     }));
 
     const operations = styleBulletins
-      .filter((row) => selectedOpRowIds.has(row.RowId))
       .slice()
       .sort(
         (a, b) => (a.Operation_Sequence ?? 0) - (b.Operation_Sequence ?? 0),
@@ -799,7 +830,7 @@ export default function OpenOrderPage() {
       operations,
       bundles,
     };
-  }, [activeSearchQuery, cutDetails, styleBulletins, selectedOpRowIds]);
+  }, [activeSearchQuery, cutDetails, styleBulletins]);
 
   const { handleGenerateCoupons, generatingCoupons, handleDownloadPdf: downloadPdf, generatingPdf, couponCount } =
     useGenerateCouponPdf(
@@ -1133,18 +1164,8 @@ export default function OpenOrderPage() {
             <DataTable
                 columns={styleBulletinColumns}
                 data={filteredStyleBulletins}
-                toolbarRightChildren={
-                  activeStyle && (
-                    <button
-                      onClick={handleGenerateCoupons}
-                      disabled={generatingCoupons}
-                      className="flex items-center justify-center gap-2 bg-white border border-[#4f46e5] text-[#4f46e5] hover:bg-[#eef2ff] px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                      <QrCode className="w-3.5 h-3.5" />
-                      <span>{generatingCoupons ? "Generating…" : "Generate Coupons"}</span>
-                    </button>
-                  )
-                }
+                showColumnsDropdown={false}
+
                 toolbarChildren={
                   <div className="flex items-center gap-2 flex-wrap">
                     <button
@@ -1192,132 +1213,9 @@ export default function OpenOrderPage() {
                       finishing
                     </button>
 
-                    {/* Divider vertical bar */}
-                    <div className="w-[1px] h-5 bg-[#e2e8f0] mx-1 self-center" />
 
-                    {/* Section Multi-Select Dropdown */}
-                    <div ref={sectionRef} className="relative z-30">
-                      <button
-                        type="button"
-                        onClick={() => setSectionDropdownOpen(!sectionDropdownOpen)}
-                        className={`flex items-center justify-between gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer min-w-[130px] ${
-                          selectedSections.length > 0
-                            ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                            : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
-                        }`}
-                      >
-                        <span className="truncate max-w-[110px]">
-                          {selectedSections.length === 0
-                            ? "All Sections"
-                            : selectedSections.length === 1
-                            ? selectedSections[0]
-                            : `${selectedSections.length} Sections`}
-                        </span>
-                        <ChevronDown className={`w-3 h-3 transition-transform duration-200 shrink-0 ${sectionDropdownOpen ? "rotate-180 text-indigo-500" : "text-slate-400"}`} />
-                      </button>
-                      
-                      {sectionDropdownOpen && (
-                        <div className="absolute left-0 mt-1.5 w-56 bg-white border border-[#e2e8f0] shadow-xl rounded-xl p-2 z-50 max-h-60 overflow-y-auto animate-fade-in flex flex-col gap-0.5">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedSections([])}
-                            className={`text-left px-2.5 py-1.5 text-[11px] font-bold rounded-lg cursor-pointer transition-colors ${
-                              selectedSections.length === 0
-                                ? "bg-slate-100 text-slate-800"
-                                : "hover:bg-slate-50 text-slate-500 hover:text-slate-700"
-                            }`}
-                          >
-                            All Sections
-                          </button>
-                          <div className="h-[1px] bg-slate-100 my-1" />
-                          {uniqueSections.map(section => {
-                            const isChecked = selectedSections.includes(section);
-                            return (
-                              <label
-                                key={section}
-                                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer text-[11px] font-semibold text-slate-600 hover:text-slate-800 transition-colors select-none"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => {
-                                    setSelectedSections(prev =>
-                                      isChecked
-                                        ? prev.filter(s => s !== section)
-                                        : [...prev, section]
-                                    );
-                                  }}
-                                  className="w-3.5 h-3.5 rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 focus:ring-offset-0 cursor-pointer"
-                                />
-                                <span className="truncate">{section}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
 
-                    {/* Machine Multi-Select Dropdown */}
-                    <div ref={machineRef} className="relative z-30">
-                      <button
-                        type="button"
-                        onClick={() => setMachineDropdownOpen(!machineDropdownOpen)}
-                        className={`flex items-center justify-between gap-1.5 px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer min-w-[130px] ${
-                          selectedMachines.length > 0
-                            ? "bg-indigo-50 text-indigo-700 border-indigo-200"
-                            : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
-                        }`}
-                      >
-                        <span className="truncate max-w-[110px]">
-                          {selectedMachines.length === 0
-                            ? "All Machines"
-                            : selectedMachines.length === 1
-                            ? selectedMachines[0]
-                            : `${selectedMachines.length} Machines`}
-                        </span>
-                        <ChevronDown className={`w-3 h-3 transition-transform duration-200 shrink-0 ${machineDropdownOpen ? "rotate-180 text-indigo-500" : "text-slate-400"}`} />
-                      </button>
-                      
-                      {machineDropdownOpen && (
-                        <div className="absolute left-0 mt-1.5 w-56 bg-white border border-[#e2e8f0] shadow-xl rounded-xl p-2 z-50 max-h-60 overflow-y-auto animate-fade-in flex flex-col gap-0.5">
-                          <button
-                            type="button"
-                            onClick={() => setSelectedMachines([])}
-                            className={`text-left px-2.5 py-1.5 text-[11px] font-bold rounded-lg cursor-pointer transition-colors ${
-                              selectedMachines.length === 0
-                                ? "bg-slate-100 text-slate-800"
-                                : "hover:bg-slate-50 text-slate-500 hover:text-slate-700"
-                            }`}
-                          >
-                            All Machines
-                          </button>
-                          <div className="h-[1px] bg-slate-100 my-1" />
-                          {uniqueMachines.map(machine => {
-                            const isChecked = selectedMachines.includes(machine);
-                            return (
-                              <label
-                                key={machine}
-                                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer text-[11px] font-semibold text-slate-600 hover:text-slate-800 transition-colors select-none"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={isChecked}
-                                  onChange={() => {
-                                    setSelectedMachines(prev =>
-                                      isChecked
-                                        ? prev.filter(m => m !== machine)
-                                        : [...prev, machine]
-                                    );
-                                  }}
-                                  className="w-3.5 h-3.5 rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 focus:ring-offset-0 cursor-pointer"
-                                />
-                                <span className="truncate">{machine}</span>
-                              </label>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
+
                   </div>
                 }
               />
