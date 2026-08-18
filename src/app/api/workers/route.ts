@@ -21,11 +21,43 @@ export async function GET(request: Request) {
         return Response.json({ error: "Invalid employee code format." }, { status: 400 });
       }
 
+      // Run auto-migration check in a separate query to avoid compile-time issues
+      await pool.request().query(`
+        IF NOT EXISTS (
+          SELECT 1 FROM sys.columns
+          WHERE object_id = OBJECT_ID('dbo.QrCode_Coupon') AND name = 'ScannedAt'
+        )
+        BEGIN
+          ALTER TABLE dbo.QrCode_Coupon ADD ScannedAt DATETIME NULL;
+        END
+      `);
+
       const result = await pool
         .request()
         .input("code", sql.Int, codeNum)
         .query(`
-          SELECT TOP 1 EmployeeID, FirstName, DesignationName, ParentDepartment, DepartmentName
+          SELECT TOP 1 
+            EmployeeID, 
+            FirstName, 
+            DesignationName, 
+            ParentDepartment, 
+            DepartmentName,
+            (
+              SELECT COUNT(*) 
+              FROM dbo.QrCode_Coupon 
+              WHERE EmployeeCode = CAST(@code AS NVARCHAR(100)) 
+                AND IsScanned = 1 
+                AND ScannedAt IS NOT NULL 
+                AND CAST(ScannedAt AS DATE) = CAST(GETDATE() AS DATE)
+            ) AS AlreadyDailyScan,
+            (
+              SELECT COUNT(*) 
+              FROM dbo.QrCode_Coupon 
+              WHERE EmployeeCode = CAST(@code AS NVARCHAR(100)) 
+                AND IsScanned = 1 
+                AND ScannedAt IS NOT NULL 
+                AND ScannedAt >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
+            ) AS AlreadyMonthlyScan
           FROM dbo.Workers
           WHERE EmployeeID = @code
         `);

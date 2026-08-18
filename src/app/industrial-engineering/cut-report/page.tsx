@@ -115,6 +115,50 @@ export default function OpenOrderPage() {
         size: 60,
       },
       {
+        accessorKey: "Cut",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title="Cut"
+            onFilterClick={() => {}}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="text-center font-semibold text-indigo-600">
+            {row.original.Cut}
+          </div>
+        ),
+        size: 70,
+      },
+       {
+        accessorKey: "Bundle_Id",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title="Bundle ID"
+            onFilterClick={() => {}}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="text-center font-mono">{row.original.Bundle_Id}</div>
+        ),
+        size: 100,
+      },
+      {
+        accessorKey: "Bundle_Qty",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title="Bundle Qty"
+            onFilterClick={() => {}}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="text-right font-bold">{row.original.Bundle_Qty}</div>
+        ),
+        size: 90,
+      },
+      {
         accessorKey: "Inseam",
         header: ({ column }) => (
           <DataTableColumnHeader
@@ -152,50 +196,6 @@ export default function OpenOrderPage() {
           />
         ),
         size: 100,
-      },
-      {
-        accessorKey: "Cut",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Cut"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-center font-semibold text-indigo-600">
-            {row.original.Cut}
-          </div>
-        ),
-        size: 70,
-      },
-      {
-        accessorKey: "Bundle_Id",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Bundle ID"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-center font-mono">{row.original.Bundle_Id}</div>
-        ),
-        size: 100,
-      },
-      {
-        accessorKey: "Bundle_Qty",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Bundle Qty"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-right font-bold">{row.original.Bundle_Qty}</div>
-        ),
-        size: 90,
       },
       {
         accessorKey: "Shade",
