@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Search,
   AlertCircle,
@@ -8,7 +8,11 @@ import {
   Database,
   Paperclip,
   ChevronDown,
+  Plus,
+  FileText,
+  Trash2,
 } from "lucide-react";
+import { useAuth } from "@/features/auth/context/auth-context";
 // import type { PageSetupConfig } from "@/features/barcode-generation/types";
 // import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
 import { ColumnDef } from "@tanstack/react-table";
@@ -21,6 +25,15 @@ import type {
 } from "@/features/qr-code-generation/types";
 import { useGenerateCouponPdf } from "@/features/qr-code-generation/hooks/useGenerateCouponPdf";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
+
+interface StyleBulletinAttachment {
+  Id: number;
+  WorkOrder: string;
+  FileName: string;
+  ContentType: string;
+  CreatedAt: string;
+  CreatedBy: string | null;
+}
 
 interface CutDetailRow {
   RowId: number;
@@ -95,7 +108,7 @@ function TableSkeleton({ columnsCount }: { columnsCount: number }) {
 
 export default function OpenOrderPage() {
 
-
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
   const [isWoFocused, setIsWoFocused] = useState(false);
@@ -238,6 +251,11 @@ export default function OpenOrderPage() {
     rowId: number;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Persisted style bulletin attachments (dbo.StyleBulletin_Attachment), keyed by work order.
+  const [bulletinAttachments, setBulletinAttachments] = useState<StyleBulletinAttachment[]>([]);
+  const [bulletinAttachmentsLoading, setBulletinAttachmentsLoading] = useState(false);
+  const [bulletinAttachmentError, setBulletinAttachmentError] = useState("");
 
   const styleBulletinColumns = useMemo<ColumnDef<StyleBulletinRow>[]>(
     () => [
@@ -503,6 +521,64 @@ export default function OpenOrderPage() {
       setIsSaving(false);
     }
   };
+
+  const loadBulletinAttachments = useCallback(async (workOrder: string) => {
+    if (!workOrder) {
+      setBulletinAttachments([]);
+      return;
+    }
+    setBulletinAttachmentsLoading(true);
+    setBulletinAttachmentError("");
+    try {
+      const res = await fetch(`/api/style-bulletin/attachments?workOrder=${encodeURIComponent(workOrder)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load attachments.");
+      setBulletinAttachments(data);
+    } catch (err) {
+      setBulletinAttachmentError(err instanceof Error ? err.message : "Failed to load attachments.");
+    } finally {
+      setBulletinAttachmentsLoading(false);
+    }
+  }, []);
+
+  const handleUploadBulletinAttachment = async (file: File) => {
+    const workOrder = cutDetails[0]?.Work_Order || activeSearchQuery;
+    if (!workOrder) {
+      setBulletinAttachmentError("No active Work Order to attach a file to.");
+      return;
+    }
+    setBulletinAttachmentError("");
+    const form = new FormData();
+    form.append("workOrder", workOrder);
+    form.append("file", file);
+    form.append("createdBy", user?.email || "");
+
+    try {
+      const res = await fetch("/api/style-bulletin/attachments", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to upload attachment.");
+      await loadBulletinAttachments(workOrder);
+    } catch (err) {
+      setBulletinAttachmentError(err instanceof Error ? err.message : "Failed to upload attachment.");
+    }
+  };
+
+  const handleDeleteBulletinAttachment = async (id: number) => {
+    setBulletinAttachmentError("");
+    try {
+      const res = await fetch(`/api/style-bulletin/attachments?id=${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete attachment.");
+      setBulletinAttachments((prev) => prev.filter((a) => a.Id !== id));
+    } catch (err) {
+      setBulletinAttachmentError(err instanceof Error ? err.message : "Failed to delete attachment.");
+    }
+  };
+
+  useEffect(() => {
+    const workOrder = cutDetails[0]?.Work_Order || activeSearchQuery;
+    void Promise.resolve().then(() => loadBulletinAttachments(workOrder || ""));
+  }, [cutDetails, activeSearchQuery, loadBulletinAttachments]);
 
   // Fetch autocomplete suggestions as user types
   useEffect(() => {
@@ -1245,6 +1321,71 @@ export default function OpenOrderPage() {
                   </div>
                 }
               />
+          </div>
+        )}
+
+        {/* Style Bulletin Attachments */}
+        {hasSearched && (
+          <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-[#0f172a] text-sm">Attachments</h2>
+              <label className="flex items-center gap-1.5 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer">
+                <Plus className="w-3.5 h-3.5" />
+                Add Attachment
+                <input
+                  type="file"
+                  accept="application/pdf,image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleUploadBulletinAttachment(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+
+            {bulletinAttachmentError && (
+              <p className="text-red-600 text-[11px] font-semibold">{bulletinAttachmentError}</p>
+            )}
+
+            {bulletinAttachmentsLoading ? (
+              <p className="text-[#64748b] text-[11px]">Loading attachments...</p>
+            ) : bulletinAttachments.length === 0 ? (
+              <p className="text-[#94a3b8] text-[11px]">No attachments yet.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {bulletinAttachments.map((a) => (
+                  <div key={a.Id} className="flex items-center justify-between gap-2 border border-[#e2e8f0] rounded-xl px-3 py-2.5">
+                    <a
+                      href={`/api/style-bulletin/attachments/${a.Id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 min-w-0 hover:text-[#4f46e5]"
+                    >
+                      {a.ContentType === "application/pdf" ? (
+                        <FileText className="w-4 h-4 text-[#4f46e5] shrink-0" />
+                      ) : (
+                        <Paperclip className="w-4 h-4 text-[#4f46e5] shrink-0" />
+                      )}
+                      <span className="flex flex-col min-w-0">
+                        <span className="truncate font-semibold text-[#334155] text-[11px]">{a.FileName}</span>
+                        <span className="text-[10px] text-[#94a3b8]">
+                          {new Date(a.CreatedAt).toLocaleString()}{a.CreatedBy ? ` · ${a.CreatedBy}` : ""}
+                        </span>
+                      </span>
+                    </a>
+                    <button
+                      onClick={() => handleDeleteBulletinAttachment(a.Id)}
+                      className="text-[#94a3b8] hover:text-red-500 p-1 shrink-0"
+                      title="Delete attachment"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
       </div>
