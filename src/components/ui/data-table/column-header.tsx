@@ -22,12 +22,12 @@ export function DataTableColumnHeader<TData, TValue>({
   onFilterClick,
 }: DataTableColumnHeaderProps<TData, TValue>) {
   if (!column.getCanSort() && !column.getCanFilter()) {
-    return <div className="text-[10px] font-bold text-[#64748b] uppercase tracking-wider">{title}</div>;
+    return <div className="text-[10px] font-bold text-[#64748b] uppercase tracking-wider whitespace-normal break-words">{title}</div>;
   }
 
   return (
-    <div className="flex items-center justify-between group/header w-full min-h-[28px]">
-      <span className="text-[10px] font-bold text-[#64748b] uppercase tracking-wider">{title}</span>
+    <div className="flex items-center justify-between gap-1 group/header w-full min-h-[28px]">
+      <span className="text-[10px] font-bold text-[#64748b] uppercase tracking-wider whitespace-normal break-words">{title}</span>
       
       <DropdownMenu>
         <DropdownMenuTrigger
