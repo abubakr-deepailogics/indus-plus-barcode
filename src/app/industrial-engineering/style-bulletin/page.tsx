@@ -7,7 +7,6 @@ import {
   Info,
   Database,
   Paperclip,
-  ChevronDown,
   Plus,
   FileText,
   Trash2,
@@ -68,6 +67,11 @@ interface StyleBulletinRow {
   Smv_Sam?: number;
   First_Operation_Section_Wise?: number;
   Last_Operation_Section_Wise?: number;
+  Bi_Hourly_Tgt?: number;
+  Shift_Tgt?: number;
+  No_Of_Operations?: number;
+  DL?: number;
+  No_Mc?: number;
 }
 
 function TableSkeleton({ columnsCount }: { columnsCount: number }) {
@@ -118,17 +122,12 @@ export default function OpenOrderPage() {
   const [selectedDeptFilter, setSelectedDeptFilter] = useState<"all" | "cutting" | "washing" | "sewing" | "finishing">("all");
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
   const [selectedMachines, setSelectedMachines] = useState<string[]>([]);
-  const [sectionDropdownOpen, setSectionDropdownOpen] = useState(false);
   const [machineDropdownOpen, setMachineDropdownOpen] = useState(false);
 
-  const sectionRef = useRef<HTMLDivElement>(null);
   const machineRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (sectionRef.current && !sectionRef.current.contains(event.target as Node)) {
-        setSectionDropdownOpen(false);
-      }
       if (machineRef.current && !machineRef.current.contains(event.target as Node)) {
         setMachineDropdownOpen(false);
       }
@@ -263,90 +262,6 @@ export default function OpenOrderPage() {
   const styleBulletinColumns = useMemo<ColumnDef<StyleBulletinRow>[]>(
     () => [
       {
-        accessorKey: "Section",
-        meta: { borderRight: true },
-        header: ({ column }) => {
-          return (
-            <div className="relative flex items-center justify-between gap-1 select-none font-bold text-[#64748b]">
-              <span>Section</span>
-              <div ref={sectionRef} className="relative z-30">
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setSectionDropdownOpen(!sectionDropdownOpen);
-                  }}
-                  className={`p-1 rounded hover:bg-slate-100 transition-colors cursor-pointer ${
-                    selectedSections.length > 0 ? "text-indigo-600 font-bold" : "text-slate-400"
-                  }`}
-                >
-                  <ChevronDown className="w-3.5 h-3.5" />
-                </button>
-
-                {sectionDropdownOpen && (
-                  <div className="absolute left-0 mt-1 w-48 bg-white border border-[#e2e8f0] shadow-xl rounded-xl p-2 z-50 max-h-56 overflow-y-auto font-normal text-xs text-[#334155] flex flex-col gap-0.5 normal-case">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedSections([]);
-                      }}
-                      className={`text-left px-2.5 py-1.5 text-[10px] font-bold rounded-lg cursor-pointer transition-colors ${
-                        selectedSections.length === 0
-                          ? "bg-slate-100 text-slate-800"
-                          : "hover:bg-slate-50 text-slate-500 hover:text-slate-700"
-                      }`}
-                    >
-                      All Sections
-                    </button>
-                    <div className="h-[1px] bg-slate-100 my-1" />
-                    {uniqueSections.map((section) => {
-                      const isChecked = selectedSections.includes(section);
-                      return (
-                        <label
-                          key={section}
-                          onClick={(e) => e.stopPropagation()}
-                          className="flex items-center gap-2 px-2.5 py-1 rounded-lg hover:bg-slate-50 cursor-pointer text-[10px] font-semibold text-slate-600 hover:text-slate-800 transition-colors"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              e.stopPropagation();
-                              setSelectedSections((prev) =>
-                                isChecked
-                                  ? prev.filter((s) => s !== section)
-                                  : [...prev, section]
-                              );
-                            }}
-                            className="w-3 h-3 rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 focus:ring-offset-0 cursor-pointer"
-                          />
-                          <span className="truncate">{section}</span>
-                        </label>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            </div>
-          );
-        },
-       cell: ({ row, table }) => {
-          const currentVal = row.original.Section;
-          const displayRows = table.getRowModel().rows;
-          const displayIndex = displayRows.findIndex((r) => r.id === row.id);
-          
-          if (displayIndex > 0) {
-            const prevVal = displayRows[displayIndex - 1].original.Section;
-            if (currentVal === prevVal) {
-              return null;
-            }
-          }
-          
-          return <span className="text-slate-500">{currentVal}</span>;
-        },
-      },
-      {
         accessorKey: "Operation_Sequence",
         header: ({ column }) => (
           <DataTableColumnHeader
@@ -360,7 +275,7 @@ export default function OpenOrderPage() {
             {row.original.Operation_Sequence}
           </div>
         ),
-        size: 60,
+        size: 50,
       },
       {
         accessorKey: "Operation_Code",
@@ -381,7 +296,7 @@ export default function OpenOrderPage() {
             Total
           </span>
         ),
-        size: 85,
+        size: 70,
       },
       {
         accessorKey: "Operation_Name",
@@ -414,7 +329,7 @@ export default function OpenOrderPage() {
             {row.original.SkillLevel ?? "-"}
           </div>
         ),
-        size: 90,
+        size: 70,
       },
       {
         accessorKey: "Piece_Rate",
@@ -437,7 +352,7 @@ export default function OpenOrderPage() {
           }, 0);
           return <div className="text-right font-bold text-slate-700">{total.toFixed(4)}</div>;
         },
-        size: 90,
+        size: 70,
       },
       {
         accessorKey: "Smv_Sam",
@@ -461,7 +376,7 @@ export default function OpenOrderPage() {
           }, 0);
           return <div className="text-right font-bold text-purple-600">{total.toFixed(2)}</div>;
         },
-        size: 90,
+        size: 70,
       },
       {
         accessorKey: "Machine_Type",
@@ -472,7 +387,87 @@ export default function OpenOrderPage() {
             onFilterClick={() => {}}
           />
         ),
-        size: 110,
+        size: 80,
+      },
+      {
+        accessorKey: "Bi_Hourly_Tgt",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title="Bi Hourly TGT"
+            onFilterClick={() => {}}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="text-center font-semibold text-slate-600">
+            {row.original.Bi_Hourly_Tgt ?? "-"}
+          </div>
+        ),
+        size: 70,
+      },
+      {
+        accessorKey: "Shift_Tgt",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title="Shift TGT"
+            onFilterClick={() => {}}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="text-center font-semibold text-slate-600">
+            {row.original.Shift_Tgt ?? "-"}
+          </div>
+        ),
+        size: 70,
+      },
+      {
+        accessorKey: "No_Of_Operations",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title="#of Operations"
+            onFilterClick={() => {}}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="text-center font-semibold text-slate-600">
+            {row.original.No_Of_Operations ?? "-"}
+          </div>
+        ),
+        size: 70,
+      },
+      {
+        accessorKey: "DL",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title="DL"
+            onFilterClick={() => {}}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="text-center font-semibold text-slate-600">
+            {row.original.DL ?? "-"}
+          </div>
+        ),
+        size: 70,
+      },
+      {
+        accessorKey: "No_Mc",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title="No M/C"
+            onFilterClick={() => {}}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="text-center font-semibold text-slate-600">
+            {row.original.No_Mc ?? "-"}
+          </div>
+        ),
+        size: 80,
       },
 
     ],
@@ -1160,8 +1155,52 @@ export default function OpenOrderPage() {
         ) : (
           <div className="flex flex-col gap-4 animate-fade-in">
 
-            {/* DataTable Component */}
-            <DataTable
+            {/* Section Panel + DataTable, side by side at equal height */}
+            <div className="flex items-stretch gap-4">
+              <div className="w-56 shrink-0 bg-white border border-[#e2e8f0] rounded-2xl shadow-sm flex flex-col overflow-hidden">
+                <div className="px-4 py-2 border-b border-[#e2e8f0] bg-[#f8fafc] font-bold text-[#64748b] text-[10px] uppercase tracking-wider">
+                  Section
+                </div>
+                <div className="max-h-[370px] overflow-y-auto flex flex-col gap-0.5 p-2 text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSections([])}
+                    className={`text-left px-2.5 py-1.5 rounded-lg cursor-pointer font-bold transition-colors ${
+                      selectedSections.length === 0
+                        ? "bg-slate-100 text-slate-800"
+                        : "hover:bg-slate-50 text-slate-500 hover:text-slate-700"
+                    }`}
+                  >
+                    {selectedDeptFilter === "all" ? "All Sections" : selectedDeptFilter}
+                  </button>
+                  <div className="h-[1px] bg-slate-100 my-1" />
+                  {uniqueSections.map((section) => {
+                    const isChecked = selectedSections.includes(section);
+                    return (
+                      <label
+                        key={section}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer font-semibold text-slate-600 hover:text-slate-800 transition-colors"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          onChange={() =>
+                            setSelectedSections((prev) =>
+                              isChecked ? prev.filter((s) => s !== section) : [...prev, section]
+                            )
+                          }
+                          className="w-3 h-3 rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 focus:ring-offset-0 cursor-pointer"
+                        />
+                        <span className="truncate">{section}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* DataTable Component */}
+              <div className="flex-1 min-w-0">
+              <DataTable
                 columns={styleBulletinColumns}
                 data={filteredStyleBulletins}
                 showColumnsDropdown={false}
@@ -1219,6 +1258,8 @@ export default function OpenOrderPage() {
                   </div>
                 }
               />
+              </div>
+            </div>
           </div>
         )}
 

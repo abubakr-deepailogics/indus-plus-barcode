@@ -189,16 +189,6 @@ export function DataTable<TData, TValue>({
     <div className="w-full space-y-4">
       {/* Top Toolbar containing Search input and the "Columns" hide/show dropdown menu */}
       <div className="flex items-center justify-start gap-3 flex-wrap">
-        <div className="relative w-64">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-          <input
-            type="text"
-            value={globalFilter}
-            onChange={(e) => setGlobalFilter(e.target.value)}
-            placeholder="Search from table..."
-            className="w-full pl-9 pr-3 py-2 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-          />
-        </div>
         {toolbarChildren}
         {showColumnsDropdown && (
           <DropdownMenu>
@@ -226,11 +216,19 @@ export function DataTable<TData, TValue>({
             </DropdownMenuContent>
           </DropdownMenu>
         )}
-        {toolbarRightChildren && (
-          <div className="ml-auto flex items-center gap-3">
-            {toolbarRightChildren}
+        <div className="ml-auto flex items-center gap-3">
+          {toolbarRightChildren}
+          <div className="relative w-64">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <input
+              type="text"
+              value={globalFilter}
+              onChange={(e) => setGlobalFilter(e.target.value)}
+              placeholder="Search from table..."
+              className="w-full pl-9 pr-3 py-2 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+            />
           </div>
-        )}
+        </div>
       </div>
 
       {/* MUI-style filter panel built on Shadcn UI components */}
@@ -262,7 +260,7 @@ export function DataTable<TData, TValue>({
                     return (
                       <th
                         key={header.id}
-                        className={`px-4 py-1.5 h-auto font-bold text-[#64748b] bg-[#f8fafc] sticky top-0 z-10 border-b border-[#e2e8f0] shadow-[0_1px_0_0_#e2e8f0] text-left align-middle whitespace-nowrap relative group/header ${
+                        className={`px-4 py-1.5 h-auto font-bold text-[#64748b] bg-[#f8fafc] sticky top-0 z-10 border-b border-[#e2e8f0] shadow-[0_1px_0_0_#e2e8f0] text-left align-middle whitespace-normal break-words relative group/header ${
                           hasBorderRight ? "border-r-3 border-r-[#e2e8f0]" : ""
                         }`}
                         style={{ width: header.column.getSize() }}
