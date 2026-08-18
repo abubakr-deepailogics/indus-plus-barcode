@@ -25,6 +25,7 @@ interface DataTableProps<TData, TValue> {
   data: TData[];
   isLoading?: boolean;
   toolbarChildren?: React.ReactNode;
+  toolbarRightChildren?: React.ReactNode;
   maxHeight?: string;
 }
 
@@ -33,7 +34,8 @@ export function DataTable<TData, TValue>({
   data,
   isLoading = false,
   toolbarChildren,
-  maxHeight = "max-h-[350px]",
+  toolbarRightChildren,
+  maxHeight = "max-h-[370px]",
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -158,7 +160,7 @@ export function DataTable<TData, TValue>({
             <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
               <tr>
                 {Array.from({ length: columns.length }).map((_, i) => (
-                  <th key={i} className="px-4 py-4.5">
+                  <th key={i} className="px-4 py-1.5">
                     <div className="h-3 bg-slate-200 rounded w-16"></div>
                   </th>
                 ))}
@@ -168,7 +170,7 @@ export function DataTable<TData, TValue>({
               {Array.from({ length: 5 }).map((_, rowIndex) => (
                 <tr key={rowIndex}>
                   {Array.from({ length: columns.length }).map((_, colIndex) => (
-                    <td key={colIndex} className="px-4 py-4.5">
+                    <td key={colIndex} className="px-4 py-1">
                       <div className="h-3.5 bg-slate-100 rounded w-full"></div>
                     </td>
                   ))}
@@ -197,11 +199,11 @@ export function DataTable<TData, TValue>({
         </div>
         {toolbarChildren}
         <DropdownMenu>
-          <DropdownMenuTrigger className="flex items-center gap-1 bg-white hover:bg-[#f8fafc]/80 text-[#475569] border border-[#e2e8f0] px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs ml-auto hover:text-[#0f172a] focus:outline-none">
+          <DropdownMenuTrigger className="flex items-center gap-1 bg-white hover:bg-[#f8fafc]/80 text-[#475569] border border-[#e2e8f0] px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs hover:text-[#0f172a] focus:outline-none">
             <span>Columns</span>
             <ChevronDown className="h-3.5 w-3.5" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-48 bg-white border border-[#e2e8f0] shadow-md rounded-xl p-1 z-50">
+          <DropdownMenuContent align="start" className="w-48 bg-white border border-[#e2e8f0] shadow-md rounded-xl p-1 z-50">
             {table
               .getAllColumns()
               .filter((column) => column.getCanHide())
@@ -220,6 +222,11 @@ export function DataTable<TData, TValue>({
               })}
           </DropdownMenuContent>
         </DropdownMenu>
+        {toolbarRightChildren && (
+          <div className="ml-auto flex items-center gap-3">
+            {toolbarRightChildren}
+          </div>
+        )}
       </div>
 
       {/* MUI-style filter panel built on Shadcn UI components */}
@@ -249,7 +256,7 @@ export function DataTable<TData, TValue>({
                   {headerGroup.headers.map((header) => (
                     <th
                       key={header.id}
-                      className="px-4 py-3 h-auto font-bold text-[#64748b] bg-[#f8fafc] sticky top-0 z-10 border-b border-[#e2e8f0] shadow-[0_1px_0_0_#e2e8f0] text-left align-middle whitespace-nowrap relative group/header"
+                      className="px-4 py-1.5 h-auto font-bold text-[#64748b] bg-[#f8fafc] sticky top-0 z-10 border-b border-[#e2e8f0] shadow-[0_1px_0_0_#e2e8f0] text-left align-middle whitespace-nowrap relative group/header"
                       style={{ width: header.column.getSize() }}
                     >
                       {header.isPlaceholder
@@ -281,7 +288,7 @@ export function DataTable<TData, TValue>({
                     {row.getVisibleCells().map((cell) => (
                       <td 
                         key={cell.id} 
-                        className="px-4 py-3 align-middle whitespace-nowrap overflow-hidden text-ellipsis"
+                        className="px-4 py-1 align-middle whitespace-nowrap overflow-hidden text-ellipsis"
                         style={{ width: cell.column.getSize() }}
                       >
                         {flexRender(cell.column.columnDef.cell, cell.getContext())}
@@ -307,7 +314,7 @@ export function DataTable<TData, TValue>({
                     {footerGroup.headers.map((header) => (
                       <td
                         key={header.id}
-                        className="px-4 py-3 align-middle whitespace-nowrap bg-[#f8fafc]"
+                        className="px-4 py-1.5 align-middle whitespace-nowrap bg-[#f8fafc]"
                         style={{ width: header.column.getSize() }}
                       >
                         {header.isPlaceholder

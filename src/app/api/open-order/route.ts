@@ -76,6 +76,7 @@ export async function POST(request: Request) {
       appDate,
       appBy,
       status,
+      forwardForApproval,
     } = body;
 
     if (!workOrder) {
@@ -104,8 +105,16 @@ export async function POST(request: Request) {
               [App_Date] NVARCHAR(50) NULL,
               [App_By] NVARCHAR(100) NULL,
               [Status] NVARCHAR(50) NULL,
+              [Forward_For_Approval] NVARCHAR(50) NULL,
               [UpdatedAt] DATETIME DEFAULT GETDATE()
           )
+      END
+      ELSE
+      BEGIN
+          IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Order_StyleBulletin_Header]') AND name = 'Forward_For_Approval')
+          BEGIN
+              ALTER TABLE [dbo].[Order_StyleBulletin_Header] ADD [Forward_For_Approval] NVARCHAR(50) NULL
+          END
       END
     `);
 
@@ -127,6 +136,7 @@ export async function POST(request: Request) {
       .input("appDate", sql.NVarChar, appDate || "")
       .input("appBy", sql.NVarChar, appBy || "")
       .input("status", sql.NVarChar, status || "Approved")
+      .input("forwardForApproval", sql.NVarChar, forwardForApproval || "No")
       .query(`
         MERGE INTO dbo.Order_StyleBulletin_Header AS target
         USING (SELECT @wo AS Work_Order) AS source
@@ -147,10 +157,11 @@ export async function POST(request: Request) {
                 App_Date = @appDate,
                 App_By = @appBy,
                 Status = @status,
+                Forward_For_Approval = @forwardForApproval,
                 UpdatedAt = GETDATE()
         WHEN NOT MATCHED THEN
-            INSERT (Work_Order, Description, Style_Description, Style_Category, Smd_No, Final_Smd_No, Target, Target_Unit_Min, Start_Time, Poc_Sam, Poc_Piece_Rate, Head_Reqd, App_Date, App_By, Status)
-            VALUES (source.Work_Order, @desc, @styleDesc, @styleCat, @smdNo, @finalSmdNo, @target, @targetUnitMin, @startTime, @pocSam, @pocPieceRate, @headReqd, @appDate, @appBy, @status);
+            INSERT (Work_Order, Description, Style_Description, Style_Category, Smd_No, Final_Smd_No, Target, Target_Unit_Min, Start_Time, Poc_Sam, Poc_Piece_Rate, Head_Reqd, App_Date, App_By, Status, Forward_For_Approval)
+            VALUES (source.Work_Order, @desc, @styleDesc, @styleCat, @smdNo, @finalSmdNo, @target, @targetUnitMin, @startTime, @pocSam, @pocPieceRate, @headReqd, @appDate, @appBy, @status, @forwardForApproval);
       `);
 
     return Response.json({ success: true, message: "Bulletin details saved successfully." });

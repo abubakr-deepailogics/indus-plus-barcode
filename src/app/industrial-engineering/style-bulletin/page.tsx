@@ -1,16 +1,18 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Search,
-  FileText,
-  Scissors,
   AlertCircle,
   Info,
   Database,
   Paperclip,
   ChevronDown,
+  Plus,
+  FileText,
+  Trash2,
 } from "lucide-react";
+import { useAuth } from "@/features/auth/context/auth-context";
 // import type { PageSetupConfig } from "@/features/barcode-generation/types";
 // import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
 import { ColumnDef } from "@tanstack/react-table";
@@ -23,6 +25,15 @@ import type {
 } from "@/features/qr-code-generation/types";
 import { useGenerateCouponPdf } from "@/features/qr-code-generation/hooks/useGenerateCouponPdf";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
+
+interface StyleBulletinAttachment {
+  Id: number;
+  WorkOrder: string;
+  FileName: string;
+  ContentType: string;
+  CreatedAt: string;
+  CreatedBy: string | null;
+}
 
 interface CutDetailRow {
   RowId: number;
@@ -96,146 +107,12 @@ function TableSkeleton({ columnsCount }: { columnsCount: number }) {
 }
 
 export default function OpenOrderPage() {
-  const cutReportColumns = useMemo<ColumnDef<CutDetailRow>[]>(
-    () => [
-      {
-        accessorKey: "RowId",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Row ID"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <span className="font-semibold text-slate-900">
-            {row.original.RowId}
-          </span>
-        ),
-        size: 60,
-      },
-      {
-        accessorKey: "Inseam",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Inseam"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-center">{row.original.Inseam}</div>
-        ),
-        size: 70,
-      },
-      {
-        accessorKey: "Size",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Size"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-center font-bold">{row.original.Size}</div>
-        ),
-        size: 70,
-      },
-      {
-        accessorKey: "Color",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Color"
-            onFilterClick={() => {}}
-          />
-        ),
-        size: 100,
-      },
-      {
-        accessorKey: "Cut",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Cut"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-center font-semibold text-indigo-600">
-            {row.original.Cut}
-          </div>
-        ),
-        size: 70,
-      },
-      {
-        accessorKey: "Bundle_Id",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Bundle ID"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-center font-mono">{row.original.Bundle_Id}</div>
-        ),
-        size: 100,
-      },
-      {
-        accessorKey: "Bundle_Qty",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Bundle Qty"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-right font-bold">{row.original.Bundle_Qty}</div>
-        ),
-        size: 90,
-      },
-      {
-        accessorKey: "Shade",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Shade"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-center font-bold text-indigo-600">
-            {row.original.Shade}
-          </div>
-        ),
-        size: 70,
-      },
-      {
-        accessorKey: "Shrinkage",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Shrinkage"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-center font-mono">{row.original.Shrinkage}</div>
-        ),
-        size: 80,
-      },
-    ],
-    [],
-  );
 
+  const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
-  const [activeTab, setActiveTab] = useState<"cut_report" | "style_bulletin">(
-    "cut_report",
-  );
+  const [isWoFocused, setIsWoFocused] = useState(false);
+  const activeTab = "style_bulletin";
   const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
   const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
   // Operations to include in coupon generation — defaults to "all" (set
@@ -357,6 +234,7 @@ export default function OpenOrderPage() {
   const [appDate, setAppDate] = useState("");
   const [appBy, setAppBy] = useState("");
   const [status, setStatus] = useState("Approved");
+  const [forwardForApproval, setForwardForApproval] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [saveSuccessMsg, setSaveSuccessMsg] = useState("");
   const [saveErrorMsg, setSaveErrorMsg] = useState("");
@@ -373,6 +251,11 @@ export default function OpenOrderPage() {
     rowId: number;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Persisted style bulletin attachments (dbo.StyleBulletin_Attachment), keyed by work order.
+  const [bulletinAttachments, setBulletinAttachments] = useState<StyleBulletinAttachment[]>([]);
+  const [bulletinAttachmentsLoading, setBulletinAttachmentsLoading] = useState(false);
+  const [bulletinAttachmentError, setBulletinAttachmentError] = useState("");
 
   const styleBulletinColumns = useMemo<ColumnDef<StyleBulletinRow>[]>(
     () => [
@@ -415,24 +298,19 @@ export default function OpenOrderPage() {
         ),
         size: 40,
       },
-      {
-        accessorKey: "RowId",
+        {
+        accessorKey: "Operation_Sequence",
         header: ({ column }) => (
           <DataTableColumnHeader
             column={column}
-            title="Row ID"
+            title="Sequence"
             onFilterClick={() => {}}
           />
         ),
         cell: ({ row }) => (
-          <span className="font-semibold text-slate-900">
-            {row.original.RowId}
-          </span>
-        ),
-        footer: () => (
-          <span className="font-bold text-slate-800 uppercase text-[10px] tracking-wider">
-            Total
-          </span>
+          <div className="text-center font-bold text-slate-700">
+            {row.original.Operation_Sequence}
+          </div>
         ),
         size: 60,
       },
@@ -448,6 +326,11 @@ export default function OpenOrderPage() {
         cell: ({ row }) => (
           <span className="font-mono text-purple-600">
             {row.original.Operation_Code}
+          </span>
+        ),
+        footer: () => (
+          <span className="font-bold text-slate-800 uppercase text-[10px] tracking-wider">
+            Total
           </span>
         ),
         size: 85,
@@ -466,7 +349,7 @@ export default function OpenOrderPage() {
             {row.original.Operation_Name}
           </span>
         ),
-        size: 180,
+        size: 260,
       },
       {
         accessorKey: "Section",
@@ -482,22 +365,7 @@ export default function OpenOrderPage() {
         ),
         size: 100,
       },
-      {
-        accessorKey: "Operation_Sequence",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Sequence"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-center font-bold text-slate-700">
-            {row.original.Operation_Sequence}
-          </div>
-        ),
-        size: 80,
-      },
+    
       {
         accessorKey: "Machine_Type",
         header: ({ column }) => (
@@ -571,102 +439,7 @@ export default function OpenOrderPage() {
         },
         size: 90,
       },
-      {
-        accessorKey: "First_Operation_Section_Wise",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="First Op (Sec)"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-center">
-            <span
-              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                row.original.First_Operation_Section_Wise === 1
-                  ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                  : "bg-slate-50 text-slate-400"
-              }`}
-            >
-              {row.original.First_Operation_Section_Wise === 1 ? "Yes" : "No"}
-            </span>
-          </div>
-        ),
-        size: 90,
-      },
-      {
-        accessorKey: "Last_Operation_Section_Wise",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Last Op (Sec)"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-center">
-            <span
-              className={`px-2 py-0.5 rounded text-[10px] font-bold ${
-                row.original.Last_Operation_Section_Wise === 1
-                  ? "bg-amber-50 text-amber-700 border border-amber-100"
-                  : "bg-slate-50 text-slate-400"
-              }`}
-            >
-              {row.original.Last_Operation_Section_Wise === 1 ? "Yes" : "No"}
-            </span>
-          </div>
-        ),
-        size: 90,
-      },
-      {
-        id: "Attachment",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Attachment"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => {
-          const rowId = row.original.RowId;
-          const attachment = rowAttachments[rowId];
 
-          if (attachment) {
-            return (
-              <button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setPreviewFile({
-                    ...attachment,
-                    rowId,
-                  });
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 border border-indigo-200 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold text-[11px] shadow-sm transition-all cursor-pointer truncate max-w-[150px]"
-                title={`Click to preview: ${attachment.name}`}
-              >
-                <Paperclip className="w-3 h-3 text-indigo-500 shrink-0" />
-                <span className="truncate">{attachment.name}</span>
-              </button>
-            );
-          }
-
-          return (
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                setActiveRowIdForUpload(rowId);
-                fileInputRef.current?.click();
-              }}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-[#e2e8f0] rounded-xl bg-white hover:bg-slate-50 hover:text-slate-800 text-slate-600 hover:border-slate-300 font-semibold text-[11px] shadow-sm transition-all cursor-pointer"
-            >
-              <Paperclip className="w-3 h-3 text-slate-400" />
-              <span>Attachment</span>
-            </button>
-          );
-        },
-        size: 130,
-      },
     ],
     [rowAttachments, selectedOpRowIds, filteredStyleBulletins],
   );
@@ -729,6 +502,7 @@ export default function OpenOrderPage() {
           appDate,
           appBy,
           status,
+          forwardForApproval,
         }),
       });
       
@@ -747,6 +521,64 @@ export default function OpenOrderPage() {
       setIsSaving(false);
     }
   };
+
+  const loadBulletinAttachments = useCallback(async (workOrder: string) => {
+    if (!workOrder) {
+      setBulletinAttachments([]);
+      return;
+    }
+    setBulletinAttachmentsLoading(true);
+    setBulletinAttachmentError("");
+    try {
+      const res = await fetch(`/api/style-bulletin/attachments?workOrder=${encodeURIComponent(workOrder)}`);
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to load attachments.");
+      setBulletinAttachments(data);
+    } catch (err) {
+      setBulletinAttachmentError(err instanceof Error ? err.message : "Failed to load attachments.");
+    } finally {
+      setBulletinAttachmentsLoading(false);
+    }
+  }, []);
+
+  const handleUploadBulletinAttachment = async (file: File) => {
+    const workOrder = cutDetails[0]?.Work_Order || activeSearchQuery;
+    if (!workOrder) {
+      setBulletinAttachmentError("No active Work Order to attach a file to.");
+      return;
+    }
+    setBulletinAttachmentError("");
+    const form = new FormData();
+    form.append("workOrder", workOrder);
+    form.append("file", file);
+    form.append("createdBy", user?.email || "");
+
+    try {
+      const res = await fetch("/api/style-bulletin/attachments", { method: "POST", body: form });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to upload attachment.");
+      await loadBulletinAttachments(workOrder);
+    } catch (err) {
+      setBulletinAttachmentError(err instanceof Error ? err.message : "Failed to upload attachment.");
+    }
+  };
+
+  const handleDeleteBulletinAttachment = async (id: number) => {
+    setBulletinAttachmentError("");
+    try {
+      const res = await fetch(`/api/style-bulletin/attachments?id=${id}`, { method: "DELETE" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to delete attachment.");
+      setBulletinAttachments((prev) => prev.filter((a) => a.Id !== id));
+    } catch (err) {
+      setBulletinAttachmentError(err instanceof Error ? err.message : "Failed to delete attachment.");
+    }
+  };
+
+  useEffect(() => {
+    const workOrder = cutDetails[0]?.Work_Order || activeSearchQuery;
+    void Promise.resolve().then(() => loadBulletinAttachments(workOrder || ""));
+  }, [cutDetails, activeSearchQuery, loadBulletinAttachments]);
 
   // Fetch autocomplete suggestions as user types
   useEffect(() => {
@@ -780,6 +612,7 @@ export default function OpenOrderPage() {
         !containerRef.current.contains(event.target as Node)
       ) {
         setShowSuggestions(false);
+        setIsWoFocused(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -791,9 +624,11 @@ export default function OpenOrderPage() {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === "Escape") {
       setShowSuggestions(false);
+      setIsWoFocused(false);
     } else if (e.key === "Enter") {
       setActiveSearchQuery(searchQuery);
       setShowSuggestions(false);
+      setIsWoFocused(false);
     }
   };
 
@@ -822,6 +657,7 @@ export default function OpenOrderPage() {
     setAppDate("");
     setAppBy("");
     setStatus("Approved");
+    setForwardForApproval("");
     setRowAttachments({});
     setPreviewFile(null);
 
@@ -849,8 +685,8 @@ export default function OpenOrderPage() {
         const data = await response.json();
         setCutDetails(data.cutDetails || []);
         setStyleBulletins(data.styleBulletins || []);
-        // Default to every operation selected for coupon generation.
-        setSelectedOpRowIds(new Set((data.styleBulletins || []).map((row: StyleBulletinRow) => row.RowId)));
+        // Do not pre-select any operations.
+        setSelectedOpRowIds(new Set());
 
         // Compute and set totalSam & totalRate
         const computedSam = (data.styleBulletins || []).reduce((acc: number, curr: any) => acc + (curr.Smv_Sam ?? 0), 0);
@@ -873,6 +709,7 @@ export default function OpenOrderPage() {
           setAppDate(data.metadata.App_Date || "");
           setAppBy(data.metadata.App_By || "");
           setStatus(data.metadata.Status || "Approved");
+          setForwardForApproval(data.metadata.Forward_For_Approval || "No");
         }
       } catch (err: unknown) {
         console.error("Fetch error:", err);
@@ -887,20 +724,7 @@ export default function OpenOrderPage() {
     fetchData();
   }, [activeSearchQuery]);
 
-  // Handle Tab changes with simulated smooth skeleton transition
-  const handleTabChange = (tab: "cut_report" | "style_bulletin") => {
-    if (tab === activeTab) return;
-    setSelectedDeptFilter("all");
-    setIsTransitioning(true);
-    // Brief transition period to show skeleton loader
-    setTimeout(() => {
-      setActiveTab(tab);
-      setIsTransitioning(false);
-    }, 450);
-  };
-
-  const activeRecordsCount =
-    activeTab === "cut_report" ? cutDetails.length : styleBulletins.length;
+  const activeRecordsCount = styleBulletins.length;
 
   // Dynamically derive style bulletin metadata from fetched style bulletins and cut details
   const styleBulletinMetadata = useMemo(() => {
@@ -989,171 +813,85 @@ export default function OpenOrderPage() {
   return (
     <>
       <div className="no-print flex flex-col gap-6 max-w-[1400px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
-        {/* Top Breadcrumb */}
-        <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-3">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#64748b]">
-            <span>Industrial Engineering</span>
-            <span className="text-[#94a3b8] font-light">/</span>
-            <span className="text-[#4f46e5] font-bold">Open Order</span>
-          </div>
-        </div>
-
-        {/* Title Header */}
-        <div className="flex flex-col gap-1">
-          <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
-            Open Order Inquiry
-          </h1>
-          <p className="text-[11px] text-[#64748b]">
-            Inquire and search work orders from the database to view cut details
-            and style bulletins.
-          </p>
-        </div>
-
-        {/* Search Bar Panel */}
-        <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm relative z-20">
-          <div
-            ref={containerRef}
-            className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3"
-          >
-            <div className="relative flex-grow">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-[#94a3b8]" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => {
-                  setSearchQuery(e.target.value);
-                  setShowSuggestions(true);
-                }}
-                onFocus={() => setShowSuggestions(true)}
-                onKeyDown={handleKeyDown}
-                placeholder="Search Work Order (e.g. W/O-003355)"
-                className="w-full pl-11 pr-4 py-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-              />
-              {/* Autocomplete Suggestions Dropdown Overlay */}
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute left-0 right-0 mt-1 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-[#f1f5f9] animate-fade-in">
-                  {suggestions.map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      onClick={() => {
-                        setSearchQuery(suggestion);
-                        setActiveSearchQuery(suggestion);
-                        setShowSuggestions(false);
-                      }}
-                      className="w-full text-left px-4 py-2.5 hover:bg-indigo-50/50 text-slate-700 hover:text-[#4f46e5] font-semibold transition-all text-xs cursor-pointer block"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <button
-              onClick={() => {
-                setActiveSearchQuery(searchQuery);
-                setShowSuggestions(false);
-              }}
-              className="flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-sm cursor-pointer animate-fade-in"
-            >
-              <Search className="w-3.5 h-3.5" />
-              <span>Search</span>
-            </button>
-          </div>
-        </div>
 
         {/* Dynamic Metadata Cards Row */}
-        {hasSearched && cutDetails.length > 0 && (
-          activeTab === "cut_report" ? (
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
-              {/* Card 1: Order Info */}
-              <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
-                <div>
-                  <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Sale Order No</span>
-                  <input
-                    type="text"
-                    readOnly
-                    value={cutDetails[0]?.Sale_Order_No || ""}
-                    className="mt-1.5 w-full px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Work Order</span>
-                  <input
-                    type="text"
-                    readOnly
-                    value={cutDetails[0]?.Work_Order || ""}
-                    className="mt-1.5 w-full px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
-                  />
-                </div>
-              </div>
 
-              {/* Card 2: Customer & Qty */}
-              <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
-                <div>
-                  <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Customer</span>
-                  <input
-                    type="text"
-                    readOnly
-                    value={cutDetails[0]?.Customer_Name || ""}
-                    className="mt-1.5 w-full px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Order Qty</span>
-                  <input
-                    type="text"
-                    readOnly
-                    value={cutDetails[0]?.Order_Qty_After_Add || ""}
-                    className="mt-1.5 w-full px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
-                  />
-                </div>
-              </div>
-
-              {/* Card 3: Specifications */}
-              <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
-                <div>
-                  <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Fabric Code</span>
-                  <input
-                    type="text"
-                    readOnly
-                    value={cutDetails[0]?.Fabric_Code_Main_Body || ""}
-                    className="mt-1.5 w-full px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
-                  />
-                </div>
-                <div>
-                  <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Wash</span>
-                  <input
-                    type="text"
-                    readOnly
-                    value={cutDetails[0]?.Wash || ""}
-                    className="mt-1.5 w-full px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-          ) : (
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 animate-fade-in">
               {/* Left Form Panel: Basic Style Details */}
               <div className="lg:col-span-3 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
+                {/* Row 1: W/O # & Customer */}
+                <div className="flex flex-col gap-1.5 relative" ref={containerRef}>
                   <label className="font-bold text-[#475569] text-[10px] uppercase">W/O # &amp; Customer</label>
-                  <input type="text" readOnly value={`${styleBulletinMetadata.amNo} (${styleBulletinMetadata.customer})`} className="px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 font-semibold focus:outline-none" />
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94a3b8]" />
+                    <input
+                      type="text"
+                      value={
+                        isWoFocused
+                          ? searchQuery
+                          : styleBulletinMetadata.amNo
+                          ? `${styleBulletinMetadata.amNo}${
+                              styleBulletinMetadata.customer
+                                ? ` (${styleBulletinMetadata.customer})`
+                                : ""
+                            }`
+                          : searchQuery
+                      }
+                      onChange={(e) => {
+                        setSearchQuery(e.target.value);
+                        setShowSuggestions(true);
+                      }}
+                      onFocus={() => {
+                        setIsWoFocused(true);
+                        setShowSuggestions(true);
+                      }}
+                      onKeyDown={handleKeyDown}
+                      placeholder="Search W/O..."
+                      className="w-full pl-9 pr-3 py-1 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                    />
+                  </div>
+                  {/* Autocomplete Suggestions Dropdown Overlay */}
+                  {showSuggestions && suggestions.length > 0 && (
+                    <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-[#f1f5f9] animate-fade-in">
+                      {suggestions.map((suggestion) => (
+                        <button
+                          key={suggestion}
+                          type="button"
+                          onClick={() => {
+                            setSearchQuery(suggestion);
+                            setActiveSearchQuery(suggestion);
+                            setShowSuggestions(false);
+                            setIsWoFocused(false);
+                          }}
+                          className="w-full text-left px-4 py-2 hover:bg-indigo-50/50 text-slate-700 hover:text-[#4f46e5] font-semibold transition-all text-xs cursor-pointer block"
+                        >
+                          {suggestion}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-[#475569] text-[10px] uppercase">Sale Order No</label>
-                  <input type="text" readOnly value={styleBulletinMetadata.styleCode} className="px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 font-semibold focus:outline-none" />
+                {/* Row 2: Sale Order No & Order Qty */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="font-bold text-[#475569] text-[10px] uppercase">Sale Order No</label>
+                    <input type="text" readOnly value={styleBulletinMetadata.styleCode} className="px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 font-semibold focus:outline-none w-full" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="font-bold text-[#475569] text-[10px] uppercase">Order Qty</label>
+                    <input type="text" readOnly value={styleBulletinMetadata.planQty} className="px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold w-full" />
+                  </div>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-[#475569] text-[10px] uppercase">Order Qty</label>
-                  <input type="text" readOnly value={styleBulletinMetadata.planQty} className="px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold" />
-                </div>
-             <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-[#475569] text-[10px] uppercase">Fabric Code</label>
-                  <input type="text" readOnly value={cutDetails[0]?.Fabric_Code_Main_Body || ""} className="px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-[#475569] text-[10px] uppercase">Wash</label>
-                  <input type="text" readOnly value={cutDetails[0]?.Wash || ""} className="px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold" />
+                {/* Row 3: Fabric Code & Wash */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="font-bold text-[#475569] text-[10px] uppercase">Fabric Code</label>
+                    <input type="text" readOnly value={cutDetails[0]?.Fabric_Code_Main_Body || ""} className="px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold w-full" />
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="font-bold text-[#475569] text-[10px] uppercase">Wash</label>
+                    <input type="text" readOnly value={cutDetails[0]?.Wash || ""} className="px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold w-full" />
+                  </div>
                 </div>
               </div>
 
@@ -1165,7 +903,7 @@ export default function OpenOrderPage() {
                     type="text"
                     value={description}
                     onChange={(e) => setDescription(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -1174,7 +912,7 @@ export default function OpenOrderPage() {
                     type="text"
                     value={styleDescription}
                     onChange={(e) => setStyleDescription(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -1183,31 +921,15 @@ export default function OpenOrderPage() {
                     type="text"
                     value={styleCategory}
                     onChange={(e) => setStyleCategory(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
                   />
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-[#475569] text-[10px] uppercase">SMD #</label>
-                  <input
-                    type="text"
-                    value={smdNo}
-                    onChange={(e) => setSmdNo(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-[#475569] text-[10px] uppercase">Final SMD #</label>
-                  <input
-                    type="text"
-                    value={finalSmdNo}
-                    onChange={(e) => setFinalSmdNo(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-                  />
-                </div>
+              
               </div>
 
               {/* Middle Form Panel 2: Targets & Piece Rates */}
               <div className="lg:col-span-3 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
+                {/* Row 1: Target & Target Unit/Min */}
                 <div className="grid grid-cols-2 gap-3">
                   <div className="flex flex-col gap-1.5">
                     <label className="font-bold text-[#475569] text-[10px] uppercase">Target</label>
@@ -1215,7 +937,7 @@ export default function OpenOrderPage() {
                       type="text"
                       value={target}
                       onChange={(e) => setTarget(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -1224,49 +946,43 @@ export default function OpenOrderPage() {
                       type="text"
                       value={targetUnitMin}
                       onChange={(e) => setTargetUnitMin(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
                     />
                   </div>
                 </div>
+                {/* Row 2: Start Time */}
                 <div className="flex flex-col gap-1.5">
                   <label className="font-bold text-[#475569] text-[10px] uppercase">Start Time</label>
                   <input
                     type="text"
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
                   />
                 </div>
+                {/* Row 3: Forward for Approval */}
                 <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-[#475569] text-[10px] uppercase">POC SAM</label>
+                  <label className="font-bold text-[#475569] text-[10px] uppercase">Forward for Approval</label>
                   <input
                     type="text"
-                    value={pocSam}
-                    onChange={(e) => setPocSam(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-[#475569] text-[10px] uppercase">POC Piece Rate</label>
-                  <input
-                    type="text"
-                    value={pocPieceRate}
-                    onChange={(e) => setPocPieceRate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                    value={forwardForApproval}
+                    onChange={(e) => setForwardForApproval(e.target.value)}
+                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
                   />
                 </div>
               </div>
 
               {/* Right Form Panel: SAM Summary & Approvals */}
-              <div className="lg:col-span-4 flex flex-col gap-4">
-                <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm grid grid-cols-3 gap-3">
+              <div className="lg:col-span-4 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
+                {/* Row 1: Head/Reqd | Total SAM | Total Rate */}
+                <div className="grid grid-cols-3 gap-3">
                   <div className="flex flex-col gap-1">
                     <span className="font-bold text-[#64748b] text-[10px] uppercase">Head/Reqd</span>
                     <input
                       type="text"
                       value={headReqd}
                       onChange={(e) => setHeadReqd(e.target.value)}
-                      className="w-full px-3 py-2 border border-[#e2e8f0] rounded-xl bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all font-semibold text-center"
+                      className="w-full px-3 py-1 border border-[#e2e8f0] rounded-xl bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all font-semibold text-center"
                     />
                   </div>
                   <div className="flex flex-col gap-1">
@@ -1276,7 +992,7 @@ export default function OpenOrderPage() {
                       readOnly
                       value={totalSam}
                       onChange={(e) => setTotalSam(e.target.value)}
-                      className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 font-semibold focus:outline-none"
+                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 font-semibold focus:outline-none"
                     />
                   </div>
                   <div className="flex flex-col gap-1">
@@ -1286,33 +1002,36 @@ export default function OpenOrderPage() {
                       readOnly
                       value={totalRate}
                       onChange={(e) => setTotalRate(e.target.value)}
-                      className="w-full px-3 py-2 border border-[#e2e8f0] rounded-xl bg-slate-50 font-semibold focus:outline-none"
+                      className="w-full px-3 py-1 border border-[#e2e8f0] rounded-xl bg-slate-50 font-semibold focus:outline-none"
                     />
                   </div>
                 </div>
 
-                <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="font-bold text-[#475569] text-[10px] uppercase">App Date</label>
-                      <input
-                        type="text"
-                        value={appDate}
-                        onChange={(e) => setAppDate(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all font-semibold text-center"
-                      />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                      <label className="font-bold text-[#475569] text-[10px] uppercase">App By</label>
-                      <input
-                        type="text"
-                        value={appBy}
-                        onChange={(e) => setAppBy(e.target.value)}
-                        className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all font-semibold text-center"
-                      />
-                    </div>
+                {/* Row 2: App Date & App By */}
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="font-bold text-[#475569] text-[10px] uppercase">App Date</label>
+                    <input
+                      type="text"
+                      value={appDate}
+                      onChange={(e) => setAppDate(e.target.value)}
+                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all font-semibold text-center"
+                    />
                   </div>
-                  <div className="flex items-center justify-between border-t border-[#f1f5f9] pt-3 mt-1">
+                  <div className="flex flex-col gap-1.5">
+                    <label className="font-bold text-[#475569] text-[10px] uppercase">App By</label>
+                    <input
+                      type="text"
+                      value={appBy}
+                      onChange={(e) => setAppBy(e.target.value)}
+                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all font-semibold text-center"
+                    />
+                  </div>
+                </div>
+
+                {/* Row 3: Status on Left, Save Button on Right */}
+                <div className="flex items-center justify-between gap-4 pt-1.5 mt-1 border-t border-[#f1f5f9]">
+                  <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-[#94a3b8] uppercase">Status</span>
                     <select
                       value={status}
@@ -1330,21 +1049,11 @@ export default function OpenOrderPage() {
                       <option value="Draft">Draft</option>
                     </select>
                   </div>
-                  {saveSuccessMsg && (
-                    <div className="mt-2 text-[11px] text-center font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg py-1.5 px-3 animate-fade-in">
-                      {saveSuccessMsg}
-                    </div>
-                  )}
-                  {saveErrorMsg && (
-                    <div className="mt-2 text-[11px] text-center font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg py-1.5 px-3 animate-fade-in">
-                      {saveErrorMsg}
-                    </div>
-                  )}
                   <button
                     type="button"
                     onClick={handleSaveMetadata}
                     disabled={isSaving}
-                    className="w-full mt-3 bg-[#4f46e5] hover:bg-[#4338ca] disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-2.5 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                    className="flex-grow max-w-[200px] bg-[#4f46e5] hover:bg-[#4338ca] disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-1.5 px-4 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
                   >
                     {isSaving ? (
                       <>
@@ -1356,36 +1065,21 @@ export default function OpenOrderPage() {
                     )}
                   </button>
                 </div>
+
+                {saveSuccessMsg && (
+                  <div className="mt-2 text-[11px] text-center font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg py-1.5 px-3 animate-fade-in">
+                    {saveSuccessMsg}
+                  </div>
+                )}
+                {saveErrorMsg && (
+                  <div className="mt-2 text-[11px] text-center font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg py-1.5 px-3 animate-fade-in">
+                    {saveErrorMsg}
+                  </div>
+                )}
               </div>
             </div>
-          )
-        )}
 
-        {/* Tab Switcher */}
-        <div className="flex items-center gap-3 mt-1">
-          <button
-            onClick={() => handleTabChange("cut_report")}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
-              activeTab === "cut_report"
-                ? "bg-[#e0e7ff] text-[#4f46e5] border-[#c7d2fe]"
-                : "bg-white text-[#475569] border-[#e2e8f0] hover:bg-[#f8fafc]"
-            }`}
-          >
-            <Scissors className="w-3.5 h-3.5" />
-            <span>Cut Report</span>
-          </button>
-          <button
-            onClick={() => handleTabChange("style_bulletin")}
-            className={`flex items-center gap-2 px-5 py-2.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
-              activeTab === "style_bulletin"
-                ? "bg-[#f5f3ff] text-[#7c3aed] border-[#ddd6fe]"
-                : "bg-white text-[#475569] border-[#e2e8f0] hover:bg-[#f8fafc]"
-            }`}
-          >
-            <FileText className="w-3.5 h-3.5" />
-            <span>Style Bulletin</span>
-          </button>
-        </div>
+
 
         {/* Main Results / Table Block */}
         {errorMsg ? (
@@ -1397,7 +1091,7 @@ export default function OpenOrderPage() {
             </div>
           </div>
         ) : isSkeletonActive ? (
-          <TableSkeleton columnsCount={activeTab === "cut_report" ? 15 : 13} />
+          <TableSkeleton columnsCount={12} />
         ) : !hasSearched ? (
           <div className="bg-white border border-[#e2e8f0] rounded-2xl p-12 text-center flex flex-col items-center justify-center gap-4 shadow-sm animate-fade-in">
             <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner">
@@ -1408,7 +1102,7 @@ export default function OpenOrderPage() {
                 Ready to Search
               </h3>
               <p className="text-xs text-[#64748b] mt-1">
-                Please enter a Work Order number above (for example,{" "}
+                Please enter a Work Order number in the W/O field above (for example,{" "}
                 <code className="bg-[#f1f5f9] px-1.5 py-0.5 rounded font-mono text-[#4f46e5]">
                   W/O-003355
                 </code>
@@ -1428,46 +1122,19 @@ export default function OpenOrderPage() {
               <p className="text-xs text-[#64748b] mt-1">
                 We couldn&apos;t find any records for work order{" "}
                 <strong className="text-slate-800">`{activeSearchQuery}`</strong>{" "}
-                in the{" "}
-                {activeTab === "cut_report" ? "Cut Detail" : "Style Bulletin"}{" "}
-                table.
+                in the Style Bulletin table.
               </p>
-              {activeTab === "cut_report" && styleBulletins.length > 0 && (
-                <p
-                  className="text-[11px] text-[#4f46e5] mt-3 font-semibold cursor-pointer"
-                  onClick={() => handleTabChange("style_bulletin")}
-                >
-                  Tip: Data was found in the Style Bulletin tab. Click
-                  &quot;Style Bulletin&quot; above to view.
-                </p>
-              )}
-              {activeTab === "style_bulletin" && cutDetails.length > 0 && (
-                <p
-                  className="text-[11px] text-[#7c3aed] mt-3 font-semibold cursor-pointer"
-                  onClick={() => handleTabChange("cut_report")}
-                >
-                  Tip: Data was found in the Cut Report tab. Click &quot;Cut
-                  Report&quot; above to view.
-                </p>
-              )}
             </div>
           </div>
         ) : (
           <div className="flex flex-col gap-4 animate-fade-in">
-            {/* Header Panel */}
-            {activeTab === "style_bulletin" && (
-              <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-sm bg-[#fafafa]">
-                <div>
-                  <h3 className="text-sm font-bold text-[#0f172a]">
-                    Order Style Bulletin
-                  </h3>
-                  <p className="text-[10px] text-[#64748b] mt-0.5">
-                    Showing {activeRecordsCount} records matching Work Order{" "}
-                    <strong className="text-slate-700">`{activeSearchQuery}`</strong>
-                  </p>
-                </div>
-                {activeStyle && (
-                  <div className="flex items-center gap-3">
+
+            {/* DataTable Component */}
+            <DataTable
+                columns={styleBulletinColumns}
+                data={filteredStyleBulletins}
+                toolbarRightChildren={
+                  activeStyle && (
                     <button
                       onClick={handleGenerateCoupons}
                       disabled={generatingCoupons}
@@ -1476,18 +1143,8 @@ export default function OpenOrderPage() {
                       <QrCode className="w-3.5 h-3.5" />
                       <span>{generatingCoupons ? "Generating…" : "Generate Coupons"}</span>
                     </button>
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* DataTable Component */}
-            {activeTab === "cut_report" ? (
-              <DataTable columns={cutReportColumns} data={cutDetails} />
-            ) : (
-              <DataTable
-                columns={styleBulletinColumns}
-                data={filteredStyleBulletins}
+                  )
+                }
                 toolbarChildren={
                   <div className="flex items-center gap-2 flex-wrap">
                     <button
@@ -1664,6 +1321,70 @@ export default function OpenOrderPage() {
                   </div>
                 }
               />
+          </div>
+        )}
+
+        {/* Style Bulletin Attachments */}
+        {hasSearched && (
+          <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3 animate-fade-in">
+            <div className="flex items-center justify-between">
+              <h2 className="font-bold text-[#0f172a] text-sm">Attachments</h2>
+              <label className="flex items-center gap-1.5 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer">
+                <Plus className="w-3.5 h-3.5" />
+                Add Attachment
+                <input
+                  type="file"
+                  accept="application/pdf,image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) handleUploadBulletinAttachment(file);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+
+            {bulletinAttachmentError && (
+              <p className="text-red-600 text-[11px] font-semibold">{bulletinAttachmentError}</p>
+            )}
+
+            {bulletinAttachmentsLoading ? (
+              <p className="text-[#64748b] text-[11px]">Loading attachments...</p>
+            ) : bulletinAttachments.length === 0 ? (
+              <p className="text-[#94a3b8] text-[11px]">No attachments yet.</p>
+            ) : (
+              <div className="flex flex-col gap-2">
+                {bulletinAttachments.map((a) => (
+                  <div key={a.Id} className="flex items-center justify-between gap-2 border border-[#e2e8f0] rounded-xl px-3 py-2.5">
+                    <a
+                      href={`/api/style-bulletin/attachments/${a.Id}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 min-w-0 hover:text-[#4f46e5]"
+                    >
+                      {a.ContentType === "application/pdf" ? (
+                        <FileText className="w-4 h-4 text-[#4f46e5] shrink-0" />
+                      ) : (
+                        <Paperclip className="w-4 h-4 text-[#4f46e5] shrink-0" />
+                      )}
+                      <span className="flex flex-col min-w-0">
+                        <span className="truncate font-semibold text-[#334155] text-[11px]">{a.FileName}</span>
+                        <span className="text-[10px] text-[#94a3b8]">
+                          {new Date(a.CreatedAt).toLocaleString()}{a.CreatedBy ? ` · ${a.CreatedBy}` : ""}
+                        </span>
+                      </span>
+                    </a>
+                    <button
+                      onClick={() => handleDeleteBulletinAttachment(a.Id)}
+                      className="text-[#94a3b8] hover:text-red-500 p-1 shrink-0"
+                      title="Delete attachment"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}

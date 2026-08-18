@@ -8,11 +8,15 @@ export interface OperationsDetailRow {
   rate: string;
   skills: string;
   lastOpSection: boolean;
+  inc?: string;
+  sdl?: string;
 }
 
 export interface BundleDetailRow {
   id: number;
+  transId?: string;
   cutNo: string;
+  char?: string;
   line: string;
   bundleNo: string;
   inseam: string;
@@ -20,6 +24,7 @@ export interface BundleDetailRow {
   pcs: number;
   sel: boolean;
   code: string;
+  rPcs?: string;
 }
 
 export interface QrCodeStyleData {

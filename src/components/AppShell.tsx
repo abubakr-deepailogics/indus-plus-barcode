@@ -74,9 +74,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   // Top navigation tabs
   const navTabs = [
     // { label: "Industrial Engineering", href: "#", hasDropdown: true },
-    { label: "Open Order", href: "/industrial-engineering/open-order", hasDropdown: false },
-    { label: "Coupon Scanning", href: "/industrial-engineering/coupon-scanning", hasDropdown: false },
+    { label: "Cut Report", href: "/industrial-engineering/cut-report", hasDropdown: false },
+    { label: "Style Bulletin", href: "/industrial-engineering/style-bulletin", hasDropdown: false },
+    { label: "QR Code Generation", href: "/industrial-engineering/qr-code-generation-finishing", hasDropdown: false },
     { label: "Coupon Tracing", href: "/industrial-engineering/coupon-tracing", hasDropdown: false },
+    { label: "Coupon Scanning", href: "/industrial-engineering/coupon-scanning", hasDropdown: false },
     { label: "Rework Coupon", href: "/industrial-engineering/rework-coupon", hasDropdown: false }
   ];
 
@@ -373,7 +375,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                       <Layers className="w-4 h-4" />
                     </span>
                     <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
-                      QR Code Generation Finishing
+                      QR Code Generation
                     </span>
                   </div>
                   <ChevronRight className="w-3.5 h-3.5 text-[#94a3b8] mr-1" />
