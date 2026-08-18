@@ -93,7 +93,13 @@ export async function generateCouponPdf({
   cards: precomputedCards,
   layout = "same-line",
 }: GeneratePdfParams): Promise<{ buffer: Buffer; cardCount: number }> {
-  const cards = precomputedCards ?? buildCouponCards(bundles, operations);
+  // buildCouponCards already sorts by seqNo for the common path; precomputedCards
+  // (filtered coupon-tracing reprints) is built card-by-card outside that
+  // function, so re-sort here too — the single choke point every render
+  // goes through, regardless of how the card list was assembled.
+  const cards = (precomputedCards ?? buildCouponCards(bundles, operations))
+    .slice()
+    .sort((a, b) => (Number(a.op.seqNo) || 0) - (Number(b.op.seqNo) || 0));
   const totalCards = cards.length;
   const slots = assignSlots(cards, layout, GRID_COLS, GRID_ROWS);
 
