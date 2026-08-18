@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { QrCodeStyleData } from "../types";
+import type { CouponLayout, QrCodeStyleData } from "../types";
 
 // Shared by every page that offers coupon generation (qr-code-generation,
 // open-order, rework-coupon). Two separate actions:
@@ -63,7 +63,7 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
     }
   };
 
-  const handleDownloadPdf = async () => {
+  const handleDownloadPdf = async (layout?: CouponLayout) => {
     setGeneratingPdf(true);
     try {
       const res = await fetch("/api/qr-code-generation/pdf", {
@@ -75,6 +75,7 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
           styleCode: activeStyle.styleCode,
           bundles: activeStyle.bundles,
           operations: activeStyle.operations,
+          layout,
         }),
       });
       const data = await res.json();

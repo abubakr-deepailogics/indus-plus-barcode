@@ -1,7 +1,7 @@
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import path from "node:path";
-import type { BundleDetailRow, OperationsDetailRow } from "../types";
+import type { BundleDetailRow, CouponLayout, OperationsDetailRow } from "../types";
 import { buildCouponCards, type CouponCard } from "./coupon-pairing.service";
 import { buildCouponCode } from "./coupon-code";
 
@@ -27,6 +27,53 @@ interface GeneratePdfParams {
   // bundle against every operation". bundles/operations are still used
   // for their row data even when this is set.
   cards?: CouponCard[];
+  // Controls how operation boundaries fall on the grid. Cards arrive
+  // operation-major (see buildCouponCards), so "next operation" is just
+  // "op differs from the previous card's op". Defaults to today's plain
+  // dense packing. See CouponLayout for the three modes.
+  layout?: CouponLayout;
+}
+
+// Assigns each card a (page, col, row) slot per the chosen layout. Cards
+// are already operation-major/cut-major ordered by buildCouponCards —
+// this only decides where page/row breaks fall relative to op changes.
+function assignSlots(
+  cards: CouponCard[],
+  layout: CouponLayout,
+  cols: number,
+  rows: number,
+): { page: number; col: number; row: number }[] {
+  const perPage = cols * rows;
+  const slots: { page: number; col: number; row: number }[] = [];
+  let page = 0;
+  let cell = 0; // 0-indexed position within the current page
+  let prevOp: string | undefined;
+
+  for (const { op } of cards) {
+    const opChanged = prevOp !== undefined && op.opNo !== prevOp;
+    prevOp = op.opNo;
+
+    if (opChanged) {
+      if (layout === "different-pages") {
+        page += 1;
+        cell = 0;
+      } else if (layout === "same-page" && cell % cols !== 0) {
+        // Jump to the start of the next row (rolling onto the next page
+        // if that row doesn't exist on this one).
+        cell += cols - (cell % cols);
+      }
+    }
+
+    if (cell >= perPage) {
+      page += 1;
+      cell = 0;
+    }
+
+    slots.push({ page, col: cell % cols, row: Math.floor(cell / cols) });
+    cell += 1;
+  }
+
+  return slots;
 }
 
 // US Letter, points (72pt/in). Grid: 4 cols x 10 rows = 40 cards/page —
@@ -36,7 +83,6 @@ const PAGE_SIZE: [number, number] = [612, 792];
 const PAGE_MARGIN = 18;
 const GRID_COLS = 4;
 const GRID_ROWS = 10;
-const CARDS_PER_PAGE = GRID_COLS * GRID_ROWS;
 
 export async function generateCouponPdf({
   workOrder,
@@ -45,9 +91,11 @@ export async function generateCouponPdf({
   bundles,
   operations,
   cards: precomputedCards,
+  layout = "same-line",
 }: GeneratePdfParams): Promise<{ buffer: Buffer; cardCount: number }> {
   const cards = precomputedCards ?? buildCouponCards(bundles, operations);
   const totalCards = cards.length;
+  const slots = assignSlots(cards, layout, GRID_COLS, GRID_ROWS);
 
   const usableWidth = PAGE_SIZE[0] - PAGE_MARGIN * 2;
   const usableHeight = PAGE_SIZE[1] - PAGE_MARGIN * 2;
@@ -75,12 +123,10 @@ export async function generateCouponPdf({
   // the DB insert.
   for (let i = 0; i < cards.length; i++) {
     const { bundle, op } = cards[i];
-    const posOnPage = i % CARDS_PER_PAGE;
+    const { page, col, row } = slots[i];
 
-    if (i > 0 && posOnPage === 0) doc.addPage();
+    if (i > 0 && page !== slots[i - 1].page) doc.addPage();
 
-    const col = posOnPage % GRID_COLS;
-    const row = Math.floor(posOnPage / GRID_COLS);
     const cellX = PAGE_MARGIN + col * cellWidth;
     const cellY = PAGE_MARGIN + row * cellHeight;
     const padX = cellX + 6;

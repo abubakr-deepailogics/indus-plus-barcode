@@ -215,6 +215,7 @@ export default function OpenOrderPage() {
     orientation: "Portrait",
     margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 },
     gridFormat: "3x10",
+    layout: "same-line",
   });
 
   // Dynamic Input States for Style Bulletin Metadata
@@ -806,7 +807,7 @@ export default function OpenOrderPage() {
       activeStyle ?? { workOrder: "", saleOrderNo: "", styleCode: "", bundles: [], operations: [] },
     );
   const handleGeneratePdf = async () => {
-    await downloadPdf();
+    await downloadPdf(pageSetup.layout);
     setShowPageSetupModal(false);
   };
 

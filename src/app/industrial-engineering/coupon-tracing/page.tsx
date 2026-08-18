@@ -5,6 +5,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { Search, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
+import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
+import type { PageSetupConfig } from "@/features/qr-code-generation/types";
 
 interface CouponRow {
   Id: number;
@@ -41,6 +43,15 @@ export default function CouponTracingPage() {
   const [sectionOptions, setSectionOptions] = useState<string[]>([]);
   const [scannedFilter, setScannedFilter] = useState<(typeof SCANNED_OPTIONS)[number]["value"]>("");
   const [unscanningCode, setUnscanningCode] = useState("");
+  const [showPageSetupModal, setShowPageSetupModal] = useState(false);
+  const [pageSetup, setPageSetup] = useState<PageSetupConfig>({
+    size: "Legal",
+    source: "Automatically Select",
+    orientation: "Portrait",
+    margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 },
+    gridFormat: "3x10",
+    layout: "same-line",
+  });
 
   const fetchWorkOrderSuggestions = async (query: string) => {
     try {
@@ -181,8 +192,9 @@ export default function CouponTracingPage() {
     if (opFilter.trim()) params.set("op_no", opFilter.trim());
     if (sectionFilter) params.set("section", sectionFilter);
     if (scannedFilter) params.set("is_scanned", scannedFilter);
+    params.set("layout", pageSetup.layout);
     return `/api/qr-code-generation/coupons/pdf?${params}`;
-  }, [tracedWorkOrder, bundleFilter, opFilter, sectionFilter, scannedFilter]);
+  }, [tracedWorkOrder, bundleFilter, opFilter, sectionFilter, scannedFilter, pageSetup.layout]);
 
   // Any filter change re-queries from page 1 — old page N may no longer
   // exist once the row count shrinks.
@@ -263,17 +275,18 @@ export default function CouponTracingPage() {
               <span className="text-[11px] font-semibold text-[#64748b]">
                 {couponTotal.toLocaleString()} total
               </span>
-              <a
-                href={couponPdfUrl}
+              <button
+                onClick={() => setShowPageSetupModal(true)}
+                disabled={couponTotal === 0}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
                   couponTotal === 0
-                    ? "bg-slate-100 text-slate-400 pointer-events-none"
+                    ? "bg-slate-100 text-slate-400 cursor-not-allowed"
                     : "bg-[#4f46e5] text-white hover:bg-[#4338ca] shadow-sm"
                 }`}
               >
                 <Download className="w-3.5 h-3.5" />
                 Download PDF
-              </a>
+              </button>
             </div>
           </div>
 
@@ -416,6 +429,19 @@ export default function CouponTracingPage() {
             </div>
           )}
         </div>
+      )}
+
+      {showPageSetupModal && (
+        <PageSetupModal
+          pageSetup={pageSetup}
+          onPageSetupChange={setPageSetup}
+          onClose={() => setShowPageSetupModal(false)}
+          onGeneratePdf={() => {
+            window.location.href = couponPdfUrl;
+            setShowPageSetupModal(false);
+          }}
+          generatingPdf={false}
+        />
       )}
     </div>
   );
