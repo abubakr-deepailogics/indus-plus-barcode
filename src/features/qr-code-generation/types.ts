@@ -59,7 +59,15 @@ export interface PageSetupConfig {
     bottom: number;
   };
   gridFormat: string;
+  layout: CouponLayout;
 }
+
+// How operation boundaries interact with the coupon grid's rows/pages:
+// - "same-page": ops share pages, but each op always starts a fresh row.
+// - "same-line": ops pack densely, an op can start mid-row right after
+//   the previous op's last card (today's plain behavior).
+// - "different-pages": every op starts on a fresh page.
+export type CouponLayout = "same-page" | "same-line" | "different-pages";
 
 export interface QrCodeCardProps {
   pageIndex: number;

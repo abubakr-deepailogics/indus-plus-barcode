@@ -2,7 +2,9 @@ import { getPool, sql } from "@/lib/db";
 import { generateCouponPdf } from "@/features/qr-code-generation/services/pdf-generation.service";
 import type { CouponCard } from "@/features/qr-code-generation/services/coupon-pairing.service";
 import { listAllCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
-import type { BundleDetailRow, OperationsDetailRow } from "@/features/qr-code-generation/types";
+import type { BundleDetailRow, CouponLayout, OperationsDetailRow } from "@/features/qr-code-generation/types";
+
+const VALID_LAYOUTS: CouponLayout[] = ["same-page", "same-line", "different-pages"];
 
 // Renders a PDF for coupons already registered against a work order,
 // scoped by the same filters as the coupon-tracing table (bundle/op/
@@ -21,6 +23,10 @@ export async function GET(request: Request) {
   const section = searchParams.get("section") || undefined;
   const scannedParam = searchParams.get("is_scanned");
   const isScanned = scannedParam === null ? undefined : scannedParam === "true";
+  const layoutParam = searchParams.get("layout");
+  const layout = VALID_LAYOUTS.includes(layoutParam as CouponLayout)
+    ? (layoutParam as CouponLayout)
+    : undefined;
 
   if (!workOrder) {
     return Response.json({ error: "work_order is required." }, { status: 400 });
@@ -124,6 +130,7 @@ export async function GET(request: Request) {
       bundles,
       operations,
       cards,
+      layout,
     });
 
     return new Response(new Uint8Array(buffer), {

@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Calendar, FileText, TrendingUp, Cpu } from "lucide-react";
+import { Calendar, FileText, Cpu } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
 
 interface ScanningRow {
@@ -30,7 +30,6 @@ export default function CouponScanningPage() {
   const [department, setDepartment] = useState("");
 
   const [designation, setDesignation] = useState("");
-  const [remarks, setRemarks] = useState("");
   const [alreadyDailyScan, setAlreadyDailyScan] = useState("");
   const [alreadyMonthlyScan, setAlreadyMonthlyScan] = useState("");
   const [lineId, setLineId] = useState("");
@@ -44,7 +43,8 @@ export default function CouponScanningPage() {
 
   // Coupon verification headers state
   const [workOrder, setWorkOrder] = useState("");
-  const [bundleNo, setBundleNo] = useState("");
+  const [fromCut, setFromCut] = useState("");
+  const [toCut, setToCut] = useState("");
   const [opNo, setOpNo] = useState("");
   const [scanCouponCode, setScanCouponCode] = useState("");
   const [scanError, setScanError] = useState("");
@@ -152,7 +152,7 @@ export default function CouponScanningPage() {
     try {
       const url = scanCouponCode.trim()
         ? `/api/coupons/scan?barcode=${encodeURIComponent(scanCouponCode.trim())}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}`
-        : `/api/coupons/scan?wo=${encodeURIComponent(workOrder)}&bundle=${encodeURIComponent(bundleNo)}&op=${encodeURIComponent(opNo)}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}`;
+        : `/api/coupons/scan?wo=${encodeURIComponent(workOrder)}&op=${encodeURIComponent(opNo)}&fromCut=${encodeURIComponent(fromCut)}&toCut=${encodeURIComponent(toCut)}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}`;
       const response = await fetch(url);
       const data = await response.json();
 
@@ -164,6 +164,14 @@ export default function CouponScanningPage() {
       }
 
       const items = Array.isArray(data) ? data : [data];
+
+      // Increment daily and monthly scan totals in UI dynamically
+      setAlreadyDailyScan((prev) =>
+        String((parseInt(prev) || 0) + items.length),
+      );
+      setAlreadyMonthlyScan((prev) =>
+        String((parseInt(prev) || 0) + items.length),
+      );
 
       setRows((prev) => {
         let updatedRows = [...prev];
@@ -281,6 +289,14 @@ export default function CouponScanningPage() {
       if (!response.ok) {
         setScanError(data.error || "Failed to unscan coupon.");
       } else {
+        // Decrement daily and monthly scan totals in UI dynamically
+        setAlreadyDailyScan((prev) =>
+          String(Math.max(0, (parseInt(prev) || 0) - 1)),
+        );
+        setAlreadyMonthlyScan((prev) =>
+          String(Math.max(0, (parseInt(prev) || 0) - 1)),
+        );
+
         // Reset that row to default empty state
         setRows((prev) =>
           prev.map((r) =>
@@ -314,12 +330,29 @@ export default function CouponScanningPage() {
     }
   };
 
-  const handleSelectWorker = (worker: any) => {
-    setEmployeeCode(String(worker.EmployeeID));
+  const handleSelectWorker = async (worker: any) => {
+    const empCode = String(worker.EmployeeID);
+    setEmployeeCode(empCode);
     setEmployeeName(worker.FirstName ? worker.FirstName.trim() : "");
     setDepartment(worker.ParentDepartment || worker.DepartmentName || "");
     setDesignation(worker.DesignationName || "");
     setSection(worker.DepartmentName || "");
+
+    // Fetch dynamic scan stats
+    try {
+      const response = await fetch(
+        `/api/workers?code=${encodeURIComponent(empCode)}`,
+      );
+      if (response.ok) {
+        const fullWorker = await response.json();
+        if (fullWorker) {
+          setAlreadyDailyScan(String(fullWorker.AlreadyDailyScan ?? 0));
+          setAlreadyMonthlyScan(String(fullWorker.AlreadyMonthlyScan ?? 0));
+        }
+      }
+    } catch (err) {
+      console.error("Failed to fetch worker scan stats:", err);
+    }
   };
 
   // Direct fetch by code (on Enter or Tab press)
@@ -433,33 +466,29 @@ export default function CouponScanningPage() {
     (sum, row) => sum + (parseFloat(row.value) || 0),
     0,
   );
+  const totalSam = rows.reduce(
+    (sum, row) => sum + (parseFloat(row.smv) || 0) * (parseInt(row.qty) || 0),
+    0,
+  );
 
   return (
     <div className="flex flex-col gap-6 w-full text-xs text-[#334155] animate-fade-in pb-16 px-4 max-w-[1400px] mx-auto">
-      {/* Page Header */}
-      <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-3 no-print">
-        <div className="flex items-center gap-2 text-xs font-semibold text-[#64748b]">
-          <span>Industrial Engineering</span>
-          <span className="text-[#94a3b8] font-light">/</span>
-          <span className="text-[#4f46e5] font-bold">Coupon Scanning</span>
-        </div>
-      </div>
-
       {/* Main Grid: Info Cards + Total Status Box */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-stretch">
         {/* Left Columns: Information panels */}
-        <div className="xl:col-span-10 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm">
-          <div className="flex items-center gap-2 mb-4 border-b border-slate-100 pb-2">
+        <div className="xl:col-span-12 bg-white border border-[#e2e8f0] rounded-2xl p-3.5 shadow-sm">
+          <div className="flex items-center gap-2 mb-2.5 border-b border-slate-100 pb-1.5">
             <Cpu className="w-4 h-4 text-[#4f46e5]" />
             <h2 className="font-bold text-[#4f46e5] text-xs uppercase tracking-wider">
               Information
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {/* Column 1 */}
-            <div className="flex flex-col gap-3">
-              <div className="flex flex-col gap-1 relative">
+          <div className="flex flex-col gap-3">
+            {/* Row 1 */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Employee Code */}
+              <div className="flex flex-col gap-0.5 relative">
                 <span className="font-bold text-[#475569] text-[10px] uppercase">
                   Employee Code <span className="text-red-500">*</span>
                 </span>
@@ -483,67 +512,14 @@ export default function CouponScanningPage() {
                   )}
                   getSuggestionValue={(worker) => String(worker.EmployeeID)}
                   placeholder="Enter Employee Code"
-                  inputClassName="w-full px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  inputClassName="w-full px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
                   onKeyDown={handleEmployeeCodeKeyDown}
                   minChars={1}
                 />
               </div>
-              <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">
-                  Department
-                </span>
-                <input
-                  type="text"
-                  placeholder="Department Name"
-                  value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">
-                  Designation
-                </span>
-                <input
-                  type="text"
-                  placeholder="Enter designation"
-                  value={designation}
-                  onChange={(e) => setDesignation(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
-                />
-              </label>
 
-              <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">
-                  Dated
-                </span>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={dated}
-                    onChange={(e) => setDated(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white w-full"
-                  />
-                  <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer" />
-                </div>
-              </label>
-
-              <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">
-                  Shift
-                </span>
-                <input
-                  type="text"
-                  value={shift}
-                  onChange={(e) => setShift(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
-                />
-              </label>
-            </div>
-
-            {/* Column 2 */}
-            <div className="flex flex-col gap-3">
-              <label className="flex flex-col gap-1">
+              {/* Employee Name */}
+              <label className="flex flex-col gap-0.5">
                 <span className="font-bold text-[#475569] text-[10px] uppercase">
                   Employee Name
                 </span>
@@ -552,10 +528,72 @@ export default function CouponScanningPage() {
                   placeholder="Enter employee name"
                   value={employeeName}
                   onChange={(e) => setEmployeeName(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
                 />
               </label>
-              <label className="flex flex-col gap-1">
+
+              {/* Department */}
+              <label className="flex flex-col gap-0.5">
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Department
+                </span>
+                <input
+                  type="text"
+                  placeholder="Department Name"
+                  value={department}
+                  onChange={(e) => setDepartment(e.target.value)}
+                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                />
+              </label>
+
+              {/* Designation */}
+              <label className="flex flex-col gap-0.5">
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Designation
+                </span>
+                <input
+                  type="text"
+                  placeholder="Enter designation"
+                  value={designation}
+                  onChange={(e) => setDesignation(e.target.value)}
+                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                />
+              </label>
+            </div>
+
+            {/* Row 2 */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Dated */}
+              <label className="flex flex-col gap-0.5">
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Dated
+                </span>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={dated}
+                    onChange={(e) => setDated(e.target.value)}
+                    className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white w-full"
+                  />
+                  <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer" />
+                </div>
+              </label>
+
+              {/* Shift */}
+              <label className="flex flex-col gap-0.5">
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Shift
+                </span>
+                <input
+                  type="text"
+                  value={shift}
+                  onChange={(e) => setShift(e.target.value)}
+                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                />
+              </label>
+
+              {/* Section */}
+              <label className="flex flex-col gap-0.5">
                 <span className="font-bold text-[#475569] text-[10px] uppercase">
                   Section
                 </span>
@@ -564,10 +602,43 @@ export default function CouponScanningPage() {
                   placeholder="Section Name"
                   value={section}
                   onChange={(e) => setSection(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
                 />
               </label>
-              <label className="flex flex-col gap-1">
+
+              {/* Line I.D */}
+              <label className="flex flex-col gap-0.5">
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Line I.D
+                </span>
+                <input
+                  type="text"
+                  placeholder="Enter line id"
+                  value={lineId}
+                  onChange={(e) => setLineId(e.target.value)}
+                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                />
+              </label>
+            </div>
+
+            {/* Row 3 */}
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              {/* Scan By */}
+              <label className="flex flex-col gap-0.5">
+                <span className="font-bold text-[#475569] text-[10px] uppercase">
+                  Scan By <span className="text-red-500">*</span>
+                </span>
+                <input
+                  type="text"
+                  placeholder="Enter scanner"
+                  value={scanBy}
+                  onChange={(e) => setScanBy(e.target.value)}
+                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                />
+              </label>
+
+              {/* Already Daily Scan */}
+              <label className="flex flex-col gap-0.5">
                 <span className="font-bold text-[#475569] text-[10px] uppercase">
                   Already Daily Scan
                 </span>
@@ -577,10 +648,12 @@ export default function CouponScanningPage() {
                   placeholder="Enter daily scan"
                   value={alreadyDailyScan}
                   onChange={(e) => setAlreadyDailyScan(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-500 bg-slate-50 focus:outline-none cursor-default"
+                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-500 bg-slate-50 focus:outline-none cursor-default"
                 />
               </label>
-              <label className="flex flex-col gap-1">
+
+              {/* Already Monthly Scan */}
+              <label className="flex flex-col gap-0.5">
                 <span className="font-bold text-[#475569] text-[10px] uppercase">
                   Already Monthly Scan
                 </span>
@@ -590,51 +663,13 @@ export default function CouponScanningPage() {
                   placeholder="Enter monthly scan"
                   value={alreadyMonthlyScan}
                   onChange={(e) => setAlreadyMonthlyScan(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-500 bg-slate-50 focus:outline-none cursor-default"
+                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-500 bg-slate-50 focus:outline-none cursor-default"
                 />
               </label>
-              <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">
-                  Line I.D
-                </span>
-                <input
-                  type="text"
-                  placeholder="Enter line id"
-                  value={lineId}
-                  onChange={(e) => setLineId(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
-                />
-              </label>
-              <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">
-                  Scan By <span className="text-red-500">*</span>
-                </span>
-                <input
-                  type="text"
-                  placeholder="Enter scanner"
-                  value={scanBy}
-                  onChange={(e) => setScanBy(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
-                />
-              </label>
-            </div>
 
-            {/* Column 3 */}
-            <div className="flex flex-col gap-3">
-              <label className="flex flex-col gap-1">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">
-                  Remarks
-                </span>
-                <input
-                  type="text"
-                  placeholder="Enter remarks"
-                  value={remarks}
-                  onChange={(e) => setRemarks(e.target.value)}
-                  className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
-                />
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <label className="flex flex-col gap-1">
+              {/* Ani No. & Sort Order (combined in one column slot) */}
+              <div className="grid grid-cols-2 gap-2">
+                <label className="flex flex-col gap-0.5">
                   <span className="font-bold text-[#475569] text-[10px] uppercase">
                     Ani No.
                   </span>
@@ -643,10 +678,10 @@ export default function CouponScanningPage() {
                     placeholder="Enter ANI no."
                     value={aniNo}
                     onChange={(e) => setAniNo(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                    className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white w-full"
                   />
                 </label>
-                <label className="flex flex-col gap-1">
+                <label className="flex flex-col gap-0.5">
                   <span className="font-bold text-[#475569] text-[10px] uppercase">
                     Sort Order
                   </span>
@@ -655,12 +690,16 @@ export default function CouponScanningPage() {
                     placeholder="Enter sort order"
                     value={sortOrder}
                     onChange={(e) => setSortOrder(e.target.value)}
-                    className="px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                    className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white w-full"
                   />
                 </label>
               </div>
+            </div>
 
-              <div className="flex flex-col gap-1">
+            {/* Row 4 */}
+            <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+              {/* Coupon Code */}
+              <div className="flex flex-col gap-0.5 md:col-span-3">
                 <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
                   Coupon Code
                 </span>
@@ -669,13 +708,12 @@ export default function CouponScanningPage() {
                   placeholder="Scan or enter Coupon Code"
                   value={scanCouponCode}
                   onChange={(e) => setScanCouponCode(e.target.value)}
-                  className="w-full px-3 py-1.5 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  className="w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
                 />
               </div>
 
-              <div className="h-[1px] bg-slate-100 my-2" />
-
-              <div className="flex flex-col gap-1 relative">
+              {/* Work Order */}
+              <div className="flex flex-col gap-0.5 relative md:col-span-2">
                 <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
                   Work Order{" "}
                   {!scanCouponCode.trim() && (
@@ -687,92 +725,97 @@ export default function CouponScanningPage() {
                   onChange={setWorkOrder}
                   onSelect={(wo) => {
                     setWorkOrder(wo);
-                    setBundleNo("");
+                    setFromCut("");
+                    setToCut("");
                     setOpNo("");
                   }}
                   fetchSuggestions={fetchWorkOrderSuggestions}
                   renderSuggestion={(item) => <span>{item}</span>}
                   getSuggestionValue={(item) => item}
-                  placeholder="Enter Work Order (e.g. W/O-003355)"
-                  inputClassName="w-full px-3 py-1.5 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  placeholder="Enter W/O"
+                  inputClassName="w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div className="flex flex-col gap-1 relative">
+              {/* From Cut & To Cut (grouped side-by-side in one md-col-span-3 slot) */}
+              <div className="grid grid-cols-2 gap-2 md:col-span-3">
+                <div className="flex flex-col gap-0.5">
                   <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
-                    Bundle
+                    From Cut
                   </span>
-                  <Autocomplete<string>
-                    value={bundleNo}
-                    onChange={setBundleNo}
-                    onSelect={setBundleNo}
-                    fetchSuggestions={fetchBundleSuggestions}
-                    renderSuggestion={(item) => <span>{item}</span>}
-                    getSuggestionValue={(item) => item}
-                    placeholder="e.g. 33550019"
-                    inputClassName="w-full px-3 py-1.5 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  <input
+                    type="text"
+                    placeholder="e.g. 1"
+                    value={fromCut}
+                    onChange={(e) => setFromCut(e.target.value)}
+                    className="w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
                   />
                 </div>
 
-                <div className="flex flex-col gap-1 relative">
+                <div className="flex flex-col gap-0.5">
                   <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
-                    Operation No
+                    To Cut
                   </span>
-                  <Autocomplete<any>
-                    value={opNo}
-                    onChange={setOpNo}
-                    onSelect={(op) => setOpNo(op.Operation_Code)}
-                    fetchSuggestions={fetchOpSuggestions}
-                    renderSuggestion={(op) => (
-                      <div className="flex flex-col">
-                        <span className="text-[#4f46e5] font-bold text-[10px]">
-                          {op.Operation_Code}
-                        </span>
-                        <span className="text-[10px] text-slate-500 truncate">
-                          {op.Operation_Name}
-                        </span>
-                      </div>
-                    )}
-                    getSuggestionValue={(op) => op.Operation_Code}
-                    placeholder="e.g. SW0000090"
-                    inputClassName="w-full px-3 py-1.5 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  <input
+                    type="text"
+                    placeholder="e.g. 10"
+                    value={toCut}
+                    onChange={(e) => setToCut(e.target.value)}
+                    className="w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
                   />
                 </div>
               </div>
 
-              <button
-                type="button"
-                onClick={handleScanCoupon}
-                className="w-full mt-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white font-bold py-2.5 rounded-xl text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:shadow-md active:scale-[0.98]"
-              >
-                <span>🔍 Scan Coupon</span>
-              </button>
+              {/* Operation No */}
+              <div className="flex flex-col gap-0.5 relative md:col-span-2">
+                <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
+                  Operation No
+                </span>
+                <Autocomplete<any>
+                  value={opNo}
+                  onChange={setOpNo}
+                  onSelect={(op) => setOpNo(op.Operation_Code)}
+                  fetchSuggestions={fetchOpSuggestions}
+                  renderSuggestion={(op) => (
+                    <div className="flex flex-col">
+                      <span className="text-[#4f46e5] font-bold text-[10px]">
+                        {op.Operation_Code}
+                      </span>
+                      <span className="text-[10px] text-slate-500 truncate">
+                        {op.Operation_Name}
+                      </span>
+                    </div>
+                  )}
+                  getSuggestionValue={(op) => op.Operation_Code}
+                  placeholder="e.g. SW0000090"
+                  inputClassName="w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                />
+              </div>
+
+              {/* Scan Coupon button */}
+              <div className="flex flex-col justify-end md:col-span-2">
+                <button
+                  type="button"
+                  onClick={handleScanCoupon}
+                  className="w-full bg-[#4f46e5] hover:bg-[#4338ca] text-white font-bold py-1 rounded-lg text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:shadow-md active:scale-[0.98] border border-transparent h-[26px]"
+                >
+                  <span>🔍 Scan Coupon</span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-
-        {/* Right Status Card: Total / Remaining */}
-        <div className="xl:col-span-2 bg-[#fdfdfd] border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col items-center justify-center min-h-[180px] bg-gradient-to-br from-indigo-50/30 to-purple-50/20">
-          <TrendingUp className="w-5 h-5 text-indigo-500 mb-2" />
-          <span className="font-bold text-indigo-900 text-[11px] uppercase tracking-wider text-center">
-            Total / Remaining
-          </span>
-          <span className="text-[44px] font-black text-indigo-600 mt-2 select-none">
-            {totalRecords}
-          </span>
         </div>
       </div>
 
       {/* Rebuilt SCANNING DETAILS block */}
-      <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm mt-1 flex flex-col gap-4">
+      <div className="bg-white border border-[#e2e8f0] rounded-2xl p-3.5 shadow-sm mt-1 flex flex-col gap-2.5">
         {scanError && (
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-xl px-4 py-2.5 font-bold text-xs animate-fade-in flex items-center gap-2 no-print">
             <span>⚠️</span>
             <span>{scanError}</span>
           </div>
         )}
-        <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-1.5">
           <div className="flex items-center gap-2">
             <FileText className="w-4 h-4 text-[#4f46e5]" />
             <h2 className="font-bold text-[#4f46e5] text-xs uppercase tracking-wider">
@@ -786,76 +829,67 @@ export default function CouponScanningPage() {
 
         {/* Scrollable table container */}
         <div className="overflow-x-auto overflow-y-auto w-full border border-slate-100 rounded-xl max-h-[500px] shadow-inner bg-slate-50/40">
-          <table className="w-full border-collapse text-[11px] min-w-[1500px]">
+          <table className="w-full border-collapse text-[11px] min-w-[1200px]">
             {/* Header groups */}
             <thead>
               {/* Category label row */}
               <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
                 <th
-                  colSpan={15}
-                  className="py-1.5 px-3 border-r border-slate-200"
+                  colSpan={12}
+                  className="py-1 px-3 border-r border-slate-200"
                 ></th>
                 <th
                   colSpan={3}
-                  className="py-1 px-3 text-center text-[9px] uppercase tracking-wider bg-slate-200/60 text-slate-800 border-b border-slate-300"
+                  className="py-0.5 px-3 text-center text-[9px] uppercase tracking-wider bg-slate-200/60 text-slate-800 border-b border-slate-300"
                 >
                   Rate
                 </th>
               </tr>
               {/* Main table headers */}
               <tr className="bg-slate-50 text-slate-700 font-bold border-b border-slate-200 text-left">
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[40px]">
+                <th className="py-1 px-2 border-r border-slate-200 text-center w-[40px]">
                   #
                 </th>
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[80px] text-[#ef4444] uppercase tracking-wider text-[9px] font-bold">
+                <th className="py-1 px-2 border-r border-slate-200 text-center w-[80px] text-[#ef4444] uppercase tracking-wider text-[9px] font-bold">
                   Unscan
                 </th>
-                <th className="py-2 px-3 border-r border-slate-200 w-[140px]">
+                <th className="py-1 px-3 border-r border-slate-200 w-[140px]">
                   Coupon Code
                 </th>
-                <th className="py-2 px-2 border-r border-slate-200 w-[100px]">
+                <th className="py-1 px-2 border-r border-slate-200 w-[100px]">
                   W/0 #
                 </th>
-                <th className="py-2 px-2 border-r border-slate-200 w-[100px]">
+                <th className="py-1 px-2 border-r border-slate-200 w-[100px]">
                   Cut #
                 </th>
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[60px]">
-                  Shade
-                </th>
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[80px]">
+                <th className="py-1 px-2 border-r border-slate-200 text-center w-[80px]">
                   Bundle #
                 </th>
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[70px]">
+                <th className="py-1 px-2 border-r border-slate-200 text-center w-[70px]">
                   Qty
                 </th>
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[80px]">
+                <th className="py-1 px-2 border-r border-slate-200 text-center w-[80px]">
                   Inseam
                 </th>
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[70px]">
+                <th className="py-1 px-2 border-r border-slate-200 text-center w-[70px]">
                   Size #
                 </th>
-                <th className="py-2 px-2 border-r border-slate-200 w-[90px]">
-                  Section #
-                </th>
-                <th className="py-2 px-3 border-r border-slate-200 w-[130px]">
+                <th className="py-1 px-3 border-r border-slate-200 w-[130px]">
                   Section Name
                 </th>
-                <th className="py-2 px-2 border-r border-slate-200 w-[90px]">
-                  Opr #
-                </th>
-                <th className="py-2 px-3 border-r border-slate-200 w-[180px]">
+                <th className="py-1 px-3 border-r border-slate-200 w-[180px]">
                   Operation Name
                 </th>
-                <th className="py-2 px-2 border-r border-slate-200 text-center w-[60px]">
+                <th className="py-1 px-2 border-r border-slate-200 text-center w-[60px]">
                   Skill #
                 </th>
-                <th className="py-2 px-2 border-r border-slate-200 text-right w-[80px] bg-slate-100/30">
+                <th className="py-1 px-2 border-r border-slate-200 text-right w-[80px] bg-slate-100/30">
                   SMV
                 </th>
-                <th className="py-2 px-2 border-r border-slate-200 text-right w-[90px] bg-slate-100/30">
+                <th className="py-1 px-2 border-r border-slate-200 text-right w-[90px] bg-slate-100/30">
                   Rate
                 </th>
-                <th className="py-2 px-3 text-right w-[100px] bg-indigo-50/20 text-[#4f46e5]">
+                <th className="py-1 px-3 text-right w-[100px] bg-indigo-50/20 text-[#4f46e5]">
                   Value
                 </th>
               </tr>
@@ -885,9 +919,6 @@ export default function CouponScanningPage() {
                         <div className="h-3 w-12 bg-slate-200 rounded" />
                       </td>
                       <td className="py-3 px-2 border-r border-slate-200 text-center">
-                        <div className="h-3 w-8 bg-slate-200 rounded mx-auto" />
-                      </td>
-                      <td className="py-3 px-2 border-r border-slate-200 text-center">
                         <div className="h-3 w-16 bg-slate-200 rounded mx-auto" />
                       </td>
                       <td className="py-3 px-2 border-r border-slate-200 text-center">
@@ -899,14 +930,8 @@ export default function CouponScanningPage() {
                       <td className="py-3 px-2 border-r border-slate-200 text-center">
                         <div className="h-3 w-10 bg-slate-200 rounded mx-auto" />
                       </td>
-                      <td className="py-3 px-2 border-r border-slate-200">
-                        <div className="h-3 w-16 bg-slate-200 rounded" />
-                      </td>
                       <td className="py-3 px-3 border-r border-slate-200">
                         <div className="h-3 w-28 bg-slate-200 rounded" />
-                      </td>
-                      <td className="py-3 px-2 border-r border-slate-200">
-                        <div className="h-3 w-16 bg-slate-200 rounded" />
                       </td>
                       <td className="py-3 px-3 border-r border-slate-200">
                         <div className="h-3 w-36 bg-slate-200 rounded" />
@@ -961,10 +986,6 @@ export default function CouponScanningPage() {
                       <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
                         {row.cutNo || "-"}
                       </td>
-                      {/* [A,B,C] */}
-                      <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
-                        {row.category || "-"}
-                      </td>
                       {/* Bundle # */}
                       <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
                         {row.bundleNo || "-"}
@@ -981,17 +1002,9 @@ export default function CouponScanningPage() {
                       <td className="py-1 px-2 border-r border-slate-200 text-center font-semibold text-slate-700">
                         {row.sizeCode || "-"}
                       </td>
-                      {/* Section # */}
-                      <td className="py-1 px-2 border-r border-slate-200 font-semibold text-slate-700">
-                        {row.sectionCode || "-"}
-                      </td>
                       {/* Section Name */}
                       <td className="py-1 px-3 border-r border-slate-200 font-semibold text-slate-700">
                         {row.sectionName || "-"}
-                      </td>
-                      {/* Opr # */}
-                      <td className="py-1 px-2 border-r border-slate-200 font-semibold text-slate-700">
-                        {row.oprCode || "-"}
                       </td>
                       {/* Operation Name */}
                       <td className="py-1 px-3 border-r border-slate-200 font-semibold text-slate-700">
@@ -1020,13 +1033,13 @@ export default function CouponScanningPage() {
         </div>
 
         {/* Footer Summary Container */}
-        <div className="flex flex-col sm:flex-row items-center justify-between gap-5 bg-slate-50 border border-slate-200/60 rounded-xl px-6 py-4 mt-2">
+        <div className="flex flex-wrap items-center justify-start sm:justify-end gap-x-6 gap-y-2 bg-slate-50 border border-slate-200/60 rounded-xl px-4 py-2 mt-2">
           {/* Total Qty */}
           <div className="flex items-center gap-2">
             <span className="font-bold text-[#64748b] text-[10px] uppercase tracking-wider">
               Total Qty
             </span>
-            <div className="px-4 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-black text-xs text-center min-w-[80px] shadow-sm">
+            <div className="px-3 py-1 rounded-lg border border-slate-200 bg-white text-slate-800 font-black text-xs text-center min-w-[60px] shadow-sm">
               {totalQty}
             </div>
           </div>
@@ -1036,17 +1049,25 @@ export default function CouponScanningPage() {
             <span className="font-bold text-[#64748b] text-[10px] uppercase tracking-wider">
               Total Records
             </span>
-            <div className="px-4 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 font-black text-xs text-center min-w-[80px] shadow-sm">
+            <div className="px-3 py-1 rounded-lg border border-slate-200 bg-white text-slate-800 font-black text-xs text-center min-w-[60px] shadow-sm">
               {totalRecords}
             </div>
           </div>
-
+          {/* Total SAM */}
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-[#64748b] text-[10px] uppercase tracking-wider">
+              Total SAM
+            </span>
+            <div className="px-3 py-1 rounded-lg border border-slate-200 bg-white text-slate-800 font-black text-xs text-center min-w-[60px] shadow-sm">
+              {totalSam.toFixed(2)}
+            </div>
+          </div>
           {/* Total Value */}
           <div className="flex items-center gap-2 font-semibold">
             <span className="font-bold text-[#64748b] text-[10px] uppercase tracking-wider">
               Total Value
             </span>
-            <div className="px-4 py-1.5 rounded-lg border border-indigo-100 bg-indigo-50/50 text-indigo-700 font-black text-sm text-right min-w-[120px] shadow-sm">
+            <div className="px-3 py-1 rounded-lg border border-indigo-100 bg-indigo-50/50 text-indigo-700 font-black text-sm text-right min-w-[100px] shadow-sm">
               {totalValue.toFixed(2)}
             </div>
           </div>
@@ -1072,10 +1093,18 @@ export default function CouponScanningPage() {
                     <strong className="text-slate-800">Work Order:</strong>{" "}
                     {workOrder}
                   </div>
-                  <div>
-                    <strong className="text-slate-800">Bundle No:</strong>{" "}
-                    {bundleNo || "All Bundles"}
-                  </div>
+                  {fromCut && (
+                    <div>
+                      <strong className="text-slate-800">From Cut No:</strong>{" "}
+                      {fromCut}
+                    </div>
+                  )}
+                  {toCut && (
+                    <div>
+                      <strong className="text-slate-800">To Cut No:</strong>{" "}
+                      {toCut}
+                    </div>
+                  )}
                   <div>
                     <strong className="text-slate-800">Operation No:</strong>{" "}
                     {opNo || "All Operations"}

@@ -31,7 +31,14 @@ export function buildCouponCards(
     .slice()
     .sort((a, b) => a.cutNo.localeCompare(b.cutNo, undefined, { numeric: true }));
 
-  return operations.flatMap((op) =>
+  // Sorted by seqNo here (not just relied on from the caller) so every
+  // caller gets Operation_Sequence order for free, including ones that
+  // pass operations in whatever order they happened to fetch/select them.
+  const sortedOperations = operations
+    .slice()
+    .sort((a, b) => (Number(a.seqNo) || 0) - (Number(b.seqNo) || 0));
+
+  return sortedOperations.flatMap((op) =>
     sortedBundles.map((bundle) => ({ bundle, op })),
   );
 }
@@ -69,7 +76,8 @@ export function demo() {
     bundle("cut1", "B1"),
     bundle("cut1", "B2"),
   ];
-  const operations = [op(1), op(2)];
+  // Operations arrive out of sequence order to prove the seqNo sort works.
+  const operations = [op(2), op(1)];
 
   const cards = buildCouponCards(bundles, operations);
   const actual = cards.map((c) => `${c.bundle.bundleNo}:${c.op.operationName}`);

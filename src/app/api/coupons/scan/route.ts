@@ -8,6 +8,8 @@ export async function GET(request: Request) {
   const wo = searchParams.get("wo") || "";
   const bundle = searchParams.get("bundle") || "";
   const op = searchParams.get("op") || "";
+  const fromCut = searchParams.get("fromCut") || "";
+  const toCut = searchParams.get("toCut") || "";
 
   const employeeCode = searchParams.get("employeeCode") || "";
   const scanBy = searchParams.get("scanBy") || "";
@@ -22,7 +24,7 @@ export async function GET(request: Request) {
   try {
     const pool = await getPool();
 
-    // Auto-migration: Ensure EmployeeCode and ScanBy columns exist in dbo.QrCode_Coupon
+    // Auto-migration: Ensure EmployeeCode, ScanBy, and ScannedAt columns exist in dbo.QrCode_Coupon
     await pool.request().query(`
       IF NOT EXISTS (
         SELECT 1 FROM sys.columns
@@ -38,6 +40,14 @@ export async function GET(request: Request) {
       )
       BEGIN
         ALTER TABLE dbo.QrCode_Coupon ADD ScanBy NVARCHAR(100) NULL;
+      END
+
+      IF NOT EXISTS (
+        SELECT 1 FROM sys.columns
+        WHERE object_id = OBJECT_ID('dbo.QrCode_Coupon') AND name = 'ScannedAt'
+      )
+      BEGIN
+        ALTER TABLE dbo.QrCode_Coupon ADD ScannedAt DATETIME NULL;
       END
     `);
 
@@ -124,6 +134,8 @@ export async function GET(request: Request) {
         WHERE c.WorkOrder = @wo
           AND (@bundle = '' OR c.BundleNo = @bundle)
           AND (@op = '' OR c.OpNo = @op)
+          AND (@fromCut = '' OR TRY_CAST(d.Cut AS INT) >= TRY_CAST(@fromCut AS INT))
+          AND (@toCut = '' OR TRY_CAST(d.Cut AS INT) <= TRY_CAST(@toCut AS INT))
       `;
 
     const result = await pool
@@ -132,6 +144,8 @@ export async function GET(request: Request) {
       .input("wo", sql.NVarChar, wo.trim())
       .input("bundle", sql.NVarChar, bundle.trim())
       .input("op", sql.NVarChar, op.trim())
+      .input("fromCut", sql.NVarChar, fromCut.trim())
+      .input("toCut", sql.NVarChar, toCut.trim())
       .query(queryStr);
 
     const records = result.recordset;
@@ -162,7 +176,8 @@ export async function GET(request: Request) {
           UPDATE dbo.QrCode_Coupon 
           SET IsScanned = 1,
               EmployeeCode = NULLIF(@employeeCode, ''),
-              ScanBy = NULLIF(@scanBy, '') 
+              ScanBy = NULLIF(@scanBy, ''),
+              ScannedAt = GETDATE()
           WHERE CouponCode = @barcode
         `);
 
@@ -185,16 +200,29 @@ export async function GET(request: Request) {
       .input("wo", sql.NVarChar, wo.trim())
       .input("bundle", sql.NVarChar, bundle.trim())
       .input("op", sql.NVarChar, op.trim())
+      .input("fromCut", sql.NVarChar, fromCut.trim())
+      .input("toCut", sql.NVarChar, toCut.trim())
       .input("employeeCode", sql.NVarChar, employeeCode.trim())
       .input("scanBy", sql.NVarChar, scanBy.trim())
       .query(`
-        UPDATE dbo.QrCode_Coupon 
+        UPDATE c 
         SET IsScanned = 1,
             EmployeeCode = NULLIF(@employeeCode, ''),
-            ScanBy = NULLIF(@scanBy, '')
-        WHERE WorkOrder = @wo 
-          AND (@bundle = '' OR BundleNo = @bundle) 
-          AND (@op = '' OR OpNo = @op)
+            ScanBy = NULLIF(@scanBy, ''),
+            ScannedAt = GETDATE()
+        FROM dbo.QrCode_Coupon c
+        OUTER APPLY (
+            SELECT TOP 1 *
+            FROM dbo.Order_Po_Cut_Detail cd WITH (NOLOCK)
+            WHERE cd.Work_Order = c.WorkOrder 
+              AND cd.Bundle_Id = TRY_CAST(c.BundleNo AS INT)
+            ORDER BY cd.RowId
+        ) d
+        WHERE c.WorkOrder = @wo 
+          AND (@bundle = '' OR c.BundleNo = @bundle) 
+          AND (@op = '' OR c.OpNo = @op)
+          AND (@fromCut = '' OR TRY_CAST(d.Cut AS INT) >= TRY_CAST(@fromCut AS INT))
+          AND (@toCut = '' OR TRY_CAST(d.Cut AS INT) <= TRY_CAST(@toCut AS INT))
           AND IsScanned = 0
       `);
 

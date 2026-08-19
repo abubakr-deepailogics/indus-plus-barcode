@@ -23,7 +23,8 @@ export async function POST(request: Request) {
         UPDATE dbo.QrCode_Coupon
         SET IsScanned = 0,
             EmployeeCode = NULL,
-            ScanBy = NULL
+            ScanBy = NULL,
+            ScannedAt = NULL
         WHERE CouponCode = @couponCode
       `);
 

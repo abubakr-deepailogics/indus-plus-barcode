@@ -72,6 +72,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     orientation: "Portrait",
     margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 },
     gridFormat: "3x10",
+    layout: "same-line",
   });
 
   const [searchResults, setSearchResults] = useState<QrCodeStyleData[]>([]);
@@ -375,7 +376,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
 
   const { handleDownloadPdf: downloadPdf, generatingPdf } = useGenerateCouponPdf(activeStyle);
   const handleGeneratePdf = async () => {
-    await downloadPdf();
+    await downloadPdf(pageSetup.layout);
     setShowPageSetupModal(false);
   };
 

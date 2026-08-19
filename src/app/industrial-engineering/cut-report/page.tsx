@@ -2,21 +2,16 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
-  Search,
-  FileText,
-  Scissors,
-  AlertCircle,
+  Search, AlertCircle,
   Info,
   Database,
-  Paperclip,
-  ChevronDown,
+  Paperclip
 } from "lucide-react";
 // import type { PageSetupConfig } from "@/features/barcode-generation/types";
 // import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { DataTableColumnHeader } from "@/components/ui/data-table/column-header";
-import { QrCode } from "lucide-react";
 import type {
   PageSetupConfig,
   QrCodeStyleData,
@@ -115,6 +110,50 @@ export default function OpenOrderPage() {
         size: 60,
       },
       {
+        accessorKey: "Cut",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title="Cut"
+            onFilterClick={() => {}}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="text-center font-semibold text-indigo-600">
+            {row.original.Cut}
+          </div>
+        ),
+        size: 70,
+      },
+       {
+        accessorKey: "Bundle_Id",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title="Bundle ID"
+            onFilterClick={() => {}}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="text-center font-mono">{row.original.Bundle_Id}</div>
+        ),
+        size: 100,
+      },
+      {
+        accessorKey: "Bundle_Qty",
+        header: ({ column }) => (
+          <DataTableColumnHeader
+            column={column}
+            title="Bundle Qty"
+            onFilterClick={() => {}}
+          />
+        ),
+        cell: ({ row }) => (
+          <div className="text-right font-bold">{row.original.Bundle_Qty}</div>
+        ),
+        size: 90,
+      },
+      {
         accessorKey: "Inseam",
         header: ({ column }) => (
           <DataTableColumnHeader
@@ -152,50 +191,6 @@ export default function OpenOrderPage() {
           />
         ),
         size: 100,
-      },
-      {
-        accessorKey: "Cut",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Cut"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-center font-semibold text-indigo-600">
-            {row.original.Cut}
-          </div>
-        ),
-        size: 70,
-      },
-      {
-        accessorKey: "Bundle_Id",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Bundle ID"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-center font-mono">{row.original.Bundle_Id}</div>
-        ),
-        size: 100,
-      },
-      {
-        accessorKey: "Bundle_Qty",
-        header: ({ column }) => (
-          <DataTableColumnHeader
-            column={column}
-            title="Bundle Qty"
-            onFilterClick={() => {}}
-          />
-        ),
-        cell: ({ row }) => (
-          <div className="text-right font-bold">{row.original.Bundle_Qty}</div>
-        ),
-        size: 90,
       },
       {
         accessorKey: "Shade",
@@ -337,6 +332,7 @@ export default function OpenOrderPage() {
     orientation: "Portrait",
     margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 },
     gridFormat: "3x10",
+    layout: "same-line",
   });
 
   // Dynamic Input States for Style Bulletin Metadata
@@ -879,7 +875,7 @@ export default function OpenOrderPage() {
       activeStyle ?? { workOrder: "", saleOrderNo: "", styleCode: "", bundles: [], operations: [] },
     );
   const handleGeneratePdf = async () => {
-    await downloadPdf();
+    await downloadPdf(pageSetup.layout);
     setShowPageSetupModal(false);
   };
 

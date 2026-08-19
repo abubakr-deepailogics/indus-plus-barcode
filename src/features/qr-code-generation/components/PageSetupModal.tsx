@@ -110,6 +110,59 @@ export function PageSetupModal({
           </div>
         </div>
 
+        {/* Coupon Layout Section */}
+        <div className="mb-5 border border-gray-100 rounded-2xl p-4 bg-gray-50/30">
+          <div className="flex items-center gap-2 mb-3">
+            <FileText className="w-4 h-4 text-[#4f46e5]" />
+            <span className="font-bold text-[#4f46e5] text-[11px] uppercase tracking-wider">
+              Coupon Layout
+            </span>
+            <div className="flex-1 h-[1px] bg-gray-100" />
+          </div>
+          <div className="flex flex-col gap-2.5 pl-1">
+            {(
+              [
+                {
+                  value: "same-page",
+                  label: "Same Page",
+                  desc: "Operations share pages; each operation starts a new row.",
+                },
+                {
+                  value: "same-line",
+                  label: "Same Line",
+                  desc: "Operations pack tightly and can share a row.",
+                },
+                {
+                  value: "different-pages",
+                  label: "Different Pages",
+                  desc: "Each operation starts on a fresh page.",
+                },
+              ] as const
+            ).map((opt) => (
+              <label
+                key={opt.value}
+                className="flex items-start gap-2 cursor-pointer"
+              >
+                <input
+                  type="radio"
+                  name="layout"
+                  checked={pageSetup.layout === opt.value}
+                  onChange={() =>
+                    onPageSetupChange({ ...pageSetup, layout: opt.value })
+                  }
+                  className="mt-0.5 text-[#4f46e5] focus:ring-indigo-500"
+                />
+                <span>
+                  <span className="font-bold text-gray-700">{opt.label}</span>
+                  <span className="block text-[10px] text-gray-500">
+                    {opt.desc}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </div>
+
         {/* Orientation & Margins Section */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 mb-6">
           <div className="md:col-span-5 border border-gray-100 rounded-2xl p-4 bg-gray-50/30">
