@@ -3,6 +3,7 @@
 import { useState, useMemo, useEffect } from "react";
 import type { QrCodeStyleData, PageSetupConfig } from "../types";
 import { useGenerateCouponPdf } from "./useGenerateCouponPdf";
+import { useAuth } from "@/features/auth/context/auth-context";
 
 interface WorkerItem {
   EmployeeID: number;
@@ -52,7 +53,7 @@ const emptyStyle: QrCodeStyleData = {
   saleOrderNo: "",
   customer: "",
   styleCode: "",
-  generateBy: "116205",
+  generateBy: "",
   generateDatetime: "",
   totalWash: "",
   generatedCoupons: "0",
@@ -69,6 +70,7 @@ const emptyStyle: QrCodeStyleData = {
 };
 
 export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
+  const { user } = useAuth();
   const [activeStyle, setActiveStyle] = useState<QrCodeStyleData>(emptyStyle);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -114,6 +116,17 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       }).replace(",", ""),
     }));
   }, []);
+
+  // Set default generateBy to logged in user name
+  useEffect(() => {
+    if (user) {
+      const name = user.displayName || user.email?.split("@")[0] || "";
+      setActiveStyle((prev) => ({
+        ...prev,
+        generateBy: prev.generateBy || name,
+      }));
+    }
+  }, [user]);
 
   // Fetch dropdown collections & initial suggestions on mount
   useEffect(() => {

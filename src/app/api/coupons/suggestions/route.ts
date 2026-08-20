@@ -7,6 +7,7 @@ export async function GET(request: Request) {
   const wo = searchParams.get("wo") || "";
   const type = searchParams.get("type") || ""; // 'bundle' or 'operation'
   const query = searchParams.get("query") || "";
+  const onlyGenerated = searchParams.get("only_generated") === "true";
 
   if (!wo) {
     return Response.json({ error: "Work Order parameter is required." }, { status: 400 });
@@ -16,6 +17,22 @@ export async function GET(request: Request) {
     const pool = await getPool();
 
     if (type === "bundle") {
+      if (onlyGenerated) {
+        const result = await pool
+          .request()
+          .input("wo", sql.NVarChar, wo.trim())
+          .input("q", sql.NVarChar, `%${query.trim()}%`)
+          .query(`
+            SELECT DISTINCT TOP 10 BundleNo 
+            FROM dbo.QrCode_Coupon 
+            WHERE WorkOrder = @wo 
+              AND BundleNo LIKE @q
+            ORDER BY BundleNo
+          `);
+        const list = result.recordset.map((r) => String(r.BundleNo));
+        return Response.json(list);
+      }
+
       const result = await pool
         .request()
         .input("wo", sql.NVarChar, wo.trim())
@@ -33,6 +50,26 @@ export async function GET(request: Request) {
     }
 
     if (type === "operation") {
+      if (onlyGenerated) {
+        const result = await pool
+          .request()
+          .input("wo", sql.NVarChar, wo.trim())
+          .input("q", sql.NVarChar, `%${query.trim()}%`)
+          .query(`
+            SELECT DISTINCT TOP 10 c.OpNo AS Operation_Code, sb.Operation_Name
+            FROM dbo.QrCode_Coupon c
+            OUTER APPLY (
+              SELECT TOP 1 sb.Operation_Name
+              FROM dbo.Order_StyleBulletin sb
+              WHERE sb.Order_No = c.WorkOrder AND sb.Operation_Code = c.OpNo
+            ) sb
+            WHERE c.WorkOrder = @wo
+              AND (c.OpNo LIKE @q OR sb.Operation_Name LIKE @q)
+            ORDER BY c.OpNo
+          `);
+        return Response.json(result.recordset);
+      }
+
       const result = await pool
         .request()
         .input("wo", sql.NVarChar, wo.trim())
@@ -64,6 +101,26 @@ export async function GET(request: Request) {
         `);
 
       return Response.json(result.recordset.map((r) => r.Section as string));
+    }
+
+    if (type === "cut") {
+      const result = await pool
+        .request()
+        .input("wo", sql.NVarChar, wo.trim())
+        .input("q", sql.NVarChar, `%${query.trim()}%`)
+        .query(`
+          SELECT CutNo FROM (
+            SELECT DISTINCT CutNo
+            FROM dbo.QrCode_Coupon
+            WHERE WorkOrder = @wo 
+              AND CutNo IS NOT NULL 
+              AND CutNo <> ''
+              AND CutNo LIKE @q
+          ) t
+          ORDER BY TRY_CAST(CutNo AS INT), CutNo
+        `);
+
+      return Response.json(result.recordset.map((r) => String(r.CutNo)));
     }
 
     return Response.json([]);

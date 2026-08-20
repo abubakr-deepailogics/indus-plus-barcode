@@ -62,7 +62,7 @@ export default function CouponTracingPage() {
 
   const fetchWorkOrderSuggestions = async (query: string) => {
     try {
-      const response = await fetch(`/api/open-order/suggestions?query=${encodeURIComponent(query)}`);
+      const response = await fetch(`/api/open-order/suggestions?query=${encodeURIComponent(query)}&only_generated=true`);
       if (response.ok) {
         return await response.json();
       }
@@ -76,7 +76,7 @@ export default function CouponTracingPage() {
     if (!tracedWorkOrder) return [];
     try {
       const response = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=bundle&query=${encodeURIComponent(query)}`
+        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=bundle&query=${encodeURIComponent(query)}&only_generated=true`
       );
       if (response.ok) {
         return await response.json();
@@ -91,7 +91,7 @@ export default function CouponTracingPage() {
     if (!tracedWorkOrder) return [];
     try {
       const response = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=operation&query=${encodeURIComponent(query)}`
+        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=operation&query=${encodeURIComponent(query)}&only_generated=true`
       );
       if (response.ok) {
         return await response.json();

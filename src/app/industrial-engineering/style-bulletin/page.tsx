@@ -929,8 +929,8 @@ export default function OpenOrderPage() {
                   <input
                     type="text"
                     value={description}
-                    onChange={(e) => setDescription(e.target.value)}
-                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                    readOnly
+                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -938,8 +938,8 @@ export default function OpenOrderPage() {
                   <input
                     type="text"
                     value={styleDescription}
-                    onChange={(e) => setStyleDescription(e.target.value)}
-                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                    readOnly
+                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
                   />
                 </div>
                 <div className="flex flex-col gap-1.5">
@@ -947,8 +947,8 @@ export default function OpenOrderPage() {
                   <input
                     type="text"
                     value={styleCategory}
-                    onChange={(e) => setStyleCategory(e.target.value)}
-                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                    readOnly
+                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
                   />
                 </div>
               
@@ -963,8 +963,8 @@ export default function OpenOrderPage() {
                     <input
                       type="text"
                       value={target}
-                      onChange={(e) => setTarget(e.target.value)}
-                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                      readOnly
+                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -972,8 +972,8 @@ export default function OpenOrderPage() {
                     <input
                       type="text"
                       value={targetUnitMin}
-                      onChange={(e) => setTargetUnitMin(e.target.value)}
-                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                      readOnly
+                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
                     />
                   </div>
                 </div>
@@ -983,8 +983,8 @@ export default function OpenOrderPage() {
                   <input
                     type="text"
                     value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                    readOnly
+                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
                   />
                 </div>
                 {/* Row 3: Forward for Approval */}
@@ -993,8 +993,8 @@ export default function OpenOrderPage() {
                   <input
                     type="text"
                     value={forwardForApproval}
-                    onChange={(e) => setForwardForApproval(e.target.value)}
-                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                    readOnly
+                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
                   />
                 </div>
               </div>
@@ -1008,8 +1008,8 @@ export default function OpenOrderPage() {
                     <input
                       type="text"
                       value={headReqd}
-                      onChange={(e) => setHeadReqd(e.target.value)}
-                      className="w-full px-3 py-1 border border-[#e2e8f0] rounded-xl bg-white text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all font-semibold text-center"
+                      readOnly
+                      className="w-full px-3 py-1 border border-[#e2e8f0] rounded-xl bg-slate-50 text-xs text-slate-500 focus:outline-none font-semibold text-center cursor-not-allowed"
                     />
                   </div>
                   <div className="flex flex-col gap-1">
@@ -1041,8 +1041,8 @@ export default function OpenOrderPage() {
                     <input
                       type="text"
                       value={appDate}
-                      onChange={(e) => setAppDate(e.target.value)}
-                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all font-semibold text-center"
+                      readOnly
+                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 focus:outline-none font-semibold text-center cursor-not-allowed"
                     />
                   </div>
                   <div className="flex flex-col gap-1.5">
@@ -1050,8 +1050,8 @@ export default function OpenOrderPage() {
                     <input
                       type="text"
                       value={appBy}
-                      onChange={(e) => setAppBy(e.target.value)}
-                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all font-semibold text-center"
+                      readOnly
+                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 focus:outline-none font-semibold text-center cursor-not-allowed"
                     />
                   </div>
                 </div>
