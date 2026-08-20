@@ -70,7 +70,10 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     size: "Legal",
     source: "Automatically Select",
     orientation: "Portrait",
-    margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 },
+    // Measured margins (cm) for the actual 210x309mm label sheet stock
+    // this prints on — not auto-centered, since the sheet's printable
+    // area is offset, not simply smaller than the page.
+    margins: { left: 0.65, right: 0.6, top: 1.6, bottom: 0.95 },
     gridFormat: "3x10",
     layout: "same-line",
   });
@@ -376,7 +379,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
 
   const { handleDownloadPdf: downloadPdf, generatingPdf } = useGenerateCouponPdf(activeStyle);
   const handleGeneratePdf = async () => {
-    await downloadPdf(pageSetup.layout);
+    await downloadPdf(pageSetup.layout, pageSetup.margins);
     setShowPageSetupModal(false);
   };
 

@@ -63,7 +63,10 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
     }
   };
 
-  const handleDownloadPdf = async (layout?: CouponLayout) => {
+  const handleDownloadPdf = async (
+    layout?: CouponLayout,
+    margins?: { top: number; bottom: number; left: number; right: number },
+  ) => {
     setGeneratingPdf(true);
     try {
       const res = await fetch("/api/qr-code-generation/pdf", {
@@ -76,6 +79,7 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
           bundles: activeStyle.bundles,
           operations: activeStyle.operations,
           layout,
+          margins,
         }),
       });
       const data = await res.json();

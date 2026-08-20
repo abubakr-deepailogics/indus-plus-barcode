@@ -7,12 +7,20 @@
 // digits and "0001" is the real per-bundle sequence) — stripping that
 // repeated prefix keeps the coupon code from embedding the same number
 // twice.
+// Strips the work order's digits from the front of a bundle number when
+// they're duplicated there (see module comment) — shared with the coupon
+// PDF card, which prints the bundle number on its own and needs it short
+// without re-deriving the same regex.
+export function trimBundleNo(workOrder: string, bundleNo: string): string {
+  const workOrderDigits = workOrder.replace(/\D/g, "").replace(/^0+/, "");
+  return workOrderDigits && bundleNo.startsWith(workOrderDigits)
+    ? bundleNo.slice(workOrderDigits.length)
+    : bundleNo;
+}
+
 export function buildCouponCode(workOrder: string, bundleNo: string, opNo: string): string {
   const workOrderDigits = workOrder.replace(/\D/g, "").replace(/^0+/, "");
-  const trimmedBundleNo =
-    workOrderDigits && bundleNo.startsWith(workOrderDigits)
-      ? bundleNo.slice(workOrderDigits.length)
-      : bundleNo;
+  const trimmedBundleNo = trimBundleNo(workOrder, bundleNo);
   return `${workOrderDigits || workOrder}-${trimmedBundleNo}-${opNo}`;
 }
 
