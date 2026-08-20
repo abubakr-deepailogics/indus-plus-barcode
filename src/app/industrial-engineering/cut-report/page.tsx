@@ -323,7 +323,9 @@ export default function OpenOrderPage() {
 
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const [showPageSetupModal, setShowPageSetupModal] = useState(false);
   const [pageSetup, setPageSetup] = useState<PageSetupConfig>({
@@ -689,14 +691,54 @@ export default function OpenOrderPage() {
     };
   }, []);
 
+  useEffect(() => {
+    setActiveIndex(-1);
+  }, [suggestions]);
+
+  useEffect(() => {
+    if (activeIndex >= 0 && dropdownRef.current) {
+      const activeElement = dropdownRef.current.children[activeIndex] as HTMLElement;
+      if (activeElement) {
+        activeElement.scrollIntoView({ block: "nearest" });
+      }
+    }
+  }, [activeIndex]);
+
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showSuggestions && suggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : 0));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1));
+        return;
+      }
+      if (e.key === "Enter") {
+        if (activeIndex >= 0 && activeIndex < suggestions.length) {
+          e.preventDefault();
+          const selected = suggestions[activeIndex];
+          setSearchQuery(selected);
+          setActiveSearchQuery(selected);
+          setShowSuggestions(false);
+          setIsWoFocused(false);
+          setActiveIndex(-1);
+          return;
+        }
+      }
+    }
+
     if (e.key === "Escape") {
       setShowSuggestions(false);
       setIsWoFocused(false);
+      setActiveIndex(-1);
     } else if (e.key === "Enter") {
       setActiveSearchQuery(searchQuery);
       setShowSuggestions(false);
       setIsWoFocused(false);
+      setActiveIndex(-1);
     }
   };
 
@@ -910,8 +952,11 @@ export default function OpenOrderPage() {
               </div>
               {/* Autocomplete Suggestions Dropdown Overlay */}
               {showSuggestions && suggestions.length > 0 && (
-                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-[#f1f5f9] animate-fade-in">
-                  {suggestions.map((suggestion) => (
+                <div 
+                  ref={dropdownRef}
+                  className="absolute left-0 right-0 top-full mt-1 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-[#f1f5f9] animate-fade-in"
+                >
+                  {suggestions.map((suggestion, idx) => (
                     <button
                       key={suggestion}
                       type="button"
@@ -921,7 +966,11 @@ export default function OpenOrderPage() {
                         setShowSuggestions(false);
                         setIsWoFocused(false);
                       }}
-                      className="w-full text-left px-4 py-2 hover:bg-indigo-50/50 text-slate-700 hover:text-[#4f46e5] font-semibold transition-all text-xs cursor-pointer block"
+                      className={`w-full text-left px-4 py-2 text-xs font-semibold transition-all cursor-pointer block ${
+                        idx === activeIndex
+                          ? "bg-indigo-50 text-[#4f46e5]"
+                          : "hover:bg-indigo-50/50 text-slate-700 hover:text-[#4f46e5]"
+                      }`}
                     >
                       {suggestion}
                     </button>
