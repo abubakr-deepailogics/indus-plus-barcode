@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { Calendar as CalendarIcon, FileText, Cpu } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
+import { useAuth } from "@/features/auth/context/auth-context";
 import {
   Popover,
   PopoverTrigger,
@@ -33,6 +34,7 @@ interface ScanningRow {
 }
 
 export default function CouponScanningPage() {
+  const { user } = useAuth();
   // Information panel state variables
   const [employeeCode, setEmployeeCode] = useState("");
   const [department, setDepartment] = useState("");
@@ -42,6 +44,13 @@ export default function CouponScanningPage() {
   const [alreadyMonthlyScan, setAlreadyMonthlyScan] = useState("");
   const [lineId, setLineId] = useState("");
   const [scanBy, setScanBy] = useState("");
+
+  useEffect(() => {
+    if (user) {
+      const name = user.displayName || user.email?.split("@")[0] || "";
+      setScanBy(name);
+    }
+  }, [user]);
   const [dated, setDated] = useState("");
   const [employeeName, setEmployeeName] = useState("");
   const [section, setSection] = useState("");
@@ -82,7 +91,7 @@ export default function CouponScanningPage() {
   const fetchWorkOrderSuggestions = async (query: string) => {
     try {
       const response = await fetch(
-        `/api/open-order/suggestions?query=${encodeURIComponent(query)}`,
+        `/api/open-order/suggestions?query=${encodeURIComponent(query)}&only_generated=true`,
       );
       if (response.ok) {
         return await response.json();
@@ -97,7 +106,7 @@ export default function CouponScanningPage() {
     if (!workOrder) return [];
     try {
       const response = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=bundle&query=${encodeURIComponent(query)}`,
+        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=bundle&query=${encodeURIComponent(query)}&only_generated=true`,
       );
       if (response.ok) {
         return await response.json();
@@ -112,13 +121,28 @@ export default function CouponScanningPage() {
     if (!workOrder) return [];
     try {
       const response = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=operation&query=${encodeURIComponent(query)}`,
+        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=operation&query=${encodeURIComponent(query)}&only_generated=true`,
       );
       if (response.ok) {
         return await response.json();
       }
     } catch (err) {
       console.error("Op suggestions fetch error:", err);
+    }
+    return [];
+  };
+
+  const fetchCutSuggestions = async (query: string) => {
+    if (!workOrder) return [];
+    try {
+      const response = await fetch(
+        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=cut&query=${encodeURIComponent(query)}`,
+      );
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (err) {
+      console.error("Cut suggestions fetch error:", err);
     }
     return [];
   };
@@ -271,7 +295,7 @@ export default function CouponScanningPage() {
     setAlreadyDailyScan("");
     setAlreadyMonthlyScan("");
     setLineId("");
-    setScanBy("");
+    setScanBy(user?.displayName || user?.email?.split("@")[0] || "");
     setDated("");
     setEmployeeName("");
     setSection("");
@@ -611,8 +635,8 @@ export default function CouponScanningPage() {
                   type="text"
                   placeholder="Enter employee name"
                   value={employeeName}
-                  onChange={(e) => setEmployeeName(e.target.value)}
-                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  readOnly
+                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-500 bg-slate-50 focus:outline-none cursor-not-allowed"
                 />
               </label>
 
@@ -625,8 +649,8 @@ export default function CouponScanningPage() {
                   type="text"
                   placeholder="Department Name"
                   value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  readOnly
+                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-500 bg-slate-50 focus:outline-none cursor-not-allowed"
                 />
               </label>
 
@@ -639,8 +663,8 @@ export default function CouponScanningPage() {
                   type="text"
                   placeholder="Enter designation"
                   value={designation}
-                  onChange={(e) => setDesignation(e.target.value)}
-                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  readOnly
+                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-500 bg-slate-50 focus:outline-none cursor-not-allowed"
                 />
               </label>
             </div>
@@ -709,8 +733,8 @@ export default function CouponScanningPage() {
                   type="text"
                   placeholder="Section Name"
                   value={section}
-                  onChange={(e) => setSection(e.target.value)}
-                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  readOnly
+                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-500 bg-slate-50 focus:outline-none cursor-not-allowed"
                 />
               </label>
 
@@ -740,8 +764,8 @@ export default function CouponScanningPage() {
                   type="text"
                   placeholder="Enter scanner"
                   value={scanBy}
-                  onChange={(e) => setScanBy(e.target.value)}
-                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  readOnly
+                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-500 bg-slate-50 focus:outline-none cursor-not-allowed"
                 />
               </label>
 
@@ -847,36 +871,54 @@ export default function CouponScanningPage() {
 
               {/* From Cut & To Cut (grouped side-by-side in one md-col-span-3 slot) */}
               <div className="grid grid-cols-2 gap-2 md:col-span-3">
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
+                <div className="flex flex-col gap-0.5 relative">
+                  <span className={`font-bold text-[10px] uppercase transition-colors ${!workOrder.trim() ? "text-slate-400" : "text-[#4f46e5]"}`}>
                     From Cut
                   </span>
-                  <input
-                    type="text"
-                    placeholder="e.g. 1"
+                  <Autocomplete<string>
                     value={fromCut}
-                    onChange={(e) => setFromCut(e.target.value)}
-                    className="w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                    onChange={setFromCut}
+                    onSelect={setFromCut}
+                    fetchSuggestions={fetchCutSuggestions}
+                    renderSuggestion={(item) => <span>{item}</span>}
+                    getSuggestionValue={(item) => item}
+                    minChars={0}
+                    disabled={!workOrder.trim()}
+                    placeholder="e.g. 1"
+                    inputClassName={`w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold focus:outline-none transition-all ${
+                      !workOrder.trim()
+                        ? "bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200"
+                        : "bg-white text-slate-800 focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
+                    }`}
                   />
                 </div>
 
-                <div className="flex flex-col gap-0.5">
-                  <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
+                <div className="flex flex-col gap-0.5 relative">
+                  <span className={`font-bold text-[10px] uppercase transition-colors ${!workOrder.trim() ? "text-slate-400" : "text-[#4f46e5]"}`}>
                     To Cut
                   </span>
-                  <input
-                    type="text"
-                    placeholder="e.g. 10"
+                  <Autocomplete<string>
                     value={toCut}
-                    onChange={(e) => setToCut(e.target.value)}
-                    className="w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                    onChange={setToCut}
+                    onSelect={setToCut}
+                    fetchSuggestions={fetchCutSuggestions}
+                    renderSuggestion={(item) => <span>{item}</span>}
+                    getSuggestionValue={(item) => item}
+                    minChars={0}
+                    disabled={!workOrder.trim()}
+                    placeholder="e.g. 10"
+                    inputClassName={`w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold focus:outline-none transition-all ${
+                      !workOrder.trim()
+                        ? "bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200"
+                        : "bg-white text-slate-800 focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
+                    }`}
                   />
                 </div>
               </div>
 
               {/* Operation No */}
               <div className="flex flex-col gap-0.5 relative md:col-span-2">
-                <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
+                <span className={`font-bold text-[10px] uppercase transition-colors ${!workOrder.trim() ? "text-slate-400" : "text-[#4f46e5]"}`}>
                   Operation No
                 </span>
                 <Autocomplete<any>
@@ -884,6 +926,7 @@ export default function CouponScanningPage() {
                   onChange={setOpNo}
                   onSelect={(op) => setOpNo(op.Operation_Code)}
                   fetchSuggestions={fetchOpSuggestions}
+                  disabled={!workOrder.trim()}
                   renderSuggestion={(op) => (
                     <div className="flex flex-col">
                       <span className="text-[#4f46e5] font-bold text-[10px]">
@@ -896,7 +939,11 @@ export default function CouponScanningPage() {
                   )}
                   getSuggestionValue={(op) => op.Operation_Code}
                   placeholder="e.g. SW0000090"
-                  inputClassName="w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  inputClassName={`w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold focus:outline-none transition-all ${
+                    !workOrder.trim()
+                      ? "bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200"
+                      : "bg-white text-slate-800 focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
+                  }`}
                 />
               </div>
 

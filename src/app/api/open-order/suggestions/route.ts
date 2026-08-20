@@ -4,6 +4,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("query") || "";
   const type = searchParams.get("type") || "work_order";
+  const onlyGenerated = searchParams.get("only_generated") === "true";
 
   try {
     const pool = await getPool();
@@ -45,6 +46,30 @@ export async function GET(request: Request) {
     }
 
     // Default: work_order suggestions
+    if (onlyGenerated) {
+      if (!query || query.trim().length < 2) {
+        const result = await pool.request().query(`
+          SELECT DISTINCT TOP 12 WorkOrder 
+          FROM dbo.QrCode_Coupon 
+          ORDER BY WorkOrder DESC
+        `);
+        return Response.json(result.recordset.map((r) => r.WorkOrder));
+      }
+
+      const result = await pool
+        .request()
+        .input("q", sql.NVarChar, `%${query.trim()}%`)
+        .query(`
+          SELECT DISTINCT TOP 8 WorkOrder 
+          FROM dbo.QrCode_Coupon 
+          WHERE WorkOrder LIKE @q OR CouponCode LIKE @q OR BundleNo LIKE @q
+          ORDER BY WorkOrder
+        `);
+
+      const suggestions = result.recordset.map((r) => r.WorkOrder);
+      return Response.json(suggestions);
+    }
+
     if (!query || query.trim().length < 2) {
       // If empty query, return top 12 general work orders
       const result = await pool.request().query(`

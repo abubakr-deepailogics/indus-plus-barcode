@@ -17,6 +17,7 @@ interface AutocompleteProps<T> {
   debounceMs?: number;
   onKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
   onFocus?: () => void;
+  disabled?: boolean;
 }
 
 export function Autocomplete<T>({
@@ -33,6 +34,7 @@ export function Autocomplete<T>({
   debounceMs = 200,
   onKeyDown,
   onFocus,
+  disabled,
 }: AutocompleteProps<T>) {
   const [suggestions, setSuggestions] = useState<T[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -42,7 +44,7 @@ export function Autocomplete<T>({
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    if (value.trim().length < minChars) {
+    if (disabled || value.trim().length < minChars) {
       setSuggestions([]);
       return;
     }
@@ -129,11 +131,13 @@ export function Autocomplete<T>({
       <input
         type="text"
         value={value}
+        disabled={disabled}
         onChange={(e) => {
           onChange(e.target.value);
           setShowSuggestions(true);
         }}
         onFocus={() => {
+          if (disabled) return;
           setShowSuggestions(true);
           if (onFocus) onFocus();
         }}

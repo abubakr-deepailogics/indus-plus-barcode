@@ -38,28 +38,7 @@ export function ParametersPanel({
       {/* Left Input Fields Column (9 cols) */}
       <div className="lg:col-span-9">
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
-          <div className="flex flex-col gap-1.5">
-            <label className="font-bold text-[#475569] text-[11px]">
-              Customer
-            </label>
-            <select
-              value={activeStyle.customer}
-              onChange={(e) => onFieldChange("customer", e.target.value)}
-              className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all cursor-pointer"
-            >
-              <option value="">Select Customer</option>
-              {customersList.map((cust) => (
-                <option key={cust} value={cust}>
-                  {cust}
-                </option>
-              ))}
-              {activeStyle.customer && !customersList.includes(activeStyle.customer) && (
-                <option value={activeStyle.customer}>{activeStyle.customer}</option>
-              )}
-            </select>
-          </div>
-
-          <div className="flex flex-col gap-1.5">
+           <div className="flex flex-col gap-1.5">
             <label className="font-bold text-[#475569] text-[11px]">
               Work Order
             </label>
@@ -88,6 +67,18 @@ export function ParametersPanel({
               />
             </div>
           </div>
+          <div className="flex flex-col gap-1.5">
+            <label className="font-bold text-[#475569] text-[11px]">
+              Customer
+            </label>
+            <input
+              type="text"
+              value={activeStyle.customer}
+              readOnly
+              placeholder="Customer Name"
+              className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
+            />
+          </div>
 
           <div className="flex flex-col gap-1.5">
             <label className="font-bold text-[#475569] text-[11px]">
@@ -96,8 +87,9 @@ export function ParametersPanel({
             <input
               type="text"
               value={activeStyle.styleCode}
-              onChange={(e) => onFieldChange("styleCode", e.target.value)}
-              className="px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
+              readOnly
+              placeholder="Style Code"
+              className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
             />
           </div>
 
@@ -105,30 +97,13 @@ export function ParametersPanel({
             <label className="font-bold text-[#475569] text-[11px]">
               Generate By
             </label>
-            <div className="relative w-full">
-              <Autocomplete<WorkerItem>
-                value={activeStyle.generateBy}
-                onChange={(val) => onFieldChange("generateBy", val)}
-                onSelect={(worker) => onFieldChange("generateBy", String(worker.EmployeeID))}
-                fetchSuggestions={async (q) => {
-                  const res = await fetch(`/api/open-order/suggestions?type=workers&query=${encodeURIComponent(q)}`);
-                  if (res.ok) {
-                    return res.json();
-                  }
-                  return [];
-                }}
-                renderSuggestion={(item) => (
-                  <span className="font-semibold text-slate-700">
-                    {item.EmployeeID} - {item.FirstName}
-                  </span>
-                )}
-                getSuggestionValue={(item) => String(item.EmployeeID)}
-                minChars={1}
-                placeholder="Enter Operator ID / Name"
-                className="w-full"
-                inputClassName="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-              />
-            </div>
+            <input
+              type="text"
+              value={activeStyle.generateBy}
+              readOnly
+              placeholder="Operator Name"
+              className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
+            />
           </div>
 
         </div>
