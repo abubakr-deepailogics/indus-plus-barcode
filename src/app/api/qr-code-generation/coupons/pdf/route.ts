@@ -1,7 +1,7 @@
 import { getPool, sql } from "@/lib/db";
 import { generateCouponPdf } from "@/features/qr-code-generation/services/pdf-generation.service";
 import type { CouponCard } from "@/features/qr-code-generation/services/coupon-pairing.service";
-import { listAllCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
+import { chunk, listAllCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
 import type { BundleDetailRow, CouponLayout, OperationsDetailRow } from "@/features/qr-code-generation/types";
 
 const VALID_LAYOUTS: CouponLayout[] = ["same-page", "same-line", "different-pages"];
@@ -48,15 +48,23 @@ export async function GET(request: Request) {
     // Two joins with a variable-length IN() list — built with per-value
     // params (not string-interpolated) to stay injection-safe. Bundle_Id
     // is numeric in the source table but coupons store it as text, hence
-    // the CAST on the cut-detail side.
-    const cutRequest = pool.request().input("wo", sql.NVarChar, workOrder);
-    bundleNos.forEach((b, i) => cutRequest.input(`bundle${i}`, sql.NVarChar, b));
-    const cutRows = await cutRequest.query(`
-      SELECT * FROM dbo.Order_Po_Cut_Detail
-      WHERE Work_Order = @wo AND CAST(Bundle_Id AS NVARCHAR(50)) IN (${bundleNos
-        .map((_, i) => `@bundle${i}`)
-        .join(", ")})
-    `);
+    // the CAST on the cut-detail side. bundleNos is chunked because a work
+    // order can have thousands of bundles and SQL Server caps params at
+    // 2100 per query.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- matches sql.Request#query's own recordset typing
+    const cutRecordsets: any[][] = [];
+    for (const batch of chunk(bundleNos, 2000)) {
+      const cutRequest = pool.request().input("wo", sql.NVarChar, workOrder);
+      batch.forEach((b, i) => cutRequest.input(`bundle${i}`, sql.NVarChar, b));
+      const result = await cutRequest.query(`
+        SELECT * FROM dbo.Order_Po_Cut_Detail
+        WHERE Work_Order = @wo AND CAST(Bundle_Id AS NVARCHAR(50)) IN (${batch
+          .map((_, i) => `@bundle${i}`)
+          .join(", ")})
+      `);
+      cutRecordsets.push(result.recordset);
+    }
+    const cutRows = { recordset: cutRecordsets.flat() };
 
     const opRequest = pool.request().input("wo", sql.NVarChar, workOrder);
     opNos.forEach((o, i) => opRequest.input(`op${i}`, sql.NVarChar, o));

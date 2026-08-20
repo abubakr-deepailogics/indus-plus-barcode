@@ -1,7 +1,11 @@
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import path from "node:path";
-import type { BundleDetailRow, CouponLayout, OperationsDetailRow } from "../types";
+import type {
+  BundleDetailRow,
+  CouponLayout,
+  OperationsDetailRow,
+} from "../types";
 import { buildCouponCards, type CouponCard } from "./coupon-pairing.service";
 import { buildCouponCode, trimBundleNo } from "./coupon-code";
 
@@ -89,29 +93,30 @@ function assignSlots(
   return slots;
 }
 
-// Actual label sheet stock: 210mm x 309mm (not a standard Legal/A4 size —
-// this is the physical paper the coupons print on). Grid: 6 cols x 18
-// rows = 108 cards/page, each box 3.2cm x 1.5cm.
+// Printed on real A4 (210x297mm) — printers select "A4" in the dialog, so
+// the PDF page must actually be A4, not a taller label-stock size, or the
+// print driver auto-scales the whole page down to fit and every box comes
+// out a few % undersized. Grid: 6 cols x 18 rows = 108 cards/page, each
+// box 3.2cm x 1.5cm.
 //
 // Box is shaved down from the original 3.25x1.55cm spec on purpose: with
-// the real margins (top 1.6, bottom 0.95, left 0.65, right 0.6cm), the
-// printable area is 197.5x283.5mm and the original box only left
-// 2.5mm/4.5mm of slack — comfortable on paper, but thin enough that a
-// ~1mm error in any one measurement (paper size, margin, or box) could
-// overflow the printable area. 3.2x1.5cm doubles that slack to
-// 5.5mm/9.9mm without changing the 6x18/108-per-page layout.
+// margins (top 1.6, bottom 0.6, left 0.65, right 0.6cm), the printable
+// area is 197.5x279mm — 18 rows of 1.5cm need 270mm, leaving 4.5mm/9mm of
+// slack, thin enough that a ~1mm error in any one measurement (margin or
+// box) could overflow the printable area, but there's no more height to
+// give: A4 minus a workable top margin (for the sheet edge most printers
+// can't feed to) is already this tight at 18 rows.
 const MM_TO_PT = 72 / 25.4;
-const PAGE_SIZE: [number, number] = [210 * MM_TO_PT, 309 * MM_TO_PT];
+const PAGE_SIZE: [number, number] = [210 * MM_TO_PT, 297 * MM_TO_PT];
 const CM_TO_PT = 28.3465;
-const BOX_WIDTH = 3.2 * CM_TO_PT;
-const BOX_HEIGHT = 1.5 * CM_TO_PT;
+const BOX_WIDTH = 3.25 * CM_TO_PT;
+const BOX_HEIGHT = 1.6 * CM_TO_PT;
 const GRID_COLS = 6;
 const GRID_ROWS = 18;
-// Measured margins (cm) for the actual 210x309mm label sheet stock this
-// prints on. Callers that don't pass margins explicitly (e.g. the
-// coupon-tracing reprint route) still need to land on the real
-// printable area, not a theoretical centered guess.
-const DEFAULT_MARGINS = { top: 1.6, bottom: 0.95, left: 0.65, right: 0.6 };
+// Margins (cm) for real A4 stock. Callers that don't pass margins
+// explicitly (e.g. the coupon-tracing reprint route) still need to land
+// on the real printable area, not a theoretical centered guess.
+const DEFAULT_MARGINS = { top: 1.6, bottom: 0.6, left: 0.7, right: 0.65 };
 
 export async function generateCouponPdf({
   workOrder,
@@ -137,18 +142,22 @@ export async function generateCouponPdf({
   const marginRight = margins.right * CM_TO_PT;
   const cellWidth = BOX_WIDTH;
   const cellHeight = BOX_HEIGHT;
-  // QR spans the full box height (top edge to the op-name strip) — it's
+  // QR spans most of the box height (top edge to the op-name strip) — it's
   // the largest single element on the card and the one thing that must
   // stay scanner-reliable, so it gets priority over the text rows for
-  // vertical space rather than being capped to match the field grid.
-  const qrSize = cellHeight - 3 - 7;
+  // vertical space rather than being capped to match the field grid. Shaved
+  // down slightly (not the full available height) so it doesn't sit flush
+  // against the box edges — square, so scannability doesn't degrade.
+  const qrSize = cellHeight - 3 - 7 - 2;
   // Fixed-size grid is centered in whatever page area the margins leave,
   // rather than stretched to fill it — the box dimensions are a print
   // spec (label sheet), not a function of page size.
   const usableWidth = PAGE_SIZE[0] - marginLeft - marginRight;
   const usableHeight = PAGE_SIZE[1] - marginTop - marginBottom;
-  const gridOriginX = marginLeft + Math.max(0, (usableWidth - cellWidth * GRID_COLS) / 2);
-  const gridOriginY = marginTop + Math.max(0, (usableHeight - cellHeight * GRID_ROWS) / 2);
+  const gridOriginX =
+    marginLeft + Math.max(0, (usableWidth - cellWidth * GRID_COLS) / 2);
+  const gridOriginY =
+    marginTop + Math.max(0, (usableHeight - cellHeight * GRID_ROWS) / 2);
 
   const doc = new PDFDocument({
     size: PAGE_SIZE,
@@ -163,6 +172,30 @@ export async function generateCouponPdf({
     doc.on("error", reject);
   });
 
+  // Grid lines drawn once per boundary (not once per cell) — a per-cell
+  // rect() strokes every shared edge twice (once from each neighboring
+  // cell), and those doubled-up strokes were the "borders stacking" bug:
+  // each extra stroke width eats into the cell below/right of it, so the
+  // drift compounds row after row down the page.
+  function drawGridLines() {
+    doc.strokeColor("#94a3b8").lineWidth(0.4);
+    for (let c = 0; c <= GRID_COLS; c++) {
+      const x = gridOriginX + c * cellWidth;
+      doc
+        .moveTo(x, gridOriginY)
+        .lineTo(x, gridOriginY + cellHeight * GRID_ROWS)
+        .stroke();
+    }
+    for (let r = 0; r <= GRID_ROWS; r++) {
+      const y = gridOriginY + r * cellHeight;
+      doc
+        .moveTo(gridOriginX, y)
+        .lineTo(gridOriginX + cellWidth * GRID_COLS, y)
+        .stroke();
+    }
+  }
+  drawGridLines();
+
   // ponytail: cards are rendered and flushed one at a time (not held as
   // PDFKit objects all at once), so memory stays flat for thousands of
   // cards. If this needs to run against tens of thousands, move to a
@@ -172,7 +205,10 @@ export async function generateCouponPdf({
     const { bundle, op } = cards[i];
     const { page, col, row } = slots[i];
 
-    if (i > 0 && page !== slots[i - 1].page) doc.addPage();
+    if (i > 0 && page !== slots[i - 1].page) {
+      doc.addPage();
+      drawGridLines();
+    }
 
     const cellX = gridOriginX + col * cellWidth;
     const cellY = gridOriginY + row * cellHeight;
@@ -209,14 +245,8 @@ export async function generateCouponPdf({
       width: 150,
     });
 
-    // Thin box outline only — at this density (108/page) a dashed cut
-    // line plus registration marks per box just turns into ink noise.
-    doc
-      .rect(cellX, cellY, cellWidth, cellHeight)
-      .strokeColor("#94a3b8")
-      .lineWidth(0.4)
-      .stroke();
-
+    // Cell border is part of the shared grid (drawGridLines, drawn once
+    // per page) — not redrawn per cell.
     const cardX = cellX + 1.5;
     const cardY = cellY + 1.5;
     const cardW = cellWidth - 3;
@@ -231,25 +261,29 @@ export async function generateCouponPdf({
     const headerH = headerLineH * 2;
     const topH = cellHeight - 3 - opNameH;
 
-    const qrX = cardX + cardW - qrSize;
+    // Shifted left of the box's right edge so the QR has its own margin
+    // instead of sitting flush against the border.
+    const qrX = cardX + cardW - qrSize - 1.5;
     doc.image(qrPng, qrX, cardY, { width: qrSize, height: qrSize });
 
     const textW = qrX - cardX - 3;
     doc.fontSize(4.5);
-    doc
-      .fillColor("#64748b")
-      .text("WO", cardX, cardY, { width: 9, height: headerLineH, lineBreak: false });
-    doc
-      .fillColor("#1e293b")
-      .text(workOrderShort, cardX + 9, cardY, {
-        width: textW - 9,
-        height: headerLineH,
-        ellipsis: true,
-        lineBreak: false,
-      });
-    doc
-      .fillColor("#64748b")
-      .text("Sec", cardX, cardY + headerLineH, { width: 9, height: headerLineH, lineBreak: false });
+    doc.fillColor("#64748b").text("WO", cardX, cardY, {
+      width: 9,
+      height: headerLineH,
+      lineBreak: false,
+    });
+    doc.fillColor("#1e293b").text(workOrderShort, cardX + 9, cardY, {
+      width: textW - 9,
+      height: headerLineH,
+      ellipsis: true,
+      lineBreak: false,
+    });
+    doc.fillColor("#64748b").text("Sec", cardX, cardY + headerLineH, {
+      width: 9,
+      height: headerLineH,
+      lineBreak: false,
+    });
     doc
       .fillColor("#1e293b")
       .text(op.section || "-", cardX + 9, cardY + headerLineH, {
@@ -284,17 +318,17 @@ export async function generateCouponPdf({
       const cx = cardX + col * fieldColW;
       const cy = gridY + row * fieldRowH;
       const labelW = 9;
-      doc
-        .fillColor("#64748b")
-        .text(label, cx, cy, { width: labelW, height: fieldRowH, lineBreak: false });
-      doc
-        .fillColor("#1e293b")
-        .text(value, cx + labelW, cy, {
-          width: fieldColW - labelW,
-          height: fieldRowH,
-          ellipsis: true,
-          lineBreak: false,
-        });
+      doc.fillColor("#64748b").text(label, cx, cy, {
+        width: labelW,
+        height: fieldRowH,
+        lineBreak: false,
+      });
+      doc.fillColor("#1e293b").text(value, cx + labelW, cy, {
+        width: fieldColW - labelW,
+        height: fieldRowH,
+        ellipsis: true,
+        lineBreak: false,
+      });
     }
 
     // Operation name — full card width (under the QR too), pinned to the

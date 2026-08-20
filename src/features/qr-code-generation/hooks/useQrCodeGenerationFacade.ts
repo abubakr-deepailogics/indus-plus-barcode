@@ -78,10 +78,11 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     size: "Legal",
     source: "Automatically Select",
     orientation: "Portrait",
-    // Measured margins (cm) for the actual 210x309mm label sheet stock
-    // this prints on — not auto-centered, since the sheet's printable
-    // area is offset, not simply smaller than the page.
-    margins: { left: 0.65, right: 0.6, top: 1.6, bottom: 0.95 },
+    // Margins (cm) for the real A4 sheet this prints on — not
+    // auto-centered, since the sheet's printable area is offset, not
+    // simply smaller than the page. Must match DEFAULT_MARGINS in
+    // pdf-generation.service.ts.
+    margins: { left: 0.74, right: 0.65, top: 1.6, bottom: 0.6 },
     gridFormat: "3x10",
     layout: "same-line",
   });

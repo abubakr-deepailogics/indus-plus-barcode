@@ -2,11 +2,12 @@ import { sql } from "@/lib/db";
 import { buildCouponCode } from "./coupon-code";
 import type { CouponCard } from "./coupon-pairing.service";
 
-// 4 params/row (couponCode, workOrder, bundleNo, opNo) — SQL Server caps
-// query params at 2100, so this stays comfortably under that per batch.
-const CHUNK_SIZE = 500;
+// 5 params/row (couponCode, bundleNo, opNo, section, cutNo) + 1 shared
+// @workOrder param — SQL Server caps query params at 2100, so this stays
+// comfortably under that per batch (400 * 5 + 1 = 2001).
+const CHUNK_SIZE = 400;
 
-function chunk<T>(items: T[], size: number): T[][] {
+export function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
