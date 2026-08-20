@@ -90,6 +90,7 @@ export async function GET(request: Request) {
       rate: String(row.Piece_Rate ?? ""),
       skills: "",
       lastOpSection: row.Last_Operation_Section_Wise === 1,
+      inc: row.Incentive !== undefined ? String(row.Incentive) : "-",
     }));
 
     if (bundles.length === 0 || operations.length === 0) {

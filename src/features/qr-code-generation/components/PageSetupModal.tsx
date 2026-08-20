@@ -38,10 +38,10 @@ export function PageSetupModal({
             <div
               className="w-full h-full border border-dashed border-[#4f46e5]/40 rounded bg-gray-50/50 flex flex-col justify-between p-2"
               style={{
-                paddingLeft: `${Math.max(2, pageSetup.margins.left * 15)}px`,
-                paddingRight: `${Math.max(2, pageSetup.margins.right * 15)}px`,
-                paddingTop: `${Math.max(2, pageSetup.margins.top * 15)}px`,
-                paddingBottom: `${Math.max(2, pageSetup.margins.bottom * 15)}px`,
+                paddingLeft: `${Math.max(2, pageSetup.margins.left * 6)}px`,
+                paddingRight: `${Math.max(2, pageSetup.margins.right * 6)}px`,
+                paddingTop: `${Math.max(2, pageSetup.margins.top * 6)}px`,
+                paddingBottom: `${Math.max(2, pageSetup.margins.bottom * 6)}px`,
                 transform:
                   pageSetup.orientation === "Landscape"
                     ? "rotate(-90deg)"
@@ -85,11 +85,13 @@ export function PageSetupModal({
                 }
                 className="flex-1 max-w-[280px] px-3 py-2 rounded-xl border border-[#e2e8f0] bg-white font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
               >
-                <option value="Legal">Legal</option>
-                <option value="Letter">Letter</option>
-                <option value="A4">A4</option>
-                <option value="4x6 Label">4x6 Label (Thermal)</option>
-                <option value="Custom">Custom</option>
+                {/* Coupon PDF always renders on the fixed 210x309mm label
+                    sheet (see PAGE_SIZE in pdf-generation.service.ts) —
+                    this selector doesn't change that yet, so it only
+                    offers the one size that matches what's actually
+                    generated rather than implying a choice that does
+                    nothing. */}
+                <option value="Legal">210 x 309mm (Label Sheet)</option>
               </select>
             </div>
             <div className="flex items-center justify-between">
@@ -206,7 +208,7 @@ export function PageSetupModal({
             <div className="flex items-center gap-1.5 mb-3">
               <FileText className="w-3.5 h-3.5 text-[#4f46e5]" />
               <span className="font-bold text-[#4f46e5] text-[11px] uppercase tracking-wider">
-                Margins (inches)
+                Margins (cm)
               </span>
             </div>
             <div className="grid grid-cols-2 gap-x-4 gap-y-2.5">
