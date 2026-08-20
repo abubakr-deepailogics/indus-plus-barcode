@@ -10,6 +10,7 @@ import {
   Plus,
   FileText,
   Trash2,
+  Printer,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/context/auth-context";
 // import type { PageSetupConfig } from "@/features/barcode-generation/types";
@@ -809,6 +810,19 @@ export default function OpenOrderPage() {
     };
   }, [styleBulletins, cutDetails, activeSearchQuery]);
 
+  // Group operations by Section for printing layout
+  const groupedOperations = useMemo(() => {
+    const groups: Record<string, StyleBulletinRow[]> = {};
+    styleBulletins.forEach((op) => {
+      const sec = op.Section || "Other";
+      if (!groups[sec]) {
+        groups[sec] = [];
+      }
+      groups[sec].push(op);
+    });
+    return groups;
+  }, [styleBulletins]);
+
   const isSkeletonActive = isLoading || isTransitioning;
 
   // Build the coupon-printable style data for the searched work order from
@@ -1125,21 +1139,32 @@ export default function OpenOrderPage() {
                       <option value="Draft">Draft</option>
                     </select>
                   </div>
-                  <button
-                    type="button"
-                    onClick={handleSaveMetadata}
-                    disabled={isSaving}
-                    className="flex-grow max-w-[200px] bg-[#4f46e5] hover:bg-[#4338ca] disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-1.5 px-4 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
-                  >
-                    {isSaving ? (
-                      <>
-                        <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                        <span>Saving...</span>
-                      </>
-                    ) : (
-                      <span>Save Bulletin Details</span>
-                    )}
-                  </button>
+                  <div className="flex gap-2 w-full justify-end max-w-[320px]">
+                    <button
+                      type="button"
+                      onClick={() => window.print()}
+                      disabled={styleBulletins.length === 0}
+                      className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-slate-700 disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      <span>Print</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveMetadata}
+                      disabled={isSaving}
+                      className="bg-[#4f46e5] hover:bg-[#4338ca] disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-1.5 px-4 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5 flex-grow"
+                    >
+                      {isSaving ? (
+                        <>
+                          <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Saving...</span>
+                        </>
+                      ) : (
+                        <span>Save Bulletin Details</span>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 {saveSuccessMsg && (
@@ -1487,6 +1512,190 @@ export default function OpenOrderPage() {
           </div>
         </div>
       )}
+
+      {/* Print styles */}
+      <style>{`
+        @media print {
+          body {
+            background: white !important;
+            color: black !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-only {
+            display: block !important;
+          }
+          @page {
+            size: A4 portrait;
+            margin: 1cm 1cm 1cm 1cm;
+          }
+          .print-container {
+            width: 100%;
+            font-family: Arial, sans-serif;
+            color: black;
+          }
+          .print-header-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+            border: 1.5px solid #000;
+          }
+          .print-header-table td {
+            padding: 4px 8px;
+            border: 1px solid #000;
+            vertical-align: top;
+            font-size: 10px;
+            line-height: 1.4;
+          }
+          .print-section-title {
+            font-weight: bold;
+            font-size: 10px;
+            background-color: #cbd5e1 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            padding: 4px 6px;
+            border: 1px solid #000;
+            border-bottom: none;
+            margin-top: 10px;
+          }
+          .print-ops-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 5px;
+            border: 1px solid #000;
+          }
+          .print-ops-table th, .print-ops-table td {
+            border: 1px solid #000;
+            padding: 3px 5px;
+            font-size: 8.5px;
+            text-align: left;
+          }
+          .print-ops-table th {
+            background-color: #e2e8f0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 8px;
+          }
+          .print-ops-table td.text-center, .print-ops-table th.text-center {
+            text-align: center;
+          }
+          .print-ops-table td.text-right, .print-ops-table th.text-right {
+            text-align: right;
+          }
+          .print-totals-row td {
+            font-weight: bold;
+            background-color: #f1f5f9 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+        @media screen {
+          .print-only {
+            display: none !important;
+          }
+        }
+      `}</style>
+
+      {/* PRINT ONLY PREVIEW CONTAINER */}
+      <div className="print-only print-container">
+        <h2 className="text-center font-extrabold text-sm uppercase tracking-wide mb-3 border-b-2 border-black pb-2">
+          OB Preview for Indus Plus Pvt Limited
+        </h2>
+        
+        <table className="print-header-table">
+          <tbody>
+            <tr>
+              <td style={{ width: "35%" }}>
+                <div className="flex flex-col gap-1">
+                  <div><strong>OB STAGE:</strong> {styleCategory}</div>
+                  <div><strong>PO#:</strong> {styleBulletinMetadata.styleCode}</div>
+                  <div><strong>W/O #:</strong> {styleBulletinMetadata.amNo}</div>
+                  <div><strong>STYLE #:</strong> {styleBulletinMetadata.styleCode}</div>
+                  <div><strong>STYLE Name:</strong> {styleDescription}</div>
+                </div>
+              </td>
+              <td style={{ width: "30%" }}>
+                <div className="flex flex-col gap-1">
+                  <div><strong>OUT PUT:</strong> {target}</div>
+                  <div><strong>EFFICIENCY:</strong> {targetUnitMin}</div>
+                  <div><strong>SHIFT TIME:</strong> {startTime}</div>
+                </div>
+              </td>
+              <td style={{ width: "35%" }}>
+                <div className="flex flex-col gap-1">
+                  <div><strong>OPERATORS - SEWING:</strong> {headReqd}</div>
+                  <div><strong>HELPERS:</strong> {forwardForApproval}</div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        {/* Grouped Operations Tables */}
+        {Object.keys(groupedOperations).map((sectionName) => {
+          const ops = groupedOperations[sectionName];
+          if (ops.length === 0) return null;
+          
+          // Calculate Totals for this section
+          const totalSectionSam = ops.reduce((acc, curr) => acc + (curr.Smv_Sam ?? 0), 0);
+          const totalSectionRate = ops.reduce((acc, curr) => acc + (curr.Piece_Rate ?? 0), 0);
+          
+          return (
+            <div key={sectionName} className="mb-4">
+              <div className="print-section-title uppercase">{sectionName}</div>
+              <table className="print-ops-table">
+                <thead>
+                  <tr>
+                    <th className="text-center w-8">S.NO</th>
+                    <th className="w-16">OP Code</th>
+                    <th>Operation Description</th>
+                    <th className="text-center w-10">Skill Level</th>
+                    <th className="text-right w-14">Piece Rate</th>
+                    <th className="text-right w-12">SAM</th>
+                    <th className="text-center w-14">Bi Hourly Tgt</th>
+                    <th className="text-center w-14">Shift Tgt</th>
+                    <th className="text-center w-12">M/C Y/N</th>
+                    <th>Machine Type/Class</th>
+                    <th className="text-center w-16">#of Operations</th>
+                    <th className="text-center w-10">DL</th>
+                    <th className="text-center w-12">No M/C</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {ops.map((op, idx) => (
+                    <tr key={op.RowId}>
+                      <td className="text-center">{idx + 1}</td>
+                      <td className="font-mono">{op.Operation_Code}</td>
+                      <td>{op.Operation_Name}</td>
+                      <td className="text-center">{op.SkillLevel ?? "-"}</td>
+                      <td className="text-right">{op.Piece_Rate?.toFixed(4) ?? "0.0000"}</td>
+                      <td className="text-right">{op.Smv_Sam?.toFixed(2) ?? "0.00"}</td>
+                      <td className="text-center">{op.Bi_Hourly_Tgt ?? "-"}</td>
+                      <td className="text-center">{op.Shift_Tgt ?? "-"}</td>
+                      <td className="text-center">
+                        {op.Machine_Type && op.Machine_Type.toLowerCase() !== "manual" ? "Y" : "N"}
+                      </td>
+                      <td>{op.Machine_Type ?? "Manual"}</td>
+                      <td className="text-center">{op.No_Of_Operations ?? "-"}</td>
+                      <td className="text-center">{op.DL ?? "-"}</td>
+                      <td className="text-center">{op.No_Mc ?? "-"}</td>
+                    </tr>
+                  ))}
+                  <tr className="print-totals-row">
+                    <td colSpan={4} className="text-right uppercase">Total</td>
+                    <td className="text-right">{totalSectionRate.toFixed(4)}</td>
+                    <td className="text-right">{totalSectionSam.toFixed(2)}</td>
+                    <td colSpan={7}></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          );
+        })}
+      </div>
     </>
   );
 }
