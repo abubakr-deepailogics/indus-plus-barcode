@@ -17,6 +17,11 @@ interface CouponRow {
   Section: string | null;
   IsScanned: boolean;
   CreatedAt: string;
+  CutNo?: string | null;
+  OpName?: string | null;
+  EmployeeCode?: string | null;
+  EmployeeName?: string | null;
+  ScannedAt?: string | null;
 }
 
 const COUPON_PAGE_SIZE = 50;
@@ -40,6 +45,8 @@ export default function CouponTracingPage() {
   const [bundleFilter, setBundleFilter] = useState("");
   const [opFilter, setOpFilter] = useState("");
   const [sectionFilter, setSectionFilter] = useState("");
+  const [fromCutFilter, setFromCutFilter] = useState("");
+  const [toCutFilter, setToCutFilter] = useState("");
   const [sectionOptions, setSectionOptions] = useState<string[]>([]);
   const [scannedFilter, setScannedFilter] = useState<(typeof SCANNED_OPTIONS)[number]["value"]>("");
   const [unscanningCode, setUnscanningCode] = useState("");
@@ -124,6 +131,8 @@ export default function CouponTracingPage() {
       if (opFilter.trim()) params.set("op_no", opFilter.trim());
       if (sectionFilter) params.set("section", sectionFilter);
       if (scannedFilter) params.set("is_scanned", scannedFilter);
+      if (fromCutFilter.trim()) params.set("from_cut", fromCutFilter.trim());
+      if (toCutFilter.trim()) params.set("to_cut", toCutFilter.trim());
       const res = await fetch(`/api/qr-code-generation/coupons?${params}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load coupons.");
@@ -142,6 +151,8 @@ export default function CouponTracingPage() {
     const workOrder = code.trim();
     setTracedWorkOrder(workOrder);
     setCouponPage(1);
+    setFromCutFilter("");
+    setToCutFilter("");
     fetchSectionOptions(workOrder);
     if (workOrder) fetchCoupons(workOrder, 1);
     else {
@@ -192,9 +203,11 @@ export default function CouponTracingPage() {
     if (opFilter.trim()) params.set("op_no", opFilter.trim());
     if (sectionFilter) params.set("section", sectionFilter);
     if (scannedFilter) params.set("is_scanned", scannedFilter);
+    if (fromCutFilter.trim()) params.set("from_cut", fromCutFilter.trim());
+    if (toCutFilter.trim()) params.set("to_cut", toCutFilter.trim());
     params.set("layout", pageSetup.layout);
     return `/api/qr-code-generation/coupons/pdf?${params}`;
-  }, [tracedWorkOrder, bundleFilter, opFilter, sectionFilter, scannedFilter, pageSetup.layout]);
+  }, [tracedWorkOrder, bundleFilter, opFilter, sectionFilter, scannedFilter, fromCutFilter, toCutFilter, pageSetup.layout]);
 
   // Any filter change re-queries from page 1 — old page N may no longer
   // exist once the row count shrinks.
@@ -203,26 +216,10 @@ export default function CouponTracingPage() {
     setCouponPage(1);
     fetchCoupons(tracedWorkOrder, 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bundleFilter, opFilter, sectionFilter, scannedFilter]);
+  }, [bundleFilter, opFilter, sectionFilter, scannedFilter, fromCutFilter, toCutFilter]);
 
   return (
     <div className="flex flex-col gap-6 max-w-[900px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
-      <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-3">
-        <div className="flex items-center gap-2 text-xs font-semibold text-[#64748b]">
-          <span>Industrial Engineering</span>
-          <span className="text-[#94a3b8] font-light">/</span>
-          <span className="text-[#4f46e5] font-bold">Coupon Tracing</span>
-        </div>
-      </div>
-
-      <div className="flex flex-col gap-1">
-        <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
-          Coupon Tracing
-        </h1>
-        <p className="text-[11px] text-[#64748b]">
-          Look up a coupon or bundle to see its scan history across operations.
-        </p>
-      </div>
 
       <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm">
         <div className="flex items-stretch gap-3">
@@ -233,6 +230,8 @@ export default function CouponTracingPage() {
               setCode(val);
               setTracedWorkOrder(val);
               setCouponPage(1);
+              setFromCutFilter("");
+              setToCutFilter("");
               fetchSectionOptions(val);
               fetchCoupons(val, 1);
             }}
@@ -319,6 +318,20 @@ export default function CouponTracingPage() {
               className="w-40"
               inputClassName="w-full px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
             />
+            <input
+              type="text"
+              placeholder="From Cut"
+              value={fromCutFilter}
+              onChange={(e) => setFromCutFilter(e.target.value)}
+              className="w-24 px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+            />
+            <input
+              type="text"
+              placeholder="To Cut"
+              value={toCutFilter}
+              onChange={(e) => setToCutFilter(e.target.value)}
+              className="w-24 px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+            />
             <select
               value={sectionFilter}
               onChange={(e) => setSectionFilter(e.target.value)}
@@ -345,35 +358,40 @@ export default function CouponTracingPage() {
           <table className="w-full text-left border-collapse">
             <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
               <tr>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Coupon Code</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Bundle No</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Op No</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Section</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Scanned</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider">Created At</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Cut No</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Bundle No</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">Section</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">Operation Name</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">Emp Code</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">Emp Name</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">Scanned</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">Scan Date</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">Created At</th>
               </tr>
             </thead>
             <tbody>
               {couponsLoading ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-[#94a3b8]">
+                  <td colSpan={9} className="px-4 py-6 text-center text-[#94a3b8]">
                     Loading…
                   </td>
                 </tr>
               ) : coupons.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-6 text-center text-[#94a3b8]">
+                  <td colSpan={9} className="px-4 py-6 text-center text-[#94a3b8]">
                     No coupons match{bundleFilter || opFilter || sectionFilter || scannedFilter ? " these filters" : " this work order yet"}.
                   </td>
                 </tr>
               ) : (
                 coupons.map((c) => (
-                  <tr key={c.Id} className="border-b border-[#f1f5f9] last:border-0">
-                    <td className="px-4 py-3 font-mono text-[#0f172a]">{c.CouponCode}</td>
-                    <td className="px-4 py-3 text-[#334155]">{c.BundleNo}</td>
-                    <td className="px-4 py-3 text-[#334155]">{c.OpNo}</td>
-                    <td className="px-4 py-3 text-[#334155]">{c.Section || "—"}</td>
-                    <td className="px-4 py-3">
+                  <tr key={c.Id} className="border-b border-[#f1f5f9] last:border-0 hover:bg-[#f8fafc] transition-colors">
+                    <td className="px-4 py-3 text-[#334155] text-center font-bold text-indigo-600">{c.CutNo || "—"}</td>
+                    <td className="px-4 py-3 text-[#334155] text-center font-mono">{c.BundleNo}</td>
+                    <td className="px-4 py-3 text-[#334155] text-left">{c.Section || "—"}</td>
+                    <td className="px-4 py-3 text-[#334155] text-left font-medium">{c.OpName || c.OpNo}</td>
+                    <td className="px-4 py-3 text-[#334155] text-left font-mono">{c.EmployeeCode || "—"}</td>
+                    <td className="px-4 py-3 text-[#334155] text-left font-medium">{c.EmployeeName || "—"}</td>
+                    <td className="px-4 py-3 text-left">
                       <div className="flex items-center gap-2">
                         <span
                           className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
@@ -395,7 +413,10 @@ export default function CouponTracingPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-[#334155]">
+                    <td className="px-4 py-3 text-[#334155] text-left">
+                      {c.ScannedAt ? new Date(c.ScannedAt).toLocaleString() : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-[#334155] text-left">
                       {new Date(c.CreatedAt).toLocaleString()}
                     </td>
                   </tr>

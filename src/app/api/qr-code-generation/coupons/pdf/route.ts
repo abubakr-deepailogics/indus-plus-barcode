@@ -27,6 +27,8 @@ export async function GET(request: Request) {
   const layout = VALID_LAYOUTS.includes(layoutParam as CouponLayout)
     ? (layoutParam as CouponLayout)
     : undefined;
+  const fromCut = searchParams.get("from_cut") || undefined;
+  const toCut = searchParams.get("to_cut") || undefined;
 
   if (!workOrder) {
     return Response.json({ error: "work_order is required." }, { status: 400 });
@@ -35,7 +37,7 @@ export async function GET(request: Request) {
   try {
     const pool = await getPool();
 
-    const coupons = await listAllCoupons(pool, workOrder, { bundleNo, opNo, section, isScanned });
+    const coupons = await listAllCoupons(pool, workOrder, { bundleNo, opNo, section, isScanned, fromCut, toCut });
     if (coupons.length === 0) {
       return Response.json({ error: "No coupons match this work order/filters." }, { status: 404 });
     }

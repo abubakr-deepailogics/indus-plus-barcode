@@ -31,9 +31,10 @@ export async function POST(request: Request) {
   }
 
   const selectedBundles = bundles.filter((b) => b.sel);
-  if (selectedBundles.length === 0 || operations.length === 0) {
+  const selectedOperations = operations.filter((op) => op.lastOpSection);
+  if (selectedBundles.length === 0 || selectedOperations.length === 0) {
     return Response.json(
-      { error: "No bundles selected or no operations to generate." },
+      { error: "No bundles or operations selected to generate." },
       { status: 400 },
     );
   }
@@ -44,7 +45,7 @@ export async function POST(request: Request) {
       saleOrderNo: saleOrderNo ?? "",
       styleCode: styleCode ?? "",
       bundles: selectedBundles,
-      operations,
+      operations: selectedOperations,
       layout,
     });
 
@@ -54,7 +55,7 @@ export async function POST(request: Request) {
     // generated for this work order/bundle/operation — reprints never
     // add rows. Batched (see coupon-registration.service) so thousands
     // of coupons don't mean thousands of round trips.
-    await registerCoupons(pool, workOrder, buildCouponCards(selectedBundles, operations));
+    await registerCoupons(pool, workOrder, buildCouponCards(selectedBundles, selectedOperations));
 
     // Explicit timeout override — the driver default (15s) can be too
     // tight for a large work order's PDF blob (thousands of coupons =

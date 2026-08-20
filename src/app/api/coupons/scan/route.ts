@@ -13,6 +13,7 @@ export async function GET(request: Request) {
 
   const employeeCode = searchParams.get("employeeCode") || "";
   const scanBy = searchParams.get("scanBy") || "";
+  const scanDate = searchParams.get("scanDate") || "";
 
   if (!barcode && !wo) {
     return Response.json(
@@ -61,6 +62,7 @@ export async function GET(request: Request) {
             c.BundleNo,
             c.OpNo,
             c.IsScanned,
+            c.ScannedAt,
             d.Inseam,
             d.Size AS SizeCode,
             d.Cut AS CutNo,
@@ -101,6 +103,7 @@ export async function GET(request: Request) {
             c.BundleNo,
             c.OpNo,
             c.IsScanned,
+            c.ScannedAt,
             d.Inseam,
             d.Size AS SizeCode,
             d.Cut AS CutNo,
@@ -172,12 +175,13 @@ export async function GET(request: Request) {
         .input("barcode", sql.NVarChar, barcode.trim())
         .input("employeeCode", sql.NVarChar, employeeCode.trim())
         .input("scanBy", sql.NVarChar, scanBy.trim())
+        .input("scanDate", sql.NVarChar, scanDate.trim())
         .query(`
           UPDATE dbo.QrCode_Coupon 
           SET IsScanned = 1,
               EmployeeCode = NULLIF(@employeeCode, ''),
               ScanBy = NULLIF(@scanBy, ''),
-              ScannedAt = GETDATE()
+              ScannedAt = COALESCE(TRY_CAST(NULLIF(@scanDate, '') AS DATETIME), GETDATE())
           WHERE CouponCode = @barcode
         `);
 
@@ -204,12 +208,13 @@ export async function GET(request: Request) {
       .input("toCut", sql.NVarChar, toCut.trim())
       .input("employeeCode", sql.NVarChar, employeeCode.trim())
       .input("scanBy", sql.NVarChar, scanBy.trim())
+      .input("scanDate", sql.NVarChar, scanDate.trim())
       .query(`
         UPDATE c 
         SET IsScanned = 1,
             EmployeeCode = NULLIF(@employeeCode, ''),
             ScanBy = NULLIF(@scanBy, ''),
-            ScannedAt = GETDATE()
+            ScannedAt = COALESCE(TRY_CAST(NULLIF(@scanDate, '') AS DATETIME), GETDATE())
         FROM dbo.QrCode_Coupon c
         OUTER APPLY (
             SELECT TOP 1 *

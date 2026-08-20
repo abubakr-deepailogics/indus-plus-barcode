@@ -1221,17 +1221,6 @@ export default function OpenOrderPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setSelectedDeptFilter(selectedDeptFilter === "washing" ? "all" : "washing")}
-                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
-                        selectedDeptFilter === "washing"
-                          ? "bg-red-50 text-red-600 border-red-200"
-                          : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      washing
-                    </button>
-                    <button
-                      type="button"
                       onClick={() => setSelectedDeptFilter(selectedDeptFilter === "sewing" ? "all" : "sewing")}
                       className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
                         selectedDeptFilter === "sewing"
@@ -1240,6 +1229,17 @@ export default function OpenOrderPage() {
                       }`}
                     >
                       sewing
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedDeptFilter(selectedDeptFilter === "washing" ? "all" : "washing")}
+                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                        selectedDeptFilter === "washing"
+                          ? "bg-red-50 text-red-600 border-red-200"
+                          : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                      }`}
+                    >
+                      washing
                     </button>
                     <button
                       type="button"
@@ -1252,10 +1252,6 @@ export default function OpenOrderPage() {
                     >
                       finishing
                     </button>
-
-
-
-
                   </div>
                 }
               />

@@ -25,7 +25,6 @@ export function Autocomplete<T>({
   onSelect,
   fetchSuggestions,
   renderSuggestion,
-  getSuggestionValue,
   placeholder = "",
   className = "",
   inputClassName = "",
@@ -38,7 +37,9 @@ export function Autocomplete<T>({
   const [suggestions, setSuggestions] = useState<T[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (value.trim().length < minChars) {
@@ -62,6 +63,10 @@ export function Autocomplete<T>({
   }, [value, minChars, debounceMs, fetchSuggestions]);
 
   useEffect(() => {
+    setActiveIndex(-1);
+  }, [suggestions]);
+
+  useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setShowSuggestions(false);
@@ -70,6 +75,54 @@ export function Autocomplete<T>({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    if (activeIndex >= 0 && dropdownRef.current) {
+      const activeElement = dropdownRef.current.children[activeIndex] as HTMLElement;
+      if (activeElement) {
+        activeElement.scrollIntoView({ block: "nearest" });
+      }
+    }
+  }, [activeIndex]);
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (showSuggestions && suggestions.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : 0));
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1));
+        return;
+      }
+      if (e.key === "Enter") {
+        if (activeIndex >= 0 && activeIndex < suggestions.length) {
+          e.preventDefault();
+          const item = suggestions[activeIndex];
+          onSelect(item);
+          setShowSuggestions(false);
+          setActiveIndex(-1);
+          return;
+        }
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setShowSuggestions(false);
+        setActiveIndex(-1);
+        return;
+      }
+    }
+
+    if (e.key === "Enter" || e.key === "Tab") {
+      setShowSuggestions(false);
+    }
+
+    if (onKeyDown) {
+      onKeyDown(e);
+    }
+  };
 
   return (
     <div className={`relative ${className}`} ref={containerRef}>
@@ -84,12 +137,7 @@ export function Autocomplete<T>({
           setShowSuggestions(true);
           if (onFocus) onFocus();
         }}
-        onKeyDown={(e) => {
-          if (e.key === "Enter" || e.key === "Tab") {
-            setShowSuggestions(false);
-          }
-          if (onKeyDown) onKeyDown(e);
-        }}
+        onKeyDown={handleKeyDown}
         placeholder={placeholder}
         className={inputClassName}
       />
@@ -99,17 +147,21 @@ export function Autocomplete<T>({
         </div>
       )}
       {showSuggestions && suggestions.length > 0 && (
-        <div className={`absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-[#e2e8f0] shadow-xl rounded-xl py-1 z-50 max-h-48 overflow-y-auto ${dropdownClassName}`}>
+        <div 
+          ref={dropdownRef}
+          className={`absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-[#e2e8f0] shadow-xl rounded-xl py-1 z-50 max-h-48 overflow-y-auto ${dropdownClassName}`}
+        >
           {suggestions.map((item, idx) => (
             <button
               key={idx}
               type="button"
               onClick={() => {
-                const val = getSuggestionValue(item);
                 onSelect(item);
                 setShowSuggestions(false);
               }}
-              className="w-full text-left px-3 py-1.5 hover:bg-slate-50 transition-colors text-xs font-semibold text-slate-700 flex items-center justify-between border-b border-slate-50 last:border-0 cursor-pointer"
+              className={`w-full text-left px-3 py-1.5 hover:bg-slate-50 transition-colors text-xs font-semibold text-slate-700 flex items-center justify-between border-b border-slate-50 last:border-0 cursor-pointer ${
+                idx === activeIndex ? "bg-indigo-50 text-indigo-700" : ""
+              }`}
             >
               {renderSuggestion(item)}
             </button>

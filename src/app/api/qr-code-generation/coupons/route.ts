@@ -27,16 +27,17 @@ export async function POST(request: Request) {
   }
 
   const selectedBundles = bundles.filter((b) => b.sel);
-  if (selectedBundles.length === 0 || operations.length === 0) {
+  const selectedOperations = operations.filter((op) => op.lastOpSection);
+  if (selectedBundles.length === 0 || selectedOperations.length === 0) {
     return Response.json(
-      { error: "No bundles selected or no operations to generate." },
+      { error: "No bundles or operations selected to generate." },
       { status: 400 },
     );
   }
 
   try {
     const pool = await getPool();
-    const cards = buildCouponCards(selectedBundles, operations);
+    const cards = buildCouponCards(selectedBundles, selectedOperations);
 
     await registerCoupons(pool, workOrder, cards);
     const couponCount = await countCoupons(pool, workOrder);
@@ -64,6 +65,8 @@ export async function GET(request: Request) {
   const section = searchParams.get("section") || undefined;
   const scannedParam = searchParams.get("is_scanned");
   const isScanned = scannedParam === null ? undefined : scannedParam === "true";
+  const fromCut = searchParams.get("from_cut") || undefined;
+  const toCut = searchParams.get("to_cut") || undefined;
 
   if (!workOrder) {
     return Response.json({ error: "work_order is required." }, { status: 400 });
@@ -76,6 +79,8 @@ export async function GET(request: Request) {
       opNo,
       section,
       isScanned,
+      fromCut,
+      toCut,
     });
     return Response.json({ coupons: rows, total, page, pageSize });
   } catch (err: unknown) {

@@ -17,6 +17,7 @@ interface CouponRow {
   bundleNo: string;
   opNo: string;
   section: string;
+  cutNo: string;
 }
 
 // INSERT...SELECT WHERE NOT EXISTS against a VALUES rowset — one round
@@ -33,13 +34,14 @@ async function insertCouponBatch(pool: sql.ConnectionPool, workOrder: string, ba
       request.input(`bundle${i}`, sql.NVarChar, row.bundleNo);
       request.input(`op${i}`, sql.NVarChar, row.opNo);
       request.input(`section${i}`, sql.NVarChar, row.section || null);
-      return `(@code${i}, @bundle${i}, @op${i}, @section${i})`;
+      request.input(`cut${i}`, sql.NVarChar, row.cutNo || null);
+      return `(@code${i}, @bundle${i}, @op${i}, @section${i}, @cut${i})`;
     })
     .join(", ");
   await request.input("workOrder", sql.NVarChar, workOrder).query(`
-    INSERT INTO dbo.QrCode_Coupon (CouponCode, WorkOrder, BundleNo, OpNo, Section)
-    SELECT src.CouponCode, @workOrder, src.BundleNo, src.OpNo, src.Section
-    FROM (VALUES ${valueList}) AS src(CouponCode, BundleNo, OpNo, Section)
+    INSERT INTO dbo.QrCode_Coupon (CouponCode, WorkOrder, BundleNo, OpNo, Section, CutNo)
+    SELECT src.CouponCode, @workOrder, src.BundleNo, src.OpNo, src.Section, src.CutNo
+    FROM (VALUES ${valueList}) AS src(CouponCode, BundleNo, OpNo, Section, CutNo)
     WHERE NOT EXISTS (
       SELECT 1 FROM dbo.QrCode_Coupon existing WHERE existing.CouponCode = src.CouponCode
     )
@@ -50,11 +52,23 @@ async function insertCouponBatch(pool: sql.ConnectionPool, workOrder: string, ba
 // thousands of coupons take a handful of round trips instead of one per
 // coupon. Safe to call repeatedly — codes already registered are skipped.
 export async function registerCoupons(pool: sql.ConnectionPool, workOrder: string, cards: CouponCard[]) {
+  // Ensure CutNo column exists before doing inserts
+  await pool.request().query(`
+    IF NOT EXISTS (
+      SELECT 1 FROM sys.columns
+      WHERE object_id = OBJECT_ID('dbo.QrCode_Coupon') AND name = 'CutNo'
+    )
+    BEGIN
+      ALTER TABLE dbo.QrCode_Coupon ADD CutNo NVARCHAR(50) NULL;
+    END
+  `);
+
   const rows = cards.map(({ bundle, op }) => ({
     couponCode: buildCouponCode(workOrder, bundle.bundleNo, op.opNo),
     bundleNo: bundle.bundleNo,
     opNo: op.opNo,
     section: op.section,
+    cutNo: bundle.cutNo,
   }));
 
   for (const batch of chunk(rows, CHUNK_SIZE)) {
@@ -96,6 +110,11 @@ export interface CouponListRow {
   Section: string | null;
   IsScanned: boolean;
   CreatedAt: string;
+  CutNo?: string | null;
+  OpName?: string | null;
+  EmployeeCode?: string | null;
+  EmployeeName?: string | null;
+  ScannedAt?: string | null;
 }
 
 export interface CouponListFilters {
@@ -103,6 +122,8 @@ export interface CouponListFilters {
   opNo?: string;
   section?: string;
   isScanned?: boolean;
+  fromCut?: string;
+  toCut?: string;
 }
 
 // Shared WHERE-clause builder for coupon lookups — bundleNo/opNo match by
@@ -112,24 +133,32 @@ export interface CouponListFilters {
 // to whichever request object is passed in, so paginated and full-set
 // queries stay in sync.
 function applyCouponFilters(request: sql.Request, workOrder: string, filters: CouponListFilters) {
-  const conditions = ["WorkOrder = @workOrder"];
+  const conditions = ["c.WorkOrder = @workOrder"];
   request.input("workOrder", sql.NVarChar, workOrder);
 
   if (filters.bundleNo) {
-    conditions.push("BundleNo LIKE @bundleNo");
+    conditions.push("c.BundleNo LIKE @bundleNo");
     request.input("bundleNo", sql.NVarChar, `%${filters.bundleNo}%`);
   }
   if (filters.opNo) {
-    conditions.push("OpNo LIKE @opNo");
+    conditions.push("c.OpNo LIKE @opNo");
     request.input("opNo", sql.NVarChar, `%${filters.opNo}%`);
   }
   if (filters.section) {
-    conditions.push("Section = @section");
+    conditions.push("c.Section = @section");
     request.input("section", sql.NVarChar, filters.section);
   }
   if (filters.isScanned !== undefined) {
-    conditions.push("IsScanned = @isScanned");
+    conditions.push("c.IsScanned = @isScanned");
     request.input("isScanned", sql.Bit, filters.isScanned);
+  }
+  if (filters.fromCut) {
+    conditions.push("TRY_CAST(c.CutNo AS INT) >= TRY_CAST(@fromCut AS INT)");
+    request.input("fromCut", sql.NVarChar, filters.fromCut);
+  }
+  if (filters.toCut) {
+    conditions.push("TRY_CAST(c.CutNo AS INT) <= TRY_CAST(@toCut AS INT)");
+    request.input("toCut", sql.NVarChar, filters.toCut);
   }
   return conditions.join(" AND ");
 }
@@ -155,13 +184,24 @@ export async function listCoupons(
       .input("offset", sql.Int, (page - 1) * pageSize)
       .input("pageSize", sql.Int, pageSize)
       .query(`
-        SELECT Id, CouponCode, WorkOrder, BundleNo, OpNo, Section, IsScanned, CreatedAt
-        FROM dbo.QrCode_Coupon
+        SELECT 
+          c.Id, c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.Section, c.IsScanned, c.CreatedAt, c.CutNo,
+          sb.Operation_Name AS OpName,
+          c.EmployeeCode,
+          w.FirstName AS EmployeeName,
+          c.ScannedAt
+        FROM dbo.QrCode_Coupon c
+        OUTER APPLY (
+          SELECT TOP 1 sb.Operation_Name
+          FROM dbo.Order_StyleBulletin sb
+          WHERE sb.Order_No = c.WorkOrder AND sb.Operation_Code = c.OpNo
+        ) sb
+        LEFT JOIN dbo.Workers w ON w.EmployeeID = TRY_CAST(c.EmployeeCode AS INT)
         WHERE ${where}
-        ORDER BY Id
+        ORDER BY c.Id
         OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
       `),
-    countRequest.query(`SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE ${where}`),
+    countRequest.query(`SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon c WHERE ${where}`),
   ]);
   return { rows: dataResult.recordset, total: countResult.recordset[0].total };
 }
@@ -176,10 +216,21 @@ export async function listAllCoupons(
   const request = pool.request();
   const where = applyCouponFilters(request, workOrder, filters);
   const result = await request.query(`
-    SELECT Id, CouponCode, WorkOrder, BundleNo, OpNo, Section, IsScanned, CreatedAt
-    FROM dbo.QrCode_Coupon
+    SELECT 
+      c.Id, c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.Section, c.IsScanned, c.CreatedAt, c.CutNo,
+      sb.Operation_Name AS OpName,
+      c.EmployeeCode,
+      w.FirstName AS EmployeeName,
+      c.ScannedAt
+    FROM dbo.QrCode_Coupon c
+    OUTER APPLY (
+      SELECT TOP 1 sb.Operation_Name
+      FROM dbo.Order_StyleBulletin sb
+      WHERE sb.Order_No = c.WorkOrder AND sb.Operation_Code = c.OpNo
+    ) sb
+    LEFT JOIN dbo.Workers w ON w.EmployeeID = TRY_CAST(c.EmployeeCode AS INT)
     WHERE ${where}
-    ORDER BY Id
+    ORDER BY c.Id
   `);
   return result.recordset;
 }

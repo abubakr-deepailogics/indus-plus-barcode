@@ -2,11 +2,14 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import {
-  Calendar,
+  Calendar as CalendarIcon,
   FileText,
   Cpu
 } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { format } from "date-fns";
 
 interface ScanningRow {
   index: number;
@@ -26,6 +29,7 @@ interface ScanningRow {
   smv: string;
   rate: string;
   value: string;
+  scanDate?: string;
 }
 
 export default function CouponScanningPage() {
@@ -149,8 +153,8 @@ export default function CouponScanningPage() {
 
     try {
       const url = scanCouponCode.trim()
-        ? `/api/coupons/scan?barcode=${encodeURIComponent(scanCouponCode.trim())}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}`
-        : `/api/coupons/scan?wo=${encodeURIComponent(workOrder)}&op=${encodeURIComponent(opNo)}&fromCut=${encodeURIComponent(fromCut)}&toCut=${encodeURIComponent(toCut)}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}`;
+        ? `/api/coupons/scan?barcode=${encodeURIComponent(scanCouponCode.trim())}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}&scanDate=${encodeURIComponent(dated)}`
+        : `/api/coupons/scan?wo=${encodeURIComponent(workOrder)}&op=${encodeURIComponent(opNo)}&fromCut=${encodeURIComponent(fromCut)}&toCut=${encodeURIComponent(toCut)}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}&scanDate=${encodeURIComponent(dated)}`;
       const response = await fetch(url);
       const data = await response.json();
 
@@ -189,6 +193,7 @@ export default function CouponScanningPage() {
             smv: String(item.Smv ?? ""),
             rate: String(item.Rate ?? ""),
             value: String(item.Value ?? ""),
+            scanDate: item.ScannedAt ? new Date(item.ScannedAt).toLocaleDateString() : (dated || new Date().toLocaleDateString()),
           };
 
           if (targetIndex !== -1) {
@@ -238,8 +243,77 @@ export default function CouponScanningPage() {
       smv: "",
       rate: "",
       value: "",
+      scanDate: "",
     }))
   );
+
+  const clearForm = () => {
+    // Clear Information panel
+    setEmployeeCode("");
+    setDepartment("");
+    setDesignation("");
+    setAlreadyDailyScan("");
+    setAlreadyMonthlyScan("");
+    setLineId("");
+    setScanBy("");
+    setDated("");
+    setEmployeeName("");
+    setSection("");
+    setShift("");
+    setAniNo("");
+    setSortOrder("");
+
+    // Clear Coupon verification headers
+    setWorkOrder("");
+    setFromCut("");
+    setToCut("");
+    setOpNo("");
+    setScanCouponCode("");
+    setScanError("");
+    setSuccessMessage("");
+    setErrorMessage("");
+
+    // Clear Table (reset to 10 empty rows)
+    setRows(
+      Array.from({ length: 10 }, (_, i) => ({
+        index: i + 1,
+        barCode: "",
+        anlCode: "",
+        cutNo: "",
+        category: "",
+        bundleNo: "",
+        qty: "",
+        inseam: "",
+        sizeCode: "",
+        sectionCode: "",
+        sectionName: "",
+        oprCode: "",
+        operationName: "",
+        skillCode: "",
+        smv: "",
+        rate: "",
+        value: "",
+        scanDate: "",
+      }))
+    );
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Check for Cmd+N (macOS: metaKey) or Ctrl+N (Windows/Linux: ctrlKey)
+      const isNewFormKey = (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "n";
+      
+      if (isNewFormKey) {
+        e.preventDefault(); // Prevent browser default (like opening new window)
+        clearForm();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, []);
 
   const handleCellChange = (index: number, field: keyof ScanningRow, val: string) => {
     setRows((prev) =>
@@ -381,7 +455,7 @@ export default function CouponScanningPage() {
 
       try {
         const response = await fetch(
-          `/api/coupons/scan?barcode=${encodeURIComponent(code)}&wo=${encodeURIComponent(workOrder)}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}`
+          `/api/coupons/scan?barcode=${encodeURIComponent(code)}&wo=${encodeURIComponent(workOrder)}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}&scanDate=${encodeURIComponent(dated)}`
         );
         const data = await response.json();
 
@@ -415,6 +489,7 @@ export default function CouponScanningPage() {
                   smv: String(item.Smv ?? ""),
                   rate: String(item.Rate ?? ""),
                   value: String(item.Value ?? ""),
+                  scanDate: item.ScannedAt ? new Date(item.ScannedAt).toLocaleDateString() : (dated || new Date().toLocaleDateString()),
                 };
               }
               return row;
@@ -519,18 +594,40 @@ export default function CouponScanningPage() {
             {/* Row 2 */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               {/* Dated */}
-              <label className="flex flex-col gap-0.5">
+              {/* Dated */}
+              <div className="flex flex-col gap-0.5">
                 <span className="font-bold text-[#475569] text-[10px] uppercase">Dated</span>
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={dated}
-                    onChange={(e) => setDated(e.target.value)}
-                    className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white w-full"
-                  />
-                  <Calendar className="w-3.5 h-3.5 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2 cursor-pointer" />
-                </div>
-              </label>
+                <Popover>
+                  <PopoverTrigger
+                    className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white w-full text-left flex items-center justify-between cursor-pointer h-[26px]"
+                  >
+                    <span>{dated ? format(new Date(dated), "yyyy-MM-dd") : "Select date"}</span>
+                    <CalendarIcon className="w-3.5 h-3.5 text-slate-400" />
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-white" align="start">
+                    <Calendar
+                      mode="single"
+                      captionLayout="dropdown"
+                      selected={dated ? new Date(dated) : undefined}
+                      onSelect={(date) => {
+                        if (date) {
+                          setDated(format(date, "yyyy-MM-dd"));
+                        } else {
+                          setDated("");
+                        }
+                      }}
+                      disabled={(date) => {
+                        if (date.getDay() === 0) return true;
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const comp = new Date(date);
+                        comp.setHours(0, 0, 0, 0);
+                        return comp > today;
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
 
               {/* Shift */}
               <label className="flex flex-col gap-0.5">
@@ -712,15 +809,25 @@ export default function CouponScanningPage() {
                 />
               </div>
 
-              {/* Scan Coupon button */}
+              {/* Action buttons */}
               <div className="flex flex-col justify-end md:col-span-2">
-                <button
-                  type="button"
-                  onClick={handleScanCoupon}
-                  className="w-full bg-[#4f46e5] hover:bg-[#4338ca] text-white font-bold py-1 rounded-lg text-xs shadow-sm transition-all flex items-center justify-center gap-1.5 cursor-pointer hover:shadow-md active:scale-[0.98] border border-transparent h-[26px]"
-                >
-                  <span>🔍 Scan Coupon</span>
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleScanCoupon}
+                    className="flex-1 bg-[#4f46e5] hover:bg-[#4338ca] text-white font-bold py-1 rounded-lg text-xs shadow-sm transition-all flex items-center justify-center gap-1 cursor-pointer hover:shadow-md active:scale-[0.98] border border-transparent h-[26px] whitespace-nowrap"
+                  >
+                    <span>🔍 Scan</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearForm}
+                    className="flex-1 bg-white border border-[#e2e8f0] hover:bg-slate-50 text-slate-700 font-bold py-1 rounded-lg text-xs shadow-sm transition-all flex items-center justify-center gap-1 cursor-pointer hover:shadow-md active:scale-[0.98] h-[26px] whitespace-nowrap"
+                    title="Clear all fields and tables (Ctrl+N or Cmd+N)"
+                  >
+                    <span>➕ New</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>

@@ -6,6 +6,7 @@ import { OperationsDetailTable } from "./OperationsDetailTable";
 import { BundleDetailTable } from "./BundleDetailTable";
 import { StyleSearchModal } from "./StyleSearchModal";
 import { PageSetupModal } from "./PageSetupModal";
+import { GenerateCouponsModal } from "./GenerateCouponsModal";
 
 export function QrCodeGenerationView() {
   const facade = useQrCodeGenerationFacade();
@@ -13,28 +14,6 @@ export function QrCodeGenerationView() {
   return (
     <>
       <div className="no-print flex flex-col gap-6 max-w-345 mx-auto text-xs text-[#334155] animate-fade-in relative pb-16">
-        {/* Top Breadcrumb */}
-        <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-3">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#64748b]">
-            <span>Industrial Engineering</span>
-            <span className="text-[#94a3b8] font-light">/</span>
-            <span className="text-[#4f46e5] font-bold">
-              QR Code Generation
-            </span>
-          </div>
-        </div>
-
-        {/* Title Header */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-          <div>
-            <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
-              QR Code Generation
-            </h1>
-            <p className="text-[11px] text-[#64748b] mt-0.5">
-              Generate and manage QR code finishing bundles
-            </p>
-          </div>
-        </div>
 
         {/* Main Parameters Panel */}
         <ParametersPanel
@@ -113,6 +92,19 @@ export function QrCodeGenerationView() {
           onClose={() => facade.setShowPageSetupModal(false)}
           onGeneratePdf={facade.handleGeneratePdf}
           generatingPdf={facade.generatingPdf}
+        />
+      )}
+
+      {/* Generate Coupons Modal */}
+      {facade.showGenerateModal && (
+        <GenerateCouponsModal
+          state={facade.generateModalState}
+          selectedBundlesCount={facade.activeStyle.bundles.filter((b) => b.sel).length}
+          selectedOperationsCount={facade.activeStyle.operations.filter((op) => op.lastOpSection).length}
+          generatedCount={facade.generatedCount}
+          errorMessage={facade.couponModalError}
+          onClose={() => facade.setShowGenerateModal(false)}
+          onConfirm={facade.confirmGenerateCoupons}
         />
       )}
     </>

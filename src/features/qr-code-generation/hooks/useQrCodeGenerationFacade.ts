@@ -37,6 +37,14 @@ interface QrCodeGenerationFacade {
   generatingCoupons: boolean;
   customersList: string[];
   workersList: WorkerItem[];
+
+  // Generation modal state
+  showGenerateModal: boolean;
+  setShowGenerateModal: (show: boolean) => void;
+  generateModalState: "confirm" | "generating" | "success" | "error";
+  couponModalError: string;
+  generatedCount: number;
+  confirmGenerateCoupons: () => Promise<void>;
 }
 
 const emptyStyle: QrCodeStyleData = {
@@ -78,6 +86,12 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   const [searchResults, setSearchResults] = useState<QrCodeStyleData[]>([]);
   const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [generatingCoupons, setGeneratingCoupons] = useState(false);
+
+  // Generation Modal States
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [generateModalState, setGenerateModalState] = useState<"confirm" | "generating" | "success" | "error">("confirm");
+  const [couponModalError, setCouponModalError] = useState("");
+  const [generatedCount, setGeneratedCount] = useState(0);
 
   // Dynamic dropdown lists
   const [customersList, setCustomersList] = useState<string[]>([]);
@@ -200,6 +214,13 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         code: cut.Color || "",
         rPcs: cut.R_Pcs !== undefined ? String(cut.R_Pcs) : "-",
       }));
+
+      // // Sort bundles in sequence by Cut No and Bundle No
+      bundles.sort((a: any, b: any) => {
+        const cutCompare = a.cutNo.localeCompare(b.cutNo, undefined, { numeric: true });
+        if (cutCompare !== 0) return cutCompare;
+        return a.bundleNo.localeCompare(b.bundleNo, undefined, { numeric: true });
+      });
 
       // Fetch coupon counts for the work order from registration count API
       let couponCount = "0";
@@ -336,11 +357,19 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       alert("Please select at least one bundle check box under Cutting Detail.");
       return;
     }
-    if (activeStyle.operations.length === 0) {
-      alert("No operations found for this Work Order.");
+    const selectedOperations = activeStyle.operations.filter((op) => op.lastOpSection);
+    if (selectedOperations.length === 0) {
+      alert("Please select at least one operation checkbox under Operations Detail.");
       return;
     }
 
+    setGenerateModalState("confirm");
+    setCouponModalError("");
+    setShowGenerateModal(true);
+  };
+
+  const confirmGenerateCoupons = async () => {
+    setGenerateModalState("generating");
     setGeneratingCoupons(true);
     try {
       const response = await fetch("/api/qr-code-generation/coupons", {
@@ -360,15 +389,17 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         throw new Error(data.error || "Failed to generate coupons.");
       }
 
-      alert(`Coupons registered successfully! Generated count: ${data.couponCount}`);
-      
+      setGeneratedCount(data.couponCount);
+      setGenerateModalState("success");
+
       // Update coupons count in UI
       setActiveStyle((prev) => ({
         ...prev,
         generatedCoupons: String(data.couponCount),
       }));
     } catch (err: any) {
-      alert(err.message || "An error occurred while generating coupons.");
+      setCouponModalError(err.message || "An error occurred while generating coupons.");
+      setGenerateModalState("error");
     } finally {
       setGeneratingCoupons(false);
     }
@@ -408,5 +439,13 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     generatingCoupons,
     customersList,
     workersList,
+
+    // Generation modal state
+    showGenerateModal,
+    setShowGenerateModal,
+    generateModalState,
+    couponModalError,
+    generatedCount,
+    confirmGenerateCoupons,
   };
 }
