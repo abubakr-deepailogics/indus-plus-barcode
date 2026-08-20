@@ -78,9 +78,6 @@ export function BundleDetailTable({
         <table className="w-full text-left border-collapse min-w-[500px]">
           <thead>
             <tr className="border-b border-[#e2e8f0]">
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
-                Trans Id
-              </th>
               <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
                 Cut #
               </th>
@@ -113,9 +110,6 @@ export function BundleDetailTable({
           <tbody className="divide-y divide-[#f1f5f9]">
             {bundles.map((bd) => (
               <tr key={bd.id} className="hover:bg-[#f8fafc] border-b border-[#f1f5f9] transition-colors text-[11px] font-semibold text-slate-700">
-                <td className="py-2.5 text-left text-slate-500 font-medium">
-                  {bd.transId}
-                </td>
                 <td className="py-2.5 text-center text-[#4f46e5] font-bold">
                   {bd.cutNo}
                 </td>

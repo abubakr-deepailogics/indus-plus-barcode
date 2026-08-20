@@ -42,11 +42,6 @@ export function PageSetupModal({
                 paddingRight: `${Math.max(2, pageSetup.margins.right * 6)}px`,
                 paddingTop: `${Math.max(2, pageSetup.margins.top * 6)}px`,
                 paddingBottom: `${Math.max(2, pageSetup.margins.bottom * 6)}px`,
-                transform:
-                  pageSetup.orientation === "Landscape"
-                    ? "rotate(-90deg)"
-                    : "none",
-                transition: "all 0.2s ease",
               }}
             >
               <div className="flex flex-col gap-1 w-full">
@@ -92,21 +87,6 @@ export function PageSetupModal({
                     generated rather than implying a choice that does
                     nothing. */}
                 <option value="Legal">210 x 309mm (Label Sheet)</option>
-              </select>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="font-bold text-gray-500 w-20">Source</span>
-              <select
-                value={pageSetup.source}
-                onChange={(e) =>
-                  onPageSetupChange({ ...pageSetup, source: e.target.value })
-                }
-                className="flex-1 max-w-[280px] px-3 py-2 rounded-xl border border-[#e2e8f0] bg-white font-semibold text-gray-700 focus:outline-none focus:ring-1 focus:ring-indigo-500"
-              >
-                <option value="Automatically Select">
-                  Automatically Select
-                </option>
-                <option value="Manual Feed">Manual Feed</option>
               </select>
             </div>
           </div>
@@ -165,46 +145,9 @@ export function PageSetupModal({
           </div>
         </div>
 
-        {/* Orientation & Margins Section */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 mb-6">
-          <div className="md:col-span-5 border border-gray-100 rounded-2xl p-4 bg-gray-50/30">
-            <div className="flex items-center gap-1.5 mb-3">
-              <span className="font-bold text-[#4f46e5] text-[11px] uppercase tracking-wider">
-                Orientation
-              </span>
-            </div>
-            <div className="flex flex-col gap-2.5 pl-1">
-              <label className="flex items-center gap-2 cursor-pointer font-bold text-gray-700">
-                <input
-                  type="radio"
-                  name="orientation"
-                  checked={pageSetup.orientation === "Portrait"}
-                  onChange={() =>
-                    onPageSetupChange({ ...pageSetup, orientation: "Portrait" })
-                  }
-                  className="text-[#4f46e5] focus:ring-indigo-500"
-                />
-                <span>Portrait</span>
-              </label>
-              <label className="flex items-center gap-2 cursor-pointer font-bold text-gray-700">
-                <input
-                  type="radio"
-                  name="orientation"
-                  checked={pageSetup.orientation === "Landscape"}
-                  onChange={() =>
-                    onPageSetupChange({
-                      ...pageSetup,
-                      orientation: "Landscape",
-                    })
-                  }
-                  className="text-[#4f46e5] focus:ring-indigo-500"
-                />
-                <span>Landscape</span>
-              </label>
-            </div>
-          </div>
-
-          <div className="md:col-span-7 border border-gray-100 rounded-2xl p-4 bg-gray-50/30">
+        {/* Margins Section */}
+        <div className="mb-6">
+          <div className="border border-gray-100 rounded-2xl p-4 bg-gray-50/30">
             <div className="flex items-center gap-1.5 mb-3">
               <FileText className="w-3.5 h-3.5 text-[#4f46e5]" />
               <span className="font-bold text-[#4f46e5] text-[11px] uppercase tracking-wider">
