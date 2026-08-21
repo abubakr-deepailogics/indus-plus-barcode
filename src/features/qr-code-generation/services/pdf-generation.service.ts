@@ -97,20 +97,22 @@ function assignSlots(
 // the PDF page must actually be A4, not a taller label-stock size, or the
 // print driver auto-scales the whole page down to fit and every box comes
 // out a few % undersized. Grid: 6 cols x 18 rows = 108 cards/page, each
-// box 3.2cm x 1.5cm.
+// box 3.25cm x 1.527cm.
 //
-// Box is shaved down from the original 3.25x1.55cm spec on purpose: with
-// margins (top 1.6, bottom 0.6, left 0.65, right 0.6cm), the printable
-// area is 197.5x279mm — 18 rows of 1.5cm need 270mm, leaving 4.5mm/9mm of
-// slack, thin enough that a ~1mm error in any one measurement (margin or
-// box) could overflow the printable area, but there's no more height to
-// give: A4 minus a workable top margin (for the sheet edge most printers
-// can't feed to) is already this tight at 18 rows.
+// Box height is shaved down from the original 3.25x1.55cm spec on
+// purpose: with margins (top 1.6, bottom 0.6cm), the printable height is
+// 275mm — 18 rows of 1.55cm need 279mm, 4mm *too tall*, which clipped the
+// 18th row off the printable page. 1.527cm/row (18 rows = 274.9mm) is the
+// largest box that actually fits, leaving ~0.1mm/row of slack. That's
+// razor-thin: a ~1mm error in any one measurement (margin or box) can
+// overflow again, but there's no more height to give — A4 minus a
+// workable top margin (for the sheet edge most printers can't feed to)
+// is already this tight at 18 rows.
 const MM_TO_PT = 72 / 25.4;
 const PAGE_SIZE: [number, number] = [210 * MM_TO_PT, 297 * MM_TO_PT];
 const CM_TO_PT = 28.3465;
 const BOX_WIDTH = 3.25 * CM_TO_PT;
-const BOX_HEIGHT = 1.6 * CM_TO_PT;
+const BOX_HEIGHT = 1.55 * CM_TO_PT;
 const GRID_COLS = 6;
 const GRID_ROWS = 18;
 // Margins (cm) for real A4 stock. Callers that don't pass margins
