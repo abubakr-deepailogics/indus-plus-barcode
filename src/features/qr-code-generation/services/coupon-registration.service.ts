@@ -53,16 +53,7 @@ async function insertCouponBatch(pool: sql.ConnectionPool, workOrder: string, ba
 // thousands of coupons take a handful of round trips instead of one per
 // coupon. Safe to call repeatedly — codes already registered are skipped.
 export async function registerCoupons(pool: sql.ConnectionPool, workOrder: string, cards: CouponCard[]) {
-  // Ensure CutNo column exists before doing inserts
-  await pool.request().query(`
-    IF NOT EXISTS (
-      SELECT 1 FROM sys.columns
-      WHERE object_id = OBJECT_ID('dbo.QrCode_Coupon') AND name = 'CutNo'
-    )
-    BEGIN
-      ALTER TABLE dbo.QrCode_Coupon ADD CutNo NVARCHAR(50) NULL;
-    END
-  `);
+
 
   const rows = cards.map(({ bundle, op }) => ({
     couponCode: buildCouponCode(workOrder, bundle.bundleNo, op.opNo),

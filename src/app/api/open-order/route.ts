@@ -85,39 +85,6 @@ export async function POST(request: Request) {
 
     const pool = await getPool();
 
-    // 1. Create table if not exists
-    await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Order_StyleBulletin_Header]') AND type in (N'U'))
-      BEGIN
-          CREATE TABLE [dbo].[Order_StyleBulletin_Header] (
-              [Work_Order] NVARCHAR(50) NOT NULL PRIMARY KEY,
-              [Description] NVARCHAR(255) NULL,
-              [Style_Description] NVARCHAR(255) NULL,
-              [Style_Category] NVARCHAR(100) NULL,
-              [Smd_No] NVARCHAR(50) NULL,
-              [Final_Smd_No] NVARCHAR(50) NULL,
-              [Target] NVARCHAR(50) NULL,
-              [Target_Unit_Min] NVARCHAR(50) NULL,
-              [Start_Time] NVARCHAR(50) NULL,
-              [Poc_Sam] NVARCHAR(50) NULL,
-              [Poc_Piece_Rate] NVARCHAR(50) NULL,
-              [Head_Reqd] NVARCHAR(50) NULL,
-              [App_Date] NVARCHAR(50) NULL,
-              [App_By] NVARCHAR(100) NULL,
-              [Status] NVARCHAR(50) NULL,
-              [Forward_For_Approval] NVARCHAR(50) NULL,
-              [UpdatedAt] DATETIME DEFAULT GETDATE()
-          )
-      END
-      ELSE
-      BEGIN
-          IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Order_StyleBulletin_Header]') AND name = 'Forward_For_Approval')
-          BEGIN
-              ALTER TABLE [dbo].[Order_StyleBulletin_Header] ADD [Forward_For_Approval] NVARCHAR(50) NULL
-          END
-      END
-    `);
-
     // 2. Perform UPSERT using MERGE
     await pool
       .request()

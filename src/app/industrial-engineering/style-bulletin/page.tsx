@@ -19,6 +19,7 @@ import { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { DataTableColumnHeader } from "@/components/ui/data-table/column-header";
 import { QrCode } from "lucide-react";
+import { Autocomplete } from "@/components/ui/autocomplete";
 import type {
   PageSetupConfig,
   QrCodeStyleData,
@@ -116,7 +117,6 @@ export default function OpenOrderPage() {
   const { user } = useAuth();
   const [searchQuery, setSearchQuery] = useState("");
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
-  const [isWoFocused, setIsWoFocused] = useState(false);
   const activeTab = "style_bulletin";
   const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
   const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
@@ -206,13 +206,6 @@ export default function OpenOrderPage() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
-
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
-
   const [showPageSetupModal, setShowPageSetupModal] = useState(false);
   const [pageSetup, setPageSetup] = useState<PageSetupConfig>({
     size: "Legal",
@@ -614,97 +607,6 @@ export default function OpenOrderPage() {
     void Promise.resolve().then(() => loadBulletinAttachments(workOrder || ""));
   }, [cutDetails, activeSearchQuery, loadBulletinAttachments]);
 
-  // Fetch autocomplete suggestions as user types
-  useEffect(() => {
-    if (searchQuery.trim().length < 2) {
-      setSuggestions([]);
-      return;
-    }
-
-    const delayDebounceFn = setTimeout(async () => {
-      try {
-        const response = await fetch(
-          `/api/open-order/suggestions?query=${encodeURIComponent(searchQuery)}`,
-        );
-        if (response.ok) {
-          const data = await response.json();
-          setSuggestions(data || []);
-        }
-      } catch (err) {
-        console.error("Suggestions fetch error:", err);
-      }
-    }, 200); // Shorter debounce for suggestion lists
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery]);
-
-  // Handle click outside suggestions container to close dropdown
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setShowSuggestions(false);
-        setIsWoFocused(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  useEffect(() => {
-    setActiveIndex(-1);
-  }, [suggestions]);
-
-  useEffect(() => {
-    if (activeIndex >= 0 && dropdownRef.current) {
-      const activeElement = dropdownRef.current.children[activeIndex] as HTMLElement;
-      if (activeElement) {
-        activeElement.scrollIntoView({ block: "nearest" });
-      }
-    }
-  }, [activeIndex]);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (showSuggestions && suggestions.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setActiveIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : 0));
-        return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setActiveIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1));
-        return;
-      }
-      if (e.key === "Enter") {
-        if (activeIndex >= 0 && activeIndex < suggestions.length) {
-          e.preventDefault();
-          const selected = suggestions[activeIndex];
-          setSearchQuery(selected);
-          setActiveSearchQuery(selected);
-          setShowSuggestions(false);
-          setIsWoFocused(false);
-          setActiveIndex(-1);
-          return;
-        }
-      }
-    }
-
-    if (e.key === "Escape") {
-      setShowSuggestions(false);
-      setIsWoFocused(false);
-      setActiveIndex(-1);
-    } else if (e.key === "Enter") {
-      setActiveSearchQuery(searchQuery);
-      setShowSuggestions(false);
-      setIsWoFocused(false);
-      setActiveIndex(-1);
-    }
-  };
 
   // Fetch data from API only when the active (committed) search query
   // changes — typing alone must not refetch/replace the table.
@@ -810,6 +712,19 @@ export default function OpenOrderPage() {
     };
   }, [styleBulletins, cutDetails, activeSearchQuery]);
 
+  // Synchronize searchQuery with active metadata once loaded
+  useEffect(() => {
+    if (styleBulletinMetadata.amNo) {
+      setSearchQuery(
+        `${styleBulletinMetadata.amNo}${
+          styleBulletinMetadata.customer ? ` (${styleBulletinMetadata.customer})` : ""
+        }`
+      );
+    } else if (activeSearchQuery) {
+      setSearchQuery(activeSearchQuery);
+    }
+  }, [styleBulletinMetadata.amNo, styleBulletinMetadata.customer, activeSearchQuery]);
+
   // Group operations by Section for printing layout
   const groupedOperations = useMemo(() => {
     const groups: Record<string, StyleBulletinRow[]> = {};
@@ -903,63 +818,52 @@ export default function OpenOrderPage() {
               {/* Left Form Panel: Basic Style Details */}
               <div className="lg:col-span-3 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
                 {/* Row 1: W/O # & Customer */}
-                <div className="flex flex-col gap-1.5 relative" ref={containerRef}>
+                <div className="flex flex-col gap-1.5 relative">
                   <label className="font-bold text-[#475569] text-[10px] uppercase">W/O # &amp; Customer</label>
                   <div className="relative">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94a3b8]" />
-                    <input
-                      type="text"
-                      value={
-                        isWoFocused
-                          ? searchQuery
-                          : styleBulletinMetadata.amNo
-                          ? `${styleBulletinMetadata.amNo}${
-                              styleBulletinMetadata.customer
-                                ? ` (${styleBulletinMetadata.customer})`
-                                : ""
-                            }`
-                          : searchQuery
-                      }
-                      onChange={(e) => {
-                        setSearchQuery(e.target.value);
-                        setShowSuggestions(true);
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94a3b8] z-10 pointer-events-none" />
+                    <Autocomplete<string>
+                      value={searchQuery}
+                      onChange={(val) => {
+                        setSearchQuery(val);
+                        if (!val) {
+                          setActiveSearchQuery("");
+                        }
                       }}
-                      onFocus={() => {
-                        setIsWoFocused(true);
-                        setShowSuggestions(true);
+                      onSelect={(item) => {
+                        setSearchQuery(item);
+                        setActiveSearchQuery(item);
                       }}
-                      onKeyDown={handleKeyDown}
+                      fetchSuggestions={async (query) => {
+                        try {
+                          const response = await fetch(
+                            `/api/open-order/suggestions?query=${encodeURIComponent(query)}`
+                          );
+                          if (response.ok) {
+                            const data = await response.json();
+                            return data || [];
+                          }
+                        } catch (err) {
+                          console.error("Suggestions fetch error:", err);
+                        }
+                        return [];
+                      }}
+                      renderSuggestion={(suggestion) => (
+                        <span>{suggestion}</span>
+                      )}
+                      getSuggestionValue={(item) => item}
                       placeholder="Search W/O..."
-                      className="w-full pl-9 pr-3 py-1 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                      className="w-full"
+                      inputClassName="w-full pl-9 pr-3 py-1 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                      dropdownClassName="max-h-60"
+                      minChars={2}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          setActiveSearchQuery(searchQuery);
+                        }
+                      }}
                     />
                   </div>
-                  {/* Autocomplete Suggestions Dropdown Overlay */}
-                  {showSuggestions && suggestions.length > 0 && (
-                    <div 
-                      ref={dropdownRef}
-                      className="absolute left-0 right-0 top-full mt-1 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-[#f1f5f9] animate-fade-in"
-                    >
-                      {suggestions.map((suggestion, idx) => (
-                        <button
-                          key={suggestion}
-                          type="button"
-                          onClick={() => {
-                            setSearchQuery(suggestion);
-                            setActiveSearchQuery(suggestion);
-                            setShowSuggestions(false);
-                            setIsWoFocused(false);
-                          }}
-                          className={`w-full text-left px-4 py-2 text-xs font-semibold transition-all cursor-pointer block ${
-                            idx === activeIndex
-                              ? "bg-indigo-50 text-[#4f46e5]"
-                              : "hover:bg-indigo-50/50 text-slate-700 hover:text-[#4f46e5]"
-                          }`}
-                        >
-                          {suggestion}
-                        </button>
-                      ))}
-                    </div>
-                  )}
                 </div>
                 {/* Row 2: Sale Order No & Order Qty */}
                 <div className="grid grid-cols-2 gap-3">

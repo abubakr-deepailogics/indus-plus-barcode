@@ -1,15 +1,10 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Calendar as CalendarIcon, FileText, Cpu } from "lucide-react";
+import { FileText, Cpu } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { useAuth } from "@/features/auth/context/auth-context";
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import { DatePicker } from "@/components/ui/date-picker";
 import { format } from "date-fns";
 
 interface ScanningRow {
@@ -206,7 +201,7 @@ export default function CouponScanningPage() {
       );
 
       setRows((prev) => {
-        let updatedRows = [...prev];
+        const updatedRows = [...prev];
         items.forEach((item) => {
           // Find the first empty row in our table grid (where row.barCode is empty)
           const targetIndex = updatedRows.findIndex((row) => !row.barCode);
@@ -677,38 +672,19 @@ export default function CouponScanningPage() {
                 <span className="font-bold text-[#475569] text-[10px] uppercase">
                   Dated
                 </span>
-                <Popover>
-                  <PopoverTrigger className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white w-full text-left flex items-center justify-between cursor-pointer h-[26px]">
-                    <span>
-                      {dated
-                        ? format(new Date(dated), "yyyy-MM-dd")
-                        : "Select date"}
-                    </span>
-                    <CalendarIcon className="w-3.5 h-3.5 text-slate-400" />
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-white" align="start">
-                    <Calendar
-                      mode="single"
-                      captionLayout="dropdown"
-                      selected={dated ? new Date(dated) : undefined}
-                      onSelect={(date) => {
-                        if (date) {
-                          setDated(format(date, "yyyy-MM-dd"));
-                        } else {
-                          setDated("");
-                        }
-                      }}
-                      disabled={(date) => {
-                        if (date.getDay() === 0) return true;
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        const comp = new Date(date);
-                        comp.setHours(0, 0, 0, 0);
-                        return comp > today;
-                      }}
-                    />
-                  </PopoverContent>
-                </Popover>
+                <DatePicker
+                  value={dated}
+                  onChange={setDated}
+                  placeholder="Select date"
+                  disabledDays={(date) => {
+                    if (date.getDay() === 0) return true;
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const comp = new Date(date);
+                    comp.setHours(0, 0, 0, 0);
+                    return comp > today;
+                  }}
+                />
               </div>
 
               {/* Shift */}

@@ -21,16 +21,7 @@ export async function GET(request: Request) {
         return Response.json({ error: "Invalid employee code format." }, { status: 400 });
       }
 
-      // Run auto-migration check in a separate query to avoid compile-time issues
-      await pool.request().query(`
-        IF NOT EXISTS (
-          SELECT 1 FROM sys.columns
-          WHERE object_id = OBJECT_ID('dbo.QrCode_Coupon') AND name = 'ScannedAt'
-        )
-        BEGIN
-          ALTER TABLE dbo.QrCode_Coupon ADD ScannedAt DATETIME NULL;
-        END
-      `);
+
 
       const result = await pool
         .request()

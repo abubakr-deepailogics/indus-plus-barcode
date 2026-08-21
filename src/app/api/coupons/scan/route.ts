@@ -25,32 +25,7 @@ export async function GET(request: Request) {
   try {
     const pool = await getPool();
 
-    // Auto-migration: Ensure EmployeeCode, ScanBy, and ScannedAt columns exist in dbo.QrCode_Coupon
-    await pool.request().query(`
-      IF NOT EXISTS (
-        SELECT 1 FROM sys.columns
-        WHERE object_id = OBJECT_ID('dbo.QrCode_Coupon') AND name = 'EmployeeCode'
-      )
-      BEGIN
-        ALTER TABLE dbo.QrCode_Coupon ADD EmployeeCode NVARCHAR(100) NULL;
-      END
 
-      IF NOT EXISTS (
-        SELECT 1 FROM sys.columns
-        WHERE object_id = OBJECT_ID('dbo.QrCode_Coupon') AND name = 'ScanBy'
-      )
-      BEGIN
-        ALTER TABLE dbo.QrCode_Coupon ADD ScanBy NVARCHAR(100) NULL;
-      END
-
-      IF NOT EXISTS (
-        SELECT 1 FROM sys.columns
-        WHERE object_id = OBJECT_ID('dbo.QrCode_Coupon') AND name = 'ScannedAt'
-      )
-      BEGIN
-        ALTER TABLE dbo.QrCode_Coupon ADD ScannedAt DATETIME NULL;
-      END
-    `);
 
     // Optimize execution plan by running distinct lookup logic depending on whether barcode is provided.
     // This avoids slow OR queries which prevent index seeks on index tables.
