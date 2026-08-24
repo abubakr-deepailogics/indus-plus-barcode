@@ -12,6 +12,7 @@ interface GenerateRequestBody {
   operations: OperationsDetailRow[];
   layout: CouponLayout;
   margins: { top: number; bottom: number; left: number; right: number };
+  codeType: "qr" | "barcode";
 }
 
 // Generates the QR-coupon PDF once and stores it — repeat downloads read
@@ -19,7 +20,7 @@ interface GenerateRequestBody {
 // re-rendering thousands of QR codes every time.
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<GenerateRequestBody>;
-  const { workOrder, saleOrderNo, styleCode, bundles, operations, layout, margins } = body;
+  const { workOrder, saleOrderNo, styleCode, bundles, operations, layout, margins, codeType } = body;
 
   // styleCode is only a display label in the PDF header — some sources
   // (e.g. Open Order) have no real style code and legitimately send "".
@@ -49,6 +50,7 @@ export async function POST(request: Request) {
       operations: selectedOperations,
       layout,
       margins,
+      codeType,
     });
 
     const pool = await getPool();

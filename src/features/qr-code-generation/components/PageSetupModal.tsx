@@ -44,18 +44,53 @@ export function PageSetupModal({
                 paddingBottom: `${Math.max(2, pageSetup.margins.bottom * 6)}px`,
               }}
             >
-              <div className="flex flex-col gap-1 w-full">
-                <div className="h-1.5 w-8/12 bg-gray-300 rounded" />
-                <div className="h-1 bg-gray-200 rounded w-full" />
-                <div className="h-1 bg-gray-200 rounded w-10/12" />
-                <div className="h-1 bg-gray-200 rounded w-11/12" />
-              </div>
-              <div className="flex flex-col gap-1 w-full items-center">
-                <div className="h-3 w-full bg-gray-300/60 rounded flex items-center justify-center text-[5px] text-gray-500 font-bold font-mono">
-                  QR CODE
+              {pageSetup.codeType === "barcode" ? (
+                <div className="flex flex-col gap-1 w-full h-full justify-between">
+                  {/* 3x3 Grid fields preview */}
+                  <div className="grid grid-cols-3 gap-0.5 w-full">
+                    <div className="h-1 bg-gray-300 rounded w-full" />
+                    <div className="h-1 bg-gray-250 rounded w-full" />
+                    <div className="h-1 bg-gray-250 rounded w-full" />
+                    
+                    <div className="h-1 bg-gray-250 rounded w-full" />
+                    <div className="h-1 bg-gray-300 rounded w-full" />
+                    <div className="h-1 bg-gray-250 rounded w-full" />
+                    
+                    <div className="h-1 bg-gray-250 rounded w-full" />
+                    <div className="h-1 bg-gray-250 rounded w-full" />
+                    <div className="h-1 bg-gray-300 rounded w-full" />
+                  </div>
+                  {/* Barcode stripes */}
+                  <div className="flex items-center gap-[1px] h-6 w-full justify-center my-0.5">
+                    <div className="w-[1.5px] h-full bg-slate-700" />
+                    <div className="w-[0.5px] h-full bg-slate-700" />
+                    <div className="w-[2px] h-full bg-slate-700" />
+                    <div className="w-[0.5px] h-full bg-slate-700" />
+                    <div className="w-[1px] h-full bg-slate-700" />
+                    <div className="w-[3px] h-full bg-slate-700" />
+                    <div className="w-[0.5px] h-full bg-slate-700" />
+                    <div className="w-[1.5px] h-full bg-slate-700" />
+                    <div className="w-[2px] h-full bg-slate-700" />
+                  </div>
+                  {/* Operation name */}
+                  <div className="h-1 w-10/12 bg-gray-300 rounded self-center" />
                 </div>
-              </div>
-              <div className="h-1.5 w-4/12 bg-gray-300 rounded self-end" />
+              ) : (
+                <>
+                  <div className="flex flex-col gap-1 w-full">
+                    <div className="h-1.5 w-8/12 bg-gray-300 rounded" />
+                    <div className="h-1 bg-gray-200 rounded w-full" />
+                    <div className="h-1 bg-gray-200 rounded w-10/12" />
+                    <div className="h-1 bg-gray-200 rounded w-11/12" />
+                  </div>
+                  <div className="flex flex-col gap-1 w-full items-center">
+                    <div className="h-3 w-full bg-gray-300/60 rounded flex items-center justify-center text-[5px] text-gray-500 font-bold font-mono">
+                      QR CODE
+                    </div>
+                  </div>
+                  <div className="h-1.5 w-4/12 bg-gray-300 rounded self-end" />
+                </>
+              )}
             </div>
             <div className="absolute top-0 right-0 w-3 h-3 bg-white border-l border-b border-gray-300 rounded-bl-sm" />
           </div>

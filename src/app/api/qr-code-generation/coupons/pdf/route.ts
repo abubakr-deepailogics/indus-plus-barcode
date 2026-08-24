@@ -29,6 +29,8 @@ export async function GET(request: Request) {
     : undefined;
   const fromCut = searchParams.get("from_cut") || undefined;
   const toCut = searchParams.get("to_cut") || undefined;
+  const codeTypeParam = searchParams.get("code_type");
+  const codeType = codeTypeParam === "barcode" ? "barcode" : "qr";
 
   if (!workOrder) {
     return Response.json({ error: "work_order is required." }, { status: 400 });
@@ -142,6 +144,7 @@ export async function GET(request: Request) {
       operations,
       cards,
       layout,
+      codeType,
     });
 
     return new Response(new Uint8Array(buffer), {

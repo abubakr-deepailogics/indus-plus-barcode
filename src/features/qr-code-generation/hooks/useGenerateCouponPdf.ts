@@ -66,6 +66,7 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
   const handleDownloadPdf = async (
     layout?: CouponLayout,
     margins?: { top: number; bottom: number; left: number; right: number },
+    codeType?: "qr" | "barcode",
   ) => {
     setGeneratingPdf(true);
     try {
@@ -80,6 +81,7 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
           operations: activeStyle.operations,
           layout,
           margins,
+          codeType,
         }),
       });
       const data = await res.json();

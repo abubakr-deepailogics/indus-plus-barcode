@@ -7,6 +7,7 @@ import { BundleDetailTable } from "./BundleDetailTable";
 import { StyleSearchModal } from "./StyleSearchModal";
 import { PageSetupModal } from "./PageSetupModal";
 import { GenerateCouponsModal } from "./GenerateCouponsModal";
+import { CodeTypeSelectionModal } from "./CodeTypeSelectionModal";
 
 export function QrCodeGenerationView() {
   const facade = useQrCodeGenerationFacade();
@@ -20,7 +21,7 @@ export function QrCodeGenerationView() {
           activeStyle={facade.activeStyle}
           onWorkOrderInputChange={facade.handleWorkOrderInputChange}
           onOpenSearchModal={facade.openSearchModal}
-          onOpenPageSetupModal={() => facade.setShowPageSetupModal(true)}
+          onOpenPageSetupModal={() => facade.setShowCodeTypeModal(true)}
           onFieldChange={facade.handleFieldChange}
           onGenerateCoupons={facade.handleGenerateCoupons}
           generatingCoupons={facade.generatingCoupons}
@@ -94,6 +95,17 @@ export function QrCodeGenerationView() {
           generatingPdf={facade.generatingPdf}
         />
       )}
+
+      {/* Code Type Selection Modal */}
+      <CodeTypeSelectionModal
+        isOpen={facade.showCodeTypeModal}
+        onClose={() => facade.setShowCodeTypeModal(false)}
+        onSelect={(type) => {
+          facade.setPageSetup({ ...facade.pageSetup, codeType: type });
+          facade.setShowCodeTypeModal(false);
+          facade.setShowPageSetupModal(true);
+        }}
+      />
 
       {/* Generate Coupons Modal */}
       {facade.showGenerateModal && (

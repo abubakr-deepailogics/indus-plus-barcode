@@ -24,6 +24,8 @@ interface QrCodeGenerationFacade {
   setSelectedIdx: (idx: number) => void;
   setShowSearchModal: (show: boolean) => void;
   setShowPageSetupModal: (show: boolean) => void;
+  showCodeTypeModal: boolean;
+  setShowCodeTypeModal: (show: boolean) => void;
   setPageSetup: (config: PageSetupConfig) => void;
   openSearchModal: () => void;
   handleFieldChange: (field: keyof QrCodeStyleData, value: string) => void;
@@ -76,6 +78,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
   const [showPageSetupModal, setShowPageSetupModal] = useState(false);
+  const [showCodeTypeModal, setShowCodeTypeModal] = useState(false);
   const [pageSetup, setPageSetup] = useState<PageSetupConfig>({
     size: "Legal",
     source: "Automatically Select",
@@ -87,6 +90,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     margins: { left: 0.74, right: 0.65, top: 1.6, bottom: 0.6 },
     gridFormat: "3x10",
     layout: "same-line",
+    codeType: "qr",
   });
 
   const [searchResults, setSearchResults] = useState<QrCodeStyleData[]>([]);
@@ -424,7 +428,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
 
   const { handleDownloadPdf: downloadPdf, generatingPdf } = useGenerateCouponPdf(activeStyle);
   const handleGeneratePdf = async () => {
-    await downloadPdf(pageSetup.layout, pageSetup.margins);
+    await downloadPdf(pageSetup.layout, pageSetup.margins, pageSetup.codeType);
     setShowPageSetupModal(false);
   };
 
@@ -442,6 +446,8 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     setSelectedIdx,
     setShowSearchModal,
     setShowPageSetupModal,
+    showCodeTypeModal,
+    setShowCodeTypeModal,
     setPageSetup,
     openSearchModal,
     handleFieldChange,

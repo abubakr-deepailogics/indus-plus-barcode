@@ -60,6 +60,7 @@ export interface PageSetupConfig {
   };
   gridFormat: string;
   layout: CouponLayout;
+  codeType?: "qr" | "barcode";
 }
 
 // How operation boundaries interact with the coupon grid's rows/pages:

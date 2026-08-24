@@ -6,6 +6,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Search, Download, ChevronLeft, ChevronRight } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
+import { CodeTypeSelectionModal } from "@/features/qr-code-generation/components/CodeTypeSelectionModal";
 import type { PageSetupConfig } from "@/features/qr-code-generation/types";
 
 interface CouponRow {
@@ -51,6 +52,7 @@ export default function CouponTracingPage() {
   const [scannedFilter, setScannedFilter] = useState<(typeof SCANNED_OPTIONS)[number]["value"]>("");
   const [unscanningCode, setUnscanningCode] = useState("");
   const [showPageSetupModal, setShowPageSetupModal] = useState(false);
+  const [showCodeTypeModal, setShowCodeTypeModal] = useState(false);
   const [pageSetup, setPageSetup] = useState<PageSetupConfig>({
     size: "Legal",
     source: "Automatically Select",
@@ -58,6 +60,7 @@ export default function CouponTracingPage() {
     margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 },
     gridFormat: "3x10",
     layout: "same-line",
+    codeType: "qr",
   });
 
   const fetchWorkOrderSuggestions = async (query: string) => {
@@ -206,8 +209,9 @@ export default function CouponTracingPage() {
     if (fromCutFilter.trim()) params.set("from_cut", fromCutFilter.trim());
     if (toCutFilter.trim()) params.set("to_cut", toCutFilter.trim());
     params.set("layout", pageSetup.layout);
+    if (pageSetup.codeType) params.set("code_type", pageSetup.codeType);
     return `/api/qr-code-generation/coupons/pdf?${params}`;
-  }, [tracedWorkOrder, bundleFilter, opFilter, sectionFilter, scannedFilter, fromCutFilter, toCutFilter, pageSetup.layout]);
+  }, [tracedWorkOrder, bundleFilter, opFilter, sectionFilter, scannedFilter, fromCutFilter, toCutFilter, pageSetup.layout, pageSetup.codeType]);
 
   // Any filter change re-queries from page 1 — old page N may no longer
   // exist once the row count shrinks.
@@ -275,7 +279,7 @@ export default function CouponTracingPage() {
                 {couponTotal.toLocaleString()} total
               </span>
               <button
-                onClick={() => setShowPageSetupModal(true)}
+                onClick={() => setShowCodeTypeModal(true)}
                 disabled={couponTotal === 0}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
                   couponTotal === 0
@@ -464,6 +468,16 @@ export default function CouponTracingPage() {
           generatingPdf={false}
         />
       )}
+
+      <CodeTypeSelectionModal
+        isOpen={showCodeTypeModal}
+        onClose={() => setShowCodeTypeModal(false)}
+        onSelect={(type) => {
+          setPageSetup((prev) => ({ ...prev, codeType: type }));
+          setShowCodeTypeModal(false);
+          setShowPageSetupModal(true);
+        }}
+      />
     </div>
   );
 }

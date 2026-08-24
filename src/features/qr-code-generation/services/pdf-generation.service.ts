@@ -19,6 +19,164 @@ const FONT_PATH = path.join(
   "src/assets/fonts/Roboto-Regular.ttf",
 );
 
+const CODE128_PATTERNS = [
+  [2, 1, 2, 2, 2, 2], // 0
+  [2, 2, 2, 1, 2, 2], // 1
+  [2, 2, 2, 2, 2, 1], // 2
+  [1, 2, 1, 2, 2, 3], // 3
+  [1, 2, 1, 3, 2, 2], // 4
+  [1, 3, 1, 2, 2, 2], // 5
+  [1, 2, 2, 2, 1, 3], // 6
+  [1, 2, 2, 3, 1, 2], // 7
+  [1, 3, 2, 2, 1, 2], // 8
+  [2, 2, 1, 2, 1, 3], // 9
+  [2, 2, 1, 3, 1, 2], // 10
+  [2, 3, 1, 2, 1, 2], // 11
+  [1, 1, 2, 2, 3, 2], // 12
+  [1, 2, 2, 1, 3, 2], // 13
+  [1, 2, 2, 2, 3, 1], // 14
+  [1, 1, 3, 2, 2, 2], // 15
+  [1, 2, 3, 1, 2, 2], // 16
+  [1, 2, 3, 2, 2, 1], // 17
+  [2, 2, 3, 2, 1, 1], // 18
+  [2, 2, 1, 1, 3, 2], // 19
+  [2, 2, 1, 2, 3, 1], // 20
+  [2, 1, 3, 2, 1, 2], // 21
+  [2, 2, 3, 1, 1, 2], // 22
+  [3, 1, 2, 1, 3, 1], // 23
+  [3, 1, 1, 2, 2, 2], // 24
+  [3, 2, 1, 1, 2, 2], // 25
+  [3, 2, 1, 2, 2, 1], // 26
+  [3, 1, 2, 2, 1, 2], // 27
+  [3, 2, 2, 1, 1, 2], // 28
+  [3, 2, 2, 2, 1, 1], // 29
+  [2, 1, 2, 1, 2, 3], // 30
+  [2, 1, 2, 3, 2, 1], // 31
+  [2, 3, 2, 1, 2, 1], // 32
+  [1, 1, 1, 3, 2, 3], // 33
+  [1, 3, 1, 1, 2, 3], // 34
+  [1, 3, 1, 3, 2, 1], // 35
+  [1, 1, 2, 3, 1, 3], // 36
+  [1, 3, 2, 1, 1, 3], // 37
+  [1, 3, 2, 3, 1, 1], // 38
+  [2, 1, 1, 3, 1, 3], // 39
+  [2, 3, 1, 1, 1, 3], // 40
+  [2, 3, 1, 3, 1, 1], // 41
+  [1, 1, 2, 1, 3, 3], // 42
+  [1, 1, 2, 3, 3, 1], // 43
+  [1, 3, 2, 1, 3, 1], // 44
+  [1, 1, 3, 1, 2, 3], // 45
+  [1, 1, 3, 3, 2, 1], // 46
+  [1, 3, 3, 1, 2, 1], // 47
+  [3, 1, 3, 1, 2, 1], // 48
+  [2, 1, 1, 3, 3, 1], // 49
+  [2, 3, 1, 1, 3, 1], // 50
+  [2, 1, 3, 1, 1, 3], // 51
+  [2, 1, 3, 3, 1, 1], // 52
+  [2, 1, 3, 1, 3, 1], // 53
+  [3, 1, 1, 1, 2, 3], // 54
+  [3, 1, 1, 3, 2, 1], // 55
+  [3, 3, 1, 1, 2, 1], // 56
+  [3, 1, 2, 1, 1, 3], // 57
+  [3, 1, 2, 3, 1, 1], // 58
+  [3, 3, 2, 1, 1, 1], // 59
+  [3, 1, 4, 1, 1, 1], // 60
+  [2, 2, 1, 4, 1, 1], // 61
+  [4, 3, 1, 1, 1, 1], // 62
+  [1, 1, 1, 2, 2, 4], // 63
+  [1, 1, 1, 4, 2, 2], // 64
+  [1, 2, 1, 1, 2, 4], // 65
+  [1, 2, 1, 4, 2, 1], // 66
+  [1, 4, 1, 1, 2, 2], // 67
+  [1, 4, 1, 2, 2, 1], // 68
+  [1, 1, 2, 2, 1, 4], // 69
+  [1, 1, 2, 4, 1, 2], // 70
+  [1, 2, 2, 1, 1, 4], // 71
+  [1, 2, 2, 4, 1, 1], // 72
+  [1, 4, 2, 1, 1, 2], // 73
+  [1, 4, 2, 2, 1, 1], // 74
+  [2, 4, 1, 2, 1, 1], // 75
+  [2, 2, 1, 1, 1, 4], // 76
+  [4, 1, 3, 1, 1, 1], // 77
+  [2, 4, 1, 1, 1, 2], // 78
+  [1, 3, 4, 1, 1, 1], // 79
+  [1, 1, 1, 2, 4, 2], // 80
+  [1, 2, 1, 1, 4, 2], // 81
+  [1, 2, 1, 2, 4, 1], // 82
+  [1, 1, 4, 2, 1, 2], // 83
+  [1, 2, 4, 1, 1, 2], // 84
+  [1, 2, 4, 2, 1, 1], // 85
+  [4, 1, 1, 2, 1, 2], // 86
+  [4, 2, 1, 1, 1, 2], // 87
+  [4, 2, 1, 2, 1, 1], // 88
+  [2, 1, 2, 1, 4, 1], // 89
+  [2, 1, 4, 1, 2, 1], // 90
+  [4, 1, 2, 1, 2, 1], // 91
+  [1, 1, 1, 1, 4, 3], // 92
+  [1, 1, 1, 3, 4, 1], // 93
+  [1, 3, 1, 1, 4, 1], // 94
+  [1, 1, 4, 1, 1, 3], // 95
+  [1, 1, 4, 3, 1, 1], // 96
+  [4, 1, 1, 1, 1, 3], // 97
+  [4, 1, 1, 3, 1, 1], // 98
+  [1, 1, 3, 1, 4, 1], // 99
+  [1, 1, 4, 1, 3, 1], // 100
+  [3, 1, 1, 1, 4, 1], // 101
+  [4, 1, 1, 1, 3, 1], // 102
+  [2, 1, 1, 4, 1, 2], // 103 (Start A)
+  [2, 1, 1, 2, 1, 4], // 104 (Start B)
+  [2, 1, 1, 2, 3, 2], // 105 (Start C)
+  [2, 3, 3, 1, 1, 1, 2], // 106 (Stop)
+];
+
+function formatShortDate(date: Date = new Date()): string {
+  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+  const day = String(date.getDate()).padStart(2, "0");
+  const month = months[date.getMonth()];
+  const year = String(date.getFullYear()).slice(-2);
+  return `${day}-${month}-${year}`;
+}
+
+function drawBarcode(
+  doc: any,
+  x: number,
+  y: number,
+  width: number,
+  height: number,
+  value: string,
+) {
+  const symbols: number[] = [104]; // Start B
+  let checksum = 104;
+  for (let i = 0; i < value.length; i++) {
+    const code = value.charCodeAt(i);
+    if (code < 32 || code > 127) continue;
+    const symbolVal = code - 32;
+    symbols.push(symbolVal);
+    checksum += symbolVal * (i + 1);
+  }
+  checksum = checksum % 103;
+  symbols.push(checksum);
+  symbols.push(106); // Stop
+
+  const totalModules = 11 * (value.length + 2) + 13;
+  const moduleWidth = width / totalModules;
+
+  let currentX = x;
+  doc.save();
+  for (const sym of symbols) {
+    const pattern = CODE128_PATTERNS[sym];
+    if (!pattern) continue;
+    for (let j = 0; j < pattern.length; j++) {
+      const w = pattern[j] * moduleWidth;
+      if (j % 2 === 0) {
+        doc.rect(currentX, y, w, height).fill("#000000");
+      }
+      currentX += w;
+    }
+  }
+  doc.restore();
+}
+
 interface GeneratePdfParams {
   workOrder: string;
   saleOrderNo: string;
@@ -40,6 +198,7 @@ interface GeneratePdfParams {
   // everywhere else in this feature. Defaults match PageSetupModal's
   // initial config (see useQrCodeGenerationFacade).
   margins?: { top: number; bottom: number; left: number; right: number };
+  codeType?: "qr" | "barcode";
 }
 
 // Strips a leading non-digit label ("W/O-", "WO", etc.) so the printed
@@ -112,7 +271,7 @@ const MM_TO_PT = 72 / 25.4;
 const PAGE_SIZE: [number, number] = [210 * MM_TO_PT, 297 * MM_TO_PT];
 const CM_TO_PT = 28.3465;
 const BOX_WIDTH = 3.25 * CM_TO_PT;
-const BOX_HEIGHT = 1.55 * CM_TO_PT;
+const BOX_HEIGHT = 1.5803 * CM_TO_PT;
 const GRID_COLS = 6;
 const GRID_ROWS = 18;
 // Margins (cm) for real A4 stock. Callers that don't pass margins
@@ -127,6 +286,7 @@ export async function generateCouponPdf({
   cards: precomputedCards,
   layout = "same-line",
   margins = DEFAULT_MARGINS,
+  codeType = "qr",
 }: GeneratePdfParams): Promise<{ buffer: Buffer; cardCount: number }> {
   // buildCouponCards already sorts by seqNo for the common path; precomputedCards
   // (filtered coupon-tracing reprints) is built card-by-card outside that
@@ -214,6 +374,9 @@ export async function generateCouponPdf({
 
     const cellX = gridOriginX + col * cellWidth;
     const cellY = gridOriginY + row * cellHeight;
+    const cardX = cellX + 1.5;
+    const cardY = cellY + 1.5;
+    const cardW = cellWidth - 3;
 
     const rateNum = parseFloat(op.rate || "0");
     const qtyNum = bundle.pcs || 0;
@@ -227,129 +390,182 @@ export async function generateCouponPdf({
     // prefix, so B# actually fits its column instead of ellipsizing.
     const bundleShort = trimBundleNo(workOrder, bundle.bundleNo);
 
-    const qrDisplayValue = [
-      `Coupon: ${couponCode}`,
-      `Order: ${workOrder}`,
-      `Cut: ${bundle.cutNo}`,
-      `Bundle: ${bundle.bundleNo}`,
-      `Size: ${bundle.size || "/"}`,
-      `Inseam: ${bundle.inseam || "-"}`,
-      `Op No: ${op.opNo}`,
-      `Op Name: ${op.operationName}`,
-      `Qty: ${qtyNum}`,
-      `Rate: ${op.rate}`,
-      `Rs: ${rsVal}`,
-    ].join("\n");
+    if (codeType === "barcode") {
+      // 3x3 Grid fields at the top
+      const colW = cardW / 3;
+      const rowH = 4.8;
+      const shortDate = formatShortDate();
 
-    const qrPng = await QRCode.toBuffer(qrDisplayValue, {
-      errorCorrectionLevel: "M",
-      margin: 0,
-      width: 150,
-    });
+      const fields: { label: string; value: string; col: number; row: number; labelW: number }[] = [
+        { label: "Cut:", value: bundle.cutNo, col: 0, row: 0, labelW: 8 },
+        { label: "B#", value: bundleShort, col: 0, row: 1, labelW: 7 },
+        { label: "Rate:", value: op.rate || "0", col: 0, row: 2, labelW: 11 },
+        { label: "G:", value: shortDate, col: 1, row: 0, labelW: 5 },
+        { label: "Order:", value: workOrderShort, col: 1, row: 1, labelW: 13 },
+        { label: "Rs:", value: String(rsVal), col: 1, row: 2, labelW: 8 },
+        { label: "Size:", value: bundle.size || "/", col: 2, row: 0, labelW: 11 },
+        { label: "Qty:", value: String(qtyNum), col: 2, row: 1, labelW: 9 },
+        { label: "Inc:", value: op.inc || "", col: 2, row: 2, labelW: 9 },
+      ];
 
-    // Cell border is part of the shared grid (drawGridLines, drawn once
-    // per page) — not redrawn per cell.
-    const cardX = cellX + 1.5;
-    const cardY = cellY + 1.5;
-    const cardW = cellWidth - 3;
+      doc.fontSize(4.5);
+      for (const field of fields) {
+        const cx = cardX + field.col * colW;
+        const cy = cardY + field.row * rowH;
 
-    // QR spans the full left-to-op-name height, flush right, as large as
-    // the box allows. WO/Section (own lines, so long section names don't
-    // truncate) and the Cut/B#/Sz/Inm/Qty/Rt/Rs/Inc grid share the
-    // narrower column left of it — that column is the whitespace budget,
-    // not the QR, so the QR is sized off the box, not the text column.
-    const opNameH = 7;
-    const headerLineH = 6;
-    const headerH = headerLineH * 2;
-    const topH = cellHeight - 3 - opNameH;
+        doc.fillColor("#000000").font(FONT_PATH).text(field.label, cx, cy, {
+          width: field.labelW,
+          height: rowH,
+          lineBreak: false,
+        });
+        doc.fillColor("#000000").font(FONT_PATH).text(field.value, cx + field.labelW + 0.5, cy, {
+          width: colW - field.labelW - 0.5,
+          height: rowH,
+          ellipsis: true,
+          lineBreak: false,
+        });
+      }
 
-    // Shifted left of the box's right edge so the QR has its own margin
-    // instead of sitting flush against the border.
-    const qrX = cardX + cardW - qrSize - 1.5;
-    doc.image(qrPng, qrX, cardY, { width: qrSize, height: qrSize });
+      // Barcode in the center
+      const barcodeY = cardY + 16;
+      const opNameH = 6;
+      const opNameY = cardY + cellHeight - 3 - opNameH + 0.5;
+      const barcodeH = opNameY - barcodeY - 1.5;
 
-    const textW = qrX - cardX - 3;
-    doc.fontSize(4.5);
-    doc.fillColor("#64748b").text("WO", cardX, cardY, {
-      width: 9,
-      height: headerLineH,
-      lineBreak: false,
-    });
-    doc.fillColor("#1e293b").text(workOrderShort, cardX + 9, cardY, {
-      width: textW - 9,
-      height: headerLineH,
-      ellipsis: true,
-      lineBreak: false,
-    });
-    doc.fillColor("#64748b").text("Sec", cardX, cardY + headerLineH, {
-      width: 9,
-      height: headerLineH,
-      lineBreak: false,
-    });
-    doc
-      .fillColor("#1e293b")
-      .text(op.section || "-", cardX + 9, cardY + headerLineH, {
+      const barcodeX = cardX + 2;
+      const barcodeW = cardW - 4;
+
+      drawBarcode(doc, barcodeX, barcodeY, barcodeW, barcodeH, couponCode);
+
+      // Operation name at the bottom
+      doc.fillColor("#000000")
+        .fontSize(4.8)
+        .font(FONT_PATH)
+        .text(op.operationName, cardX, opNameY, {
+          width: cardW,
+          height: opNameH,
+          ellipsis: true,
+          lineBreak: false,
+        });
+    } else {
+      const qrDisplayValue = [
+        `Coupon: ${couponCode}`,
+        `Order: ${workOrder}`,
+        `Cut: ${bundle.cutNo}`,
+        `Bundle: ${bundle.bundleNo}`,
+        `Size: ${bundle.size || "/"}`,
+        `Inseam: ${bundle.inseam || "-"}`,
+        `Op No: ${op.opNo}`,
+        `Op Name: ${op.operationName}`,
+        `Qty: ${qtyNum}`,
+        `Rate: ${op.rate}`,
+        `Rs: ${rsVal}`,
+      ].join("\n");
+
+      const qrPng = await QRCode.toBuffer(qrDisplayValue, {
+        errorCorrectionLevel: "M",
+        margin: 0,
+        width: 150,
+      });
+
+      // QR spans the full left-to-op-name height, flush right, as large as
+      // the box allows. WO/Section (own lines, so long section names don't
+      // truncate) and the Cut/B#/Sz/Inm/Qty/Rt/Rs/Inc grid share the
+      // narrower column left of it — that column is the whitespace budget,
+      // not the QR, so the QR is sized off the box, not the text column.
+      const opNameH = 7;
+      const headerLineH = 6;
+      const headerH = headerLineH * 2;
+      const topH = cellHeight - 3 - opNameH;
+
+      // Shifted left of the box's right edge so the QR has its own margin
+      // instead of sitting flush against the border.
+      const qrX = cardX + cardW - qrSize - 1.5;
+      doc.image(qrPng, qrX, cardY, { width: qrSize, height: qrSize });
+
+      const textW = qrX - cardX - 3;
+      doc.fontSize(4.5);
+      doc.fillColor("#64748b").text("WO", cardX, cardY, {
+        width: 9,
+        height: headerLineH,
+        lineBreak: false,
+      });
+      doc.fillColor("#1e293b").text(workOrderShort, cardX + 9, cardY, {
         width: textW - 9,
         height: headerLineH,
         ellipsis: true,
         lineBreak: false,
       });
-
-    const gridY = cardY + headerH;
-
-    // Field grid: 2 columns x 4 rows in the space left of the QR — each
-    // cell a small label+value pair.
-    const fieldsW = textW;
-    const fieldColW = fieldsW / 2;
-    const fieldRowH = (topH - headerH) / 4;
-    const fields: [string, string][] = [
-      ["Cut", bundle.cutNo],
-      ["B#", bundleShort],
-      ["Sz", bundle.size || "/"],
-      ["Inm", bundle.inseam || "-"],
-      ["Qty", String(qtyNum)],
-      ["Rt", op.rate || "0"],
-      ["Rs", String(rsVal)],
-      ["Inc", op.inc || "0"],
-    ];
-    doc.fontSize(4.5);
-    for (let f = 0; f < fields.length; f++) {
-      const [label, value] = fields[f];
-      const col = Math.floor(f / 4);
-      const row = f % 4;
-      const cx = cardX + col * fieldColW;
-      const cy = gridY + row * fieldRowH;
-      const labelW = 9;
-      doc.fillColor("#64748b").text(label, cx, cy, {
-        width: labelW,
-        height: fieldRowH,
+      doc.fillColor("#64748b").text("Sec", cardX, cardY + headerLineH, {
+        width: 9,
+        height: headerLineH,
         lineBreak: false,
       });
-      doc.fillColor("#1e293b").text(value, cx + labelW, cy, {
-        width: fieldColW - labelW,
-        height: fieldRowH,
-        ellipsis: true,
-        lineBreak: false,
-      });
+      doc
+        .fillColor("#1e293b")
+        .text(op.section || "-", cardX + 9, cardY + headerLineH, {
+          width: textW - 9,
+          height: headerLineH,
+          ellipsis: true,
+          lineBreak: false,
+        });
+
+      const gridY = cardY + headerH;
+
+      // Field grid: 2 columns x 4 rows in the space left of the QR — each
+      // cell a small label+value pair.
+      const fieldsW = textW;
+      const fieldColW = fieldsW / 2;
+      const fieldRowH = (topH - headerH) / 4;
+      const fields: [string, string][] = [
+        ["Cut", bundle.cutNo],
+        ["B#", bundleShort],
+        ["Sz", bundle.size || "/"],
+        ["Inm", bundle.inseam || "-"],
+        ["Qty", String(qtyNum)],
+        ["Rt", op.rate || "0"],
+        ["Rs", String(rsVal)],
+        ["Inc", op.inc || "0"],
+      ];
+      doc.fontSize(4.5);
+      for (let f = 0; f < fields.length; f++) {
+        const [label, value] = fields[f];
+        const col = Math.floor(f / 4);
+        const row = f % 4;
+        const cx = cardX + col * fieldColW;
+        const cy = gridY + row * fieldRowH;
+        const labelW = 9;
+        doc.fillColor("#64748b").text(label, cx, cy, {
+          width: labelW,
+          height: fieldRowH,
+          lineBreak: false,
+        });
+        doc.fillColor("#1e293b").text(value, cx + labelW, cy, {
+          width: fieldColW - labelW,
+          height: fieldRowH,
+          ellipsis: true,
+          lineBreak: false,
+        });
+      }
+
+      // Operation name — full card width (under the QR too), pinned to the
+      // bottom, separated by a hairline so it reads as its own row.
+      const opNameY = cardY + topH + 1;
+      doc
+        .moveTo(cardX, opNameY - 0.5)
+        .lineTo(cardX + cardW, opNameY - 0.5)
+        .strokeColor("#e2e8f0")
+        .lineWidth(0.4)
+        .stroke();
+      doc
+        .fillColor("#000000")
+        .fontSize(4.8)
+        .text(op.operationName, cardX, opNameY, {
+          width: cardW,
+          height: opNameH - 1,
+          ellipsis: true,
+        });
     }
-
-    // Operation name — full card width (under the QR too), pinned to the
-    // bottom, separated by a hairline so it reads as its own row.
-    const opNameY = cardY + topH + 1;
-    doc
-      .moveTo(cardX, opNameY - 0.5)
-      .lineTo(cardX + cardW, opNameY - 0.5)
-      .strokeColor("#e2e8f0")
-      .lineWidth(0.4)
-      .stroke();
-    doc
-      .fillColor("#000000")
-      .fontSize(4.8)
-      .text(op.operationName, cardX, opNameY, {
-        width: cardW,
-        height: opNameH - 1,
-        ellipsis: true,
-      });
   }
 
   doc.end();
