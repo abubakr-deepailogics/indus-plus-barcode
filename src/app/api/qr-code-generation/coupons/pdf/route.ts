@@ -150,7 +150,7 @@ export async function GET(request: Request) {
     return new Response(new Uint8Array(buffer), {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="coupons-${workOrder}.pdf"`,
+        "Content-Disposition": `inline; filename="coupons-${workOrder}.pdf"`,
       },
     });
   } catch (err: unknown) {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { printPdf } from "@/lib/print";
 import type { CouponLayout, QrCodeStyleData } from "../types";
 
 // Shared by every page that offers coupon generation (qr-code-generation,
@@ -89,10 +90,10 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
         throw new Error(data.error || "Failed to generate PDF.");
       }
       if (typeof data.couponCount === "number") setCouponCount(data.couponCount);
-      window.location.href = `/api/qr-code-generation/pdf/${data.id}`;
+      const pdfUrl = `/api/qr-code-generation/pdf/${data.id}`;
+      printPdf(pdfUrl, () => setGeneratingPdf(false));
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to generate PDF.");
-    } finally {
       setGeneratingPdf(false);
     }
   };

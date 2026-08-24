@@ -3,7 +3,8 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Search, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { Search, Download, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import { printPdf } from "@/lib/print";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
 import { CodeTypeSelectionModal } from "@/features/qr-code-generation/components/CodeTypeSelectionModal";
@@ -53,6 +54,7 @@ export default function CouponTracingPage() {
   const [unscanningCode, setUnscanningCode] = useState("");
   const [showPageSetupModal, setShowPageSetupModal] = useState(false);
   const [showCodeTypeModal, setShowCodeTypeModal] = useState(false);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
   const [pageSetup, setPageSetup] = useState<PageSetupConfig>({
     size: "Legal",
     source: "Automatically Select",
@@ -462,10 +464,11 @@ export default function CouponTracingPage() {
           onPageSetupChange={setPageSetup}
           onClose={() => setShowPageSetupModal(false)}
           onGeneratePdf={() => {
-            window.location.href = couponPdfUrl;
             setShowPageSetupModal(false);
+            setGeneratingPdf(true);
+            printPdf(couponPdfUrl, () => setGeneratingPdf(false));
           }}
-          generatingPdf={false}
+          generatingPdf={generatingPdf}
         />
       )}
 
@@ -478,6 +481,17 @@ export default function CouponTracingPage() {
           setShowPageSetupModal(true);
         }}
       />
+
+      {/* Generating PDF Loader Overlay */}
+      {generatingPdf && (
+        <div className="fixed inset-0 bg-[#0f172a]/30 backdrop-blur-sm flex flex-col items-center justify-center z-[9999] animate-fade-in no-print">
+          <div className="bg-white rounded-2xl p-6 shadow-2xl border border-[#e2e8f0] flex flex-col items-center max-w-[280px] text-center">
+            <Loader2 className="w-8 h-8 text-[#4f46e5] animate-spin mb-3" />
+            <h4 className="text-xs font-extrabold text-[#0f172a] uppercase tracking-wider mb-1">Generating PDF...</h4>
+            <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">Preparing coupon sheets. Please wait.</p>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

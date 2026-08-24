@@ -48,6 +48,8 @@ interface QrCodeGenerationFacade {
   couponModalError: string;
   generatedCount: number;
   confirmGenerateCoupons: () => Promise<void>;
+  isSelectionGenerated: boolean;
+  handleDirectPrint: (codeType: "qr" | "barcode") => Promise<void>;
 }
 
 const emptyStyle: QrCodeStyleData = {
@@ -104,6 +106,22 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   >("confirm");
   const [couponModalError, setCouponModalError] = useState("");
   const [generatedCount, setGeneratedCount] = useState(0);
+
+  const [lastGeneratedSelectionKey, setLastGeneratedSelectionKey] = useState<string>("");
+
+  const currentSelectionKey = useMemo(() => {
+    const selBundles = activeStyle.bundles.filter((b) => b.sel).map((b) => b.id).sort().join(",");
+    const selOps = activeStyle.operations.filter((o) => o.lastOpSection).map((o) => o.id).sort().join(",");
+    return `${selBundles}|${selOps}`;
+  }, [activeStyle.bundles, activeStyle.operations]);
+
+  const isSelectionGenerated = useMemo(() => {
+    if (!activeStyle.workOrder) return false;
+    const hasBundles = activeStyle.bundles.some((b) => b.sel);
+    const hasOps = activeStyle.operations.some((o) => o.lastOpSection);
+    if (!hasBundles || !hasOps) return false;
+    return currentSelectionKey === lastGeneratedSelectionKey;
+  }, [activeStyle.workOrder, currentSelectionKey, lastGeneratedSelectionKey, activeStyle.bundles, activeStyle.operations]);
 
   // Dynamic dropdown lists
   const [customersList, setCustomersList] = useState<string[]>([]);
@@ -290,6 +308,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         operations,
         bundles,
       }));
+      setLastGeneratedSelectionKey("");
     } catch (err) {
       console.error("Error fetching work order details:", err);
     }
@@ -452,6 +471,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         ...prev,
         generatedCoupons: String(data.couponCount),
       }));
+      setLastGeneratedSelectionKey(currentSelectionKey);
     } catch (err: any) {
       setCouponModalError(
         err.message || "An error occurred while generating coupons.",
@@ -467,6 +487,10 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   const handleGeneratePdf = async () => {
     await downloadPdf(pageSetup.layout, pageSetup.margins, pageSetup.codeType);
     setShowPageSetupModal(false);
+  };
+
+  const handleDirectPrint = async (codeType: "qr" | "barcode") => {
+    await downloadPdf(pageSetup.layout, pageSetup.margins, codeType);
   };
 
   return {
@@ -507,5 +531,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     couponModalError,
     generatedCount,
     confirmGenerateCoupons,
+    isSelectionGenerated,
+    handleDirectPrint,
   };
 }

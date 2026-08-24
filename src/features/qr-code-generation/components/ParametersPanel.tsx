@@ -1,7 +1,6 @@
 "use client";
 
 import React from "react";
-import { Calendar } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import type { QrCodeStyleData } from "../types";
 
@@ -9,7 +8,6 @@ interface WorkerItem {
   EmployeeID: number;
   FirstName: string;
 }
-
 interface ParametersPanelProps {
   activeStyle: QrCodeStyleData;
   onWorkOrderInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -20,8 +18,8 @@ interface ParametersPanelProps {
   generatingCoupons?: boolean;
   customersList: string[];
   workersList: WorkerItem[];
+  isSelectionGenerated: boolean;
 }
-
 export function ParametersPanel({
   activeStyle,
   onWorkOrderInputChange,
@@ -32,6 +30,7 @@ export function ParametersPanel({
   generatingCoupons = false,
   customersList = [],
   workersList = [],
+  isSelectionGenerated,
 }: ParametersPanelProps) {
   return (
     <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
@@ -120,23 +119,32 @@ export function ParametersPanel({
         </div>
 
         {/* Buttons Grid */}
-        <div className="flex flex-col gap-2.5">
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              onClick={onGenerateCoupons}
-              disabled={generatingCoupons}
-              className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-slate-700 disabled:opacity-50 py-1.5 px-2 rounded-xl text-[11px] font-bold transition-all shadow-sm flex items-center justify-center text-center cursor-pointer"
-            >
-              {generatingCoupons ? "Generating..." : "Generate Coupons"}
-            </button>
-            <button
-              onClick={onOpenPageSetupModal}
-              className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-slate-700 py-1.5 px-2 rounded-xl text-[11px] font-bold transition-all shadow-sm flex items-center justify-center text-center cursor-pointer"
-            >
-              Print
-            </button>
-          </div>
-        </div>
+        {(() => {
+          const isWorkOrderEntered = activeStyle.workOrder && activeStyle.workOrder.trim() !== "";
+          const isGenerateDisabled = !isWorkOrderEntered || generatingCoupons;
+          const isPrintDisabled = !isWorkOrderEntered || !isSelectionGenerated;
+
+          return (
+            <div className="flex flex-col gap-2.5">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={onGenerateCoupons}
+                  disabled={isGenerateDisabled}
+                  className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none py-1.5 px-2 rounded-xl text-[11px] font-bold transition-all shadow-sm flex items-center justify-center text-center cursor-pointer"
+                >
+                  {generatingCoupons ? "Generating..." : "Generate Coupons"}
+                </button>
+                <button
+                  onClick={onOpenPageSetupModal}
+                  disabled={isPrintDisabled}
+                  className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none py-1.5 px-2 rounded-xl text-[11px] font-bold transition-all shadow-sm flex items-center justify-center text-center cursor-pointer"
+                >
+                  Print
+                </button>
+              </div>
+            </div>
+          );
+        })()}
       </div>
     </div>
   );

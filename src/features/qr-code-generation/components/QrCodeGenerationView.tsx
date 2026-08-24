@@ -8,6 +8,7 @@ import { StyleSearchModal } from "./StyleSearchModal";
 import { PageSetupModal } from "./PageSetupModal";
 import { GenerateCouponsModal } from "./GenerateCouponsModal";
 import { CodeTypeSelectionModal } from "./CodeTypeSelectionModal";
+import { Loader2 } from "lucide-react";
 
 export function QrCodeGenerationView() {
   const facade = useQrCodeGenerationFacade();
@@ -27,6 +28,7 @@ export function QrCodeGenerationView() {
           generatingCoupons={facade.generatingCoupons}
           customersList={facade.customersList}
           workersList={facade.workersList}
+          isSelectionGenerated={facade.isSelectionGenerated}
         />
 
         {/* Main Grid: Bundle Detail (left) + Operations (right) */}
@@ -118,6 +120,17 @@ export function QrCodeGenerationView() {
           onClose={() => facade.setShowGenerateModal(false)}
           onConfirm={facade.confirmGenerateCoupons}
         />
+      )}
+
+      {/* Generating PDF Loader Overlay */}
+      {facade.generatingPdf && (
+        <div className="fixed inset-0 bg-[#0f172a]/30 backdrop-blur-sm flex flex-col items-center justify-center z-[9999] animate-fade-in no-print">
+          <div className="bg-white rounded-2xl p-6 shadow-2xl border border-[#e2e8f0] flex flex-col items-center max-w-[280px] text-center">
+            <Loader2 className="w-8 h-8 text-[#4f46e5] animate-spin mb-3" />
+            <h4 className="text-xs font-extrabold text-[#0f172a] uppercase tracking-wider mb-1">Generating PDF...</h4>
+            <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">Preparing coupon sheets. Please wait.</p>
+          </div>
+        </div>
       )}
     </>
   );

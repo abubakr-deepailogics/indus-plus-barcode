@@ -29,7 +29,7 @@ export async function GET(
     return new Response(row.Pdf, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `attachment; filename="coupons-${row.WorkOrder}-${id}.pdf"`,
+        "Content-Disposition": `inline; filename="coupons-${row.WorkOrder}-${id}.pdf"`,
       },
     });
   } catch (err: unknown) {
