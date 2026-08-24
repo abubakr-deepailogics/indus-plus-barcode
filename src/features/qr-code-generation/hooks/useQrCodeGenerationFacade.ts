@@ -87,7 +87,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     // auto-centered, since the sheet's printable area is offset, not
     // simply smaller than the page. Must match DEFAULT_MARGINS in
     // pdf-generation.service.ts.
-    margins: { left: 0.74, right: 0.65, top: 1.6, bottom: 0.6 },
+    margins: { left: 0.6, right: 0.65, top: 1.6, bottom: 0.8 },
     gridFormat: "3x10",
     layout: "same-line",
     codeType: "qr",
@@ -99,7 +99,9 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
 
   // Generation Modal States
   const [showGenerateModal, setShowGenerateModal] = useState(false);
-  const [generateModalState, setGenerateModalState] = useState<"confirm" | "generating" | "success" | "error">("confirm");
+  const [generateModalState, setGenerateModalState] = useState<
+    "confirm" | "generating" | "success" | "error"
+  >("confirm");
   const [couponModalError, setCouponModalError] = useState("");
   const [generatedCount, setGeneratedCount] = useState(0);
 
@@ -111,13 +113,15 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   useEffect(() => {
     setActiveStyle((prev) => ({
       ...prev,
-      generateDatetime: new Date().toLocaleString("en-GB", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-      }).replace(",", ""),
+      generateDatetime: new Date()
+        .toLocaleString("en-GB", {
+          day: "2-digit",
+          month: "2-digit",
+          year: "2-digit",
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+        .replace(",", ""),
     }));
   }, []);
 
@@ -137,14 +141,18 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     const loadInitialMetadata = async () => {
       try {
         // Fetch Customers
-        const custRes = await fetch("/api/open-order/suggestions?type=customer");
+        const custRes = await fetch(
+          "/api/open-order/suggestions?type=customer",
+        );
         if (custRes.ok) {
           const customers = await custRes.json();
           setCustomersList(customers);
         }
 
         // Fetch Workers
-        const workersRes = await fetch("/api/open-order/suggestions?type=workers");
+        const workersRes = await fetch(
+          "/api/open-order/suggestions?type=workers",
+        );
         if (workersRes.ok) {
           const workers = await workersRes.json();
           setWorkersList(workers);
@@ -174,7 +182,9 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     const fetchSuggestions = async () => {
       const trimmed = searchQuery.trim();
       try {
-        const res = await fetch(`/api/open-order/suggestions?query=${encodeURIComponent(trimmed)}`);
+        const res = await fetch(
+          `/api/open-order/suggestions?query=${encodeURIComponent(trimmed)}`,
+        );
         if (res.ok) {
           const suggestions: string[] = await res.json();
           const mapped = suggestions.map((wo) => ({
@@ -198,7 +208,9 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   const fetchWorkOrderDetails = async (wo: string) => {
     if (!wo) return;
     try {
-      const response = await fetch(`/api/open-order?work_order=${encodeURIComponent(wo)}&t=${Date.now()}`);
+      const response = await fetch(
+        `/api/open-order?work_order=${encodeURIComponent(wo)}&t=${Date.now()}`,
+      );
       if (!response.ok) return;
       const data = await response.json();
 
@@ -214,7 +226,8 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         operationName: op.Operation_Name || "",
         smv: op.Smv_Sam !== undefined ? String(op.Smv_Sam) : "0",
         rate: op.Piece_Rate !== undefined ? String(op.Piece_Rate) : "0",
-        skills: op.SkillLevel !== undefined ? String(op.SkillLevel) : "Un-Skilled",
+        skills:
+          op.SkillLevel !== undefined ? String(op.SkillLevel) : "Un-Skilled",
         lastOpSection: false,
         inc: op.Incentive !== undefined ? String(op.Incentive) : "-",
         sdl: op.Sdl_No !== undefined ? String(op.Sdl_No) : "-",
@@ -238,15 +251,21 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
 
       // // Sort bundles in sequence by Cut No and Bundle No
       bundles.sort((a: any, b: any) => {
-        const cutCompare = a.cutNo.localeCompare(b.cutNo, undefined, { numeric: true });
+        const cutCompare = a.cutNo.localeCompare(b.cutNo, undefined, {
+          numeric: true,
+        });
         if (cutCompare !== 0) return cutCompare;
-        return a.bundleNo.localeCompare(b.bundleNo, undefined, { numeric: true });
+        return a.bundleNo.localeCompare(b.bundleNo, undefined, {
+          numeric: true,
+        });
       });
 
       // Fetch coupon counts for the work order from registration count API
       let couponCount = "0";
       try {
-        const countRes = await fetch(`/api/qr-code-generation/coupons?work_order=${encodeURIComponent(wo)}&page_size=1`);
+        const countRes = await fetch(
+          `/api/qr-code-generation/coupons?work_order=${encodeURIComponent(wo)}&page_size=1`,
+        );
         if (countRes.ok) {
           const countData = await countRes.json();
           couponCount = String(countData.total || 0);
@@ -284,7 +303,9 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     setShowSearchModal(false);
   };
 
-  const handleWorkOrderInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleWorkOrderInputChange = (
+    e: React.ChangeEvent<HTMLInputElement>,
+  ) => {
     const value = e.target.value;
     setActiveStyle((prev) => ({ ...prev, workOrder: value }));
     // Debounce/trigger fetch details if it matches completely
@@ -320,7 +341,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   const handleOperationChange = (id: number, field: string, value: boolean) => {
     setActiveStyle((prev) => {
       const updated = prev.operations.map((o) =>
-        o.id === id ? { ...o, [field]: value } : o
+        o.id === id ? { ...o, [field]: value } : o,
       );
       return { ...prev, operations: updated };
     });
@@ -329,9 +350,11 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   const handleBundleSelChange = (id: number, checked: boolean) => {
     setActiveStyle((prev) => {
       const updated = prev.bundles.map((b) =>
-        b.id === id ? { ...b, sel: checked } : b
+        b.id === id ? { ...b, sel: checked } : b,
       );
-      const selectedPcs = updated.filter((b) => b.sel).reduce((acc, b) => acc + b.pcs, 0);
+      const selectedPcs = updated
+        .filter((b) => b.sel)
+        .reduce((acc, b) => acc + b.pcs, 0);
       return {
         ...prev,
         bundles: updated,
@@ -344,7 +367,9 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   const handleAllBundlesSelChange = (checked: boolean) => {
     setActiveStyle((prev) => {
       const updated = prev.bundles.map((b) => ({ ...b, sel: checked }));
-      const selectedPcs = updated.filter((b) => b.sel).reduce((acc, b) => acc + b.pcs, 0);
+      const selectedPcs = updated
+        .filter((b) => b.sel)
+        .reduce((acc, b) => acc + b.pcs, 0);
       return {
         ...prev,
         bundles: updated,
@@ -356,7 +381,10 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
 
   const handleAllOperationsSelChange = (checked: boolean) => {
     setActiveStyle((prev) => {
-      const updated = prev.operations.map((o) => ({ ...o, lastOpSection: checked }));
+      const updated = prev.operations.map((o) => ({
+        ...o,
+        lastOpSection: checked,
+      }));
       return {
         ...prev,
         operations: updated,
@@ -375,12 +403,18 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     }
     const selectedBundles = activeStyle.bundles.filter((b) => b.sel);
     if (selectedBundles.length === 0) {
-      alert("Please select at least one bundle check box under Cutting Detail.");
+      alert(
+        "Please select at least one bundle check box under Cutting Detail.",
+      );
       return;
     }
-    const selectedOperations = activeStyle.operations.filter((op) => op.lastOpSection);
+    const selectedOperations = activeStyle.operations.filter(
+      (op) => op.lastOpSection,
+    );
     if (selectedOperations.length === 0) {
-      alert("Please select at least one operation checkbox under Operations Detail.");
+      alert(
+        "Please select at least one operation checkbox under Operations Detail.",
+      );
       return;
     }
 
@@ -419,14 +453,17 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         generatedCoupons: String(data.couponCount),
       }));
     } catch (err: any) {
-      setCouponModalError(err.message || "An error occurred while generating coupons.");
+      setCouponModalError(
+        err.message || "An error occurred while generating coupons.",
+      );
       setGenerateModalState("error");
     } finally {
       setGeneratingCoupons(false);
     }
   };
 
-  const { handleDownloadPdf: downloadPdf, generatingPdf } = useGenerateCouponPdf(activeStyle);
+  const { handleDownloadPdf: downloadPdf, generatingPdf } =
+    useGenerateCouponPdf(activeStyle);
   const handleGeneratePdf = async () => {
     await downloadPdf(pageSetup.layout, pageSetup.margins, pageSetup.codeType);
     setShowPageSetupModal(false);

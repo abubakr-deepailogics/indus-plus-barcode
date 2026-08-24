@@ -130,7 +130,20 @@ const CODE128_PATTERNS = [
 ];
 
 function formatShortDate(date: Date = new Date()): string {
-  const months = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"];
+  const months = [
+    "JAN",
+    "FEB",
+    "MAR",
+    "APR",
+    "MAY",
+    "JUN",
+    "JUL",
+    "AUG",
+    "SEP",
+    "OCT",
+    "NOV",
+    "DEC",
+  ];
   const day = String(date.getDate()).padStart(2, "0");
   const month = months[date.getMonth()];
   const year = String(date.getFullYear()).slice(-2);
@@ -252,32 +265,27 @@ function assignSlots(
   return slots;
 }
 
-// Printed on real A4 (210x297mm) — printers select "A4" in the dialog, so
-// the PDF page must actually be A4, not a taller label-stock size, or the
-// print driver auto-scales the whole page down to fit and every box comes
-// out a few % undersized. Grid: 6 cols x 18 rows = 108 cards/page, each
-// box 3.25cm x 1.527cm.
-//
-// Box height is shaved down from the original 3.25x1.55cm spec on
-// purpose: with margins (top 1.6, bottom 0.6cm), the printable height is
-// 275mm — 18 rows of 1.55cm need 279mm, 4mm *too tall*, which clipped the
-// 18th row off the printable page. 1.527cm/row (18 rows = 274.9mm) is the
-// largest box that actually fits, leaving ~0.1mm/row of slack. That's
-// razor-thin: a ~1mm error in any one measurement (margin or box) can
-// overflow again, but there's no more height to give — A4 minus a
-// workable top margin (for the sheet edge most printers can't feed to)
-// is already this tight at 18 rows.
-const MM_TO_PT = 72 / 25.4;
-const PAGE_SIZE: [number, number] = [210 * MM_TO_PT, 297 * MM_TO_PT];
+// Printed on real Legal (215.9x355.6mm / 8.5x14in) — printers select
+// "Legal" in the dialog, so the PDF page must actually be Legal, not a
+// mismatched size, or the print driver auto-scales the whole page to fit
+// the selected paper and every carefully-tuned dimension below (box size,
+// margins, offsets) drifts off. Grid: 6 cols x 18 rows = 108 cards/page,
+// each box 3.258cm x 1.58cm.
+const IN_TO_PT = 72;
+const PAGE_SIZE: [number, number] = [8.5 * IN_TO_PT, 14 * IN_TO_PT];
 const CM_TO_PT = 28.3465;
-const BOX_WIDTH = 3.25 * CM_TO_PT;
-const BOX_HEIGHT = 1.5803 * CM_TO_PT;
+const BOX_WIDTH = 3.258 * CM_TO_PT;
+const BOX_HEIGHT = 1.58 * CM_TO_PT;
 const GRID_COLS = 6;
 const GRID_ROWS = 18;
-// Margins (cm) for real A4 stock. Callers that don't pass margins
+// Margins (cm) for real Legal stock. Callers that don't pass margins
 // explicitly (e.g. the coupon-tracing reprint route) still need to land
 // on the real printable area, not a theoretical centered guess.
-const DEFAULT_MARGINS = { top: 1.6, bottom: 0.6, left: 0.7, right: 0.65 };
+// Shifted 2mm right (+left/-right) and 1mm up (-top/+bottom) from the
+// theoretical centering to correct for print-driver drift observed on
+// actual sheets — the grid math centers correctly, but the physical
+// printout was landing 2mm left / 1mm low of centered.
+const DEFAULT_MARGINS = { top: 1.6, bottom: 0.8, left: 0.6, right: 0.65 };
 
 export async function generateCouponPdf({
   workOrder,
@@ -314,12 +322,23 @@ export async function generateCouponPdf({
   // Fixed-size grid is centered in whatever page area the margins leave,
   // rather than stretched to fill it — the box dimensions are a print
   // spec (label sheet), not a function of page size.
+  // Horizontal: centered in the leftover width slack. Vertical: anchored
+  // to the top margin instead — Legal's height leaves far more slack than
+  // the grid needs, and centering it vertically would push the top gap
+  // well past the configured top margin (e.g. 16mm margin rendering as a
+  // ~40mm gap). Leftover vertical space goes to the bottom only.
   const usableWidth = PAGE_SIZE[0] - marginLeft - marginRight;
-  const usableHeight = PAGE_SIZE[1] - marginTop - marginBottom;
   const gridOriginX =
     marginLeft + Math.max(0, (usableWidth - cellWidth * GRID_COLS) / 2);
-  const gridOriginY =
-    marginTop + Math.max(0, (usableHeight - cellHeight * GRID_ROWS) / 2);
+  const gridOriginY = marginTop;
+  const gridHeight = cellHeight * GRID_ROWS;
+  if (gridOriginY + gridHeight > PAGE_SIZE[1] - marginBottom) {
+    throw new Error(
+      `Coupon grid (${gridHeight.toFixed(1)}pt) plus top margin doesn't fit ` +
+        `within the page above the bottom margin — reduce top/bottom margins ` +
+        `or box height.`,
+    );
+  }
 
   const doc = new PDFDocument({
     size: PAGE_SIZE,
@@ -396,14 +415,26 @@ export async function generateCouponPdf({
       const rowH = 4.8;
       const shortDate = formatShortDate();
 
-      const fields: { label: string; value: string; col: number; row: number; labelW: number }[] = [
+      const fields: {
+        label: string;
+        value: string;
+        col: number;
+        row: number;
+        labelW: number;
+      }[] = [
         { label: "Cut:", value: bundle.cutNo, col: 0, row: 0, labelW: 8 },
         { label: "B#", value: bundleShort, col: 0, row: 1, labelW: 7 },
         { label: "Rate:", value: op.rate || "0", col: 0, row: 2, labelW: 11 },
         { label: "G:", value: shortDate, col: 1, row: 0, labelW: 5 },
         { label: "Order:", value: workOrderShort, col: 1, row: 1, labelW: 13 },
         { label: "Rs:", value: String(rsVal), col: 1, row: 2, labelW: 8 },
-        { label: "Size:", value: bundle.size || "/", col: 2, row: 0, labelW: 11 },
+        {
+          label: "Size:",
+          value: bundle.size || "/",
+          col: 2,
+          row: 0,
+          labelW: 11,
+        },
         { label: "Qty:", value: String(qtyNum), col: 2, row: 1, labelW: 9 },
         { label: "Inc:", value: op.inc || "", col: 2, row: 2, labelW: 9 },
       ];
@@ -418,12 +449,15 @@ export async function generateCouponPdf({
           height: rowH,
           lineBreak: false,
         });
-        doc.fillColor("#000000").font(FONT_PATH).text(field.value, cx + field.labelW + 0.5, cy, {
-          width: colW - field.labelW - 0.5,
-          height: rowH,
-          ellipsis: true,
-          lineBreak: false,
-        });
+        doc
+          .fillColor("#000000")
+          .font(FONT_PATH)
+          .text(field.value, cx + field.labelW + 0.5, cy, {
+            width: colW - field.labelW - 0.5,
+            height: rowH,
+            ellipsis: true,
+            lineBreak: false,
+          });
       }
 
       // Barcode in the center
@@ -438,7 +472,8 @@ export async function generateCouponPdf({
       drawBarcode(doc, barcodeX, barcodeY, barcodeW, barcodeH, couponCode);
 
       // Operation name at the bottom
-      doc.fillColor("#000000")
+      doc
+        .fillColor("#000000")
         .fontSize(4.8)
         .font(FONT_PATH)
         .text(op.operationName, cardX, opNameY, {
