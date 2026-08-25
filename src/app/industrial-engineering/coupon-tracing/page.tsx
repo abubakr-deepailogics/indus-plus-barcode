@@ -3,12 +3,19 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import React, { useState, useEffect, useMemo } from "react";
-import { Search, Download, ChevronLeft, ChevronRight, Loader2 } from "lucide-react";
+import {
+  Search,
+  Download,
+  ChevronLeft,
+  ChevronRight,
+  Loader2,
+} from "lucide-react";
 import { printPdf } from "@/lib/print";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
 import { CodeTypeSelectionModal } from "@/features/qr-code-generation/components/CodeTypeSelectionModal";
 import type { PageSetupConfig } from "@/features/qr-code-generation/types";
+import { DEFAULT_MARGINS } from "@/features/qr-code-generation/types";
 
 interface CouponRow {
   Id: number;
@@ -50,7 +57,8 @@ export default function CouponTracingPage() {
   const [fromCutFilter, setFromCutFilter] = useState("");
   const [toCutFilter, setToCutFilter] = useState("");
   const [sectionOptions, setSectionOptions] = useState<string[]>([]);
-  const [scannedFilter, setScannedFilter] = useState<(typeof SCANNED_OPTIONS)[number]["value"]>("");
+  const [scannedFilter, setScannedFilter] =
+    useState<(typeof SCANNED_OPTIONS)[number]["value"]>("");
   const [unscanningCode, setUnscanningCode] = useState("");
   const [showPageSetupModal, setShowPageSetupModal] = useState(false);
   const [showCodeTypeModal, setShowCodeTypeModal] = useState(false);
@@ -59,7 +67,7 @@ export default function CouponTracingPage() {
     size: "Legal",
     source: "Automatically Select",
     orientation: "Portrait",
-    margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 },
+    margins: DEFAULT_MARGINS,
     gridFormat: "3x10",
     layout: "same-line",
     codeType: "qr",
@@ -67,7 +75,9 @@ export default function CouponTracingPage() {
 
   const fetchWorkOrderSuggestions = async (query: string) => {
     try {
-      const response = await fetch(`/api/open-order/suggestions?query=${encodeURIComponent(query)}&only_generated=true`);
+      const response = await fetch(
+        `/api/open-order/suggestions?query=${encodeURIComponent(query)}&only_generated=true`,
+      );
       if (response.ok) {
         return await response.json();
       }
@@ -81,7 +91,7 @@ export default function CouponTracingPage() {
     if (!tracedWorkOrder) return [];
     try {
       const response = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=bundle&query=${encodeURIComponent(query)}&only_generated=true`
+        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=bundle&query=${encodeURIComponent(query)}&only_generated=true`,
       );
       if (response.ok) {
         return await response.json();
@@ -96,7 +106,7 @@ export default function CouponTracingPage() {
     if (!tracedWorkOrder) return [];
     try {
       const response = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=operation&query=${encodeURIComponent(query)}&only_generated=true`
+        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=operation&query=${encodeURIComponent(query)}&only_generated=true`,
       );
       if (response.ok) {
         return await response.json();
@@ -114,7 +124,7 @@ export default function CouponTracingPage() {
     }
     try {
       const response = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=section`
+        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=section`,
       );
       setSectionOptions(response.ok ? await response.json() : []);
     } catch (err) {
@@ -144,7 +154,9 @@ export default function CouponTracingPage() {
       setCoupons(data.coupons || []);
       setCouponTotal(data.total || 0);
     } catch (err) {
-      setErrorMsg(err instanceof Error ? err.message : "An unexpected error occurred.");
+      setErrorMsg(
+        err instanceof Error ? err.message : "An unexpected error occurred.",
+      );
       setCoupons([]);
       setCouponTotal(0);
     } finally {
@@ -167,7 +179,9 @@ export default function CouponTracingPage() {
   };
 
   const handleUnscanCoupon = async (couponCode: string) => {
-    if (!window.confirm(`Are you sure you want to unscan coupon: ${couponCode}?`)) {
+    if (
+      !window.confirm(`Are you sure you want to unscan coupon: ${couponCode}?`)
+    ) {
       return;
     }
     setUnscanningCode(couponCode);
@@ -192,7 +206,10 @@ export default function CouponTracingPage() {
     }
   };
 
-  const couponPageCount = Math.max(1, Math.ceil(couponTotal / COUPON_PAGE_SIZE));
+  const couponPageCount = Math.max(
+    1,
+    Math.ceil(couponTotal / COUPON_PAGE_SIZE),
+  );
   const goToCouponPage = (page: number) => {
     setCouponPage(page);
     fetchCoupons(tracedWorkOrder, page);
@@ -213,7 +230,17 @@ export default function CouponTracingPage() {
     params.set("layout", pageSetup.layout);
     if (pageSetup.codeType) params.set("code_type", pageSetup.codeType);
     return `/api/qr-code-generation/coupons/pdf?${params}`;
-  }, [tracedWorkOrder, bundleFilter, opFilter, sectionFilter, scannedFilter, fromCutFilter, toCutFilter, pageSetup.layout, pageSetup.codeType]);
+  }, [
+    tracedWorkOrder,
+    bundleFilter,
+    opFilter,
+    sectionFilter,
+    scannedFilter,
+    fromCutFilter,
+    toCutFilter,
+    pageSetup.layout,
+    pageSetup.codeType,
+  ]);
 
   // Any filter change re-queries from page 1 — old page N may no longer
   // exist once the row count shrinks.
@@ -222,11 +249,17 @@ export default function CouponTracingPage() {
     setCouponPage(1);
     fetchCoupons(tracedWorkOrder, 1);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [bundleFilter, opFilter, sectionFilter, scannedFilter, fromCutFilter, toCutFilter]);
+  }, [
+    bundleFilter,
+    opFilter,
+    sectionFilter,
+    scannedFilter,
+    fromCutFilter,
+    toCutFilter,
+  ]);
 
   return (
     <div className="flex flex-col gap-6 max-w-[900px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
-
       <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm">
         <div className="flex items-stretch gap-3">
           <Autocomplete<string>
@@ -315,8 +348,12 @@ export default function CouponTracingPage() {
               fetchSuggestions={fetchOpSuggestions}
               renderSuggestion={(op) => (
                 <div className="flex flex-col">
-                  <span className="text-[#4f46e5] font-bold text-[10px]">{op.Operation_Code}</span>
-                  <span className="text-[10px] text-slate-500 truncate">{op.Operation_Name}</span>
+                  <span className="text-[#4f46e5] font-bold text-[10px]">
+                    {op.Operation_Code}
+                  </span>
+                  <span className="text-[10px] text-slate-500 truncate">
+                    {op.Operation_Name}
+                  </span>
                 </div>
               )}
               getSuggestionValue={(op) => op.Operation_Code}
@@ -345,12 +382,16 @@ export default function CouponTracingPage() {
             >
               <option value="">All Sections</option>
               {sectionOptions.map((s) => (
-                <option key={s} value={s}>{s}</option>
+                <option key={s} value={s}>
+                  {s}
+                </option>
               ))}
             </select>
             <select
               value={scannedFilter}
-              onChange={(e) => setScannedFilter(e.target.value as typeof scannedFilter)}
+              onChange={(e) =>
+                setScannedFilter(e.target.value as typeof scannedFilter)
+              }
               className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
             >
               {SCANNED_OPTIONS.map((opt) => (
@@ -364,39 +405,82 @@ export default function CouponTracingPage() {
           <table className="w-full text-left border-collapse">
             <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
               <tr>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Cut No</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">Bundle No</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">Section</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">Operation Name</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">Emp Code</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">Emp Name</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">Scanned</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">Scan Date</th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">Created At</th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+                  Cut No
+                </th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+                  Bundle No
+                </th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+                  Section
+                </th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+                  Operation Name
+                </th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+                  Emp Code
+                </th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+                  Emp Name
+                </th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+                  Scanned
+                </th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+                  Scan Date
+                </th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+                  Created At
+                </th>
               </tr>
             </thead>
             <tbody>
               {couponsLoading ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-6 text-center text-[#94a3b8]">
+                  <td
+                    colSpan={9}
+                    className="px-4 py-6 text-center text-[#94a3b8]"
+                  >
                     Loading…
                   </td>
                 </tr>
               ) : coupons.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="px-4 py-6 text-center text-[#94a3b8]">
-                    No coupons match{bundleFilter || opFilter || sectionFilter || scannedFilter ? " these filters" : " this work order yet"}.
+                  <td
+                    colSpan={9}
+                    className="px-4 py-6 text-center text-[#94a3b8]"
+                  >
+                    No coupons match
+                    {bundleFilter || opFilter || sectionFilter || scannedFilter
+                      ? " these filters"
+                      : " this work order yet"}
+                    .
                   </td>
                 </tr>
               ) : (
                 coupons.map((c) => (
-                  <tr key={c.Id} className="border-b border-[#f1f5f9] last:border-0 hover:bg-[#f8fafc] transition-colors">
-                    <td className="px-4 py-3 text-[#334155] text-center font-bold text-indigo-600">{c.CutNo || "—"}</td>
-                    <td className="px-4 py-3 text-[#334155] text-center font-mono">{c.BundleNo}</td>
-                    <td className="px-4 py-3 text-[#334155] text-left">{c.Section || "—"}</td>
-                    <td className="px-4 py-3 text-[#334155] text-left font-medium">{c.OpName || c.OpNo}</td>
-                    <td className="px-4 py-3 text-[#334155] text-left font-mono">{c.EmployeeCode || "—"}</td>
-                    <td className="px-4 py-3 text-[#334155] text-left font-medium">{c.EmployeeName || "—"}</td>
+                  <tr
+                    key={c.Id}
+                    className="border-b border-[#f1f5f9] last:border-0 hover:bg-[#f8fafc] transition-colors"
+                  >
+                    <td className="px-4 py-3 text-[#334155] text-center font-bold text-indigo-600">
+                      {c.CutNo || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-[#334155] text-center font-mono">
+                      {c.BundleNo}
+                    </td>
+                    <td className="px-4 py-3 text-[#334155] text-left">
+                      {c.Section || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-[#334155] text-left font-medium">
+                      {c.OpName || c.OpNo}
+                    </td>
+                    <td className="px-4 py-3 text-[#334155] text-left font-mono">
+                      {c.EmployeeCode || "—"}
+                    </td>
+                    <td className="px-4 py-3 text-[#334155] text-left font-medium">
+                      {c.EmployeeName || "—"}
+                    </td>
                     <td className="px-4 py-3 text-left">
                       <div className="flex items-center gap-2">
                         <span
@@ -414,13 +498,17 @@ export default function CouponTracingPage() {
                             disabled={unscanningCode === c.CouponCode}
                             className="text-[#ef4444] hover:text-[#dc2626] font-bold text-[10px] px-2 py-1 rounded bg-red-50 hover:bg-red-100 border border-red-100 transition-all cursor-pointer disabled:opacity-50"
                           >
-                            {unscanningCode === c.CouponCode ? "Unscanning..." : "Unscan"}
+                            {unscanningCode === c.CouponCode
+                              ? "Unscanning..."
+                              : "Unscan"}
                           </button>
                         )}
                       </div>
                     </td>
                     <td className="px-4 py-3 text-[#334155] text-left">
-                      {c.ScannedAt ? new Date(c.ScannedAt).toLocaleString() : "—"}
+                      {c.ScannedAt
+                        ? new Date(c.ScannedAt).toLocaleString()
+                        : "—"}
                     </td>
                     <td className="px-4 py-3 text-[#334155] text-left">
                       {new Date(c.CreatedAt).toLocaleString()}
@@ -487,8 +575,12 @@ export default function CouponTracingPage() {
         <div className="fixed inset-0 bg-[#0f172a]/30 backdrop-blur-sm flex flex-col items-center justify-center z-[9999] animate-fade-in no-print">
           <div className="bg-white rounded-2xl p-6 shadow-2xl border border-[#e2e8f0] flex flex-col items-center max-w-[280px] text-center">
             <Loader2 className="w-8 h-8 text-[#4f46e5] animate-spin mb-3" />
-            <h4 className="text-xs font-extrabold text-[#0f172a] uppercase tracking-wider mb-1">Generating PDF...</h4>
-            <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">Preparing coupon sheets. Please wait.</p>
+            <h4 className="text-xs font-extrabold text-[#0f172a] uppercase tracking-wider mb-1">
+              Generating PDF...
+            </h4>
+            <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
+              Preparing coupon sheets. Please wait.
+            </p>
           </div>
         </div>
       )}

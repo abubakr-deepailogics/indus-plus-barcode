@@ -1,6 +1,7 @@
 import PDFDocument from "pdfkit";
 import QRCode from "qrcode";
 import path from "node:path";
+import { DEFAULT_MARGINS } from "../types";
 import type {
   BundleDetailRow,
   CouponLayout,
@@ -278,14 +279,6 @@ const BOX_WIDTH = 3.258 * CM_TO_PT;
 const BOX_HEIGHT = 1.58 * CM_TO_PT;
 const GRID_COLS = 6;
 const GRID_ROWS = 18;
-// Margins (cm) for real Legal stock. Callers that don't pass margins
-// explicitly (e.g. the coupon-tracing reprint route) still need to land
-// on the real printable area, not a theoretical centered guess.
-// Shifted 2mm right (+left/-right) and 1mm up (-top/+bottom) from the
-// theoretical centering to correct for print-driver drift observed on
-// actual sheets — the grid math centers correctly, but the physical
-// printout was landing 2mm left / 1mm low of centered.
-const DEFAULT_MARGINS = { top: 1.6, bottom: 0.8, left: 0.6, right: 0.65 };
 
 export async function generateCouponPdf({
   workOrder,

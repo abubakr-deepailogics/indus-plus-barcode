@@ -51,12 +51,46 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
           operations: activeStyle.operations,
         }),
       });
-      const data = await res.json();
+      // Non-streaming failures (validation errors) still come back as a
+      // plain JSON error body — the stream only starts once there's work
+      // to report progress on.
       if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to generate coupons.");
       }
-      if (typeof data.couponCount === "number") setCouponCount(data.couponCount);
-      alert(`Coupons generated: ${data.couponCount} total for this work order.`);
+      if (!res.body) throw new Error("Failed to generate coupons.");
+
+      // No progress UI here (this hook's callers use a plain alert(), not
+      // the generate modal) — just drain the newline-delimited stream for
+      // its final line. See useQrCodeGenerationFacade's confirmGenerateCoupons
+      // for the version with a live progress bar.
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalData: { cardCount: number; couponCount: number } | null = null;
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const parsed = JSON.parse(line);
+          if (parsed.status === "error") throw new Error(parsed.message || "Failed to generate coupons.");
+          if (parsed.status === "complete") finalData = parsed;
+        }
+      }
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        const parsed = JSON.parse(buffer);
+        if (parsed.status === "error") throw new Error(parsed.message || "Failed to generate coupons.");
+        if (parsed.status === "complete") finalData = parsed;
+      }
+      if (!finalData) throw new Error("Failed to generate coupons.");
+
+      setCouponCount(finalData.couponCount);
+      alert(`Coupons generated: ${finalData.couponCount} total for this work order.`);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to generate coupons.");
     } finally {

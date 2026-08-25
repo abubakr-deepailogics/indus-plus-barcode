@@ -8,6 +8,7 @@ interface GenerateCouponsModalProps {
   selectedBundlesCount: number;
   selectedOperationsCount: number;
   generatedCount?: number;
+  progress?: { done: number; total: number } | null;
   errorMessage?: string;
   onClose: () => void;
   onConfirm: () => void;
@@ -18,6 +19,7 @@ export function GenerateCouponsModal({
   selectedBundlesCount,
   selectedOperationsCount,
   generatedCount = 0,
+  progress = null,
   errorMessage = "",
   onClose,
   onConfirm,
@@ -100,12 +102,25 @@ export function GenerateCouponsModal({
           )}
 
           {state === "generating" && (
-            <div className="flex flex-col items-center py-4">
+            <div className="flex flex-col items-center py-4 w-full">
               <Loader2 className="w-10 h-10 text-[#4f46e5] animate-spin mb-4" />
               <h4 className="text-sm font-extrabold text-slate-800 mb-1">
                 Generating {totalToGenerate} Coupons...
               </h4>
-              <p className="text-[11px] text-[#94a3b8] font-medium">
+              {progress && progress.total > 0 && (
+                <div className="w-full mt-3 mb-1">
+                  <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className="h-full bg-[#4f46e5] transition-all duration-200"
+                      style={{ width: `${Math.min(100, (progress.done / progress.total) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-[#64748b] font-semibold mt-1.5">
+                    {progress.done} of {progress.total} coupons registered
+                  </p>
+                </div>
+              )}
+              <p className="text-[11px] text-[#94a3b8] font-medium mt-2">
                 Registering barcode identities in the database. Please do not close or refresh this page.
               </p>
             </div>

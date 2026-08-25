@@ -116,6 +116,7 @@ export function QrCodeGenerationView() {
           selectedBundlesCount={facade.activeStyle.bundles.filter((b) => b.sel).length}
           selectedOperationsCount={facade.activeStyle.operations.filter((op) => op.lastOpSection).length}
           generatedCount={facade.generatedCount}
+          progress={facade.generateProgress}
           errorMessage={facade.couponModalError}
           onClose={() => facade.setShowGenerateModal(false)}
           onConfirm={facade.confirmGenerateCoupons}

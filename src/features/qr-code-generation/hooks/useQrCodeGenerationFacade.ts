@@ -47,6 +47,7 @@ interface QrCodeGenerationFacade {
   generateModalState: "confirm" | "generating" | "success" | "error";
   couponModalError: string;
   generatedCount: number;
+  generateProgress: { done: number; total: number } | null;
   confirmGenerateCoupons: () => Promise<void>;
   isSelectionGenerated: boolean;
   handleDirectPrint: (codeType: "qr" | "barcode") => Promise<void>;
@@ -106,6 +107,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   >("confirm");
   const [couponModalError, setCouponModalError] = useState("");
   const [generatedCount, setGeneratedCount] = useState(0);
+  const [generateProgress, setGenerateProgress] = useState<{ done: number; total: number } | null>(null);
 
   const [lastGeneratedSelectionKey, setLastGeneratedSelectionKey] = useState<string>("");
 
@@ -445,6 +447,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   const confirmGenerateCoupons = async () => {
     setGenerateModalState("generating");
     setGeneratingCoupons(true);
+    setGenerateProgress(null);
     try {
       const response = await fetch("/api/qr-code-generation/coupons", {
         method: "POST",
@@ -458,18 +461,66 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         }),
       });
 
-      const data = await response.json();
+      // Non-streaming failures (validation errors) still come back as a
+      // plain JSON error body — the stream only starts once the route has
+      // actual work to report progress on.
       if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
         throw new Error(data.error || "Failed to generate coupons.");
       }
+      if (!response.body) {
+        throw new Error("Failed to generate coupons.");
+      }
 
-      setGeneratedCount(data.couponCount);
+      // Response body arrives as newline-delimited JSON progress lines —
+      // read incrementally and buffer any partial line split across two
+      // reader chunks (a line's bytes aren't guaranteed to land in one
+      // read()) until a "\n" completes it.
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let finalData: { cardCount: number; couponCount: number } | null = null;
+
+      while (true) {
+        const { done: streamDone, value } = await reader.read();
+        if (streamDone) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? ""; // last element: partial line (or "") — held back for the next read
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          const parsed = JSON.parse(line);
+          if (parsed.status === "error") {
+            throw new Error(parsed.message || "Failed to generate coupons.");
+          }
+          if (parsed.status === "complete") {
+            finalData = parsed;
+          }
+          setGenerateProgress({ done: parsed.done, total: parsed.total });
+        }
+      }
+      // Decoder may still hold a trailing partial multi-byte char with
+      // nothing left to complete it once the stream ends — flush is a
+      // no-op unless that happened, so this is safe either way.
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        const parsed = JSON.parse(buffer);
+        if (parsed.status === "error") throw new Error(parsed.message || "Failed to generate coupons.");
+        if (parsed.status === "complete") finalData = parsed;
+      }
+
+      if (!finalData) {
+        throw new Error("Failed to generate coupons.");
+      }
+
+      setGeneratedCount(finalData.couponCount);
       setGenerateModalState("success");
 
       // Update coupons count in UI
       setActiveStyle((prev) => ({
         ...prev,
-        generatedCoupons: String(data.couponCount),
+        generatedCoupons: String(finalData!.couponCount),
       }));
       setLastGeneratedSelectionKey(currentSelectionKey);
     } catch (err: any) {
@@ -530,6 +581,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     generateModalState,
     couponModalError,
     generatedCount,
+    generateProgress,
     confirmGenerateCoupons,
     isSelectionGenerated,
     handleDirectPrint,

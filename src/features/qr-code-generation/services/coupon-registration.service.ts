@@ -2,15 +2,27 @@ import { sql } from "@/lib/db";
 import { buildCouponCode } from "./coupon-code";
 import type { CouponCard } from "./coupon-pairing.service";
 
-// 5 params/row (couponCode, bundleNo, opNo, section, cutNo) + 1 shared
-// @workOrder param — SQL Server caps query params at 2100, so this stays
-// comfortably under that per batch (400 * 5 + 1 = 2001).
-const CHUNK_SIZE = 400;
+// Number of TVP round trips a registration run is split into — a divisor
+// of the row count, not a fixed row-count-per-chunk. A TVP has no 2100-param
+// cap to dodge (unlike the old VALUES-list insert), so the split here is
+// purely to give onProgress something to report between chunks; 4 gives the
+// UI a handful of progress ticks without turning a huge work order into
+// hundreds of tiny round trips. Small runs still get at least 1 row/chunk.
+const CHUNK_COUNT = 4;
 
 export function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
+}
+
+// Splits into ~CHUNK_COUNT roughly even pieces (last chunk absorbs the
+// remainder) rather than fixed-size chunks — a work order's row count is
+// unpredictable, so this keeps chunk count stable instead of chunk size.
+function chunkEvenly<T>(items: T[], count: number): T[][] {
+  if (items.length === 0) return [];
+  const size = Math.max(1, Math.ceil(items.length / count));
+  return chunk(items, size);
 }
 
 interface CouponRow {
@@ -21,49 +33,58 @@ interface CouponRow {
   cutNo: string;
 }
 
-// INSERT...SELECT WHERE NOT EXISTS against a VALUES rowset — one round
-// trip per call regardless of row count, skips codes already registered.
+// mssql's TVP support (sql.Table) has no @types/mssql declarations, so it's
+// typed loosely here the same way pool.request(conf) is cast elsewhere in
+// this file — see the requestTimeout cast below.
+function buildCouponRowsTable(batch: CouponRow[]): sql.Table {
+  const table = new sql.Table("dbo.CouponRowType") as unknown as {
+    columns: { add: (name: string, type: unknown, opts?: { nullable?: boolean }) => void };
+    rows: { add: (...values: unknown[]) => void };
+  };
+  table.columns.add("CouponCode", sql.NVarChar(200));
+  table.columns.add("BundleNo", sql.NVarChar(100));
+  table.columns.add("OpNo", sql.NVarChar(50));
+  table.columns.add("Section", sql.NVarChar(200), { nullable: true });
+  table.columns.add("CutNo", sql.NVarChar(50), { nullable: true });
+  for (const row of batch) {
+    table.rows.add(row.couponCode, row.bundleNo, row.opNo, row.section || null, row.cutNo || null);
+  }
+  return table as unknown as sql.Table;
+}
+
+// INSERT...SELECT WHERE NOT EXISTS against a TVP rowset — one round trip
+// per chunk regardless of chunk size, skips codes already registered.
 // requestTimeout raised above the driver's 15s default — @types/mssql
 // doesn't declare pool.request(conf), hence the cast (see pdf/route.ts).
 async function insertCouponBatch(pool: sql.ConnectionPool, workOrder: string, batch: CouponRow[]) {
   const request = (pool.request as (conf?: { requestTimeout: number }) => sql.Request)({
     requestTimeout: 60_000,
   });
-  const valueList = batch
-    .map((row, i) => {
-      request.input(`code${i}`, sql.NVarChar, row.couponCode);
-      request.input(`bundle${i}`, sql.NVarChar, row.bundleNo);
-      request.input(`op${i}`, sql.NVarChar, row.opNo);
-      request.input(`section${i}`, sql.NVarChar, row.section || null);
-      request.input(`cut${i}`, sql.NVarChar, row.cutNo || null);
-      return `(@code${i}, @bundle${i}, @op${i}, @section${i}, @cut${i})`;
-    })
-    .join(", ");
-  await request.input("workOrder", sql.NVarChar, workOrder).query(`
-    INSERT INTO dbo.QrCode_Coupon (CouponCode, WorkOrder, BundleNo, OpNo, Section, CutNo)
-    SELECT src.CouponCode, @workOrder, src.BundleNo, src.OpNo, src.Section, src.CutNo
-    FROM (VALUES ${valueList}) AS src(CouponCode, BundleNo, OpNo, Section, CutNo)
-    WHERE NOT EXISTS (
-      SELECT 1 FROM dbo.QrCode_Coupon existing WHERE existing.CouponCode = src.CouponCode
-    )
-  `);
+  await request
+    .input("workOrder", sql.NVarChar, workOrder)
+    .input("CouponRows", buildCouponRowsTable(batch))
+    .query(`
+      INSERT INTO dbo.QrCode_Coupon (CouponCode, WorkOrder, BundleNo, OpNo, Section, CutNo)
+      SELECT src.CouponCode, @workOrder, src.BundleNo, src.OpNo, src.Section, src.CutNo
+      FROM @CouponRows src
+      WHERE NOT EXISTS (
+        SELECT 1 FROM dbo.QrCode_Coupon existing WHERE existing.CouponCode = src.CouponCode
+      )
+    `);
 }
 
 // Registers every card's coupon identity in dbo.QrCode_Coupon, chunked so
 // thousands of coupons take a handful of round trips instead of one per
 // coupon. Safe to call repeatedly — codes already registered are skipped.
-export async function registerCoupons(pool: sql.ConnectionPool, workOrder: string, cards: CouponCard[]) {
-  // Ensure CutNo column exists before doing inserts
-  await pool.request().query(`
-    IF NOT EXISTS (
-      SELECT 1 FROM sys.columns
-      WHERE object_id = OBJECT_ID('dbo.QrCode_Coupon') AND name = 'CutNo'
-    )
-    BEGIN
-      ALTER TABLE dbo.QrCode_Coupon ADD CutNo NVARCHAR(50) NULL;
-    END
-  `);
-
+// onProgress (optional) fires after each chunk with the running count of
+// rows attempted so far (dupes included) — it always reaches `total`
+// regardless of how many rows turned out to be dupes/skipped.
+export async function registerCoupons(
+  pool: sql.ConnectionPool,
+  workOrder: string,
+  cards: CouponCard[],
+  onProgress?: (done: number, total: number) => void,
+) {
   const rows = cards.map(({ bundle, op }) => ({
     couponCode: buildCouponCode(workOrder, bundle.bundleNo, op.opNo),
     bundleNo: bundle.bundleNo,
@@ -72,13 +93,15 @@ export async function registerCoupons(pool: sql.ConnectionPool, workOrder: strin
     cutNo: bundle.cutNo,
   }));
 
-  for (const batch of chunk(rows, CHUNK_SIZE)) {
+  const total = rows.length;
+  let done = 0;
+  for (const batch of chunkEvenly(rows, CHUNK_COUNT)) {
     try {
       await insertCouponBatch(pool, workOrder, batch);
     } catch (err: unknown) {
       // 2627/2601 = unique constraint violation — two concurrent requests
       // raced on the same coupon(s) between the NOT EXISTS check and the
-      // insert. Fall back to one-by-one for just this batch so a rare
+      // insert. Fall back to one-by-one for just this chunk so a rare
       // race doesn't fail the whole run; anything else is a real error.
       const num = (err as { number?: number }).number;
       if (num !== 2627 && num !== 2601) throw err;
@@ -91,6 +114,8 @@ export async function registerCoupons(pool: sql.ConnectionPool, workOrder: strin
         }
       }
     }
+    done += batch.length;
+    onProgress?.(done, total);
   }
 }
 
