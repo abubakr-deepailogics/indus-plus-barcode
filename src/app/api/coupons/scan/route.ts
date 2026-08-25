@@ -81,7 +81,7 @@ export async function GET(request: Request) {
             SELECT TOP 1 *
             FROM dbo.Order_Po_Cut_Detail cd WITH (NOLOCK)
             WHERE cd.Work_Order = c.WorkOrder 
-              AND cd.Bundle_Id = TRY_CAST(c.BundleNo AS INT)
+              AND cd.Bundle_Id = c.BundleNo
             ORDER BY cd.RowId
         ) d
         OUTER APPLY (
@@ -122,7 +122,7 @@ export async function GET(request: Request) {
             SELECT TOP 1 *
             FROM dbo.Order_Po_Cut_Detail cd WITH (NOLOCK)
             WHERE cd.Work_Order = c.WorkOrder 
-              AND cd.Bundle_Id = TRY_CAST(c.BundleNo AS INT)
+              AND cd.Bundle_Id = c.BundleNo
             ORDER BY cd.RowId
         ) d
         OUTER APPLY (
@@ -220,7 +220,7 @@ export async function GET(request: Request) {
             SELECT TOP 1 *
             FROM dbo.Order_Po_Cut_Detail cd WITH (NOLOCK)
             WHERE cd.Work_Order = c.WorkOrder 
-              AND cd.Bundle_Id = TRY_CAST(c.BundleNo AS INT)
+              AND cd.Bundle_Id = c.BundleNo
             ORDER BY cd.RowId
         ) d
         WHERE c.WorkOrder = @wo 
