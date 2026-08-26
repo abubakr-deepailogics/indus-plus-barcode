@@ -14,6 +14,8 @@ export async function GET(request: Request) {
   const employeeCode = searchParams.get("employeeCode") || "";
   const scanBy = searchParams.get("scanBy") || "";
   const scanDate = searchParams.get("scanDate") || "";
+  // "fetch" = lookup only, does not mark coupons as scanned in the DB
+  const mode = searchParams.get("mode") || "scan";
 
   if (!barcode && !wo) {
     return Response.json(
@@ -169,6 +171,11 @@ export async function GET(request: Request) {
         );
       }
 
+      // Fetch-only mode: return the looked-up coupon without marking it scanned.
+      if (mode === "fetch") {
+        return Response.json(records);
+      }
+
       // Mark coupon as scanned in the database in a single query
       await pool
         .request()
@@ -177,7 +184,7 @@ export async function GET(request: Request) {
         .input("scanBy", sql.NVarChar, scanBy.trim())
         .input("scanDate", sql.NVarChar, scanDate.trim())
         .query(`
-          UPDATE dbo.QrCode_Coupon 
+          UPDATE dbo.QrCode_Coupon
           SET IsScanned = 1,
               EmployeeCode = NULLIF(@employeeCode, ''),
               ScanBy = NULLIF(@scanBy, ''),
@@ -198,6 +205,11 @@ export async function GET(request: Request) {
       );
     }
 
+    // Fetch-only mode: return the looked-up coupons without marking them scanned.
+    if (mode === "fetch") {
+      return Response.json(unscanned);
+    }
+
     // Mark all matched coupons as scanned in a single bulk query (avoiding loop)
     await pool
       .request()
@@ -210,7 +222,7 @@ export async function GET(request: Request) {
       .input("scanBy", sql.NVarChar, scanBy.trim())
       .input("scanDate", sql.NVarChar, scanDate.trim())
       .query(`
-        UPDATE c 
+        UPDATE c
         SET IsScanned = 1,
             EmployeeCode = NULLIF(@employeeCode, ''),
             ScanBy = NULLIF(@scanBy, ''),
@@ -219,12 +231,12 @@ export async function GET(request: Request) {
         OUTER APPLY (
             SELECT TOP 1 *
             FROM dbo.Order_Po_Cut_Detail cd WITH (NOLOCK)
-            WHERE cd.Work_Order = c.WorkOrder 
+            WHERE cd.Work_Order = c.WorkOrder
               AND cd.Bundle_Id = c.BundleNo
             ORDER BY cd.RowId
         ) d
-        WHERE c.WorkOrder = @wo 
-          AND (@bundle = '' OR c.BundleNo = @bundle) 
+        WHERE c.WorkOrder = @wo
+          AND (@bundle = '' OR c.BundleNo = @bundle)
           AND (@op = '' OR c.OpNo = @op)
           AND (@fromCut = '' OR TRY_CAST(d.Cut AS INT) >= TRY_CAST(@fromCut AS INT))
           AND (@toCut = '' OR TRY_CAST(d.Cut AS INT) <= TRY_CAST(@toCut AS INT))

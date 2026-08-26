@@ -393,8 +393,8 @@ export async function generateCouponPdf({
     const rateNum = parseFloat(op.rate || "0");
     const qtyNum = bundle.pcs || 0;
     const rsVal = Math.round(rateNum * qtyNum);
-    // Coupon code stays only in the QR payload (scan/rework routes match
-    // on it) — not printed, per the smaller box's space budget.
+    // Coupon code is the scannable payload for both formats below (scan/rework
+    // routes match on it) — not printed as text, per the smaller box's space budget.
     const couponCode = buildCouponCode(workOrder, bundle.bundleNo, op.opNo);
     const workOrderShort = stripPrefix(workOrder);
     // Bundle number often repeats the work order's digits at the front
@@ -476,21 +476,10 @@ export async function generateCouponPdf({
           lineBreak: false,
         });
     } else {
-      const qrDisplayValue = [
-        `Coupon: ${couponCode}`,
-        `Order: ${workOrder}`,
-        `Cut: ${bundle.cutNo}`,
-        `Bundle: ${bundle.bundleNo}`,
-        `Size: ${bundle.size || "/"}`,
-        `Inseam: ${bundle.inseam || "-"}`,
-        `Op No: ${op.opNo}`,
-        `Op Name: ${op.operationName}`,
-        `Qty: ${qtyNum}`,
-        `Rate: ${op.rate}`,
-        `Rs: ${rsVal}`,
-      ].join("\n");
-
-      const qrPng = await QRCode.toBuffer(qrDisplayValue, {
+      // QR encodes only the coupon code — same payload as the barcode branch —
+      // so a scan of either format matches CouponCode in the DB the same way.
+      // The rest of the card's fields are printed as text alongside it instead.
+      const qrPng = await QRCode.toBuffer(couponCode, {
         errorCorrectionLevel: "M",
         margin: 0,
         width: 150,

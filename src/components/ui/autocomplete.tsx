@@ -30,7 +30,7 @@ export function Autocomplete<T>({
   className = "",
   inputClassName = "",
   dropdownClassName = "",
-  minChars = 2,
+  minChars = 1,
   debounceMs = 200,
   onKeyDown,
   onFocus,
@@ -43,17 +43,29 @@ export function Autocomplete<T>({
   const containerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
 
+  // Read via a ref instead of a dependency: callers often pass a new
+  // fetchSuggestions closure on every render (e.g. one bound to other form
+  // state). Depending on it directly would refetch every Autocomplete on the
+  // page whenever any of that state changes, not just when this field's own
+  // value does.
+  const fetchSuggestionsRef = useRef(fetchSuggestions);
+  useEffect(() => {
+    fetchSuggestionsRef.current = fetchSuggestions;
+  });
+
   useEffect(() => {
     if (disabled || value.trim().length < minChars) {
       setSuggestions([]);
+      setActiveIndex(-1);
       return;
     }
 
     setIsLoading(true);
     const delayDebounceFn = setTimeout(async () => {
       try {
-        const data = await fetchSuggestions(value);
+        const data = await fetchSuggestionsRef.current(value);
         setSuggestions(data || []);
+        setActiveIndex(-1);
       } catch (err) {
         console.error("Autocomplete fetch error:", err);
       } finally {
@@ -62,11 +74,7 @@ export function Autocomplete<T>({
     }, debounceMs);
 
     return () => clearTimeout(delayDebounceFn);
-  }, [value, minChars, debounceMs, fetchSuggestions]);
-
-  useEffect(() => {
-    setActiveIndex(-1);
-  }, [suggestions]);
+  }, [value, minChars, debounceMs, disabled]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
