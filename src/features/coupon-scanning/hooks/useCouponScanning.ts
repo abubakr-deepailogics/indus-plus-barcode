@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/features/auth/context/auth-context";
 import {
   ScanningRow,
@@ -335,9 +335,88 @@ export function useCouponScanning() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Barcode-gun field: a scanner types the code then sends Enter/Tab itself.
-  // This only drops the code into a new/empty table row — no fetch, no API
-  // call — then refocuses so the next scan can go straight in.
+  // Barcode-gun field: a scanner types the code then sends Enter/Tab itself,
+  // firing fast in bursts. Each code is appended to the table right away as
+  // "pending" for instant visual feedback, then queued; a burst is flushed
+  // to the batch-scan API 400ms after the *last* scan in it (trailing
+  // debounce), so N codes typed in a row become one DB round trip instead
+  // of N — the timer keeps resetting while codes keep arriving, and only
+  // fires once the gun goes quiet.
+  const FLUSH_DELAY_MS = 400;
+  const pendingCodesRef = useRef<string[]>([]);
+  const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const flushPendingScans = useCallback(async () => {
+    const codes = pendingCodesRef.current;
+    pendingCodesRef.current = [];
+    flushTimerRef.current = null;
+    if (codes.length === 0) return;
+
+    if (!employeeCode.trim()) {
+      raiseError("Please enter or select an Employee Code first!");
+      return;
+    }
+    if (!scanBy.trim()) {
+      raiseError("Please enter Scanner Name in Scan By first!");
+      return;
+    }
+
+    try {
+      const result = await couponScanningService.scanCouponsBatch({
+        barcodes: codes,
+        employeeCode,
+        scanBy,
+        scanDate: dated,
+      });
+
+      if (!result.ok) {
+        raiseError(result.error);
+        return;
+      }
+
+      const byCode = new Map(result.scanned.map((item) => [item.CouponCode, item]));
+      setRows((prev) =>
+        prev.map((row) => {
+          const item = row.barCode ? byCode.get(row.barCode) : undefined;
+          if (!item) return row;
+          return {
+            ...row,
+            ...couponItemToRow(item),
+            scanned: true,
+            scanDate: item.ScannedAt
+              ? new Date(item.ScannedAt).toLocaleDateString()
+              : dated || new Date().toLocaleDateString(),
+          };
+        }),
+      );
+
+      if (result.scanned.length > 0) {
+        setAlreadyDailyScan((prev) => String((parseInt(prev) || 0) + result.scanned.length));
+        setAlreadyMonthlyScan((prev) => String((parseInt(prev) || 0) + result.scanned.length));
+      }
+
+      if (result.failed.length > 0) {
+        setScanError(
+          `${result.failed.length} coupon(s) could not be scanned (already scanned or not found): ${result.failed.join(", ")}`,
+        );
+        // Drop failed codes' rows back to empty so the slot isn't stuck
+        // showing an unscanned "pending" row forever.
+        setRows((prev) =>
+          prev.map((row) =>
+            row.barCode && result.failed.includes(row.barCode)
+              ? makeEmptyRow(row.index)
+              : row,
+          ),
+        );
+      } else {
+        setScanError("");
+      }
+    } catch (err) {
+      console.error("Batch scan error:", err);
+      raiseError(getErrorMessage(err, "An unexpected error occurred while scanning."));
+    }
+  }, [employeeCode, scanBy, dated]);
+
   const handleScannerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== "Enter" && e.key !== "Tab") return;
 
@@ -349,7 +428,7 @@ export function useCouponScanning() {
     setScannerInput("");
     requestAnimationFrame(() => input.focus());
 
-    // Skip coupons already present in the table (already fetched/scanned).
+    // Skip coupons already present in the table (already fetched/scanned/pending).
     if (rows.some((row) => row.barCode === code)) {
       setScanError(`Coupon ${code} is already in the table.`);
       return;
@@ -369,45 +448,57 @@ export function useCouponScanning() {
       }
       return updatedRows;
     });
+
+    pendingCodesRef.current.push(code);
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = setTimeout(flushPendingScans, FLUSH_DELAY_MS);
   };
 
-  const handleRemoveRow = (rowIndex: number) => {
+  // Flush whatever's still queued if the component unmounts mid-burst
+  // (e.g. navigating away right after the last scan of a shift).
+  useEffect(() => {
+    return () => {
+      if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    };
+  }, []);
+
+  // Remove also undoes the scan in the DB when the row being removed was
+  // already scanned — one button instead of separate Remove/Unscan actions.
+  const handleRemoveRow = async (rowIndex: number) => {
+    const row = rows.find((r) => r.index === rowIndex);
+
+    if (row?.scanned && row.barCode) {
+      if (
+        !window.confirm(
+          `Coupon ${row.barCode} is already scanned. Remove and unscan it?`,
+        )
+      ) {
+        return;
+      }
+      try {
+        const result = await couponScanningService.unscanCoupon(row.barCode);
+        if (!result.ok) {
+          setScanError(result.error);
+          return;
+        }
+        setAlreadyDailyScan((prev) =>
+          String(Math.max(0, (parseInt(prev) || 0) - 1)),
+        );
+        setAlreadyMonthlyScan((prev) =>
+          String(Math.max(0, (parseInt(prev) || 0) - 1)),
+        );
+      } catch (err) {
+        console.error("Unscan error:", err);
+        setScanError("An error occurred while unscanning the coupon.");
+        return;
+      }
+    }
+
     setRows((prev) =>
       prev
         .filter((r) => r.index !== rowIndex)
         .map((r, i) => ({ ...r, index: i + 1 })),
     );
-  };
-
-  const handleUnscanCoupon = async (couponCode: string, rowIndex: number) => {
-    if (
-      !window.confirm(`Are you sure you want to unscan coupon: ${couponCode}?`)
-    ) {
-      return;
-    }
-    try {
-      const result = await couponScanningService.unscanCoupon(couponCode);
-      if (!result.ok) {
-        setScanError(result.error);
-        return;
-      }
-
-      // Decrement daily and monthly scan totals in UI dynamically
-      setAlreadyDailyScan((prev) =>
-        String(Math.max(0, (parseInt(prev) || 0) - 1)),
-      );
-      setAlreadyMonthlyScan((prev) =>
-        String(Math.max(0, (parseInt(prev) || 0) - 1)),
-      );
-
-      // Reset that row to default empty state
-      setRows((prev) =>
-        prev.map((r) => (r.index === rowIndex ? makeEmptyRow(rowIndex) : r)),
-      );
-    } catch (err) {
-      console.error("Unscan error:", err);
-      setScanError("An error occurred while unscanning the coupon.");
-    }
   };
 
   const handleSelectWorker = async (worker: Worker) => {
@@ -616,7 +707,6 @@ export function useCouponScanning() {
     clearForm,
     handleScannerKeyDown,
     handleRemoveRow,
-    handleUnscanCoupon,
     handleSelectWorker,
     handleEmployeeCodeKeyDown,
     handleBarcodeKeyDown,

@@ -104,6 +104,32 @@ export async function scanCoupon(params: {
   return { ok: true, item: items[0] || {} };
 }
 
+// Batch version of scanCoupon — one request for a whole burst of scanner-gun
+// codes instead of one request per code. Returns full row detail for every
+// code that was actually flipped to scanned, plus the codes that weren't
+// (already scanned / not found) so the caller can flag them without a
+// second round trip.
+export async function scanCouponsBatch(params: {
+  barcodes: string[];
+  employeeCode: string;
+  scanBy: string;
+  scanDate: string;
+}): Promise<
+  | { ok: true; scanned: CouponApiItem[]; failed: string[] }
+  | { ok: false; error: string }
+> {
+  const response = await fetch("/api/coupons/scan/batch", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    return { ok: false, error: data.error || "Failed to scan coupons." };
+  }
+  return { ok: true, scanned: data.scanned ?? [], failed: data.failed ?? [] };
+}
+
 export async function unscanCoupon(
   couponCode: string,
 ): Promise<{ ok: true } | { ok: false; error: string }> {

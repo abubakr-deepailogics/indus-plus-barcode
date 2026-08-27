@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { FileText } from "lucide-react";
 import type { useCouponScanning } from "../hooks/useCouponScanning";
 
@@ -14,13 +15,23 @@ export function ScanningDetailsTable(props: Facade) {
     isScanning,
     rows,
     handleRemoveRow,
-    handleUnscanCoupon,
     handleScanCoupon,
     totalQty,
     totalRecords,
     totalSam,
     totalValue,
+    employeeCode,
   } = props;
+
+  const scannerDisabled = isScanning || !employeeCode.trim();
+
+  // Auto-scroll the table to the bottom as rows fill in, so the row a
+  // just-scanned coupon landed in stays in view during a fast scan burst.
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = tableContainerRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [rows]);
 
   return (
     <div className="bg-white border border-[#e2e8f0] rounded-2xl p-3.5 shadow-sm mt-1 flex flex-col gap-2.5">
@@ -50,23 +61,30 @@ export function ScanningDetailsTable(props: Facade) {
         <input
           type="text"
           autoComplete="off"
-          placeholder="Focus here and scan a coupon barcode…"
+          placeholder={
+            employeeCode.trim()
+              ? "Focus here and scan a coupon barcode…"
+              : "Select an Employee Code first"
+          }
           value={scannerInput}
           onChange={(e) => setScannerInput(e.target.value)}
           onKeyDown={handleScannerKeyDown}
-          disabled={isScanning}
-          className="w-full px-3 py-1 rounded-lg border border-indigo-200 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5] transition-all bg-indigo-50/30 disabled:opacity-60"
+          disabled={scannerDisabled}
+          className="w-full px-3 py-1 rounded-lg border border-indigo-200 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5] transition-all bg-indigo-50/30 disabled:opacity-60 disabled:cursor-not-allowed"
         />
       </div>
 
       {/* Scrollable table container */}
-      <div className="overflow-x-auto overflow-y-auto w-full border border-slate-100 rounded-xl max-h-[500px] shadow-inner bg-slate-50/40">
+      <div
+        ref={tableContainerRef}
+        className="overflow-x-auto overflow-y-auto w-full border border-slate-100 rounded-xl max-h-[500px] shadow-inner bg-slate-50/40"
+      >
         <table className="w-full border-collapse text-[11px] min-w-[1200px]">
           {/* Header groups */}
           <thead>
             {/* Category label row */}
             <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-              <th colSpan={13} className="py-1 px-3 border-r border-slate-200"></th>
+              <th colSpan={12} className="py-1 px-3 border-r border-slate-200"></th>
               <th
                 colSpan={3}
                 className="py-0.5 px-3 text-center text-[9px] uppercase tracking-wider bg-slate-200/60 text-slate-800 border-b border-slate-300"
@@ -81,9 +99,6 @@ export function ScanningDetailsTable(props: Facade) {
               </th>
               <th className="py-1 px-2 border-r border-slate-200 text-center w-[40px]">
                 #
-              </th>
-              <th className="py-1 px-2 border-r border-slate-200 text-center w-[80px] text-[#ef4444] uppercase tracking-wider text-[9px] font-bold">
-                Unscan
               </th>
               <th className="py-1 px-3 border-r border-slate-200 w-[140px]">
                 Coupon Code
@@ -141,9 +156,6 @@ export function ScanningDetailsTable(props: Facade) {
                     <td className="py-3 px-2 border-r border-slate-200 text-center">
                       <div className="h-3 w-4 bg-slate-200 rounded mx-auto" />
                     </td>
-                    <td className="py-3 px-2 border-r border-slate-200 text-center">
-                      <div className="h-3 w-10 bg-slate-200 rounded mx-auto" />
-                    </td>
                     <td className="py-3 px-3 border-r border-slate-200">
                       <div className="h-3 w-24 bg-slate-200 rounded" />
                     </td>
@@ -190,11 +202,11 @@ export function ScanningDetailsTable(props: Facade) {
                     key={row.index}
                     className="bg-white hover:bg-slate-50/50 border-b border-slate-100 transition-colors"
                   >
-                    {/* Remove row */}
+                    {/* Remove row — unscans in DB first if already scanned */}
                     <td className="py-1 px-2 border-r border-slate-200 text-center">
                       <button
                         onClick={() => handleRemoveRow(row.index)}
-                        title="Remove row"
+                        title={row.scanned ? "Unscan & remove row" : "Remove row"}
                         className="text-[#ef4444] hover:text-[#dc2626] font-bold text-[10px] px-1.5 py-0.5 rounded bg-red-50 hover:bg-red-100 border border-red-100 transition-all cursor-pointer"
                       >
                         ✕
@@ -204,28 +216,16 @@ export function ScanningDetailsTable(props: Facade) {
                     <td className="py-1 px-2 border-r border-slate-200 text-center font-bold text-slate-400">
                       {row.index}
                     </td>
-                    {/* Unscan Action */}
-                    <td className="py-1 px-2 border-r border-slate-200 text-center">
-                      {row.barCode && row.scanned ? (
-                        <button
-                          onClick={() =>
-                            handleUnscanCoupon(row.barCode, row.index)
-                          }
-                          className="text-[#ef4444] hover:text-[#dc2626] font-bold text-[10px] px-1.5 py-0.5 rounded bg-red-50 hover:bg-red-100 border border-red-100 transition-all cursor-pointer"
-                        >
-                          Unscan
-                        </button>
-                      ) : row.barCode ? (
-                        <span className="text-[9px] font-bold text-amber-600 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100 uppercase">
-                          Pending
-                        </span>
-                      ) : (
-                        "-"
-                      )}
-                    </td>
-                    {/* Bar # */}
+                    {/* Bar # + pending/scanned status */}
                     <td className="py-1 px-3 border-r border-slate-200 font-semibold text-slate-800">
-                      {row.barCode || "-"}
+                      <div className="flex items-center gap-1.5">
+                        <span>{row.barCode || "-"}</span>
+                        {row.barCode && !row.scanned && (
+                          <span className="text-[8px] font-bold text-amber-600 bg-amber-50 px-1 py-0.5 rounded border border-amber-100 uppercase leading-none">
+                            Pending
+                          </span>
+                        )}
+                      </div>
                     </td>
                     {/* ANL # */}
                     <td className="py-1 px-3 border-r border-slate-200 font-semibold text-slate-700">
