@@ -63,6 +63,7 @@ export async function GET(request: Request) {
         WHERE Work_Order = @wo AND CAST(Bundle_Id AS NVARCHAR(50)) IN (${batch
           .map((_, i) => `@bundle${i}`)
           .join(", ")})
+        ORDER BY TRY_CAST(Cut AS INT) ASC, TRY_CAST(Bundle_Id AS INT) ASC
       `);
       cutRecordsets.push(result.recordset);
     }

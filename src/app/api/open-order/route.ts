@@ -17,7 +17,11 @@ export async function GET(request: Request) {
     const cutDetailResult = await pool
       .request()
       .input("wo", sql.NVarChar, workOrder)
-      .query("SELECT * FROM dbo.Order_Po_Cut_Detail WHERE Work_Order = @wo");
+      .query(`
+        SELECT * FROM dbo.Order_Po_Cut_Detail 
+        WHERE Work_Order = @wo 
+        ORDER BY TRY_CAST(Cut AS INT) ASC, TRY_CAST(Bundle_Id AS INT) ASC
+      `);
 
     // Fetch Style Bulletin (Operations)
     const styleBulletinResult = await pool

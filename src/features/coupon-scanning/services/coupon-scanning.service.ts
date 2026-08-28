@@ -34,8 +34,16 @@ function fetchCouponSuggestions(
   ).then((data) => data ?? []);
 }
 
-export function fetchBundleSuggestions(workOrder: string, query: string) {
-  return fetchCouponSuggestions(workOrder, "bundle", query, true);
+export function fetchBundleSuggestions(
+  workOrder: string,
+  query: string,
+): Promise<string[]> {
+  return fetchCouponSuggestions(
+    workOrder,
+    "bundle",
+    query,
+    true,
+  ) as Promise<string[]>;
 }
 
 export function fetchOpSuggestions(
@@ -67,11 +75,12 @@ export async function fetchCouponInfo(params: {
   opNo?: string;
   fromCut?: string;
   toCut?: string;
+  bundleNo?: string;
 }): Promise<{ ok: true; items: CouponApiItem[] } | { ok: false; error: string }> {
-  const { couponCode, workOrder, opNo, fromCut, toCut } = params;
+  const { couponCode, workOrder, opNo, fromCut, toCut, bundleNo } = params;
   const url = couponCode?.trim()
     ? `/api/coupons/scan?mode=fetch&barcode=${encodeURIComponent(couponCode.trim())}`
-    : `/api/coupons/scan?mode=fetch&wo=${encodeURIComponent(workOrder ?? "")}&op=${encodeURIComponent(opNo ?? "")}&fromCut=${encodeURIComponent(fromCut ?? "")}&toCut=${encodeURIComponent(toCut ?? "")}`;
+    : `/api/coupons/scan?mode=fetch&wo=${encodeURIComponent(workOrder ?? "")}&op=${encodeURIComponent(opNo ?? "")}&fromCut=${encodeURIComponent(fromCut ?? "")}&toCut=${encodeURIComponent(toCut ?? "")}&bundle=${encodeURIComponent(bundleNo ?? "")}`;
 
   const response = await fetch(url);
   const data = await response.json();

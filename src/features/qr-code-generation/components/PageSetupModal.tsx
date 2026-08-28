@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect } from "react";
 import { X, FileText } from "lucide-react";
 import type { PageSetupConfig } from "../types";
 
@@ -18,6 +19,17 @@ export function PageSetupModal({
   onGeneratePdf,
   generatingPdf,
 }: PageSetupModalProps) {
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [onClose]);
   return (
     <div className="no-print fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] max-w-[500px] w-full p-6 animate-scale-up text-xs text-[#334155] font-sans">
@@ -232,7 +244,7 @@ export function PageSetupModal({
             disabled={generatingPdf}
             className="bg-white border border-[#4f46e5] text-[#4f46e5] px-5 py-2.5 rounded-xl font-bold hover:bg-[#eef2ff] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {generatingPdf ? "Generating…" : "Generate PDF"}
+            {generatingPdf ? "Printing…" : "Print Coupons"}
           </button>
         </div>
       </div>

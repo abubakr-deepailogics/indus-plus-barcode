@@ -5,7 +5,8 @@ import {
   Search, AlertCircle,
   Info,
   Database,
-  Paperclip
+  Paperclip,
+  Printer
 } from "lucide-react";
 // import type { PageSetupConfig } from "@/features/barcode-generation/types";
 // import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
@@ -370,6 +371,19 @@ export default function OpenOrderPage() {
     rowId: number;
   } | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (!previewFile) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setPreviewFile(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [previewFile]);
 
   const styleBulletinColumns = useMemo<ColumnDef<StyleBulletinRow>[]>(
     () => [
@@ -1082,7 +1096,21 @@ export default function OpenOrderPage() {
         ) : (
           <div className="flex flex-col gap-4 animate-fade-in">
             {/* DataTable Component */}
-            <DataTable columns={cutReportColumns} data={cutDetails} />
+            <DataTable
+              columns={cutReportColumns}
+              data={cutDetails}
+              toolbarChildren={
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  disabled={cutDetails.length === 0}
+                  className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-[#334155] disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Print</span>
+                </button>
+              }
+            />
           </div>
         )}
       </div>
@@ -1199,6 +1227,151 @@ export default function OpenOrderPage() {
           </div>
         </div>
       )}
+
+      {/* Print styles */}
+      <style>{`
+        @media print {
+          body {
+            background: white !important;
+            color: black !important;
+          }
+          .no-print {
+            display: none !important;
+          }
+          .print-only {
+            display: block !important;
+          }
+          @page {
+            size: A4 portrait;
+            margin: 1cm 1cm 1cm 1cm;
+          }
+          .print-container {
+            width: 100%;
+            font-family: Arial, sans-serif;
+            color: black;
+          }
+          .print-header-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 10px;
+            border: 1.5px solid #000;
+          }
+          .print-header-table td {
+            padding: 4px 8px;
+            border: 1px solid #000;
+            vertical-align: top;
+            font-size: 10px;
+            line-height: 1.4;
+          }
+          .print-ops-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 5px;
+            border: 1px solid #000;
+          }
+          .print-ops-table th, .print-ops-table td {
+            border: 1px solid #000;
+            padding: 3.5px 5px;
+            font-size: 8.5px;
+            text-align: left;
+          }
+          .print-ops-table th {
+            background-color: #e2e8f0 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            font-weight: bold;
+            text-transform: uppercase;
+            font-size: 8px;
+          }
+          .print-ops-table td.text-center, .print-ops-table th.text-center {
+            text-align: center;
+          }
+          .print-ops-table td.text-right, .print-ops-table th.text-right {
+            text-align: right;
+          }
+          .print-totals-row td {
+            font-weight: bold;
+            background-color: #f1f5f9 !important;
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+        @media screen {
+          .print-only {
+            display: none !important;
+          }
+        }
+      `}</style>
+
+      {/* PRINT ONLY PREVIEW CONTAINER */}
+      <div className="print-only print-container">
+        <h2 className="text-center font-extrabold text-sm uppercase tracking-wide mb-3 border-b-2 border-black pb-2">
+          Cut Report Preview for Indus Plus Pvt Limited
+        </h2>
+        
+        <table className="print-header-table">
+          <tbody>
+            <tr>
+              <td style={{ width: "35%" }}>
+                <div className="flex flex-col gap-1">
+                  <div><strong>WORK ORDER:</strong> {cutDetails[0]?.Work_Order || activeSearchQuery || ""}</div>
+                  <div><strong>SALE ORDER NO:</strong> {cutDetails[0]?.Sale_Order_No || ""}</div>
+                </div>
+              </td>
+              <td style={{ width: "30%" }}>
+                <div className="flex flex-col gap-1">
+                  <div><strong>CUSTOMER:</strong> {cutDetails[0]?.Customer_Name || ""}</div>
+                  <div><strong>ORDER QTY:</strong> {cutDetails[0]?.Order_Qty_After_Add || ""}</div>
+                </div>
+              </td>
+              <td style={{ width: "35%" }}>
+                <div className="flex flex-col gap-1">
+                  <div><strong>FABRIC CODE:</strong> {cutDetails[0]?.Fabric_Code_Main_Body || ""}</div>
+                  <div><strong>WASH:</strong> {cutDetails[0]?.Wash || ""}</div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+
+        <table className="print-ops-table">
+          <thead>
+            <tr>
+              <th className="text-center w-12">ROW ID</th>
+              <th className="text-center w-12">CUT</th>
+              <th>BUNDLE ID</th>
+              <th className="text-right w-20">BUNDLE QTY</th>
+              <th className="text-center w-16">INSEAM</th>
+              <th className="text-center w-16">SIZE</th>
+              <th>COLOR</th>
+              <th className="text-center w-16">SHADE</th>
+              <th className="text-center w-20">SHRINKAGE</th>
+            </tr>
+          </thead>
+          <tbody>
+            {cutDetails.map((row) => (
+              <tr key={row.RowId}>
+                <td className="text-center">{row.RowId}</td>
+                <td className="text-center">{row.Cut}</td>
+                <td className="font-mono">{row.Bundle_Id}</td>
+                <td className="text-right font-bold">{row.Bundle_Qty}</td>
+                <td className="text-center">{row.Inseam ?? "NULL"}</td>
+                <td className="text-center font-bold">{row.Size}</td>
+                <td>{row.Color}</td>
+                <td className="text-center font-bold">{row.Shade}</td>
+                <td className="text-center font-mono">{row.Shrinkage}</td>
+              </tr>
+            ))}
+            <tr className="print-totals-row">
+              <td colSpan={3} className="text-right uppercase">Total Qty</td>
+              <td className="text-right">
+                {cutDetails.reduce((sum, row) => sum + (row.Bundle_Qty ?? 0), 0)}
+              </td>
+              <td colSpan={5}></td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </>
   );
 }
