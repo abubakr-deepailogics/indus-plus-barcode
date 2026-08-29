@@ -9,6 +9,7 @@ import type {
 } from "../types";
 import { buildCouponCards, type CouponCard } from "./coupon-pairing.service";
 import { buildCouponCode, trimBundleNo } from "./coupon-code";
+import { getBundleDisplayNos } from "./bundle-display";
 
 // pdfkit's built-in "standard" fonts (Helvetica etc.) read .afm metric
 // files from node_modules at runtime via fs.readFileSync — bundlers that
@@ -297,6 +298,11 @@ export async function generateCouponPdf({
     .slice()
     .sort((a, b) => (Number(a.op.seqNo) || 0) - (Number(b.op.seqNo) || 0));
   const totalCards = cards.length;
+  // Display-only 1,2,3... per cut (see BundleDetailTable) — printed as B#
+  // instead of the raw Bundle_Id. Derived from `bundles`, not `cards`: a
+  // bundle repeats once per operation in `cards`, so ranking off that would
+  // reset/repeat per op instead of once per cut.
+  const bundleDisplayNos = getBundleDisplayNos(bundles);
   const slots = assignSlots(cards, layout, GRID_COLS, GRID_ROWS);
 
   const marginTop = margins.top * CM_TO_PT;
@@ -400,7 +406,15 @@ export async function generateCouponPdf({
     // Bundle number often repeats the work order's digits at the front
     // (see coupon-code.ts) — trim that repetition, not just the label
     // prefix, so B# actually fits its column instead of ellipsizing.
-    const bundleShort = trimBundleNo(workOrder, bundle.bundleNo);
+    const trimmedBundleNo = trimBundleNo(workOrder, bundle.bundleNo);
+    // What's actually printed as B# is the display-only per-cut rank (1, 2,
+    // 3...), not the real bundle number — padded to the same width as the
+    // trimmed real value so the column doesn't shift width card to card.
+    const displayNo = bundleDisplayNos.get(bundle.id);
+    const bundleShort =
+      displayNo !== undefined
+        ? String(displayNo).padStart(trimmedBundleNo.length, "0")
+        : trimmedBundleNo;
 
     if (codeType === "barcode") {
       // 3x3 Grid fields at the top

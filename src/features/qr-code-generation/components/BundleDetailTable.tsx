@@ -1,8 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import { HelpCircle } from "lucide-react";
 import type { BundleDetailRow } from "../types";
+import { getBundleDisplayNos } from "../services/bundle-display";
 
 interface BundleDetailTableProps {
   bundles: BundleDetailRow[];
@@ -25,6 +26,7 @@ export function BundleDetailTable({
 }: BundleDetailTableProps) {
   const [isCutWise, setIsCutWise] = useState(false);
   const [isSizeWise, setIsSizeWise] = useState(false);
+  const bundleDisplayNos = useMemo(() => getBundleDisplayNos(bundles), [bundles]);
 
   return (
     <div className="lg:col-span-6 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
@@ -120,7 +122,7 @@ export function BundleDetailTable({
                   {bd.line}
                 </td>
                 <td className="py-2.5 text-center text-purple-600 font-bold font-mono">
-                  {bd.bundleNo}
+                  {bundleDisplayNos.get(bd.id) ?? bd.bundleNo}
                 </td>
                 <td className="py-2.5 text-center text-[#64748b] font-medium">
                   {bd.inseam}

@@ -78,17 +78,27 @@ export async function GET(request: Request) {
       ORDER BY sb.Operation_Sequence ASC
     `);
 
-    const bundles: BundleDetailRow[] = cutRows.recordset.map((row) => ({
-      id: row.RowId,
-      cutNo: String(row.Cut ?? "0"),
-      line: "1",
-      bundleNo: String(row.Bundle_Id ?? row.RowId),
-      inseam: String(row.Inseam ?? ""),
-      size: String(row.Size ?? ""),
-      pcs: row.Bundle_Qty ?? 0,
-      sel: true,
-      code: row.Color ?? "",
-    }));
+    const bundles: BundleDetailRow[] = cutRows.recordset
+      .map((row) => ({
+        id: row.RowId,
+        cutNo: String(row.Cut ?? "0"),
+        line: "1",
+        bundleNo: String(row.Bundle_Id ?? row.RowId),
+        inseam: String(row.Inseam ?? ""),
+        size: String(row.Size ?? ""),
+        pcs: row.Bundle_Qty ?? 0,
+        sel: true,
+        code: row.Color ?? "",
+      }))
+      // Cut-major, bundle-minor — same order the generation screen sorts
+      // in (see useQrCodeGenerationFacade) — so the printed B# 1,2,3...
+      // rank matches what was shown when the coupons were first generated,
+      // not whatever order SQL happened to return rows in.
+      .sort((a, b) => {
+        const cutCompare = a.cutNo.localeCompare(b.cutNo, undefined, { numeric: true });
+        if (cutCompare !== 0) return cutCompare;
+        return a.bundleNo.localeCompare(b.bundleNo, undefined, { numeric: true });
+      });
 
     const operations: OperationsDetailRow[] = opRows.recordset.map((row) => ({
       id: row.RowId,
