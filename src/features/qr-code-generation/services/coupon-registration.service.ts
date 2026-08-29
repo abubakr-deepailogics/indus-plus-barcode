@@ -219,7 +219,7 @@ export async function listCoupons(
         FROM dbo.QrCode_Coupon c
         OUTER APPLY (
           SELECT TOP 1 sb.Operation_Name
-          FROM dbo.Order_StyleBulletin sb
+          FROM dbo.StyleBulletinInt sb
           WHERE sb.Order_No = c.WorkOrder AND sb.Operation_Code = c.OpNo
         ) sb
         LEFT JOIN dbo.Workers w ON w.EmployeeID = TRY_CAST(c.EmployeeCode AS INT)
@@ -251,7 +251,7 @@ export async function listAllCoupons(
     FROM dbo.QrCode_Coupon c
     OUTER APPLY (
       SELECT TOP 1 sb.Operation_Name
-      FROM dbo.Order_StyleBulletin sb
+      FROM dbo.StyleBulletinInt sb
       WHERE sb.Order_No = c.WorkOrder AND sb.Operation_Code = c.OpNo
     ) sb
     LEFT JOIN dbo.Workers w ON w.EmployeeID = TRY_CAST(c.EmployeeCode AS INT)

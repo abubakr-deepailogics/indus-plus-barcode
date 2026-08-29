@@ -12,7 +12,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const pool = await getPool();
+    // ponytail: cross-DB — Workers lives in hrms, but this route's
+    // subqueries also read QrCode_Coupon (pit-system) on the same pool.
+    // Left on hrms's pool; split per-DB if/when these move to separate
+    // servers (the QrCode_Coupon subqueries will fail until then).
+    const pool = await getPool("hrms");
 
     // 1. Fetch details for a specific EmployeeID (exact match)
     if (code) {

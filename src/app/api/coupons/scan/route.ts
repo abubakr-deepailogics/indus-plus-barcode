@@ -20,20 +20,25 @@ export async function GET(request: Request) {
   if (!barcode && !wo) {
     return Response.json(
       { error: "Work Order is required in the header before scanning." },
-      { status: 400 }
+      { status: 400 },
     );
   }
 
   try {
-    const pool = await getPool();
+    // ponytail: cross-DB — QrCode_Coupon (pit-system) joined with
+    // SaleOrderPOCutDetailViewV1/StyleBulletinInt (indus-plus) in one query.
+    // Left on pit-system's pool as-is; split into two queries + in-memory
+    // join if/when these tables move to separate servers.
+    const pool = await getPool("pitSystem");
 
     // EmployeeCode/ScanBy/ScannedAt columns are ensured by db/migrations
     // (005, 004) — not re-checked here on every request; see AGENTS.md.
 
     // Optimize execution plan by running distinct lookup logic depending on whether barcode is provided.
     // This avoids slow OR queries which prevent index seeks on index tables.
-    const queryStr = barcode.trim() !== "" 
-      ? `
+    const queryStr =
+      barcode.trim() !== ""
+        ? `
         SELECT 
             c.CouponCode,
             c.WorkOrder,
@@ -57,24 +62,24 @@ export async function GET(request: Request) {
         FROM dbo.QrCode_Coupon c WITH (NOLOCK)
         OUTER APPLY (
             SELECT TOP 1 *
-            FROM dbo.Order_Po_Cut_Detail cd WITH (NOLOCK)
+            FROM dbo.SaleOrderPOCutDetailViewV1 cd WITH (NOLOCK)
             WHERE cd.Work_Order = c.WorkOrder 
               AND cd.Bundle_Id = c.BundleNo
             ORDER BY cd.RowId
         ) d
         OUTER APPLY (
             SELECT TOP 1 *
-            FROM dbo.Order_StyleBulletin sb WITH (NOLOCK)
-            WHERE sb.Order_No = c.WorkOrder 
+            FROM dbo.StyleBulletinInt sb WITH (NOLOCK)
+            WHERE sb.Order_No = c.WorkOrder
               AND sb.Operation_Code = c.OpNo
             ORDER BY sb.RowId
         ) s
         LEFT JOIN dbo.Operations o WITH (NOLOCK)
             ON o.OperationCode = s.Operation_Code
-        WHERE c.CouponCode = @barcode 
+        WHERE c.CouponCode = @barcode
           AND (@wo = '' OR c.WorkOrder = @wo)
       `
-      : `
+        : `
         SELECT 
             c.CouponCode,
             c.WorkOrder,
@@ -98,15 +103,15 @@ export async function GET(request: Request) {
         FROM dbo.QrCode_Coupon c WITH (NOLOCK)
         OUTER APPLY (
             SELECT TOP 1 *
-            FROM dbo.Order_Po_Cut_Detail cd WITH (NOLOCK)
+            FROM dbo.SaleOrderPOCutDetailViewV1 cd WITH (NOLOCK)
             WHERE cd.Work_Order = c.WorkOrder 
               AND cd.Bundle_Id = c.BundleNo
             ORDER BY cd.RowId
         ) d
         OUTER APPLY (
             SELECT TOP 1 *
-            FROM dbo.Order_StyleBulletin sb WITH (NOLOCK)
-            WHERE sb.Order_No = c.WorkOrder 
+            FROM dbo.StyleBulletinInt sb WITH (NOLOCK)
+            WHERE sb.Order_No = c.WorkOrder
               AND sb.Operation_Code = c.OpNo
             ORDER BY sb.RowId
         ) s
@@ -134,7 +139,7 @@ export async function GET(request: Request) {
     if (records.length === 0) {
       return Response.json(
         { error: "No matching coupon code found in the database." },
-        { status: 404 }
+        { status: 404 },
       );
     }
 
@@ -143,7 +148,7 @@ export async function GET(request: Request) {
       if (match.IsScanned) {
         return Response.json(
           { error: "This coupon barcode has already been scanned!" },
-          { status: 400 }
+          { status: 400 },
         );
       }
 
@@ -158,8 +163,7 @@ export async function GET(request: Request) {
         .input("barcode", sql.NVarChar, barcode.trim())
         .input("employeeCode", sql.NVarChar, employeeCode.trim())
         .input("scanBy", sql.NVarChar, scanBy.trim())
-        .input("scanDate", sql.NVarChar, scanDate.trim())
-        .query(`
+        .input("scanDate", sql.NVarChar, scanDate.trim()).query(`
           UPDATE dbo.QrCode_Coupon
           SET IsScanned = 1,
               EmployeeCode = NULLIF(@employeeCode, ''),
@@ -176,8 +180,11 @@ export async function GET(request: Request) {
 
     if (unscanned.length === 0) {
       return Response.json(
-        { error: "All matching coupons for this selection have already been scanned!" },
-        { status: 400 }
+        {
+          error:
+            "All matching coupons for this selection have already been scanned!",
+        },
+        { status: 400 },
       );
     }
 
@@ -196,8 +203,7 @@ export async function GET(request: Request) {
       .input("toCut", sql.NVarChar, toCut.trim())
       .input("employeeCode", sql.NVarChar, employeeCode.trim())
       .input("scanBy", sql.NVarChar, scanBy.trim())
-      .input("scanDate", sql.NVarChar, scanDate.trim())
-      .query(`
+      .input("scanDate", sql.NVarChar, scanDate.trim()).query(`
         UPDATE c
         SET IsScanned = 1,
             EmployeeCode = NULLIF(@employeeCode, ''),
@@ -206,7 +212,7 @@ export async function GET(request: Request) {
         FROM dbo.QrCode_Coupon c
         OUTER APPLY (
             SELECT TOP 1 *
-            FROM dbo.Order_Po_Cut_Detail cd WITH (NOLOCK)
+            FROM dbo.SaleOrderPOCutDetailViewV1 cd WITH (NOLOCK)
             WHERE cd.Work_Order = c.WorkOrder
               AND cd.Bundle_Id = c.BundleNo
             ORDER BY cd.RowId

@@ -1,10 +1,21 @@
 import { getPool, sql } from "@/lib/db";
 import { generateCouponPdf } from "@/features/qr-code-generation/services/pdf-generation.service";
 import type { CouponCard } from "@/features/qr-code-generation/services/coupon-pairing.service";
-import { chunk, listAllCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
-import type { BundleDetailRow, CouponLayout, OperationsDetailRow } from "@/features/qr-code-generation/types";
+import {
+  chunk,
+  listAllCoupons,
+} from "@/features/qr-code-generation/services/coupon-registration.service";
+import type {
+  BundleDetailRow,
+  CouponLayout,
+  OperationsDetailRow,
+} from "@/features/qr-code-generation/types";
 
-const VALID_LAYOUTS: CouponLayout[] = ["same-page", "same-line", "different-pages"];
+const VALID_LAYOUTS: CouponLayout[] = [
+  "same-page",
+  "same-line",
+  "different-pages",
+];
 
 // Renders a PDF for coupons already registered against a work order,
 // scoped by the same filters as the coupon-tracing table (bundle/op/
@@ -37,11 +48,26 @@ export async function GET(request: Request) {
   }
 
   try {
-    const pool = await getPool();
+    // ponytail: cross-DB — coupons live in pit-system, but this route also
+    // re-joins bundle/op display data from indus-plus (SaleOrderPOCutDetailViewV1,
+    // StyleBulletinInt) using the SAME pool below. Left as one pool on
+    // pit-system; split into per-DB queries + in-memory join if/when these
+    // move to separate servers.
+    const pool = await getPool("pitSystem");
 
-    const coupons = await listAllCoupons(pool, workOrder, { bundleNo, opNo, section, isScanned, fromCut, toCut });
+    const coupons = await listAllCoupons(pool, workOrder, {
+      bundleNo,
+      opNo,
+      section,
+      isScanned,
+      fromCut,
+      toCut,
+    });
     if (coupons.length === 0) {
-      return Response.json({ error: "No coupons match this work order/filters." }, { status: 404 });
+      return Response.json(
+        { error: "No coupons match this work order/filters." },
+        { status: 404 },
+      );
     }
 
     const bundleNos = [...new Set(coupons.map((c) => c.BundleNo))];
@@ -59,7 +85,7 @@ export async function GET(request: Request) {
       const cutRequest = pool.request().input("wo", sql.NVarChar, workOrder);
       batch.forEach((b, i) => cutRequest.input(`bundle${i}`, sql.NVarChar, b));
       const result = await cutRequest.query(`
-        SELECT * FROM dbo.Order_Po_Cut_Detail
+        SELECT * FROM dbo.SaleOrderPOCutDetailViewV1
         WHERE Work_Order = @wo AND CAST(Bundle_Id AS NVARCHAR(50)) IN (${batch
           .map((_, i) => `@bundle${i}`)
           .join(", ")})
@@ -72,10 +98,10 @@ export async function GET(request: Request) {
     opNos.forEach((o, i) => opRequest.input(`op${i}`, sql.NVarChar, o));
     const opRows = await opRequest.query(`
       SELECT sb.*, op.SkillLevel
-      FROM dbo.Order_StyleBulletin sb
+      FROM dbo.StyleBulletinInt sb
       LEFT JOIN dbo.Operations op ON sb.Operation_Code = op.OperationCode
       WHERE sb.Order_No = @wo AND sb.Operation_Code IN (${opNos.map((_, i) => `@op${i}`).join(", ")})
-      ORDER BY sb.Operation_Sequence ASC
+      ORDER BY sb.Operation_Sequeance ASC
     `);
 
     const bundles: BundleDetailRow[] = cutRows.recordset
@@ -95,9 +121,13 @@ export async function GET(request: Request) {
       // rank matches what was shown when the coupons were first generated,
       // not whatever order SQL happened to return rows in.
       .sort((a, b) => {
-        const cutCompare = a.cutNo.localeCompare(b.cutNo, undefined, { numeric: true });
+        const cutCompare = a.cutNo.localeCompare(b.cutNo, undefined, {
+          numeric: true,
+        });
         if (cutCompare !== 0) return cutCompare;
-        return a.bundleNo.localeCompare(b.bundleNo, undefined, { numeric: true });
+        return a.bundleNo.localeCompare(b.bundleNo, undefined, {
+          numeric: true,
+        });
       });
 
     const operations: OperationsDetailRow[] = opRows.recordset.map((row) => ({
@@ -115,7 +145,10 @@ export async function GET(request: Request) {
 
     if (bundles.length === 0 || operations.length === 0) {
       return Response.json(
-        { error: "Coupons matched, but their bundle/operation data is no longer in the style bulletin." },
+        {
+          error:
+            "Coupons matched, but their bundle/operation data is no longer in the style bulletin.",
+        },
         { status: 404 },
       );
     }
@@ -136,7 +169,10 @@ export async function GET(request: Request) {
 
     if (cards.length === 0) {
       return Response.json(
-        { error: "Coupons matched, but their bundle/operation data is no longer in the style bulletin." },
+        {
+          error:
+            "Coupons matched, but their bundle/operation data is no longer in the style bulletin.",
+        },
         { status: 404 },
       );
     }
@@ -165,7 +201,8 @@ export async function GET(request: Request) {
     });
   } catch (err: unknown) {
     console.error("Coupon PDF (filtered) generation error:", err);
-    const message = err instanceof Error ? err.message : "Internal Server Error";
+    const message =
+      err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
 }

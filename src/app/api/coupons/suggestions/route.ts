@@ -10,19 +10,26 @@ export async function GET(request: Request) {
   const onlyGenerated = searchParams.get("only_generated") === "true";
 
   if (!wo) {
-    return Response.json({ error: "Work Order parameter is required." }, { status: 400 });
+    return Response.json(
+      { error: "Work Order parameter is required." },
+      { status: 400 },
+    );
   }
 
   try {
-    const pool = await getPool();
+    // ponytail: cross-DB — this route queries QrCode_Coupon (pit-system)
+    // for "only_generated" branches and SaleOrderPOCutDetailViewV1/
+    // StyleBulletinInt (indus-plus) for the rest, on one shared pool.
+    // Left on pit-system's pool; split per-DB if/when these move to
+    // separate servers.
+    const pool = await getPool("pitSystem");
 
     if (type === "bundle") {
       if (onlyGenerated) {
         const result = await pool
           .request()
           .input("wo", sql.NVarChar, wo.trim())
-          .input("q", sql.NVarChar, `%${query.trim()}%`)
-          .query(`
+          .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
             SELECT DISTINCT TOP 10 BundleNo 
             FROM dbo.QrCode_Coupon 
             WHERE WorkOrder = @wo 
@@ -36,10 +43,9 @@ export async function GET(request: Request) {
       const result = await pool
         .request()
         .input("wo", sql.NVarChar, wo.trim())
-        .input("q", sql.NVarChar, `%${query.trim()}%`)
-        .query(`
+        .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
           SELECT DISTINCT TOP 10 Bundle_Id 
-          FROM dbo.Order_Po_Cut_Detail 
+          FROM dbo.SaleOrderPOCutDetailViewV1 
           WHERE Work_Order = @wo 
             AND CAST(Bundle_Id AS VARCHAR(50)) LIKE @q
           ORDER BY Bundle_Id
@@ -54,13 +60,12 @@ export async function GET(request: Request) {
         const result = await pool
           .request()
           .input("wo", sql.NVarChar, wo.trim())
-          .input("q", sql.NVarChar, `%${query.trim()}%`)
-          .query(`
+          .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
             SELECT DISTINCT TOP 10 c.OpNo AS Operation_Code, sb.Operation_Name
             FROM dbo.QrCode_Coupon c
             OUTER APPLY (
               SELECT TOP 1 sb.Operation_Name
-              FROM dbo.Order_StyleBulletin sb
+              FROM dbo.StyleBulletinInt sb
               WHERE sb.Order_No = c.WorkOrder AND sb.Operation_Code = c.OpNo
             ) sb
             WHERE c.WorkOrder = @wo
@@ -73,10 +78,9 @@ export async function GET(request: Request) {
       const result = await pool
         .request()
         .input("wo", sql.NVarChar, wo.trim())
-        .input("q", sql.NVarChar, `%${query.trim()}%`)
-        .query(`
+        .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
           SELECT DISTINCT TOP 10 Operation_Code, Operation_Name
-          FROM dbo.Order_StyleBulletin
+          FROM dbo.StyleBulletinInt
           WHERE Order_No = @wo
             AND (Operation_Code LIKE @q OR Operation_Name LIKE @q)
           ORDER BY Operation_Code
@@ -86,13 +90,11 @@ export async function GET(request: Request) {
     }
 
     if (type === "section") {
-      // Sourced from QrCode_Coupon (not Order_StyleBulletin) — Section is
+      // Sourced from QrCode_Coupon (not StyleBulletinInt) — Section is
       // whatever was recorded on the coupon at generation time, so the
       // filter's options always match what's actually in this work order's
       // coupons rather than the full style bulletin's section list.
-      const result = await pool
-        .request()
-        .input("wo", sql.NVarChar, wo.trim())
+      const result = await pool.request().input("wo", sql.NVarChar, wo.trim())
         .query(`
           SELECT DISTINCT Section
           FROM dbo.QrCode_Coupon
@@ -107,8 +109,7 @@ export async function GET(request: Request) {
       const result = await pool
         .request()
         .input("wo", sql.NVarChar, wo.trim())
-        .input("q", sql.NVarChar, `%${query.trim()}%`)
-        .query(`
+        .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
           SELECT CutNo FROM (
             SELECT DISTINCT CutNo
             FROM dbo.QrCode_Coupon

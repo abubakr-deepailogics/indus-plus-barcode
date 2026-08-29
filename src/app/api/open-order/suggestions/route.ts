@@ -7,12 +7,17 @@ export async function GET(request: Request) {
   const onlyGenerated = searchParams.get("only_generated") === "true";
 
   try {
-    const pool = await getPool();
+    // ponytail: cross-DB — this route mixes SaleOrderPOCutDetailViewV1 (indus-plus),
+    // Workers (hrms), and QrCode_Coupon (pit-system) suggestion types on one
+    // pool. Left on indus-plus's pool (the default/customer/work_order
+    // branches); "workers" and "only_generated" branches will fail until
+    // split per-DB.
+    const pool = await getPool("indusPlus");
 
     if (type === "customer") {
       const result = await pool.request().query(`
         SELECT DISTINCT TOP 20 Customer_Name 
-        FROM dbo.Order_Po_Cut_Detail 
+        FROM dbo.SaleOrderPOCutDetailViewV1 
         WHERE Customer_Name IS NOT NULL AND Customer_Name <> ''
         ORDER BY Customer_Name
       `);
@@ -25,8 +30,7 @@ export async function GET(request: Request) {
       if (q.trim()) {
         const result = await pool
           .request()
-          .input("q", sql.NVarChar, `%${q.trim()}%`)
-          .query(`
+          .input("q", sql.NVarChar, `%${q.trim()}%`).query(`
             SELECT DISTINCT TOP 20 EmployeeID, FirstName
             FROM dbo.Workers
             WHERE FirstName IS NOT NULL
@@ -58,8 +62,7 @@ export async function GET(request: Request) {
 
       const result = await pool
         .request()
-        .input("q", sql.NVarChar, `%${query.trim()}%`)
-        .query(`
+        .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
           SELECT DISTINCT TOP 8 WorkOrder 
           FROM dbo.QrCode_Coupon 
           WHERE WorkOrder LIKE @q OR CouponCode LIKE @q OR BundleNo LIKE @q
@@ -74,7 +77,7 @@ export async function GET(request: Request) {
       // If empty query, return top 12 general work orders
       const result = await pool.request().query(`
         SELECT DISTINCT TOP 12 Work_Order 
-        FROM dbo.Order_Po_Cut_Detail 
+        FROM dbo.SaleOrderPOCutDetailViewV1 
         ORDER BY Work_Order DESC
       `);
       return Response.json(result.recordset.map((r) => r.Work_Order));
@@ -82,10 +85,9 @@ export async function GET(request: Request) {
 
     const result = await pool
       .request()
-      .input("q", sql.NVarChar, `%${query.trim()}%`)
-      .query(`
+      .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
         SELECT DISTINCT TOP 8 Work_Order 
-        FROM dbo.Order_Po_Cut_Detail 
+        FROM dbo.SaleOrderPOCutDetailViewV1 
         WHERE Work_Order LIKE @q
         ORDER BY Work_Order
       `);

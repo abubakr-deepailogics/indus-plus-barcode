@@ -13,7 +13,7 @@ export async function GET(
   }
 
   try {
-    const pool = await getPool();
+    const pool = await getPool("pitSystem");
     const result = await pool
       .request()
       .input("id", sql.Int, id)

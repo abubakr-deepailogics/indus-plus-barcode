@@ -52,7 +52,7 @@ export async function POST(request: Request) {
         controller.enqueue(encoder.encode(JSON.stringify(line) + "\n"));
       };
       try {
-        const pool = await getPool();
+        const pool = await getPool("pitSystem");
         await registerCoupons(pool, workOrder, cards, (done, total) => {
           send({ done, total });
         });
@@ -100,7 +100,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const pool = await getPool();
+    const pool = await getPool("pitSystem");
     const { rows, total } = await listCoupons(pool, workOrder, page, pageSize, {
       bundleNo,
       opNo,

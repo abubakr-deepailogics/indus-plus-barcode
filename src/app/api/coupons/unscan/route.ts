@@ -13,7 +13,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const pool = await getPool();
+    const pool = await getPool("pitSystem");
 
     // Reset IsScanned, EmployeeCode, and ScanBy columns to unscan the coupon
     const result = await pool

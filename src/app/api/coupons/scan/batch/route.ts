@@ -53,10 +53,17 @@ export async function POST(request: Request) {
     const scanDate = String(body.scanDate || "").trim();
 
     if (codes.length === 0) {
-      return Response.json({ error: "No coupon codes provided." }, { status: 400 });
+      return Response.json(
+        { error: "No coupon codes provided." },
+        { status: 400 },
+      );
     }
 
-    const pool = await getPool();
+    // ponytail: cross-DB — QrCode_Coupon (pit-system) joined with
+    // SaleOrderPOCutDetailViewV1/StyleBulletinInt (indus-plus) in one query.
+    // Left on pit-system's pool as-is; split into two queries + in-memory
+    // join if/when these tables move to separate servers.
+    const pool = await getPool("pitSystem");
     const request_ = pool.request();
     request_.input("Codes", buildCodeListTable(codes));
     request_.input("employeeCode", sql.NVarChar, employeeCode);
@@ -104,14 +111,14 @@ export async function POST(request: Request) {
       INNER JOIN dbo.QrCode_Coupon c ON c.CouponCode = u.CouponCode
       OUTER APPLY (
           SELECT TOP 1 *
-          FROM dbo.Order_Po_Cut_Detail cd WITH (NOLOCK)
+          FROM dbo.SaleOrderPOCutDetailViewV1 cd WITH (NOLOCK)
           WHERE cd.Work_Order = c.WorkOrder
             AND cd.Bundle_Id = c.BundleNo
           ORDER BY cd.RowId
       ) d
       OUTER APPLY (
           SELECT TOP 1 *
-          FROM dbo.Order_StyleBulletin sb WITH (NOLOCK)
+          FROM dbo.StyleBulletinInt sb WITH (NOLOCK)
           WHERE sb.Order_No = c.WorkOrder
             AND sb.Operation_Code = c.OpNo
           ORDER BY sb.RowId
@@ -125,7 +132,8 @@ export async function POST(request: Request) {
     // types `recordsets` as array-or-map, hence the cast (same pattern as
     // the sql.Table casts above).
     const recordsets = updateResult.recordsets as unknown as ScannedRecord[][];
-    const scanned: ScannedRecord[] = updateResult.recordset ?? recordsets[0] ?? [];
+    const scanned: ScannedRecord[] =
+      updateResult.recordset ?? recordsets[0] ?? [];
     const scannedCodes = new Set(scanned.map((r) => r.CouponCode));
     const failed = codes.filter((c) => !scannedCodes.has(c));
 

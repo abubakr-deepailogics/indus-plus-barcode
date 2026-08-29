@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 const ALLOWED_TYPES = ["application/pdf", "image/jpeg", "image/png", "image/gif", "image/webp"];
 
 async function ensureTable() {
-  const pool = await getPool();
+  const pool = await getPool("pitSystem");
   await pool.request().query(`
     IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'StyleBulletin_Attachment' AND schema_id = SCHEMA_ID('dbo'))
     BEGIN

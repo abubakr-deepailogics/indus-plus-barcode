@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   }
 
   try {
-    const pool = await getPool();
+    const pool = await getPool("indusPlus");
 
     const cutDetailResult = await pool
       .request()
@@ -35,14 +35,14 @@ export async function GET(request: Request) {
       .input("cut", sql.Int, cut)
       .input("bundleId", sql.Int, bundleId)
       .query(
-        "SELECT * FROM dbo.Order_Po_Cut_Detail WHERE Work_Order = @wo AND Cut = @cut AND Bundle_Id = @bundleId",
+        "SELECT * FROM dbo.SaleOrderPOCutDetailViewV1 WHERE Work_Order = @wo AND Cut = @cut AND Bundle_Id = @bundleId",
       );
 
     const styleBulletinResult = await pool
       .request()
       .input("wo", sql.NVarChar, workOrder)
       .query(
-        "SELECT * FROM dbo.Order_StyleBulletin WHERE Order_No = @wo ORDER BY Operation_Sequence ASC",
+        "SELECT * FROM dbo.StyleBulletinInt WHERE Order_No = @wo ORDER BY Operation_Sequence ASC",
       );
 
     return Response.json({
@@ -51,7 +51,8 @@ export async function GET(request: Request) {
     });
   } catch (err: unknown) {
     console.error("Rework coupon lookup API error:", err);
-    const message = err instanceof Error ? err.message : "Internal Server Error";
+    const message =
+      err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
 }

@@ -7,28 +7,33 @@ export async function GET(request: Request) {
   const workOrder = searchParams.get("work_order") || "";
 
   if (!workOrder) {
-    return Response.json({ cutDetails: [], styleBulletins: [], metadata: null });
+    return Response.json({
+      cutDetails: [],
+      styleBulletins: [],
+      metadata: null,
+    });
   }
 
   try {
-    const pool = await getPool();
+    const pool = await getPool("indusPlus");
 
     // Fetch Cut Detail
     const cutDetailResult = await pool
       .request()
       .input("wo", sql.NVarChar, workOrder)
-      .query("SELECT * FROM dbo.Order_Po_Cut_Detail WHERE Work_Order = @wo");
+      .query(
+        "SELECT * FROM dbo.SaleOrderPOCutDetailViewV1 WHERE Work_Order = @wo",
+      );
 
     // Fetch Style Bulletin (Operations)
     const styleBulletinResult = await pool
       .request()
-      .input("wo", sql.NVarChar, workOrder)
-      .query(`
+      .input("wo", sql.NVarChar, workOrder).query(`
         SELECT sb.*, op.SkillLevel 
-        FROM dbo.Order_StyleBulletin sb
+        FROM dbo.StyleBulletinInt sb
         LEFT JOIN dbo.Operations op ON sb.Operation_Code = op.OperationCode
         WHERE sb.Order_No = @wo 
-        ORDER BY sb.Operation_Sequence ASC
+        ORDER BY sb.Operation_Sequeance ASC
       `);
 
     // Fetch Style Bulletin Header (Metadata) if exists
@@ -37,12 +42,17 @@ export async function GET(request: Request) {
       const metadataResult = await pool
         .request()
         .input("wo", sql.NVarChar, workOrder)
-        .query("SELECT * FROM dbo.Order_StyleBulletin_Header WHERE Work_Order = @wo");
+        .query(
+          "SELECT * FROM dbo.Order_StyleBulletin_Header WHERE Work_Order = @wo",
+        );
       if (metadataResult.recordset.length > 0) {
         metadata = metadataResult.recordset[0];
       }
     } catch (metadataErr) {
-      console.log("Order_StyleBulletin_Header table might not exist yet:", metadataErr);
+      console.log(
+        "Order_StyleBulletin_Header table might not exist yet:",
+        metadataErr,
+      );
     }
 
     return Response.json({
@@ -52,7 +62,8 @@ export async function GET(request: Request) {
     });
   } catch (err: unknown) {
     console.error("Database API error:", err);
-    const message = err instanceof Error ? err.message : "Internal Server Error";
+    const message =
+      err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
 }
@@ -80,10 +91,13 @@ export async function POST(request: Request) {
     } = body;
 
     if (!workOrder) {
-      return Response.json({ error: "Work Order (workOrder) is required." }, { status: 400 });
+      return Response.json(
+        { error: "Work Order (workOrder) is required." },
+        { status: 400 },
+      );
     }
 
-    const pool = await getPool();
+    const pool = await getPool("indusPlus");
 
     // 1. Create table if not exists
     await pool.request().query(`
@@ -164,10 +178,14 @@ export async function POST(request: Request) {
             VALUES (source.Work_Order, @desc, @styleDesc, @styleCat, @smdNo, @finalSmdNo, @target, @targetUnitMin, @startTime, @pocSam, @pocPieceRate, @headReqd, @appDate, @appBy, @status, @forwardForApproval);
       `);
 
-    return Response.json({ success: true, message: "Bulletin details saved successfully." });
+    return Response.json({
+      success: true,
+      message: "Bulletin details saved successfully.",
+    });
   } catch (err: unknown) {
     console.error("Database Save API error:", err);
-    const message = err instanceof Error ? err.message : "Internal Server Error";
+    const message =
+      err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
 }

@@ -53,7 +53,7 @@ export async function POST(request: Request) {
       codeType,
     });
 
-    const pool = await getPool();
+    const pool = await getPool("pitSystem");
 
     // Register each card's coupon identity, skipping ones already
     // generated for this work order/bundle/operation — reprints never
@@ -106,7 +106,7 @@ export async function GET(request: Request) {
   const workOrder = searchParams.get("work_order") || "";
 
   try {
-    const pool = await getPool();
+    const pool = await getPool("pitSystem");
     if (workOrder) {
       const [batchResult, couponCount] = await Promise.all([
         pool
