@@ -1,4 +1,4 @@
-import { getPool, sql } from "@/lib/db";
+import { getPool, sql, cutDetailByFilter, styleBulletinByFilter } from "@/lib/db";
 
 // Rework coupon lookup: scoped to one work order + cut + bundle (bundle ids
 // aren't unique across work orders, same reasoning as /api/open-order).
@@ -35,15 +35,15 @@ export async function GET(request: Request) {
       .input("cut", sql.Int, cut)
       .input("bundleId", sql.Int, bundleId)
       .query(
-        "SELECT * FROM dbo.SaleOrderPOCutDetailViewV1 WHERE Work_Order = @wo AND Cut = @cut AND Bundle_Id = @bundleId",
+        cutDetailByFilter(
+          "[Work Order #] = @wo AND [Cut #] = @cut AND [Bundle Id] = @bundleId",
+        ),
       );
 
     const styleBulletinResult = await pool
       .request()
       .input("wo", sql.NVarChar, workOrder)
-      .query(
-        "SELECT * FROM dbo.StyleBulletinInt WHERE Order_No = @wo ORDER BY Operation_Sequence ASC",
-      );
+      .query(styleBulletinByFilter("[Order No] = @wo"));
 
     return Response.json({
       cutDetails: cutDetailResult.recordset,

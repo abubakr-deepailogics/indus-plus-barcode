@@ -1,6 +1,20 @@
 import { getPool, sql } from "@/lib/db";
+import {
+  enrichCouponRows,
+  withinCutRange,
+} from "@/features/coupon-scanning/services/coupon-enrichment.service";
+import { chunk } from "@/features/qr-code-generation/services/coupon-registration.service";
 
 export const dynamic = "force-dynamic";
+
+interface CouponRow {
+  CouponCode: string;
+  WorkOrder: string;
+  BundleNo: string;
+  OpNo: string;
+  IsScanned: boolean;
+  ScannedAt: string | null;
+}
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -25,104 +39,13 @@ export async function GET(request: Request) {
   }
 
   try {
-    // ponytail: cross-DB — QrCode_Coupon (pit-system) joined with
-    // SaleOrderPOCutDetailViewV1/StyleBulletinInt (indus-plus) in one query.
-    // Left on pit-system's pool as-is; split into two queries + in-memory
-    // join if/when these tables move to separate servers.
+    // QrCode_Coupon lives on pitSystem; bundle/op display data (cut,
+    // size, section, rate, …) is on indusPlus — see coupon-enrichment
+    // service for why those can't be joined in one query.
     const pool = await getPool("pitSystem");
 
     // EmployeeCode/ScanBy/ScannedAt columns are ensured by db/migrations
     // (005, 004) — not re-checked here on every request; see AGENTS.md.
-
-    // Optimize execution plan by running distinct lookup logic depending on whether barcode is provided.
-    // This avoids slow OR queries which prevent index seeks on index tables.
-    const queryStr =
-      barcode.trim() !== ""
-        ? `
-        SELECT 
-            c.CouponCode,
-            c.WorkOrder,
-            c.BundleNo,
-            c.OpNo,
-            c.IsScanned,
-            c.ScannedAt,
-            d.Inseam,
-            d.Size AS SizeCode,
-            d.Cut AS CutNo,
-            d.Shade AS Category,
-            d.Bundle_Qty AS Qty,
-            s.Section AS SectionCode,
-            s.Section AS SectionName,
-            s.Operation_Code AS OprCode,
-            s.Operation_Name AS OperationName,
-            o.SkillLevel AS SkillCode,
-            s.Smv_Sam AS Smv,
-            s.Piece_Rate AS Rate,
-            (d.Bundle_Qty * s.Piece_Rate) AS Value
-        FROM dbo.QrCode_Coupon c WITH (NOLOCK)
-        OUTER APPLY (
-            SELECT TOP 1 *
-            FROM dbo.SaleOrderPOCutDetailViewV1 cd WITH (NOLOCK)
-            WHERE cd.Work_Order = c.WorkOrder 
-              AND cd.Bundle_Id = c.BundleNo
-            ORDER BY cd.RowId
-        ) d
-        OUTER APPLY (
-            SELECT TOP 1 *
-            FROM dbo.StyleBulletinInt sb WITH (NOLOCK)
-            WHERE sb.Order_No = c.WorkOrder
-              AND sb.Operation_Code = c.OpNo
-            ORDER BY sb.RowId
-        ) s
-        LEFT JOIN dbo.Operations o WITH (NOLOCK)
-            ON o.OperationCode = s.Operation_Code
-        WHERE c.CouponCode = @barcode
-          AND (@wo = '' OR c.WorkOrder = @wo)
-      `
-        : `
-        SELECT 
-            c.CouponCode,
-            c.WorkOrder,
-            c.BundleNo,
-            c.OpNo,
-            c.IsScanned,
-            c.ScannedAt,
-            d.Inseam,
-            d.Size AS SizeCode,
-            d.Cut AS CutNo,
-            d.Shade AS Category,
-            d.Bundle_Qty AS Qty,
-            s.Section AS SectionCode,
-            s.Section AS SectionName,
-            s.Operation_Code AS OprCode,
-            s.Operation_Name AS OperationName,
-            o.SkillLevel AS SkillCode,
-            s.Smv_Sam AS Smv,
-            s.Piece_Rate AS Rate,
-            (d.Bundle_Qty * s.Piece_Rate) AS Value
-        FROM dbo.QrCode_Coupon c WITH (NOLOCK)
-        OUTER APPLY (
-            SELECT TOP 1 *
-            FROM dbo.SaleOrderPOCutDetailViewV1 cd WITH (NOLOCK)
-            WHERE cd.Work_Order = c.WorkOrder 
-              AND cd.Bundle_Id = c.BundleNo
-            ORDER BY cd.RowId
-        ) d
-        OUTER APPLY (
-            SELECT TOP 1 *
-            FROM dbo.StyleBulletinInt sb WITH (NOLOCK)
-            WHERE sb.Order_No = c.WorkOrder
-              AND sb.Operation_Code = c.OpNo
-            ORDER BY sb.RowId
-        ) s
-        LEFT JOIN dbo.Operations o WITH (NOLOCK)
-            ON o.OperationCode = s.Operation_Code
-        WHERE c.WorkOrder = @wo
-          AND (@bundle = '' OR c.BundleNo = @bundle)
-          AND (@op = '' OR c.OpNo = @op)
-          AND (@fromCut = '' OR TRY_CAST(d.Cut AS INT) >= TRY_CAST(@fromCut AS INT))
-          AND (@toCut = '' OR TRY_CAST(d.Cut AS INT) <= TRY_CAST(@toCut AS INT))
-      `;
 
     const result = await pool
       .request()
@@ -130,11 +53,30 @@ export async function GET(request: Request) {
       .input("wo", sql.NVarChar, wo.trim())
       .input("bundle", sql.NVarChar, bundle.trim())
       .input("op", sql.NVarChar, op.trim())
-      .input("fromCut", sql.NVarChar, fromCut.trim())
-      .input("toCut", sql.NVarChar, toCut.trim())
-      .query(queryStr);
+      .query(
+        barcode.trim() !== ""
+          ? `
+            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt
+            FROM dbo.QrCode_Coupon WITH (NOLOCK)
+            WHERE CouponCode = @barcode
+              AND (@wo = '' OR WorkOrder = @wo)
+          `
+          : `
+            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt
+            FROM dbo.QrCode_Coupon WITH (NOLOCK)
+            WHERE WorkOrder = @wo
+              AND (@bundle = '' OR BundleNo = @bundle)
+              AND (@op = '' OR OpNo = @op)
+          `,
+      );
 
-    const records = result.recordset;
+    let records = await enrichCouponRows(result.recordset as CouponRow[]);
+
+    // Cut-range filter only applies to the wo/bundle/op (bulk/selection)
+    // path — the barcode path never used it, same as the old query.
+    if (!barcode.trim() && (fromCut || toCut)) {
+      records = records.filter((r) => withinCutRange(r.CutNo, fromCut, toCut));
+    }
 
     if (records.length === 0) {
       return Response.json(
@@ -193,37 +135,29 @@ export async function GET(request: Request) {
       return Response.json(unscanned);
     }
 
-    // Mark all matched coupons as scanned in a single bulk query (avoiding loop)
-    await pool
-      .request()
-      .input("wo", sql.NVarChar, wo.trim())
-      .input("bundle", sql.NVarChar, bundle.trim())
-      .input("op", sql.NVarChar, op.trim())
-      .input("fromCut", sql.NVarChar, fromCut.trim())
-      .input("toCut", sql.NVarChar, toCut.trim())
-      .input("employeeCode", sql.NVarChar, employeeCode.trim())
-      .input("scanBy", sql.NVarChar, scanBy.trim())
-      .input("scanDate", sql.NVarChar, scanDate.trim()).query(`
-        UPDATE c
-        SET IsScanned = 1,
-            EmployeeCode = NULLIF(@employeeCode, ''),
-            ScanBy = NULLIF(@scanBy, ''),
-            ScannedAt = COALESCE(TRY_CAST(NULLIF(@scanDate, '') AS DATETIME), GETDATE())
-        FROM dbo.QrCode_Coupon c
-        OUTER APPLY (
-            SELECT TOP 1 *
-            FROM dbo.SaleOrderPOCutDetailViewV1 cd WITH (NOLOCK)
-            WHERE cd.Work_Order = c.WorkOrder
-              AND cd.Bundle_Id = c.BundleNo
-            ORDER BY cd.RowId
-        ) d
-        WHERE c.WorkOrder = @wo
-          AND (@bundle = '' OR c.BundleNo = @bundle)
-          AND (@op = '' OR c.OpNo = @op)
-          AND (@fromCut = '' OR TRY_CAST(d.Cut AS INT) >= TRY_CAST(@fromCut AS INT))
-          AND (@toCut = '' OR TRY_CAST(d.Cut AS INT) <= TRY_CAST(@toCut AS INT))
-          AND IsScanned = 0
-      `);
+    // Mark all matched coupons as scanned — the fromCut/toCut range no
+    // longer narrows this in SQL (it's an indusPlus-only field, resolved
+    // above in JS), so update exactly the coupon codes that passed the
+    // filter rather than re-deriving the condition in a query. Chunked to
+    // stay under SQL Server's ~2100 parameter cap for a large selection.
+    for (const batch of chunk(unscanned, 2000)) {
+      const request_ = pool.request();
+      const placeholders = batch.map((r, i) => {
+        request_.input(`code${i}`, sql.NVarChar, r.CouponCode);
+        return `@code${i}`;
+      });
+      await request_
+        .input("employeeCode", sql.NVarChar, employeeCode.trim())
+        .input("scanBy", sql.NVarChar, scanBy.trim())
+        .input("scanDate", sql.NVarChar, scanDate.trim()).query(`
+          UPDATE dbo.QrCode_Coupon
+          SET IsScanned = 1,
+              EmployeeCode = NULLIF(@employeeCode, ''),
+              ScanBy = NULLIF(@scanBy, ''),
+              ScannedAt = COALESCE(TRY_CAST(NULLIF(@scanDate, '') AS DATETIME), GETDATE())
+          WHERE CouponCode IN (${placeholders.join(", ")})
+        `);
+    }
 
     return Response.json(unscanned);
   } catch (err: unknown) {

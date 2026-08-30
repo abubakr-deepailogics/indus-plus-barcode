@@ -1,4 +1,5 @@
 import { getPool, sql } from "@/lib/db";
+import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 
 export const dynamic = "force-dynamic";
 
@@ -16,24 +17,11 @@ function buildCodeListTable(codes: string[]): sql.Table {
 
 interface ScannedRecord {
   CouponCode: string;
-  WorkOrder?: string;
-  BundleNo?: string;
-  OpNo?: string;
+  WorkOrder: string;
+  BundleNo: string;
+  OpNo: string;
   IsScanned: boolean;
   ScannedAt?: string;
-  Inseam?: number;
-  SizeCode?: string | number;
-  CutNo?: string | number;
-  Category?: string;
-  Qty?: number;
-  SectionCode?: string;
-  SectionName?: string;
-  OprCode?: string;
-  OperationName?: string;
-  SkillCode?: string;
-  Smv?: number;
-  Rate?: number;
-  Value?: number;
 }
 
 // Batch version of GET /api/coupons/scan — a scanner gun fires codes fast,
@@ -59,10 +47,9 @@ export async function POST(request: Request) {
       );
     }
 
-    // ponytail: cross-DB — QrCode_Coupon (pit-system) joined with
-    // SaleOrderPOCutDetailViewV1/StyleBulletinInt (indus-plus) in one query.
-    // Left on pit-system's pool as-is; split into two queries + in-memory
-    // join if/when these tables move to separate servers.
+    // QrCode_Coupon lives on pitSystem; bundle/op display data is on
+    // indusPlus — see coupon-enrichment service for why those can't be
+    // joined in one query.
     const pool = await getPool("pitSystem");
     const request_ = pool.request();
     request_.input("Codes", buildCodeListTable(codes));
@@ -87,44 +74,9 @@ export async function POST(request: Request) {
       INNER JOIN @Codes src ON src.CouponCode = c.CouponCode
       WHERE c.IsScanned = 0;
 
-      SELECT
-          c.CouponCode,
-          c.WorkOrder,
-          c.BundleNo,
-          c.OpNo,
-          c.IsScanned,
-          c.ScannedAt,
-          d.Inseam,
-          d.Size AS SizeCode,
-          d.Cut AS CutNo,
-          d.Shade AS Category,
-          d.Bundle_Qty AS Qty,
-          s.Section AS SectionCode,
-          s.Section AS SectionName,
-          s.Operation_Code AS OprCode,
-          s.Operation_Name AS OperationName,
-          o.SkillLevel AS SkillCode,
-          s.Smv_Sam AS Smv,
-          s.Piece_Rate AS Rate,
-          (d.Bundle_Qty * s.Piece_Rate) AS Value
+      SELECT c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.IsScanned, c.ScannedAt
       FROM @Updated u
-      INNER JOIN dbo.QrCode_Coupon c ON c.CouponCode = u.CouponCode
-      OUTER APPLY (
-          SELECT TOP 1 *
-          FROM dbo.SaleOrderPOCutDetailViewV1 cd WITH (NOLOCK)
-          WHERE cd.Work_Order = c.WorkOrder
-            AND cd.Bundle_Id = c.BundleNo
-          ORDER BY cd.RowId
-      ) d
-      OUTER APPLY (
-          SELECT TOP 1 *
-          FROM dbo.StyleBulletinInt sb WITH (NOLOCK)
-          WHERE sb.Order_No = c.WorkOrder
-            AND sb.Operation_Code = c.OpNo
-          ORDER BY sb.RowId
-      ) s
-      LEFT JOIN dbo.Operations o WITH (NOLOCK)
-          ON o.OperationCode = s.Operation_Code;
+      INNER JOIN dbo.QrCode_Coupon c ON c.CouponCode = u.CouponCode;
     `);
 
     // mssql returns one recordset per SELECT; the bare UPDATE...OUTPUT
@@ -132,8 +84,9 @@ export async function POST(request: Request) {
     // types `recordsets` as array-or-map, hence the cast (same pattern as
     // the sql.Table casts above).
     const recordsets = updateResult.recordsets as unknown as ScannedRecord[][];
-    const scanned: ScannedRecord[] =
+    const scannedRows: ScannedRecord[] =
       updateResult.recordset ?? recordsets[0] ?? [];
+    const scanned = await enrichCouponRows(scannedRows);
     const scannedCodes = new Set(scanned.map((r) => r.CouponCode));
     const failed = codes.filter((c) => !scannedCodes.has(c));
 

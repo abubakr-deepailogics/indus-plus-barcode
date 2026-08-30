@@ -1,4 +1,4 @@
-import { getPool, sql } from "@/lib/db";
+import { getPool, sql, WORKERS_VIEW } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -12,11 +12,13 @@ export async function GET(request: Request) {
   }
 
   try {
-    // ponytail: cross-DB — Workers lives in hrms, but this route's
-    // subqueries also read QrCode_Coupon (pit-system) on the same pool.
-    // Left on hrms's pool; split per-DB if/when these move to separate
-    // servers (the QrCode_Coupon subqueries will fail until then).
-    const pool = await getPool("hrms");
+    // Cross-server: Workers lives in hrms (172.16.0.15), QrCode_Coupon in
+    // pitSystem (localhost) — genuinely different SQL Server instances, not
+    // just different databases on one server. A bare `dbo.QrCode_Coupon`
+    // reference from the hrms pool resolves against HRMS_Central, where
+    // that table doesn't exist ("Invalid object name") — so the two lookups
+    // have to run on their own pools and get merged here in JS.
+    const hrmsPool = await getPool("hrms");
 
     // 1. Fetch details for a specific EmployeeID (exact match)
     if (code) {
@@ -25,62 +27,56 @@ export async function GET(request: Request) {
         return Response.json({ error: "Invalid employee code format." }, { status: 400 });
       }
 
-      // Run auto-migration check in a separate query to avoid compile-time issues
-      await pool.request().query(`
-        IF NOT EXISTS (
-          SELECT 1 FROM sys.columns
-          WHERE object_id = OBJECT_ID('dbo.QrCode_Coupon') AND name = 'ScannedAt'
-        )
-        BEGIN
-          ALTER TABLE dbo.QrCode_Coupon ADD ScannedAt DATETIME NULL;
-        END
-      `);
+      const [workerResult, scanCountsResult] = await Promise.all([
+        hrmsPool
+          .request()
+          .input("code", sql.Int, codeNum)
+          .query(`
+            SELECT TOP 1 EmployeeID, FirstName, DesignationName, ParentDepartment, DepartmentName
+            FROM ${WORKERS_VIEW}
+            WHERE EmployeeID = @code
+          `),
+        (await getPool("pitSystem"))
+          .request()
+          .input("code", sql.NVarChar, String(codeNum))
+          .query(`
+            SELECT
+              (
+                SELECT COUNT(*)
+                FROM dbo.QrCode_Coupon
+                WHERE EmployeeCode = @code
+                  AND IsScanned = 1
+                  AND ScannedAt IS NOT NULL
+                  AND CAST(ScannedAt AS DATE) = CAST(GETDATE() AS DATE)
+              ) AS AlreadyDailyScan,
+              (
+                SELECT COUNT(*)
+                FROM dbo.QrCode_Coupon
+                WHERE EmployeeCode = @code
+                  AND IsScanned = 1
+                  AND ScannedAt IS NOT NULL
+                  AND ScannedAt >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
+              ) AS AlreadyMonthlyScan
+          `),
+      ]);
 
-      const result = await pool
-        .request()
-        .input("code", sql.Int, codeNum)
-        .query(`
-          SELECT TOP 1 
-            EmployeeID, 
-            FirstName, 
-            DesignationName, 
-            ParentDepartment, 
-            DepartmentName,
-            (
-              SELECT COUNT(*) 
-              FROM dbo.QrCode_Coupon 
-              WHERE EmployeeCode = CAST(@code AS NVARCHAR(100)) 
-                AND IsScanned = 1 
-                AND ScannedAt IS NOT NULL 
-                AND CAST(ScannedAt AS DATE) = CAST(GETDATE() AS DATE)
-            ) AS AlreadyDailyScan,
-            (
-              SELECT COUNT(*) 
-              FROM dbo.QrCode_Coupon 
-              WHERE EmployeeCode = CAST(@code AS NVARCHAR(100)) 
-                AND IsScanned = 1 
-                AND ScannedAt IS NOT NULL 
-                AND ScannedAt >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
-            ) AS AlreadyMonthlyScan
-          FROM dbo.Workers
-          WHERE EmployeeID = @code
-        `);
-
-      if (result.recordset.length > 0) {
-        return Response.json(result.recordset[0]);
-      } else {
+      if (workerResult.recordset.length === 0) {
         return Response.json(null);
       }
+      return Response.json({
+        ...workerResult.recordset[0],
+        ...scanCountsResult.recordset[0],
+      });
     }
 
     // 2. Fetch autocomplete suggestions matching EmployeeID or FirstName
     if (query) {
-      const result = await pool
+      const result = await hrmsPool
         .request()
         .input("q", sql.NVarChar, `%${query.trim()}%`)
         .query(`
           SELECT DISTINCT TOP 10 EmployeeID, FirstName, DesignationName, ParentDepartment, DepartmentName
-          FROM dbo.Workers
+          FROM ${WORKERS_VIEW}
           WHERE CAST(EmployeeID AS VARCHAR(50)) LIKE @q OR FirstName LIKE @q
           ORDER BY EmployeeID
         `);

@@ -1,4 +1,4 @@
-import { sql } from "@/lib/db";
+import { sql, getPool, STYLE_BULLETIN_TABLE, WORKERS_VIEW } from "@/lib/db";
 import { buildCouponCode } from "./coupon-code";
 import type { CouponCard } from "./coupon-pairing.service";
 
@@ -189,6 +189,75 @@ function applyCouponFilters(request: sql.Request, workOrder: string, filters: Co
   return conditions.join(" AND ");
 }
 
+// OpName (indusPlus) and EmployeeName (hrms) used to be pulled in via
+// OUTER APPLY/LEFT JOIN straight from the pitSystem query below — but
+// QrCode_Coupon, StyleBullettinInt and the hrms workers view each live on a
+// *different* SQL Server instance (see CONNECTION_STRINGS in db.ts), so a
+// single query can never join across them; SQL Server just throws "Invalid
+// object name" the moment it tries to resolve the other server's table.
+// These fetch each side separately and get merged into the coupon rows in
+// JS instead.
+
+// A work order's whole bulletin is small (one op list), so this is one
+// query regardless of how many coupon rows are being paged/listed.
+async function fetchOpNamesByOpNo(workOrder: string): Promise<Map<string, string>> {
+  const pool = await getPool("indusPlus");
+  const result = await pool
+    .request()
+    .input("wo", sql.NVarChar, workOrder)
+    .query(`
+      SELECT DISTINCT [Operation Code] AS OpNo, [Operation Name] AS OpName
+      FROM ${STYLE_BULLETIN_TABLE}
+      WHERE [Order No] = @wo
+    `);
+  return new Map(result.recordset.map((r) => [r.OpNo as string, r.OpName as string]));
+}
+
+// Chunked well under SQL Server's ~2100 parameter cap (see buildCouponRowsTable
+// above for the same limit) — distinct scanners on one work order should
+// never get close, but listAllCoupons is unpaginated so this stays correct
+// even if it did.
+const EMPLOYEE_CODE_CHUNK_SIZE = 500;
+
+function distinctEmployeeCodes(rows: { EmployeeCode?: string | null }[]): number[] {
+  const codes = new Set<number>();
+  for (const row of rows) {
+    const parsed = row.EmployeeCode ? Number(row.EmployeeCode) : NaN;
+    if (Number.isInteger(parsed)) codes.add(parsed);
+  }
+  return [...codes];
+}
+
+async function fetchEmployeeNamesById(employeeCodes: number[]): Promise<Map<number, string>> {
+  if (employeeCodes.length === 0) return new Map();
+  const pool = await getPool("hrms");
+  const names = new Map<number, string>();
+  for (const batch of chunk(employeeCodes, EMPLOYEE_CODE_CHUNK_SIZE)) {
+    const request = pool.request();
+    const placeholders = batch.map((code, i) => {
+      request.input(`ec${i}`, sql.Int, code);
+      return `@ec${i}`;
+    });
+    const result = await request.query(
+      `SELECT EmployeeID, FirstName FROM ${WORKERS_VIEW} WHERE EmployeeID IN (${placeholders.join(", ")})`,
+    );
+    for (const row of result.recordset) names.set(row.EmployeeID, row.FirstName);
+  }
+  return names;
+}
+
+function attachNames<T extends { OpNo: string; EmployeeCode?: string | null }>(
+  rows: T[],
+  opNames: Map<string, string>,
+  employeeNames: Map<number, string>,
+): (T & { OpName: string | null; EmployeeName: string | null })[] {
+  return rows.map((row) => ({
+    ...row,
+    OpName: opNames.get(row.OpNo) ?? null,
+    EmployeeName: row.EmployeeCode ? employeeNames.get(Number(row.EmployeeCode)) ?? null : null,
+  }));
+}
+
 // Server-side page of a work order's coupons — a work order can have
 // thousands of rows, so this never loads the full set into the app.
 // Backed by IX_QrCode_Coupon_WorkOrder; OFFSET/FETCH needs an ORDER BY.
@@ -205,31 +274,28 @@ export async function listCoupons(
   const countRequest = pool.request();
   applyCouponFilters(countRequest, workOrder, filters);
 
-  const [dataResult, countResult] = await Promise.all([
+  const [dataResult, countResult, opNames] = await Promise.all([
     request
       .input("offset", sql.Int, (page - 1) * pageSize)
       .input("pageSize", sql.Int, pageSize)
       .query(`
-        SELECT 
+        SELECT
           c.Id, c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.Section, c.IsScanned, c.CreatedAt, c.CutNo,
-          sb.Operation_Name AS OpName,
           c.EmployeeCode,
-          w.FirstName AS EmployeeName,
           c.ScannedAt
         FROM dbo.QrCode_Coupon c
-        OUTER APPLY (
-          SELECT TOP 1 sb.Operation_Name
-          FROM dbo.StyleBulletinInt sb
-          WHERE sb.Order_No = c.WorkOrder AND sb.Operation_Code = c.OpNo
-        ) sb
-        LEFT JOIN dbo.Workers w ON w.EmployeeID = TRY_CAST(c.EmployeeCode AS INT)
         WHERE ${where}
         ORDER BY c.Id
         OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
       `),
     countRequest.query(`SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon c WHERE ${where}`),
+    fetchOpNamesByOpNo(workOrder),
   ]);
-  return { rows: dataResult.recordset, total: countResult.recordset[0].total };
+  const employeeNames = await fetchEmployeeNamesById(distinctEmployeeCodes(dataResult.recordset));
+  return {
+    rows: attachNames(dataResult.recordset, opNames, employeeNames),
+    total: countResult.recordset[0].total,
+  };
 }
 
 // Every coupon matching the filters, unpaginated — used for PDF generation
@@ -241,22 +307,18 @@ export async function listAllCoupons(
 ): Promise<CouponListRow[]> {
   const request = pool.request();
   const where = applyCouponFilters(request, workOrder, filters);
-  const result = await request.query(`
-    SELECT 
-      c.Id, c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.Section, c.IsScanned, c.CreatedAt, c.CutNo,
-      sb.Operation_Name AS OpName,
-      c.EmployeeCode,
-      w.FirstName AS EmployeeName,
-      c.ScannedAt
-    FROM dbo.QrCode_Coupon c
-    OUTER APPLY (
-      SELECT TOP 1 sb.Operation_Name
-      FROM dbo.StyleBulletinInt sb
-      WHERE sb.Order_No = c.WorkOrder AND sb.Operation_Code = c.OpNo
-    ) sb
-    LEFT JOIN dbo.Workers w ON w.EmployeeID = TRY_CAST(c.EmployeeCode AS INT)
-    WHERE ${where}
-    ORDER BY c.Id
-  `);
-  return result.recordset;
+  const [result, opNames] = await Promise.all([
+    request.query(`
+      SELECT
+        c.Id, c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.Section, c.IsScanned, c.CreatedAt, c.CutNo,
+        c.EmployeeCode,
+        c.ScannedAt
+      FROM dbo.QrCode_Coupon c
+      WHERE ${where}
+      ORDER BY c.Id
+    `),
+    fetchOpNamesByOpNo(workOrder),
+  ]);
+  const employeeNames = await fetchEmployeeNamesById(distinctEmployeeCodes(result.recordset));
+  return attachNames(result.recordset, opNames, employeeNames);
 }

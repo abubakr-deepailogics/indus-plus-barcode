@@ -1,4 +1,4 @@
-import { getPool, sql } from "@/lib/db";
+import { getPool, sql, CUT_DETAIL_VIEW, STYLE_BULLETIN_TABLE } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -17,22 +17,21 @@ export async function GET(request: Request) {
   }
 
   try {
-    // ponytail: cross-DB — this route queries QrCode_Coupon (pit-system)
-    // for "only_generated" branches and SaleOrderPOCutDetailViewV1/
-    // StyleBulletinInt (indus-plus) for the rest, on one shared pool.
-    // Left on pit-system's pool; split per-DB if/when these move to
-    // separate servers.
-    const pool = await getPool("pitSystem");
-
+    // Cross-server: QrCode_Coupon lives on pitSystem; SaleOrderPOCutDetailViewV1/
+    // StyleBullettinInt live on indusPlus — different SQL Server instances,
+    // so each branch below queries its own pool rather than sharing one,
+    // and the two "only_generated" branches that need both sides fetch them
+    // separately and merge in JS instead of joining across servers.
     if (type === "bundle") {
       if (onlyGenerated) {
+        const pool = await getPool("pitSystem");
         const result = await pool
           .request()
           .input("wo", sql.NVarChar, wo.trim())
           .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
-            SELECT DISTINCT TOP 10 BundleNo 
-            FROM dbo.QrCode_Coupon 
-            WHERE WorkOrder = @wo 
+            SELECT DISTINCT TOP 10 BundleNo
+            FROM dbo.QrCode_Coupon
+            WHERE WorkOrder = @wo
               AND BundleNo LIKE @q
             ORDER BY BundleNo
           `);
@@ -40,14 +39,15 @@ export async function GET(request: Request) {
         return Response.json(list);
       }
 
+      const pool = await getPool("indusPlus");
       const result = await pool
         .request()
         .input("wo", sql.NVarChar, wo.trim())
         .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
-          SELECT DISTINCT TOP 10 Bundle_Id 
-          FROM dbo.SaleOrderPOCutDetailViewV1 
-          WHERE Work_Order = @wo 
-            AND CAST(Bundle_Id AS VARCHAR(50)) LIKE @q
+          SELECT DISTINCT TOP 10 [Bundle Id] AS Bundle_Id
+          FROM ${CUT_DETAIL_VIEW}
+          WHERE [Work Order #] = @wo
+            AND CAST([Bundle Id] AS VARCHAR(50)) LIKE @q
           ORDER BY Bundle_Id
         `);
 
@@ -57,32 +57,49 @@ export async function GET(request: Request) {
 
     if (type === "operation") {
       if (onlyGenerated) {
-        const result = await pool
-          .request()
-          .input("wo", sql.NVarChar, wo.trim())
-          .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
-            SELECT DISTINCT TOP 10 c.OpNo AS Operation_Code, sb.Operation_Name
-            FROM dbo.QrCode_Coupon c
-            OUTER APPLY (
-              SELECT TOP 1 sb.Operation_Name
-              FROM dbo.StyleBulletinInt sb
-              WHERE sb.Order_No = c.WorkOrder AND sb.Operation_Code = c.OpNo
-            ) sb
-            WHERE c.WorkOrder = @wo
-              AND (c.OpNo LIKE @q OR sb.Operation_Name LIKE @q)
-            ORDER BY c.OpNo
-          `);
-        return Response.json(result.recordset);
+        const q = query.trim().toLowerCase();
+        const [couponOps, opNames] = await Promise.all([
+          (await getPool("pitSystem"))
+            .request()
+            .input("wo", sql.NVarChar, wo.trim())
+            .query(`SELECT DISTINCT OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @wo`),
+          (await getPool("indusPlus"))
+            .request()
+            .input("wo", sql.NVarChar, wo.trim())
+            .query(`
+              SELECT DISTINCT [Operation Code] AS Operation_Code, [Operation Name] AS Operation_Name
+              FROM ${STYLE_BULLETIN_TABLE}
+              WHERE [Order No] = @wo
+            `),
+        ]);
+        const nameByOpNo = new Map(
+          opNames.recordset.map((r) => [r.Operation_Code as string, r.Operation_Name as string]),
+        );
+        const suggestions = couponOps.recordset
+          .map((r) => {
+            const opNo = r.OpNo as string;
+            return { Operation_Code: opNo, Operation_Name: nameByOpNo.get(opNo) ?? null };
+          })
+          .filter(
+            (r) =>
+              !q ||
+              r.Operation_Code.toLowerCase().includes(q) ||
+              r.Operation_Name?.toLowerCase().includes(q),
+          )
+          .sort((a, b) => a.Operation_Code.localeCompare(b.Operation_Code))
+          .slice(0, 10);
+        return Response.json(suggestions);
       }
 
+      const pool = await getPool("indusPlus");
       const result = await pool
         .request()
         .input("wo", sql.NVarChar, wo.trim())
         .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
-          SELECT DISTINCT TOP 10 Operation_Code, Operation_Name
-          FROM dbo.StyleBulletinInt
-          WHERE Order_No = @wo
-            AND (Operation_Code LIKE @q OR Operation_Name LIKE @q)
+          SELECT DISTINCT TOP 10 [Operation Code] AS Operation_Code, [Operation Name] AS Operation_Name
+          FROM ${STYLE_BULLETIN_TABLE}
+          WHERE [Order No] = @wo
+            AND ([Operation Code] LIKE @q OR [Operation Name] LIKE @q)
           ORDER BY Operation_Code
         `);
 
@@ -90,10 +107,11 @@ export async function GET(request: Request) {
     }
 
     if (type === "section") {
-      // Sourced from QrCode_Coupon (not StyleBulletinInt) — Section is
+      // Sourced from QrCode_Coupon (not the style bulletin) — Section is
       // whatever was recorded on the coupon at generation time, so the
       // filter's options always match what's actually in this work order's
       // coupons rather than the full style bulletin's section list.
+      const pool = await getPool("pitSystem");
       const result = await pool.request().input("wo", sql.NVarChar, wo.trim())
         .query(`
           SELECT DISTINCT Section
@@ -106,6 +124,7 @@ export async function GET(request: Request) {
     }
 
     if (type === "cut") {
+      const pool = await getPool("pitSystem");
       const result = await pool
         .request()
         .input("wo", sql.NVarChar, wo.trim())
@@ -113,8 +132,8 @@ export async function GET(request: Request) {
           SELECT CutNo FROM (
             SELECT DISTINCT CutNo
             FROM dbo.QrCode_Coupon
-            WHERE WorkOrder = @wo 
-              AND CutNo IS NOT NULL 
+            WHERE WorkOrder = @wo
+              AND CutNo IS NOT NULL
               AND CutNo <> ''
               AND CutNo LIKE @q
           ) t

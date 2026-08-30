@@ -1,4 +1,4 @@
-import { getPool, sql } from "@/lib/db";
+import { getPool, sql, cutDetailByFilter, styleBulletinByFilter } from "@/lib/db";
 import { generateCouponPdf } from "@/features/qr-code-generation/services/pdf-generation.service";
 import type { CouponCard } from "@/features/qr-code-generation/services/coupon-pairing.service";
 import {
@@ -48,11 +48,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    // ponytail: cross-DB — coupons live in pit-system, but this route also
-    // re-joins bundle/op display data from indus-plus (SaleOrderPOCutDetailViewV1,
-    // StyleBulletinInt) using the SAME pool below. Left as one pool on
-    // pit-system; split into per-DB queries + in-memory join if/when these
-    // move to separate servers.
+    // Coupons live on pitSystem; bundle/op display data (cut detail, style
+    // bulletin) is on indusPlus — genuinely different SQL Server instances,
+    // so each gets queried on its own pool below and merged in JS.
     const pool = await getPool("pitSystem");
 
     const coupons = await listAllCoupons(pool, workOrder, {
@@ -78,31 +76,34 @@ export async function GET(request: Request) {
     // is numeric in the source table but coupons store it as text, hence
     // the CAST on the cut-detail side. bundleNos is chunked because a work
     // order can have thousands of bundles and SQL Server caps params at
-    // 2100 per query.
+    // 2100 per query. Queried on indusPlus via the same filter builders
+    // used elsewhere (cutDetailByFilter/styleBulletinByFilter) rather than
+    // ad-hoc SQL, so the real (renamed) table names, RowId synthesis, and
+    // the OPERATIONS_CATALOG_TABLE join all stay in one place.
+    const indusPlusPool = await getPool("indusPlus");
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- matches sql.Request#query's own recordset typing
     const cutRecordsets: any[][] = [];
     for (const batch of chunk(bundleNos, 2000)) {
-      const cutRequest = pool.request().input("wo", sql.NVarChar, workOrder);
+      const cutRequest = indusPlusPool.request().input("wo", sql.NVarChar, workOrder);
       batch.forEach((b, i) => cutRequest.input(`bundle${i}`, sql.NVarChar, b));
-      const result = await cutRequest.query(`
-        SELECT * FROM dbo.SaleOrderPOCutDetailViewV1
-        WHERE Work_Order = @wo AND CAST(Bundle_Id AS NVARCHAR(50)) IN (${batch
-          .map((_, i) => `@bundle${i}`)
-          .join(", ")})
-      `);
+      const result = await cutRequest.query(
+        cutDetailByFilter(
+          `[Work Order #] = @wo AND CAST([Bundle Id] AS NVARCHAR(50)) IN (${batch
+            .map((_, i) => `@bundle${i}`)
+            .join(", ")})`,
+        ),
+      );
       cutRecordsets.push(result.recordset);
     }
     const cutRows = { recordset: cutRecordsets.flat() };
 
-    const opRequest = pool.request().input("wo", sql.NVarChar, workOrder);
+    const opRequest = indusPlusPool.request().input("wo", sql.NVarChar, workOrder);
     opNos.forEach((o, i) => opRequest.input(`op${i}`, sql.NVarChar, o));
-    const opRows = await opRequest.query(`
-      SELECT sb.*, op.SkillLevel
-      FROM dbo.StyleBulletinInt sb
-      LEFT JOIN dbo.Operations op ON sb.Operation_Code = op.OperationCode
-      WHERE sb.Order_No = @wo AND sb.Operation_Code IN (${opNos.map((_, i) => `@op${i}`).join(", ")})
-      ORDER BY sb.Operation_Sequeance ASC
-    `);
+    const opRows = await opRequest.query(
+      styleBulletinByFilter(
+        `[Order No] = @wo AND [Operation Code] IN (${opNos.map((_, i) => `@op${i}`).join(", ")})`,
+      ),
+    );
 
     const bundles: BundleDetailRow[] = cutRows.recordset
       .map((row) => ({
@@ -130,18 +131,24 @@ export async function GET(request: Request) {
         });
       });
 
-    const operations: OperationsDetailRow[] = opRows.recordset.map((row) => ({
-      id: row.RowId,
-      section: row.Section ?? "",
-      seqNo: String(row.Operation_Sequence ?? ""),
-      opNo: row.Operation_Code ?? "",
-      operationName: row.Operation_Name ?? "",
-      smv: String(row.Smv_Sam ?? ""),
-      rate: String(row.Piece_Rate ?? ""),
-      skills: "",
-      lastOpSection: row.Last_Operation_Section_Wise === 1,
-      inc: row.Incentive !== undefined ? String(row.Incentive) : "-",
-    }));
+    const operations: OperationsDetailRow[] = opRows.recordset
+      .map((row) => ({
+        id: row.RowId,
+        section: row.Section ?? "",
+        seqNo: String(row.Operation_Sequence ?? ""),
+        opNo: row.Operation_Code ?? "",
+        operationName: row.Operation_Name ?? "",
+        smv: String(row.Smv_Sam ?? ""),
+        rate: String(row.Piece_Rate ?? ""),
+        skills: "",
+        lastOpSection: row.Last_Operation_Section_Wise === 1,
+        inc: row.Incentive !== undefined ? String(row.Incentive) : "-",
+      }))
+      // RowId encodes the intended Operation_Sequence order (see
+      // styleBulletinByFilter) — SQL doesn't guarantee row order without an
+      // explicit outer ORDER BY, so sort explicitly rather than rely on it,
+      // same as bundles above.
+      .sort((a, b) => a.id - b.id);
 
     if (bundles.length === 0 || operations.length === 0) {
       return Response.json(

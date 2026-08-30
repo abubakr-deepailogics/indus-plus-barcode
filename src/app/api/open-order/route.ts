@@ -1,4 +1,4 @@
-import { getPool, sql } from "@/lib/db";
+import { getPool, sql, cutDetailByFilter, styleBulletinByFilter } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -21,25 +21,21 @@ export async function GET(request: Request) {
     const cutDetailResult = await pool
       .request()
       .input("wo", sql.NVarChar, workOrder)
-      .query(
-        "SELECT * FROM dbo.SaleOrderPOCutDetailViewV1 WHERE Work_Order = @wo",
-      );
+      .query(cutDetailByFilter("[Work Order #] = @wo"));
 
     // Fetch Style Bulletin (Operations)
     const styleBulletinResult = await pool
       .request()
-      .input("wo", sql.NVarChar, workOrder).query(`
-        SELECT sb.*, op.SkillLevel 
-        FROM dbo.StyleBulletinInt sb
-        LEFT JOIN dbo.Operations op ON sb.Operation_Code = op.OperationCode
-        WHERE sb.Order_No = @wo 
-        ORDER BY sb.Operation_Sequeance ASC
-      `);
+      .input("wo", sql.NVarChar, workOrder)
+      .query(styleBulletinByFilter("[Order No] = @wo"));
 
-    // Fetch Style Bulletin Header (Metadata) if exists
+    // Fetch Style Bulletin Header (Metadata) — this app's own write data,
+    // lives on pitSystem (see db/migrations/010_order_style_bulletin_header.sql),
+    // not the read-only indusPlus/ERP connection.
     let metadata = null;
     try {
-      const metadataResult = await pool
+      const pitPool = await getPool("pitSystem");
+      const metadataResult = await pitPool
         .request()
         .input("wo", sql.NVarChar, workOrder)
         .query(
@@ -97,42 +93,12 @@ export async function POST(request: Request) {
       );
     }
 
-    const pool = await getPool("indusPlus");
+    // App-owned write data — lives on pitSystem (see
+    // db/migrations/010_order_style_bulletin_header.sql), not the read-only
+    // indusPlus/ERP connection, which has no CREATE TABLE permission anyway.
+    const pool = await getPool("pitSystem");
 
-    // 1. Create table if not exists
-    await pool.request().query(`
-      IF NOT EXISTS (SELECT * FROM sys.objects WHERE object_id = OBJECT_ID(N'[dbo].[Order_StyleBulletin_Header]') AND type in (N'U'))
-      BEGIN
-          CREATE TABLE [dbo].[Order_StyleBulletin_Header] (
-              [Work_Order] NVARCHAR(50) NOT NULL PRIMARY KEY,
-              [Description] NVARCHAR(255) NULL,
-              [Style_Description] NVARCHAR(255) NULL,
-              [Style_Category] NVARCHAR(100) NULL,
-              [Smd_No] NVARCHAR(50) NULL,
-              [Final_Smd_No] NVARCHAR(50) NULL,
-              [Target] NVARCHAR(50) NULL,
-              [Target_Unit_Min] NVARCHAR(50) NULL,
-              [Start_Time] NVARCHAR(50) NULL,
-              [Poc_Sam] NVARCHAR(50) NULL,
-              [Poc_Piece_Rate] NVARCHAR(50) NULL,
-              [Head_Reqd] NVARCHAR(50) NULL,
-              [App_Date] NVARCHAR(50) NULL,
-              [App_By] NVARCHAR(100) NULL,
-              [Status] NVARCHAR(50) NULL,
-              [Forward_For_Approval] NVARCHAR(50) NULL,
-              [UpdatedAt] DATETIME DEFAULT GETDATE()
-          )
-      END
-      ELSE
-      BEGIN
-          IF NOT EXISTS (SELECT * FROM sys.columns WHERE object_id = OBJECT_ID(N'[dbo].[Order_StyleBulletin_Header]') AND name = 'Forward_For_Approval')
-          BEGIN
-              ALTER TABLE [dbo].[Order_StyleBulletin_Header] ADD [Forward_For_Approval] NVARCHAR(50) NULL
-          END
-      END
-    `);
-
-    // 2. Perform UPSERT using MERGE
+    // Perform UPSERT using MERGE
     await pool
       .request()
       .input("wo", sql.NVarChar, workOrder)
