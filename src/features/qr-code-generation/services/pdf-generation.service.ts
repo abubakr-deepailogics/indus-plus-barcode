@@ -403,18 +403,18 @@ export async function generateCouponPdf({
     // routes match on it) — not printed as text, per the smaller box's space budget.
     const couponCode = buildCouponCode(workOrder, bundle.bundleNo, op.opNo);
     const workOrderShort = stripPrefix(workOrder);
-    // Bundle number often repeats the work order's digits at the front
-    // (see coupon-code.ts) — trim that repetition, not just the label
-    // prefix, so B# actually fits its column instead of ellipsizing.
-    const trimmedBundleNo = trimBundleNo(workOrder, bundle.bundleNo);
-    // What's actually printed as B# is the display-only per-cut rank (1, 2,
-    // 3...), not the real bundle number — padded to the same width as the
-    // trimmed real value so the column doesn't shift width card to card.
+    // What's printed as B# is the display-only per-cut rank (1, 2, 3...),
+    // not the real bundle number — same rank shown in BundleDetailTable, so
+    // the printed coupon matches what the user saw on screen when they
+    // generated it. Falls back to the real (trimmed) bundle number only if
+    // a bundle's id somehow isn't in the map. Printed as a plain number,
+    // not zero-padded — a padded rank (e.g. "0000001") reads as a run of
+    // zeros instead of a legible bundle rank.
     const displayNo = bundleDisplayNos.get(bundle.id);
     const bundleShort =
       displayNo !== undefined
-        ? String(displayNo).padStart(trimmedBundleNo.length, "0")
-        : trimmedBundleNo;
+        ? String(displayNo)
+        : trimBundleNo(workOrder, bundle.bundleNo);
 
     if (codeType === "barcode") {
       // 3x3 Grid fields at the top

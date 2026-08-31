@@ -23,10 +23,23 @@ export function ScanningDetailsTable(props: Facade) {
     dated,
   } = props;
 
-  const scannerDisabled = isScanning || !employeeCode.trim();
+  // Sequential flow: Employee Code -> Dated (InformationPanel) -> this
+  // scanner field. Both are required before a scan means anything (who
+  // scanned it, and when), so this field stays disabled until both are set.
+  // Dated can only ever be filled in after Employee Code already is (it's
+  // itself gated the same way, in InformationPanel), so the hand-off to
+  // this field is triggered from there — on the Dated input's blur, or an
+  // explicit calendar pick — not from a reactive effect here. An effect
+  // keyed on this "ready" boolean fires the instant a still-being-typed
+  // date happens to parse as valid, stealing focus out of the Dated field
+  // mid-keystroke; committing the hand-off only where Dated is actually
+  // *done* (not just momentarily valid) avoids that.
+  const isEmployeeCodeFilled = !!employeeCode.trim();
+  const isReadyToScan = isEmployeeCodeFilled && !!dated;
+  const scannerDisabled = isScanning || !isReadyToScan;
 
   const handleInputBlur = (e: FocusEvent<HTMLInputElement>) => {
-    if (!employeeCode.trim() || !dated) return;
+    if (!isReadyToScan) return;
 
     const target = e.relatedTarget as HTMLElement;
     if (
@@ -98,9 +111,11 @@ export function ScanningDetailsTable(props: Facade) {
           type="text"
           autoComplete="off"
           placeholder={
-            employeeCode.trim()
-              ? "Focus here and scan a coupon barcode…"
-              : "Select an Employee Code first"
+            !isEmployeeCodeFilled
+              ? "Select an Employee Code first"
+              : !dated
+                ? "Enter a Date first"
+                : "Focus here and scan a coupon barcode…"
           }
           value={scannerInput}
           onChange={(e) => setScannerInput(e.target.value)}

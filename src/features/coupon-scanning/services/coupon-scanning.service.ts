@@ -113,18 +113,26 @@ export async function scanCoupon(params: {
   return { ok: true, item: items[0] || {} };
 }
 
+// A code that didn't get scanned, with the exact reason why — kept
+// distinct rather than lumped into one vague "already scanned or not
+// found" message, so the UI can tell the user precisely which it was.
+export interface FailedScan {
+  code: string;
+  reason: "already_scanned" | "not_found";
+}
+
 // Batch version of scanCoupon — one request for a whole burst of scanner-gun
 // codes instead of one request per code. Returns full row detail for every
 // code that was actually flipped to scanned, plus the codes that weren't
-// (already scanned / not found) so the caller can flag them without a
-// second round trip.
+// (each with its own reason) so the caller can flag them without a second
+// round trip.
 export async function scanCouponsBatch(params: {
   barcodes: string[];
   employeeCode: string;
   scanBy: string;
   scanDate: string;
 }): Promise<
-  | { ok: true; scanned: CouponApiItem[]; failed: string[] }
+  | { ok: true; scanned: CouponApiItem[]; failed: FailedScan[] }
   | { ok: false; error: string }
 > {
   const response = await fetch("/api/coupons/scan/batch", {

@@ -7,6 +7,7 @@ import {
   Worker,
   makeEmptyRow,
   getErrorMessage,
+  describeFailedScans,
   couponItemToRow,
 } from "../types";
 import * as couponScanningService from "../services/coupon-scanning.service";
@@ -255,9 +256,7 @@ export function useCouponScanning() {
       setScanCouponCode("");
 
       if (scanResult.failed.length > 0) {
-        setScanError(
-          `${scanResult.failed.length} coupon(s) could not be scanned (already scanned or not found): ${scanResult.failed.join(", ")}`,
-        );
+        setScanError(describeFailedScans(scanResult.failed));
       } else {
         setScanError("");
       }
@@ -385,14 +384,13 @@ export function useCouponScanning() {
       }
 
       if (result.failed.length > 0) {
-        setScanError(
-          `${result.failed.length} coupon(s) could not be scanned (already scanned or not found): ${result.failed.join(", ")}`,
-        );
+        setScanError(describeFailedScans(result.failed));
         // Drop failed codes' rows back to empty so the slot isn't stuck
         // showing an unscanned "pending" row forever.
+        const failedCodes = new Set(result.failed.map((f) => f.code));
         setRows((prev) =>
           prev.map((row) =>
-            row.barCode && result.failed.includes(row.barCode)
+            row.barCode && failedCodes.has(row.barCode)
               ? makeEmptyRow(row.index)
               : row,
           ),

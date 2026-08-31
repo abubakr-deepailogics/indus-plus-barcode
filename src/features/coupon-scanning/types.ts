@@ -61,6 +61,29 @@ export function getErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
 }
 
+// Builds one exact message per failure reason instead of lumping
+// "already scanned or not found" together — a scanner-gun burst can
+// contain both kinds of failure at once, so each reason gets its own
+// clause (joined with "; ") rather than picking one word to cover both.
+export function describeFailedScans(
+  failed: { code: string; reason: "already_scanned" | "not_found" }[],
+): string {
+  const alreadyScanned = failed.filter((f) => f.reason === "already_scanned");
+  const notFound = failed.filter((f) => f.reason === "not_found");
+  const parts: string[] = [];
+  if (alreadyScanned.length > 0) {
+    parts.push(
+      `${alreadyScanned.length} coupon(s) already scanned: ${alreadyScanned.map((f) => f.code).join(", ")}`,
+    );
+  }
+  if (notFound.length > 0) {
+    parts.push(
+      `${notFound.length} coupon(s) not found: ${notFound.map((f) => f.code).join(", ")}`,
+    );
+  }
+  return parts.join("; ");
+}
+
 export function makeEmptyRow(index: number): ScanningRow {
   return {
     index,

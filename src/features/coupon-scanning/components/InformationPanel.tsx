@@ -111,6 +111,25 @@ export function InformationPanel(props: Facade) {
     ? typedValue
     : (dated ? format(new Date(dated), "dd-MM-yyyy") : "");
 
+  // Dated is gated on Employee Code — same "disabled until the field
+  // before it is filled" convention as From Cut/To Cut/Bundle No/Operation
+  // No below (those gate on Work Order). Part of the sequential
+  // Employee Code -> Dated -> Coupon Scanning flow (the scanning field
+  // itself is gated on both, in ScanningDetailsTable).
+  const isEmployeeCodeFilled = !!employeeCode.trim();
+
+  // Hands off focus to the scanner field (a sibling component, hence the
+  // plain DOM lookup by id rather than a shared ref) once Dated is
+  // *committed* — on blur or an explicit calendar pick, never from the
+  // onChange above. Committing on every keystroke there (instead of just
+  // on a final valid value) is what previously stole focus out from under
+  // the user mid-type, the instant a partial date happened to parse valid.
+  const focusScannerIfReady = () => {
+    if (isEmployeeCodeFilled && dated) {
+      document.getElementById("scanner-input")?.focus();
+    }
+  };
+
   const isInvalid = useMemo(() => {
     if (!displayValue.trim()) return false;
     const parsed = parseDateString(displayValue);
@@ -209,13 +228,15 @@ export function InformationPanel(props: Facade) {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Dated */}
             <div className="flex flex-col gap-0.5">
-              <span className="font-bold text-[#475569] text-[10px] uppercase">
+              <span
+                className={`font-bold text-[10px] uppercase transition-colors ${!isEmployeeCodeFilled ? "text-slate-400" : "text-[#475569]"}`}
+              >
                 Dated
               </span>
               <div className="relative flex items-center w-full">
                 <input
                   type="text"
-                  placeholder="DD-MM-YYYY"
+                  placeholder={isEmployeeCodeFilled ? "DD-MM-YYYY" : "Enter Employee Code first"}
                   value={displayValue}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -231,12 +252,23 @@ export function InformationPanel(props: Facade) {
                       setDated("");
                     }
                   }}
+                  onBlur={focusScannerIfReady}
                   aria-invalid={isInvalid}
-                  className="w-full pl-3 pr-8 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] aria-invalid:border-red-500 aria-invalid:ring-red-500/10 transition-all bg-white h-[26px]"
+                  disabled={!isEmployeeCodeFilled}
+                  className={`w-full pl-3 pr-8 py-1 rounded-lg border text-xs font-semibold placeholder-slate-400 focus:outline-none aria-invalid:border-red-500 aria-invalid:ring-red-500/10 transition-all h-[26px] ${
+                    !isEmployeeCodeFilled
+                      ? "bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200"
+                      : "bg-white text-slate-800 border-[#e2e8f0] focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
+                  }`}
                 />
                 <Popover>
-                  <PopoverTrigger className="absolute right-2 p-1 hover:bg-slate-100 rounded-md cursor-pointer flex items-center justify-center">
-                    <CalendarIcon className="w-3.5 h-3.5 text-slate-400" />
+                  <PopoverTrigger
+                    disabled={!isEmployeeCodeFilled}
+                    className="absolute right-2 p-1 hover:bg-slate-100 rounded-md cursor-pointer flex items-center justify-center disabled:cursor-not-allowed disabled:hover:bg-transparent"
+                  >
+                    <CalendarIcon
+                      className={`w-3.5 h-3.5 ${!isEmployeeCodeFilled ? "text-slate-300" : "text-slate-400"}`}
+                    />
                   </PopoverTrigger>
                   <PopoverContent className="w-auto p-0 bg-white" align="start">
                     <Calendar
@@ -247,6 +279,11 @@ export function InformationPanel(props: Facade) {
                         if (date) {
                           setDated(format(date, "yyyy-MM-dd"));
                           setTypedValue(null);
+                          // An explicit pick, not a keystroke — safe to hand
+                          // off focus immediately (isEmployeeCodeFilled is
+                          // already guaranteed true, since the trigger that
+                          // opens this calendar is disabled otherwise).
+                          document.getElementById("scanner-input")?.focus();
                         } else {
                           setDated("");
                           setTypedValue(null);

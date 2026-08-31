@@ -60,7 +60,11 @@ export async function POST(request: Request) {
     // Only flips codes that exist AND aren't already scanned — codes that
     // don't match or were already scanned are silently excluded from
     // `updated` (and cross-referenced against the input below) so the
-    // client can report them separately without a second query.
+    // client can report them separately without a second query. The final
+    // SELECT classifies every code that didn't get updated as either
+    // "already_scanned" (it exists, just wasn't touched) or "not_found" (no
+    // matching row at all) — @Codes is reused a third time in the same
+    // batch, which is fine since it's a table-valued parameter, not a cursor.
     const updateResult = await request_.query(`
       DECLARE @Updated TABLE (CouponCode NVARCHAR(200));
 
@@ -77,18 +81,26 @@ export async function POST(request: Request) {
       SELECT c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.IsScanned, c.ScannedAt
       FROM @Updated u
       INNER JOIN dbo.QrCode_Coupon c ON c.CouponCode = u.CouponCode;
+
+      SELECT src.CouponCode,
+             CASE WHEN c.CouponCode IS NULL THEN 'not_found' ELSE 'already_scanned' END AS Reason
+      FROM @Codes src
+      LEFT JOIN dbo.QrCode_Coupon c ON c.CouponCode = src.CouponCode
+      WHERE src.CouponCode NOT IN (SELECT CouponCode FROM @Updated);
     `);
 
     // mssql returns one recordset per SELECT; the bare UPDATE...OUTPUT
-    // doesn't add one, so the join SELECT is recordsets[0]. @types/mssql
-    // types `recordsets` as array-or-map, hence the cast (same pattern as
-    // the sql.Table casts above).
-    const recordsets = updateResult.recordsets as unknown as ScannedRecord[][];
-    const scannedRows: ScannedRecord[] =
-      updateResult.recordset ?? recordsets[0] ?? [];
+    // doesn't add one, so the join SELECT is recordsets[0] and the reason
+    // SELECT is recordsets[1]. @types/mssql types `recordsets` as
+    // array-or-map, hence the cast (same pattern as the sql.Table casts above).
+    const recordsets = updateResult.recordsets as unknown as [
+      ScannedRecord[],
+      { CouponCode: string; Reason: "already_scanned" | "not_found" }[],
+    ];
+    const scannedRows: ScannedRecord[] = recordsets[0] ?? [];
+    const reasonRows = recordsets[1] ?? [];
     const scanned = await enrichCouponRows(scannedRows);
-    const scannedCodes = new Set(scanned.map((r) => r.CouponCode));
-    const failed = codes.filter((c) => !scannedCodes.has(c));
+    const failed = reasonRows.map((r) => ({ code: r.CouponCode, reason: r.Reason }));
 
     return Response.json({ scanned, failed });
   } catch (err: unknown) {

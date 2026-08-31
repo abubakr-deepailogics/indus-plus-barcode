@@ -241,9 +241,6 @@ export default function OpenOrderPage() {
   const [appBy, setAppBy] = useState("");
   const [status, setStatus] = useState("Approved");
   const [forwardForApproval, setForwardForApproval] = useState("");
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveSuccessMsg, setSaveSuccessMsg] = useState("");
-  const [saveErrorMsg, setSaveErrorMsg] = useState("");
 
   // State and refs for Style Bulletin attachments
   const [rowAttachments, setRowAttachments] = useState<
@@ -501,59 +498,6 @@ export default function OpenOrderPage() {
     }
     e.target.value = "";
     setActiveRowIdForUpload(null);
-  };
-
-  const handleSaveMetadata = async () => {
-    const workOrder = cutDetails[0]?.Work_Order || activeSearchQuery;
-    if (!workOrder) {
-      setSaveErrorMsg("No active Work Order to save.");
-      return;
-    }
-    
-    setIsSaving(true);
-    setSaveSuccessMsg("");
-    setSaveErrorMsg("");
-    
-    try {
-      const response = await fetch("/api/open-order", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          workOrder,
-          description,
-          styleDescription,
-          styleCategory,
-          smdNo,
-          finalSmdNo,
-          target,
-          targetUnitMin,
-          startTime,
-          pocSam,
-          pocPieceRate,
-          headReqd,
-          appDate,
-          appBy,
-          status,
-          forwardForApproval,
-        }),
-      });
-      
-      const data = await response.json();
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to save bulletin details.");
-      }
-      
-      setSaveSuccessMsg("Bulletin details saved successfully.");
-      setTimeout(() => setSaveSuccessMsg(""), 4000);
-    } catch (err: any) {
-      console.error("Save error:", err);
-      setSaveErrorMsg(err.message || "Failed to save details.");
-      setTimeout(() => setSaveErrorMsg(""), 5000);
-    } finally {
-      setIsSaving(false);
-    }
   };
 
   const loadBulletinAttachments = useCallback(async (workOrder: string) => {
@@ -1132,7 +1076,7 @@ export default function OpenOrderPage() {
                   </div>
                 </div>
 
-                {/* Row 3: Status on Left, Save Button on Right */}
+                {/* Row 3: Status on Left, Print on Right */}
                 <div className="flex items-center justify-between gap-4 pt-1.5 mt-1 border-t border-[#f1f5f9]">
                   <div className="flex items-center gap-2">
                     <span className="text-[10px] font-bold text-[#94a3b8] uppercase">Status</span>
@@ -1152,44 +1096,16 @@ export default function OpenOrderPage() {
                       <option value="Draft">Draft</option>
                     </select>
                   </div>
-                  <div className="flex gap-2 w-full justify-end max-w-[320px]">
-                    <button
-                      type="button"
-                      onClick={() => window.print()}
-                      disabled={styleBulletins.length === 0}
-                      className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-slate-700 disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
-                    >
-                      <Printer className="w-3.5 h-3.5" />
-                      <span>Print</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleSaveMetadata}
-                      disabled={isSaving}
-                      className="bg-[#4f46e5] hover:bg-[#4338ca] disabled:bg-slate-300 disabled:cursor-not-allowed text-white py-1.5 px-4 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5 flex-grow"
-                    >
-                      {isSaving ? (
-                        <>
-                          <div className="h-3 w-3 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                          <span>Saving...</span>
-                        </>
-                      ) : (
-                        <span>Save Bulletin Details</span>
-                      )}
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    disabled={styleBulletins.length === 0}
+                    className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-slate-700 disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print</span>
+                  </button>
                 </div>
-
-                {saveSuccessMsg && (
-                  <div className="mt-2 text-[11px] text-center font-bold text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg py-1.5 px-3 animate-fade-in">
-                    {saveSuccessMsg}
-                  </div>
-                )}
-                {saveErrorMsg && (
-                  <div className="mt-2 text-[11px] text-center font-bold text-red-600 bg-red-50 border border-red-100 rounded-lg py-1.5 px-3 animate-fade-in">
-                    {saveErrorMsg}
-                  </div>
-                )}
               </div>
             </div>
 
