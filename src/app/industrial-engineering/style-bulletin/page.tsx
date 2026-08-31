@@ -614,6 +614,19 @@ export default function OpenOrderPage() {
     void Promise.resolve().then(() => loadBulletinAttachments(workOrder || ""));
   }, [cutDetails, activeSearchQuery, loadBulletinAttachments]);
 
+  useEffect(() => {
+    if (!previewFile) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setPreviewFile(null);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [previewFile]);
+
   // Fetch autocomplete suggestions as user types
   useEffect(() => {
     if (searchQuery.trim().length < 2) {

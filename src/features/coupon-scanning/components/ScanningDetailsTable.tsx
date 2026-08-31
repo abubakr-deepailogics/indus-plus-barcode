@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useRef } from "react";
-import { FileText } from "lucide-react";
+import { useEffect, useRef, FocusEvent } from "react";
+import { FileText, Printer } from "lucide-react";
 import type { useCouponScanning } from "../hooks/useCouponScanning";
 
 type Facade = ReturnType<typeof useCouponScanning>;
@@ -15,15 +15,39 @@ export function ScanningDetailsTable(props: Facade) {
     isScanning,
     rows,
     handleRemoveRow,
-    handleScanCoupon,
     totalQty,
     totalRecords,
     totalSam,
     totalValue,
     employeeCode,
+    dated,
   } = props;
 
   const scannerDisabled = isScanning || !employeeCode.trim();
+
+  const handleInputBlur = (e: FocusEvent<HTMLInputElement>) => {
+    if (!employeeCode.trim() || !dated) return;
+
+    const target = e.relatedTarget as HTMLElement;
+    if (
+      target &&
+      (target.tagName === "INPUT" ||
+        target.tagName === "SELECT" ||
+        target.tagName === "BUTTON" ||
+        target.tagName === "TEXTAREA" ||
+        target.tagName === "A" ||
+        target.getAttribute("tabIndex") !== null ||
+        target.closest("[role='button']") ||
+        target.closest(".radix-popover-content") ||
+        target.closest("[data-slot='popover-content']"))
+    ) {
+      return;
+    }
+
+    setTimeout(() => {
+      e.target.focus();
+    }, 10);
+  };
 
   // Auto-scroll the table to the bottom as rows fill in, so the row a
   // just-scanned coupon landed in stays in view during a fast scan burst.
@@ -48,9 +72,20 @@ export function ScanningDetailsTable(props: Facade) {
             Scanning Details
           </h2>
         </div>
-        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
-          Rate Section
-        </span>
+        <div className="flex items-center gap-2 no-print">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            disabled={rows.filter((row) => row.barCode && row.scanned).length === 0}
+            className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-slate-700 disabled:opacity-50 py-1 px-2.5 rounded-lg font-bold transition-all shadow-sm cursor-pointer text-[10px] flex items-center justify-center gap-1.5"
+          >
+            <Printer className="w-3 h-3 text-[#4f46e5]" />
+            <span>Print Scanned</span>
+          </button>
+          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
+            Rate Section
+          </span>
+        </div>
       </div>
 
       {/* Barcode scanner field — focus here, then scan; each scan appends a fetched row below */}
@@ -59,6 +94,7 @@ export function ScanningDetailsTable(props: Facade) {
           Scanner Input
         </span>
         <input
+          id="scanner-input"
           type="text"
           autoComplete="off"
           placeholder={
@@ -69,6 +105,7 @@ export function ScanningDetailsTable(props: Facade) {
           value={scannerInput}
           onChange={(e) => setScannerInput(e.target.value)}
           onKeyDown={handleScannerKeyDown}
+          onBlur={handleInputBlur}
           disabled={scannerDisabled}
           className="w-full px-3 py-1 rounded-lg border border-indigo-200 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5] transition-all bg-indigo-50/30 disabled:opacity-60 disabled:cursor-not-allowed"
         />
@@ -281,23 +318,7 @@ export function ScanningDetailsTable(props: Facade) {
         </table>
       </div>
 
-      {/* Scan action — commits every fetched (pending) coupon in the table above */}
-      {rows.some((row) => row.barCode && !row.scanned) && (
-        <div className="flex justify-end">
-          <button
-            type="button"
-            onClick={handleScanCoupon}
-            disabled={isScanning}
-            className="bg-[#4f46e5] hover:bg-[#4338ca] text-white font-bold py-1.5 px-4 rounded-lg text-xs shadow-sm transition-all flex items-center justify-center gap-1 cursor-pointer hover:shadow-md active:scale-[0.98] disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            <span>
-              🔍 Scan{" "}
-              {rows.filter((row) => row.barCode && !row.scanned).length}{" "}
-              Coupon(s)
-            </span>
-          </button>
-        </div>
-      )}
+
 
       {/* Footer Summary Container */}
       <div className="flex flex-wrap items-center justify-start sm:justify-end gap-x-6 gap-y-2 bg-slate-50 border border-slate-200/60 rounded-xl px-4 py-2 mt-2">

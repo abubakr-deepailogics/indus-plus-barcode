@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { Calendar as CalendarIcon, Cpu } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import {
@@ -13,6 +14,39 @@ import type { Worker, OperationSuggestion } from "../types";
 import type { useCouponScanning } from "../hooks/useCouponScanning";
 
 type Facade = ReturnType<typeof useCouponScanning>;
+
+function parseDateString(str: string): Date | null {
+  const trimmed = str.trim();
+  const regex = /^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/;
+  const match = trimmed.match(regex);
+  if (!match) return null;
+
+  const day = parseInt(match[1], 10);
+  const month = parseInt(match[2], 10) - 1; // 0-indexed month
+  const year = parseInt(match[3], 10);
+
+  const date = new Date(year, month, day);
+  if (
+    date.getDate() === day &&
+    date.getMonth() === month &&
+    date.getFullYear() === year
+  ) {
+    return date;
+  }
+  return null;
+}
+
+function isValidSelectedDate(date: Date): boolean {
+  if (date.getDay() === 0) return false; // Sunday
+  
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const comp = new Date(date);
+  comp.setHours(0, 0, 0, 0);
+  if (comp > today) return false; // Future
+  
+  return true;
+}
 
 export function InformationPanel(props: Facade) {
   const {
@@ -31,30 +65,58 @@ export function InformationPanel(props: Facade) {
     scanBy,
     alreadyDailyScan,
     alreadyMonthlyScan,
-    aniNo,
-    setAniNo,
-    sortOrder,
-    setSortOrder,
     scanCouponCode,
     setScanCouponCode,
     workOrder,
     setWorkOrder,
-    setFromCut,
-    setToCut,
     fromCut,
+    setFromCut,
     toCut,
+    setToCut,
+    bundleNo,
+    setBundleNo,
     opNo,
     setOpNo,
     isScanning,
     fetchWorkerSuggestions,
     fetchWorkOrderSuggestions,
+    fetchBundleSuggestions,
     fetchCutSuggestions,
     fetchOpSuggestions,
     handleSelectWorker,
     handleEmployeeCodeKeyDown,
-    handleFetchInfo,
+    handleFetchAndScan,
     clearForm,
   } = props;
+
+  const [prevDated, setPrevDated] = useState(dated);
+  const [typedValue, setTypedValue] = useState<string | null>(null);
+
+  if (dated !== prevDated) {
+    setPrevDated(dated);
+    let matches = false;
+    if (typedValue !== null) {
+      const parsed = parseDateString(typedValue);
+      const parsedIso = parsed ? format(parsed, "yyyy-MM-dd") : "";
+      if (parsedIso === dated) {
+        matches = true;
+      }
+    }
+    if (!matches) {
+      setTypedValue(null);
+    }
+  }
+
+  const displayValue = typedValue !== null
+    ? typedValue
+    : (dated ? format(new Date(dated), "dd-MM-yyyy") : "");
+
+  const isInvalid = useMemo(() => {
+    if (!displayValue.trim()) return false;
+    const parsed = parseDateString(displayValue);
+    if (!parsed) return true;
+    return !isValidSelectedDate(parsed);
+  }, [displayValue]);
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-stretch">
@@ -150,38 +212,58 @@ export function InformationPanel(props: Facade) {
               <span className="font-bold text-[#475569] text-[10px] uppercase">
                 Dated
               </span>
-              <Popover>
-                <PopoverTrigger className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-[#0f172a] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white w-full text-left flex items-center justify-between cursor-pointer h-[26px]">
-                  <span>
-                    {dated
-                      ? format(new Date(dated), "yyyy-MM-dd")
-                      : "Select date"}
-                  </span>
-                  <CalendarIcon className="w-3.5 h-3.5 text-slate-400" />
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0 bg-white" align="start">
-                  <Calendar
-                    mode="single"
-                    captionLayout="dropdown"
-                    selected={dated ? new Date(dated) : undefined}
-                    onSelect={(date) => {
-                      if (date) {
-                        setDated(format(date, "yyyy-MM-dd"));
-                      } else {
-                        setDated("");
-                      }
-                    }}
-                    disabled={(date) => {
-                      if (date.getDay() === 0) return true;
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      const comp = new Date(date);
-                      comp.setHours(0, 0, 0, 0);
-                      return comp > today;
-                    }}
-                  />
-                </PopoverContent>
-              </Popover>
+              <div className="relative flex items-center w-full">
+                <input
+                  type="text"
+                  placeholder="DD-MM-YYYY"
+                  value={displayValue}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setTypedValue(val);
+                    if (!val.trim()) {
+                      setDated("");
+                      return;
+                    }
+                    const parsed = parseDateString(val);
+                    if (parsed && isValidSelectedDate(parsed)) {
+                      setDated(format(parsed, "yyyy-MM-dd"));
+                    } else {
+                      setDated("");
+                    }
+                  }}
+                  aria-invalid={isInvalid}
+                  className="w-full pl-3 pr-8 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] aria-invalid:border-red-500 aria-invalid:ring-red-500/10 transition-all bg-white h-[26px]"
+                />
+                <Popover>
+                  <PopoverTrigger className="absolute right-2 p-1 hover:bg-slate-100 rounded-md cursor-pointer flex items-center justify-center">
+                    <CalendarIcon className="w-3.5 h-3.5 text-slate-400" />
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-white" align="start">
+                    <Calendar
+                      mode="single"
+                      captionLayout="dropdown"
+                      selected={dated ? new Date(dated) : undefined}
+                      onSelect={(date) => {
+                        if (date) {
+                          setDated(format(date, "yyyy-MM-dd"));
+                          setTypedValue(null);
+                        } else {
+                          setDated("");
+                          setTypedValue(null);
+                        }
+                      }}
+                      disabled={(date) => {
+                        if (date.getDay() === 0) return true;
+                        const today = new Date();
+                        today.setHours(0, 0, 0, 0);
+                        const comp = new Date(date);
+                        comp.setHours(0, 0, 0, 0);
+                        return comp > today;
+                      }}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
 
             {/* Shift */}
@@ -269,40 +351,12 @@ export function InformationPanel(props: Facade) {
                 className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-500 bg-slate-50 focus:outline-none cursor-default"
               />
             </label>
-
-            {/* Ani No. & Sort Order (combined in one column slot) */}
-            <div className="grid grid-cols-2 gap-2">
-              <label className="flex flex-col gap-0.5">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">
-                  Ani No.
-                </span>
-                <input
-                  type="text"
-                  placeholder="Enter ANI no."
-                  value={aniNo}
-                  onChange={(e) => setAniNo(e.target.value)}
-                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white w-full"
-                />
-              </label>
-              <label className="flex flex-col gap-0.5">
-                <span className="font-bold text-[#475569] text-[10px] uppercase">
-                  Sort Order
-                </span>
-                <input
-                  type="text"
-                  placeholder="Enter sort order"
-                  value={sortOrder}
-                  onChange={(e) => setSortOrder(e.target.value)}
-                  className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white w-full"
-                />
-              </label>
-            </div>
           </div>
 
           {/* Row 4 */}
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             {/* Coupon Code */}
-            <div className="flex flex-col gap-0.5 md:col-span-3">
+            <div className="flex flex-col gap-0.5 md:col-span-2">
               <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
                 Coupon Code
               </span>
@@ -330,6 +384,7 @@ export function InformationPanel(props: Facade) {
                   setWorkOrder(wo);
                   setFromCut("");
                   setToCut("");
+                  setBundleNo("");
                   setOpNo("");
                 }}
                 fetchSuggestions={fetchWorkOrderSuggestions}
@@ -340,8 +395,8 @@ export function InformationPanel(props: Facade) {
               />
             </div>
 
-            {/* From Cut & To Cut (grouped side-by-side in one md-col-span-3 slot) */}
-            <div className="grid grid-cols-2 gap-2 md:col-span-3">
+            {/* From Cut & To Cut (grouped side-by-side in one md-col-span-2 slot) */}
+            <div className="grid grid-cols-2 gap-2 md:col-span-2">
               <div className="flex flex-col gap-0.5 relative">
                 <span
                   className={`font-bold text-[10px] uppercase transition-colors ${!workOrder.trim() ? "text-slate-400" : "text-[#4f46e5]"}`}
@@ -391,6 +446,31 @@ export function InformationPanel(props: Facade) {
               </div>
             </div>
 
+            {/* Bundle No */}
+            <div className="flex flex-col gap-0.5 relative md:col-span-2">
+              <span
+                className={`font-bold text-[10px] uppercase transition-colors ${!workOrder.trim() ? "text-slate-400" : "text-[#4f46e5]"}`}
+              >
+                Bundle No
+              </span>
+              <Autocomplete<string>
+                value={bundleNo}
+                onChange={setBundleNo}
+                onSelect={setBundleNo}
+                fetchSuggestions={fetchBundleSuggestions}
+                disabled={!workOrder.trim()}
+                renderSuggestion={(item) => <span>{item}</span>}
+                getSuggestionValue={(item) => item}
+                minChars={0}
+                placeholder="e.g. 33550001"
+                inputClassName={`w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold focus:outline-none transition-all ${
+                  !workOrder.trim()
+                    ? "bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200"
+                    : "bg-white text-slate-800 focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
+                }`}
+              />
+            </div>
+
             {/* Operation No */}
             <div className="flex flex-col gap-0.5 relative md:col-span-2">
               <span
@@ -429,11 +509,11 @@ export function InformationPanel(props: Facade) {
               <div className="flex gap-2">
                 <button
                   type="button"
-                  onClick={() => handleFetchInfo()}
+                  onClick={() => handleFetchAndScan()}
                   disabled={isScanning}
                   className="flex-1 bg-[#4f46e5] hover:bg-[#4338ca] text-white font-bold py-1 rounded-lg text-xs shadow-sm transition-all flex items-center justify-center gap-1 cursor-pointer hover:shadow-md active:scale-[0.98] border border-transparent h-[26px] whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
                 >
-                  <span>📋 Fetch Info</span>
+                  <span>🔍 Scan</span>
                 </button>
                 <button
                   type="button"

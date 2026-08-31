@@ -1,18 +1,11 @@
-"use client";
+import { CouponScanningDashboard } from "@/features/coupon-scanning/components/CouponScanningDashboard";
+import type { Metadata } from "next";
 
-import { useCouponScanning } from "@/features/coupon-scanning/hooks/useCouponScanning";
-import { InformationPanel } from "@/features/coupon-scanning/components/InformationPanel";
-import { ScanningDetailsTable } from "@/features/coupon-scanning/components/ScanningDetailsTable";
-import { ScanModals } from "@/features/coupon-scanning/components/ScanModals";
+export const metadata: Metadata = {
+  title: "Coupon Scanning",
+  description: "Worker daily coupon ticket scanning panel",
+};
 
 export default function CouponScanningPage() {
-  const couponScanning = useCouponScanning();
-
-  return (
-    <div className="flex flex-col gap-6 w-full text-xs text-[#334155] animate-fade-in pb-16 px-4 max-w-350 mx-auto">
-      <InformationPanel {...couponScanning} />
-      <ScanningDetailsTable {...couponScanning} />
-      <ScanModals {...couponScanning} />
-    </div>
-  );
+  return <CouponScanningDashboard />;
 }

@@ -26,26 +26,26 @@ export function useCouponScanning() {
   const [alreadyDailyScan, setAlreadyDailyScan] = useState("");
   const [alreadyMonthlyScan, setAlreadyMonthlyScan] = useState("");
   const [lineId, setLineId] = useState("");
-  const [scanBy, setScanBy] = useState("");
+  const [scanBy, setScanBy] = useState(() => {
+    return user?.displayName || user?.email?.split("@")[0] || "";
+  });
 
-  useEffect(() => {
-    if (user) {
-      const name = user.displayName || user.email?.split("@")[0] || "";
-      setScanBy(name);
-    }
-  }, [user]);
+  const [prevUser, setPrevUser] = useState(user);
+  if (user !== prevUser) {
+    setPrevUser(user);
+    setScanBy(user?.displayName || user?.email?.split("@")[0] || "");
+  }
 
   const [dated, setDated] = useState("");
   const [employeeName, setEmployeeName] = useState("");
   const [section, setSection] = useState("");
   const [shift, setShift] = useState("");
-  const [aniNo, setAniNo] = useState("");
-  const [sortOrder, setSortOrder] = useState("");
 
   // Coupon verification headers
   const [workOrder, setWorkOrder] = useState("");
   const [fromCut, setFromCut] = useState("");
   const [toCut, setToCut] = useState("");
+  const [bundleNo, setBundleNo] = useState("");
   const [opNo, setOpNo] = useState("");
   const [scanCouponCode, setScanCouponCode] = useState("");
   const [scannerInput, setScannerInput] = useState("");
@@ -53,7 +53,6 @@ export function useCouponScanning() {
 
   // Scanning state and modals
   const [isScanning, setIsScanning] = useState(false);
-  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [showSuccessModal, setShowSuccessModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [showErrorModal, setShowErrorModal] = useState(false);
@@ -124,93 +123,11 @@ export function useCouponScanning() {
     [workOrder],
   );
 
-  // Step 1: "Fetch Info" — looks up matching coupons and lists them in the
-  // table below. Does NOT mark anything as scanned in the database yet.
-  // `codeOverride` lets the scanner-gun field trigger a fetch without first
-  // round-tripping through the scanCouponCode state.
-  const handleFetchInfo = async (codeOverride?: string) => {
+  // Fetches matching coupons and immediately marks them as scanned in the database.
+  const handleFetchAndScan = async () => {
     setScanError("");
-    const couponCode = codeOverride ?? scanCouponCode;
-
-    if (!couponCode.trim() && !workOrder) {
-      raiseError("Please select a Work Order or enter a Coupon Code first!");
-      return;
-    }
-
-    setIsScanning(true);
-
-    try {
-      const result = await couponScanningService.fetchCouponInfo({
-        couponCode,
-        workOrder,
-        opNo,
-        fromCut,
-        toCut,
-      });
-
-      if (!result.ok) {
-        setIsScanning(false);
-        setErrorMessage(result.error);
-        setShowErrorModal(true);
-        return;
-      }
-
-      const existingCodes = new Set(
-        rows.filter((row) => row.barCode).map((row) => row.barCode),
-      );
-      const duplicates = result.items.filter(
-        (item) => item.CouponCode && existingCodes.has(item.CouponCode),
-      ).length;
-
-      setRows((prev) => {
-        const updatedRows = [...prev];
-        result.items.forEach((item) => {
-          const code = item.CouponCode || "";
-          // Skip coupons already present in the table (already fetched/scanned).
-          if (code && updatedRows.some((row) => row.barCode === code)) {
-            return;
-          }
-          // Find the first empty row in our table grid (where row.barCode is empty)
-          const targetIndex = updatedRows.findIndex((row) => !row.barCode);
-          const newRowData = { ...couponItemToRow(item), scanned: false };
-
-          if (targetIndex !== -1) {
-            updatedRows[targetIndex] = {
-              ...updatedRows[targetIndex],
-              ...newRowData,
-            };
-          } else {
-            // Append a new row dynamically!
-            updatedRows.push({
-              index: updatedRows.length + 1,
-              ...newRowData,
-            });
-          }
-        });
-        return updatedRows;
-      });
-
-      setIsScanning(false);
-      setScanCouponCode("");
-      if (duplicates > 0) {
-        setScanError(
-          `${duplicates} coupon(s) already in the table were skipped as duplicates.`,
-        );
-      }
-    } catch (err) {
-      console.error("Coupon lookup error:", err);
-      setIsScanning(false);
-      setErrorMessage(
-        getErrorMessage(err, "An unexpected error occurred while fetching."),
-      );
-      setShowErrorModal(true);
-    }
-  };
-
-  // Step 2: "Scan" — takes every fetched-but-unscanned coupon currently in
-  // the table and marks it as scanned in the database.
-  const handleScanCoupon = () => {
-    setScanError("");
+    setSuccessMessage("");
+    setErrorMessage("");
 
     if (!employeeCode.trim()) {
       raiseError("Please enter or select an Employee Code first!");
@@ -220,70 +137,143 @@ export function useCouponScanning() {
       raiseError("Please enter Scanner Name in Scan By first!");
       return;
     }
-    if (!rows.some((row) => row.barCode && !row.scanned)) {
-      raiseError("Please fetch coupon info first before scanning!");
+
+    if (!scanCouponCode.trim() && !workOrder) {
+      raiseError("Please select a Work Order or enter a Coupon Code first!");
       return;
     }
 
-    setShowConfirmModal(true);
-  };
-
-  const executeScanCoupon = async () => {
-    setShowConfirmModal(false);
     setIsScanning(true);
-    setScanError("");
-
-    const pending = rows.filter((row) => row.barCode && !row.scanned);
 
     try {
-      let scannedCount = 0;
-      for (const row of pending) {
-        const result = await couponScanningService.scanCoupon({
-          barcode: row.barCode,
-          employeeCode,
-          scanBy,
-          scanDate: dated,
+      // 1. Fetch matching coupons
+      const result = await couponScanningService.fetchCouponInfo({
+        couponCode: scanCouponCode,
+        workOrder,
+        opNo,
+        fromCut,
+        toCut,
+        bundleNo,
+      });
+
+      if (!result.ok) {
+        setIsScanning(false);
+        setErrorMessage(result.error);
+        setShowErrorModal(true);
+        return;
+      }
+
+      if (result.items.length === 0) {
+        setIsScanning(false);
+        setErrorMessage("No matching coupons found for the entered criteria.");
+        setShowErrorModal(true);
+        return;
+      }
+
+      const barcodesToScan = result.items
+        .map((item) => item.CouponCode || "")
+        .filter((code) => code.trim().length > 0);
+
+      if (barcodesToScan.length === 0) {
+        setIsScanning(false);
+        setErrorMessage("No valid coupon codes found.");
+        setShowErrorModal(true);
+        return;
+      }
+
+      // 2. Scan the fetched barcodes immediately in a batch
+      const scanResult = await couponScanningService.scanCouponsBatch({
+        barcodes: barcodesToScan,
+        employeeCode,
+        scanBy,
+        scanDate: dated,
+      });
+
+      if (!scanResult.ok) {
+        setIsScanning(false);
+        setErrorMessage(scanResult.error);
+        setShowErrorModal(true);
+        return;
+      }
+
+      // 3. Update the local rows state with scanned items
+      const scannedMap = new Map(
+        scanResult.scanned.map((item) => [item.CouponCode, item]),
+      );
+
+      setRows((prev) => {
+        const updatedRows = [...prev];
+        result.items.forEach((item) => {
+          const code = item.CouponCode || "";
+          const scanItem = scannedMap.get(code);
+
+          const isScanned = !!scanItem;
+          const newRowData = {
+            ...couponItemToRow(item),
+            scanned: isScanned,
+            scanDate: scanItem?.ScannedAt
+              ? new Date(scanItem.ScannedAt).toLocaleDateString()
+              : dated || new Date().toLocaleDateString(),
+          };
+
+          const existingIdx = updatedRows.findIndex((row) => row.barCode === code);
+          if (existingIdx !== -1) {
+            updatedRows[existingIdx] = {
+              ...updatedRows[existingIdx],
+              ...newRowData,
+            };
+          } else {
+            const emptyIdx = updatedRows.findIndex((row) => !row.barCode);
+            if (emptyIdx !== -1) {
+              updatedRows[emptyIdx] = {
+                ...updatedRows[emptyIdx],
+                ...newRowData,
+              };
+            } else {
+              updatedRows.push({
+                index: updatedRows.length + 1,
+                ...newRowData,
+              });
+            }
+          }
         });
+        return updatedRows;
+      });
 
-        if (!result.ok) {
-          console.error(`Failed to scan ${row.barCode}:`, result.error);
-          continue;
-        }
-
-        scannedCount += 1;
-        const item = result.item;
-        setRows((prev) =>
-          prev.map((r) =>
-            r.index === row.index
-              ? {
-                  ...r,
-                  scanned: true,
-                  scanDate: item.ScannedAt
-                    ? new Date(item.ScannedAt).toLocaleDateString()
-                    : dated || new Date().toLocaleDateString(),
-                }
-              : r,
-          ),
+      // 4. Update counts
+      const newlyScannedCount = scanResult.scanned.length;
+      if (newlyScannedCount > 0) {
+        setAlreadyDailyScan((prev) =>
+          String((parseInt(prev, 10) || 0) + newlyScannedCount),
+        );
+        setAlreadyMonthlyScan((prev) =>
+          String((parseInt(prev, 10) || 0) + newlyScannedCount),
         );
       }
 
-      setAlreadyDailyScan((prev) =>
-        String((parseInt(prev) || 0) + scannedCount),
-      );
-      setAlreadyMonthlyScan((prev) =>
-        String((parseInt(prev) || 0) + scannedCount),
-      );
-
       setIsScanning(false);
+      setScanCouponCode("");
+
+      if (scanResult.failed.length > 0) {
+        setScanError(
+          `${scanResult.failed.length} coupon(s) could not be scanned (already scanned or not found): ${scanResult.failed.join(", ")}`,
+        );
+      } else {
+        setScanError("");
+      }
+
       setSuccessMessage(
-        `Coupon(s) scanned successfully! Matched ${scannedCount} operation(s).`,
+        `Successfully scanned ${newlyScannedCount} coupon(s)!` +
+          (scanResult.failed.length > 0
+            ? ` (${scanResult.failed.length} skipped/failed)`
+            : ""),
       );
       setShowSuccessModal(true);
     } catch (err) {
-      console.error("Coupon scan error:", err);
+      console.error("Combined search and scan error:", err);
       setIsScanning(false);
       setErrorMessage(
-        getErrorMessage(err, "An unexpected error occurred while scanning."),
+        getErrorMessage(err, "An unexpected error occurred during search and scan."),
       );
       setShowErrorModal(true);
     }
@@ -302,13 +292,12 @@ export function useCouponScanning() {
     setEmployeeName("");
     setSection("");
     setShift("");
-    setAniNo("");
-    setSortOrder("");
 
     // Clear Coupon verification headers
     setWorkOrder("");
     setFromCut("");
     setToCut("");
+    setBundleNo("");
     setOpNo("");
     setScanCouponCode("");
     setScanError("");
@@ -655,10 +644,6 @@ export function useCouponScanning() {
     section,
     shift,
     setShift,
-    aniNo,
-    setAniNo,
-    sortOrder,
-    setSortOrder,
 
     // Coupon verification headers
     workOrder,
@@ -667,6 +652,8 @@ export function useCouponScanning() {
     setFromCut,
     toCut,
     setToCut,
+    bundleNo,
+    setBundleNo,
     opNo,
     setOpNo,
     scanCouponCode,
@@ -677,8 +664,6 @@ export function useCouponScanning() {
 
     // Scanning / modal state
     isScanning,
-    showConfirmModal,
-    setShowConfirmModal,
     showSuccessModal,
     setShowSuccessModal,
     successMessage,
@@ -701,9 +686,7 @@ export function useCouponScanning() {
     fetchCutSuggestions,
 
     // Handlers
-    handleFetchInfo,
-    handleScanCoupon,
-    executeScanCoupon,
+    handleFetchAndScan,
     clearForm,
     handleScannerKeyDown,
     handleRemoveRow,
