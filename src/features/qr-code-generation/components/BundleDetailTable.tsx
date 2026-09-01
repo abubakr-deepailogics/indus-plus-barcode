@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useMemo, useState } from "react";
-import { HelpCircle } from "lucide-react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 import type { BundleDetailRow } from "../types";
 import { getBundleDisplayNos } from "../services/bundle-display";
 
@@ -26,7 +26,35 @@ export function BundleDetailTable({
 }: BundleDetailTableProps) {
   const [isCutWise, setIsCutWise] = useState(false);
   const [isSizeWise, setIsSizeWise] = useState(false);
+  const [openDropdown, setOpenDropdown] = useState<"cut" | "size" | null>(null);
+  const cutDropdownRef = useRef<HTMLDivElement>(null);
+  const sizeDropdownRef = useRef<HTMLDivElement>(null);
   const bundleDisplayNos = useMemo(() => getBundleDisplayNos(bundles), [bundles]);
+
+  const uniqueCuts = useMemo(
+    () => Array.from(new Set(bundles.map((b) => b.cutNo))),
+    [bundles],
+  );
+  const uniqueSizes = useMemo(
+    () => Array.from(new Set(bundles.map((b) => b.size))),
+    [bundles],
+  );
+
+  useEffect(() => {
+    if (!openDropdown) return;
+    const activeRef = openDropdown === "cut" ? cutDropdownRef : sizeDropdownRef;
+    function handleClickOutside(event: MouseEvent) {
+      if (activeRef.current && !activeRef.current.contains(event.target as Node)) {
+        setOpenDropdown(null);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [openDropdown]);
+
+  function toggleGroupSelection(matching: BundleDetailRow[], checked: boolean) {
+    matching.forEach((b) => onBundleSelChange(b.id, checked));
+  }
 
   return (
     <div className="lg:col-span-6 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
@@ -45,7 +73,7 @@ export function BundleDetailTable({
               className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
             />
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="relative flex items-center gap-1.5" ref={cutDropdownRef}>
             <span className="text-[11px] font-bold text-[#64748b]">
               Cut Wise selection
             </span>
@@ -58,8 +86,42 @@ export function BundleDetailTable({
               }}
               className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
             />
+            <button
+              type="button"
+              onClick={() => setOpenDropdown((prev) => (prev === "cut" ? null : "cut"))}
+              className="text-[#64748b] hover:text-[#4f46e5] cursor-pointer"
+              aria-label="Select bundles by Cut #"
+            >
+              <ChevronDown className="w-3 h-3" />
+            </button>
+            {openDropdown === "cut" && (
+              <div className="absolute right-0 top-full mt-1 min-w-[130px] max-h-56 overflow-y-auto bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 p-1.5 flex flex-col gap-0.5">
+                {uniqueCuts.length === 0 ? (
+                  <span className="px-2.5 py-1.5 text-[11px] text-slate-400">No cuts</span>
+                ) : (
+                  uniqueCuts.map((cutNo) => {
+                    const matching = bundles.filter((b) => b.cutNo === cutNo);
+                    const checked = matching.every((b) => b.sel);
+                    return (
+                      <label
+                        key={cutNo}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer font-semibold text-slate-600 text-[11px]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => toggleGroupSelection(matching, e.target.checked)}
+                          className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
+                        />
+                        <span>Cut {cutNo}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
-          <div className="flex items-center gap-1.5">
+          <div className="relative flex items-center gap-1.5" ref={sizeDropdownRef}>
             <span className="text-[11px] font-bold text-[#64748b]">
               Size Wise selection
             </span>
@@ -72,6 +134,40 @@ export function BundleDetailTable({
               }}
               className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
             />
+            <button
+              type="button"
+              onClick={() => setOpenDropdown((prev) => (prev === "size" ? null : "size"))}
+              className="text-[#64748b] hover:text-[#4f46e5] cursor-pointer"
+              aria-label="Select bundles by Size #"
+            >
+              <ChevronDown className="w-3 h-3" />
+            </button>
+            {openDropdown === "size" && (
+              <div className="absolute right-0 top-full mt-1 min-w-[130px] max-h-56 overflow-y-auto bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 p-1.5 flex flex-col gap-0.5">
+                {uniqueSizes.length === 0 ? (
+                  <span className="px-2.5 py-1.5 text-[11px] text-slate-400">No sizes</span>
+                ) : (
+                  uniqueSizes.map((size) => {
+                    const matching = bundles.filter((b) => b.size === size);
+                    const checked = matching.every((b) => b.sel);
+                    return (
+                      <label
+                        key={size}
+                        className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg hover:bg-slate-50 cursor-pointer font-semibold text-slate-600 text-[11px]"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={checked}
+                          onChange={(e) => toggleGroupSelection(matching, e.target.checked)}
+                          className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
+                        />
+                        <span>Size {size}</span>
+                      </label>
+                    );
+                  })
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -143,17 +239,15 @@ export function BundleDetailTable({
                     onChange={(e) => {
                       const isChecked = e.target.checked;
                       if (isCutWise) {
-                        bundles.forEach((b) => {
-                          if (b.cutNo === bd.cutNo) {
-                            onBundleSelChange(b.id, isChecked);
-                          }
-                        });
+                        toggleGroupSelection(
+                          bundles.filter((b) => b.cutNo === bd.cutNo),
+                          isChecked,
+                        );
                       } else if (isSizeWise) {
-                        bundles.forEach((b) => {
-                          if (b.size === bd.size) {
-                            onBundleSelChange(b.id, isChecked);
-                          }
-                        });
+                        toggleGroupSelection(
+                          bundles.filter((b) => b.size === bd.size),
+                          isChecked,
+                        );
                       } else {
                         onBundleSelChange(bd.id, isChecked);
                       }
