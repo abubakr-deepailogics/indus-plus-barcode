@@ -581,7 +581,7 @@ export default function OpenOrderPage() {
     const delayDebounceFn = setTimeout(async () => {
       try {
         const response = await fetch(
-          `/api/open-order/suggestions?query=${encodeURIComponent(searchQuery)}`,
+          `/api/style-bulletin/suggestions?query=${encodeURIComponent(searchQuery)}`,
         );
         if (response.ok) {
           const data = await response.json();

@@ -1,4 +1,9 @@
-import { getPool, sql, cutDetailByFilter, styleBulletinByFilter } from "@/lib/db";
+import {
+  getPool,
+  sql,
+  cutDetailByFilter,
+  styleBulletinByFilter,
+} from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -17,17 +22,20 @@ export async function GET(request: Request) {
   try {
     const pool = await getPool("indusPlus");
 
-    // Fetch Cut Detail
-    const cutDetailResult = await pool
-      .request()
-      .input("wo", sql.NVarChar, workOrder)
-      .query(cutDetailByFilter("[Work Order #] = @wo"));
-
-    // Fetch Style Bulletin (Operations)
-    const styleBulletinResult = await pool
-      .request()
-      .input("wo", sql.NVarChar, workOrder)
-      .query(styleBulletinByFilter("[Order No] = @wo"));
+    const [styleBulletinResult, cutDetailResult] = await Promise.all([
+      pool
+        .request()
+        .input("wo", sql.NVarChar, workOrder)
+        .query(styleBulletinByFilter("[Order No] = @wo")),
+      pool
+        .request()
+        .input("wo", sql.NVarChar, workOrder)
+        .query(cutDetailByFilter("[Work Order #] = @wo"))
+        .catch((err) => {
+          console.error("Cut Detail lookup failed:", err);
+          return { recordset: [] };
+        }),
+    ]);
 
     // Fetch Style Bulletin Header (Metadata) — this app's own write data,
     // lives on pitSystem (see db/migrations/010_order_style_bulletin_header.sql),

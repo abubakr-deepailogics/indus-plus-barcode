@@ -135,8 +135,8 @@ export function styleBulletinByFilter(
         sb.Section,
         [Operation Sequeance] AS Operation_Sequence,
         [Machine Type] AS Machine_Type,
-        [Piece Rate] AS Piece_Rate,
-        [Smv/Sam] AS Smv_Sam,
+        TRY_CAST([Piece Rate] AS FLOAT) AS Piece_Rate,
+        TRY_CAST([Smv/Sam] AS FLOAT) AS Smv_Sam,
         [First Operation Section Wise] AS First_Operation_Section_Wise,
         [Last Operation Section Wise] AS Last_Operation_Section_Wise,
         op.SkillLevel
