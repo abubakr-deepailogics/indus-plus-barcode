@@ -323,6 +323,7 @@ export default function OpenOrderPage() {
   const [hasSearched, setHasSearched] = useState(false);
 
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -668,20 +669,22 @@ export default function OpenOrderPage() {
   useEffect(() => {
     if (searchQuery.trim().length < 2) {
       setSuggestions([]);
+      setSuggestionsLoading(false);
       return;
     }
 
+    setSuggestionsLoading(true);
     const delayDebounceFn = setTimeout(async () => {
       try {
         const response = await fetch(
           `/api/open-order/suggestions?query=${encodeURIComponent(searchQuery)}`,
         );
-        if (response.ok) {
-          const data = await response.json();
-          setSuggestions(data || []);
-        }
+        setSuggestions(response.ok ? (await response.json()) || [] : []);
       } catch (err) {
         console.error("Suggestions fetch error:", err);
+        setSuggestions([]);
+      } finally {
+        setSuggestionsLoading(false);
       }
     }, 200); // Shorter debounce for suggestion lists
 
@@ -749,7 +752,19 @@ export default function OpenOrderPage() {
       setIsWoFocused(false);
       setActiveIndex(-1);
     } else if (e.key === "Enter") {
-      setActiveSearchQuery(searchQuery);
+      const trimmed = searchQuery.trim();
+      // Autocomplete-only: free text that doesn't match a real Work Order
+      // must not trigger a search (an empty field is still allowed through,
+      // to let the user clear the current results).
+      const match = trimmed
+        ? suggestions.find((s) => s.toLowerCase() === trimmed.toLowerCase())
+        : "";
+      if (trimmed && !match) {
+        return;
+      }
+      const nextQuery = match || trimmed;
+      setSearchQuery(nextQuery);
+      setActiveSearchQuery(nextQuery);
       setShowSuggestions(false);
       setIsWoFocused(false);
       setActiveIndex(-1);
@@ -965,30 +980,36 @@ export default function OpenOrderPage() {
                 />
               </div>
               {/* Autocomplete Suggestions Dropdown Overlay */}
-              {showSuggestions && suggestions.length > 0 && (
-                <div 
+              {showSuggestions && searchQuery.trim().length >= 2 && !suggestionsLoading && (
+                <div
                   ref={dropdownRef}
                   className="absolute left-0 right-0 top-full mt-1 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-[#f1f5f9] animate-fade-in"
                 >
-                  {suggestions.map((suggestion, idx) => (
-                    <button
-                      key={suggestion}
-                      type="button"
-                      onClick={() => {
-                        setSearchQuery(suggestion);
-                        setActiveSearchQuery(suggestion);
-                        setShowSuggestions(false);
-                        setIsWoFocused(false);
-                      }}
-                      className={`w-full text-left px-4 py-2 text-xs font-semibold transition-all cursor-pointer block ${
-                        idx === activeIndex
-                          ? "bg-indigo-50 text-[#4f46e5]"
-                          : "hover:bg-indigo-50/50 text-slate-700 hover:text-[#4f46e5]"
-                      }`}
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
+                  {suggestions.length === 0 ? (
+                    <div className="px-4 py-3 text-xs font-semibold text-slate-400 text-center">
+                      No results found
+                    </div>
+                  ) : (
+                    suggestions.map((suggestion, idx) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => {
+                          setSearchQuery(suggestion);
+                          setActiveSearchQuery(suggestion);
+                          setShowSuggestions(false);
+                          setIsWoFocused(false);
+                        }}
+                        className={`w-full text-left px-4 py-2 text-xs font-semibold transition-all cursor-pointer block ${
+                          idx === activeIndex
+                            ? "bg-indigo-50 text-[#4f46e5]"
+                            : "hover:bg-indigo-50/50 text-slate-700 hover:text-[#4f46e5]"
+                        }`}
+                      >
+                        {suggestion}
+                      </button>
+                    ))
+                  )}
                 </div>
               )}
             </div>

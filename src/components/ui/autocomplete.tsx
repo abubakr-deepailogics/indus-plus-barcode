@@ -158,26 +158,32 @@ export function Autocomplete<T>({
           <div className="h-3.5 w-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
         </div>
       )}
-      {showSuggestions && suggestions.length > 0 && (
-        <div 
+      {showSuggestions && !isLoading && value.trim().length >= minChars && (
+        <div
           ref={dropdownRef}
           className={`absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-[#e2e8f0] shadow-xl rounded-xl py-1 z-50 max-h-48 overflow-y-auto ${dropdownClassName}`}
         >
-          {suggestions.map((item, idx) => (
-            <button
-              key={idx}
-              type="button"
-              onClick={() => {
-                onSelect(item);
-                setShowSuggestions(false);
-              }}
-              className={`w-full text-left px-3 py-1.5 hover:bg-slate-50 transition-colors text-xs font-semibold text-slate-700 flex items-center justify-between border-b border-slate-50 last:border-0 cursor-pointer ${
-                idx === activeIndex ? "bg-indigo-50 text-indigo-700" : ""
-              }`}
-            >
-              {renderSuggestion(item)}
-            </button>
-          ))}
+          {suggestions.length === 0 ? (
+            <div className="px-3 py-2 text-xs font-semibold text-slate-400 text-center">
+              No results found
+            </div>
+          ) : (
+            suggestions.map((item, idx) => (
+              <button
+                key={idx}
+                type="button"
+                onClick={() => {
+                  onSelect(item);
+                  setShowSuggestions(false);
+                }}
+                className={`w-full text-left px-3 py-1.5 hover:bg-slate-50 transition-colors text-xs font-semibold text-slate-700 flex items-center justify-between border-b border-slate-50 last:border-0 cursor-pointer ${
+                  idx === activeIndex ? "bg-indigo-50 text-indigo-700" : ""
+                }`}
+              >
+                {renderSuggestion(item)}
+              </button>
+            ))
+          )}
         </div>
       )}
     </div>

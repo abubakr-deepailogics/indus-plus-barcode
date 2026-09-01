@@ -66,6 +66,7 @@ export default function ReworkCouponPage() {
 
   // Suggestion autocomplete inside dialog
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const suggestionsRef = useRef<HTMLDivElement>(null);
 
@@ -106,19 +107,21 @@ export default function ReworkCouponPage() {
   useEffect(() => {
     if (searchWorkOrder.trim().length < 2) {
       setSuggestions([]);
+      setSuggestionsLoading(false);
       return;
     }
+    setSuggestionsLoading(true);
     const fetchSuggestions = async () => {
       try {
         const res = await fetch(
           `/api/open-order/suggestions?query=${encodeURIComponent(searchWorkOrder)}`
         );
-        if (res.ok) {
-          const list = await res.json();
-          setSuggestions(list);
-        }
+        setSuggestions(res.ok ? (await res.json()) || [] : []);
       } catch (err) {
         console.error("Suggestions fetch error:", err);
+        setSuggestions([]);
+      } finally {
+        setSuggestionsLoading(false);
       }
     };
     const delayDebounce = setTimeout(fetchSuggestions, 350);
@@ -723,18 +726,24 @@ export default function ReworkCouponPage() {
                 placeholder="e.g. W/O-003355"
                 className="px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
               />
-              {showSuggestions && suggestions.length > 0 && (
+              {showSuggestions && searchWorkOrder.trim().length >= 2 && !suggestionsLoading && (
                 <div className="absolute left-0 right-0 top-[100%] mt-1 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
-                  {suggestions.map((suggestion) => (
-                    <button
-                      key={suggestion}
-                      type="button"
-                      onClick={() => handleSelectSuggestion(suggestion)}
-                      className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 font-semibold border-b border-[#f1f5f9] last:border-0 transition-colors cursor-pointer"
-                    >
-                      {suggestion}
-                    </button>
-                  ))}
+                  {suggestions.length === 0 ? (
+                    <div className="px-4 py-3 text-xs font-semibold text-slate-400 text-center">
+                      No results found
+                    </div>
+                  ) : (
+                    suggestions.map((suggestion) => (
+                      <button
+                        key={suggestion}
+                        type="button"
+                        onClick={() => handleSelectSuggestion(suggestion)}
+                        className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 font-semibold border-b border-[#f1f5f9] last:border-0 transition-colors cursor-pointer"
+                      >
+                        {suggestion}
+                      </button>
+                    ))
+                  )}
                 </div>
               )}
             </div>
