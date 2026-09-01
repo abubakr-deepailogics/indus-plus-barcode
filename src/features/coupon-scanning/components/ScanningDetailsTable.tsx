@@ -21,21 +21,24 @@ export function ScanningDetailsTable(props: Facade) {
     totalValue,
     employeeCode,
     dated,
+    isEmployeePresent,
+    checkingAttendance,
   } = props;
 
-  // Sequential flow: Employee Code -> Dated (InformationPanel) -> this
-  // scanner field. Both are required before a scan means anything (who
-  // scanned it, and when), so this field stays disabled until both are set.
-  // Dated can only ever be filled in after Employee Code already is (it's
-  // itself gated the same way, in InformationPanel), so the hand-off to
-  // this field is triggered from there — on the Dated input's blur, or an
-  // explicit calendar pick — not from a reactive effect here. An effect
-  // keyed on this "ready" boolean fires the instant a still-being-typed
-  // date happens to parse as valid, stealing focus out of the Dated field
-  // mid-keystroke; committing the hand-off only where Dated is actually
-  // *done* (not just momentarily valid) avoids that.
+  // Sequential flow: Employee Code -> Dated -> attendance check
+  // (InformationPanel) -> this scanner field. All three must hold before a
+  // scan means anything (who scanned it, when, and that they were actually
+  // present that day), so this field stays disabled until they do. Each
+  // step can only ever be reached after the one before it is already
+  // satisfied (they're gated the same way, in InformationPanel), so the
+  // hand-off to this field is triggered from there — on the Dated input's
+  // blur, or an explicit calendar pick — not from a reactive effect here.
+  // An effect keyed on this "ready" boolean fires the instant a
+  // still-being-typed date happens to parse as valid, stealing focus out
+  // of the Dated field mid-keystroke; committing the hand-off only where
+  // Dated is actually *done* (not just momentarily valid) avoids that.
   const isEmployeeCodeFilled = !!employeeCode.trim();
-  const isReadyToScan = isEmployeeCodeFilled && !!dated;
+  const isReadyToScan = isEmployeeCodeFilled && !!dated && isEmployeePresent === true;
   const scannerDisabled = isScanning || !isReadyToScan;
 
   const handleInputBlur = (e: FocusEvent<HTMLInputElement>) => {
@@ -115,7 +118,11 @@ export function ScanningDetailsTable(props: Facade) {
               ? "Select an Employee Code first"
               : !dated
                 ? "Enter a Date first"
-                : "Focus here and scan a coupon barcode…"
+                : checkingAttendance
+                  ? "Checking attendance…"
+                  : isEmployeePresent === false
+                    ? "Employee not present on this date"
+                    : "Focus here and scan a coupon barcode…"
           }
           value={scannerInput}
           onChange={(e) => setScannerInput(e.target.value)}

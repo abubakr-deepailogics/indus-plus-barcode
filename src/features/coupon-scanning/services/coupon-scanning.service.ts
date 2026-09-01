@@ -16,6 +16,22 @@ export function fetchWorkerByCode(code: string): Promise<Worker | null> {
   return getJson<Worker>(`/api/workers?code=${encodeURIComponent(code)}`);
 }
 
+// Was this employee present (per HRMS attendance) on this date? `date` is
+// the yyyy-MM-dd form already used for `dated` elsewhere in this feature.
+export async function checkAttendance(
+  employeeCode: string,
+  date: string,
+): Promise<{ ok: true; present: boolean } | { ok: false; error: string }> {
+  const response = await fetch(
+    `/api/workers/attendance?code=${encodeURIComponent(employeeCode)}&date=${encodeURIComponent(date)}`,
+  );
+  const data = await response.json();
+  if (!response.ok) {
+    return { ok: false, error: data.error || "Failed to check attendance." };
+  }
+  return { ok: true, present: !!data.present };
+}
+
 export function fetchWorkOrderSuggestions(query: string): Promise<string[]> {
   return getJson<string[]>(
     `/api/open-order/suggestions?query=${encodeURIComponent(query)}&only_generated=true`,

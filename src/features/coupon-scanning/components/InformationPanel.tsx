@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { useState, useMemo, useRef } from "react";
 import { Calendar as CalendarIcon, Cpu } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import {
@@ -60,6 +60,9 @@ export function InformationPanel(props: Facade) {
     shift,
     setShift,
     section,
+    isEmployeePresent,
+    checkingAttendance,
+    verifyAttendance,
     lineId,
     setLineId,
     scanBy,
@@ -124,8 +127,14 @@ export function InformationPanel(props: Facade) {
   // onChange above. Committing on every keystroke there (instead of just
   // on a final valid value) is what previously stole focus out from under
   // the user mid-type, the instant a partial date happened to parse valid.
-  const focusScannerIfReady = () => {
-    if (isEmployeeCodeFilled && dated) {
+  // Attendance is verified right here too — this is the one moment the
+  // Employee Code -> Dated -> Coupon Scanning chain completes, so it's the
+  // natural place to check and, if the employee is present, move on;
+  // verifyAttendance itself raises the blocking error if they're not.
+  const focusScannerIfReady = async () => {
+    if (!isEmployeeCodeFilled || !dated) return;
+    const present = await verifyAttendance();
+    if (present) {
       document.getElementById("scanner-input")?.focus();
     }
   };
@@ -136,6 +145,16 @@ export function InformationPanel(props: Facade) {
     if (!parsed) return true;
     return !isValidSelectedDate(parsed);
   }, [displayValue]);
+
+  // Closes the calendar popover imperatively once a date is picked — left
+  // uncontrolled otherwise (no `open`/`onOpenChange`) since only this one
+  // moment needs to force it shut. Shape must match Base UI's
+  // PopoverRootActions exactly (RefObject is invariant), even though only
+  // `close` is ever called here.
+  const datePopoverActionsRef = useRef<{
+    close: () => void;
+    unmount: () => void;
+  } | null>(null);
 
   return (
     <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-stretch">
@@ -261,7 +280,7 @@ export function InformationPanel(props: Facade) {
                       : "bg-white text-slate-800 border-[#e2e8f0] focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
                   }`}
                 />
-                <Popover>
+                <Popover actionsRef={datePopoverActionsRef}>
                   <PopoverTrigger
                     disabled={!isEmployeeCodeFilled}
                     className="absolute right-2 p-1 hover:bg-slate-100 rounded-md cursor-pointer flex items-center justify-center disabled:cursor-not-allowed disabled:hover:bg-transparent"
@@ -277,13 +296,24 @@ export function InformationPanel(props: Facade) {
                       selected={dated ? new Date(dated) : undefined}
                       onSelect={(date) => {
                         if (date) {
-                          setDated(format(date, "yyyy-MM-dd"));
+                          const iso = format(date, "yyyy-MM-dd");
+                          setDated(iso);
                           setTypedValue(null);
-                          // An explicit pick, not a keystroke — safe to hand
-                          // off focus immediately (isEmployeeCodeFilled is
-                          // already guaranteed true, since the trigger that
-                          // opens this calendar is disabled otherwise).
-                          document.getElementById("scanner-input")?.focus();
+                          // Picking a date is "done" — close the calendar
+                          // immediately rather than leaving it open.
+                          datePopoverActionsRef.current?.close();
+                          // An explicit pick, not a keystroke — safe to verify
+                          // and hand off focus right away (isEmployeeCodeFilled
+                          // is already guaranteed true, since the trigger that
+                          // opens this calendar is disabled otherwise). `iso`
+                          // is passed explicitly rather than relying on the
+                          // `dated` state, which won't reflect setDated above
+                          // until the next render.
+                          void verifyAttendance(iso).then((present) => {
+                            if (present) {
+                              document.getElementById("scanner-input")?.focus();
+                            }
+                          });
                         } else {
                           setDated("");
                           setTypedValue(null);
@@ -301,6 +331,16 @@ export function InformationPanel(props: Facade) {
                   </PopoverContent>
                 </Popover>
               </div>
+              {checkingAttendance && (
+                <span className="text-[10px] font-semibold text-slate-400">
+                  Checking attendance…
+                </span>
+              )}
+              {!checkingAttendance && isEmployeePresent === false && (
+                <span className="text-[10px] font-bold text-red-600">
+                  Not present on this date
+                </span>
+              )}
             </div>
 
             {/* Shift */}

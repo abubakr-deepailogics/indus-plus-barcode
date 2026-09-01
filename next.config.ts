@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
     "/api/qr-code-generation/pdf": ["src/assets/fonts/**/*"],
     "/api/qr-code-generation/pdf/*": ["src/assets/fonts/**/*"],
   },
+  allowedDevOrigins: ["172.16.0.21"],
 };
 
 export default nextConfig;

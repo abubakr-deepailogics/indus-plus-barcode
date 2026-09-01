@@ -107,6 +107,16 @@ export const OPERATIONS_CATALOG_TABLE = "dbo.S_OperationsCatalog";
 // dbo.QrCode_Coupon/dbo.StyleBullettinInt; fetch separately and merge in JS.
 export const WORKERS_VIEW = "dbo.S_EmpDataPITSView";
 
+// Attendance/biometric-punch view, also hrms-only (see WORKERS_VIEW above).
+// One row per EmployeeID per worked day, keyed by ShiftInDate/ShiftOutDate
+// (a night shift can span midnight, hence checking both) — a day with no
+// attendance at all simply has no row, rather than a row with a status
+// flag, so "present" is existence of a matching row, not a column value.
+// CheckInTime/CheckOutTime can each be individually null (a missed punch
+// on one side) without meaning absent — only check EXISTS, never require
+// both columns to be non-null.
+export const ATTENDANCE_VIEW = "dbo.S_AttendancePITSView";
+
 // See cutDetailByFilter above for why filtering happens before RowId is
 // computed. `whereSql` must use the raw bracketed StyleBullettinInt names
 // (e.g. "[Order No] = @wo").

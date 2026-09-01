@@ -61,11 +61,81 @@ export function useCouponScanning() {
 
   const [rows, setRows] = useState<ScanningRow[]>(makeEmptyRows);
 
+  // Whether the current Employee Code was present (per HRMS attendance) on
+  // the current Dated value. null = not yet checked for this exact
+  // employee/date pair — distinct from `false` (checked, and absent) so
+  // callers can tell "unknown, still need to verify" from "verified absent".
+  const [isEmployeePresent, setIsEmployeePresent] = useState<boolean | null>(null);
+  const [checkingAttendance, setCheckingAttendance] = useState(false);
+
+  // Stale attendance result from a previous employee/date pair must never
+  // silently carry over to a new one — reset to "unknown" the moment either
+  // changes. Adjusted during render (same pattern as prevUser above) rather
+  // than in an effect, since a setState directly in an effect body risks
+  // the cascading extra render React's rules warn against.
+  const attendanceKey = `${employeeCode}|${dated}`;
+  const [prevAttendanceKey, setPrevAttendanceKey] = useState(attendanceKey);
+  if (attendanceKey !== prevAttendanceKey) {
+    setPrevAttendanceKey(attendanceKey);
+    // The "not marked present" error (raised by verifyAttendance below) was
+    // about the *previous* employee/date pair specifically — it no longer
+    // applies once either changes, so clear it here rather than leaving it
+    // to linger until the next scan attempt overwrites it. Scoped to only
+    // fire when the previous result was actually "absent" (not just any
+    // error), so unrelated errors (missing Scan By, etc.) aren't dismissed
+    // by editing Employee Code/Dated.
+    if (isEmployeePresent === false) {
+      setScanError("");
+      setErrorMessage("");
+      setShowErrorModal(false);
+    }
+    setIsEmployeePresent(null);
+  }
+
   const raiseError = (message: string) => {
     setScanError(message);
     setErrorMessage(message);
     setShowErrorModal(true);
   };
+
+  // Verifies attendance for the current employeeCode/dated pair and caches
+  // the result in isEmployeePresent — called both from the UI the moment
+  // Dated is committed (InformationPanel, to gate/focus the scanner field)
+  // and defensively right before an actual scan runs (handleFetchAndScan/
+  // flushPendingScans below), in case a scan is triggered through a path
+  // that bypasses that field's disabled state.
+  //
+  // Accepts an optional date override: a caller that just called setDated
+  // synchronously (e.g. picking a date from the calendar) would otherwise
+  // read the pre-update `dated` from this closure, since the state update
+  // hasn't re-rendered yet — passing the just-set value sidesteps that.
+  const verifyAttendance = useCallback(async (overrideDate?: string): Promise<boolean> => {
+    const dateToCheck = overrideDate ?? dated;
+    if (!employeeCode.trim() || !dateToCheck) {
+      setIsEmployeePresent(null);
+      return false;
+    }
+    setCheckingAttendance(true);
+    try {
+      const result = await couponScanningService.checkAttendance(employeeCode, dateToCheck);
+      if (!result.ok) {
+        raiseError(result.error);
+        setIsEmployeePresent(null);
+        return false;
+      }
+      setIsEmployeePresent(result.present);
+      if (!result.present) {
+        raiseError("This employee was not marked present on the selected date — scanning is disabled.");
+      }
+      return result.present;
+    } catch (err) {
+      raiseError(getErrorMessage(err, "Failed to check employee attendance."));
+      setIsEmployeePresent(null);
+      return false;
+    } finally {
+      setCheckingAttendance(false);
+    }
+  }, [employeeCode, dated]);
 
   // useCallback keeps these referentially stable across renders — Autocomplete
   // re-runs its fetch effect whenever `fetchSuggestions` changes identity, so
@@ -134,8 +204,19 @@ export function useCouponScanning() {
       raiseError("Please enter or select an Employee Code first!");
       return;
     }
+    if (!dated) {
+      raiseError("Please enter a Date first!");
+      return;
+    }
     if (!scanBy.trim()) {
       raiseError("Please enter Scanner Name in Scan By first!");
+      return;
+    }
+    // isEmployeePresent is only trustworthy for the *current* employeeCode/
+    // dated pair (reset to null the instant either changes — see the effect
+    // above), so a cached `true` can be reused, but anything else needs a
+    // fresh check rather than assuming this path was already gated by UI.
+    if (isEmployeePresent !== true && !(await verifyAttendance())) {
       return;
     }
 
@@ -344,8 +425,19 @@ export function useCouponScanning() {
       raiseError("Please enter or select an Employee Code first!");
       return;
     }
+    if (!dated) {
+      raiseError("Please enter a Date first!");
+      return;
+    }
     if (!scanBy.trim()) {
       raiseError("Please enter Scanner Name in Scan By first!");
+      return;
+    }
+    // Defense in depth — the Scanner Input field is disabled while
+    // isEmployeePresent isn't true, so this path shouldn't normally be
+    // reachable while absent, but a cached `true` only counts for the
+    // current employeeCode/dated pair (see the reset effect above).
+    if (isEmployeePresent !== true && !(await verifyAttendance())) {
       return;
     }
 
@@ -402,7 +494,7 @@ export function useCouponScanning() {
       console.error("Batch scan error:", err);
       raiseError(getErrorMessage(err, "An unexpected error occurred while scanning."));
     }
-  }, [employeeCode, scanBy, dated]);
+  }, [employeeCode, scanBy, dated, isEmployeePresent, verifyAttendance]);
 
   const handleScannerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== "Enter" && e.key !== "Tab") return;
@@ -642,6 +734,9 @@ export function useCouponScanning() {
     section,
     shift,
     setShift,
+    isEmployeePresent,
+    checkingAttendance,
+    verifyAttendance,
 
     // Coupon verification headers
     workOrder,
