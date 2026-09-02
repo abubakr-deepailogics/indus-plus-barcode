@@ -5,22 +5,14 @@ import type { OperationsDetailRow } from "../types";
 
 interface OperationsDetailTableProps {
   operations: OperationsDetailRow[];
-  remarks: string;
-  reworkQtyMain: string;
   onOperationChange: (id: number, field: string, value: boolean) => void;
   onAllOperationsSelChange: (checked: boolean) => void;
-  onRemarksChange: (value: string) => void;
-  onReworkQtyMainChange: (value: string) => void;
 }
 
 export function OperationsDetailTable({
   operations,
-  remarks,
-  reworkQtyMain,
   onOperationChange,
   onAllOperationsSelChange,
-  onRemarksChange,
-  onReworkQtyMainChange,
 }: OperationsDetailTableProps) {
   const [isSectionWise, setIsSectionWise] = useState(false);
 
@@ -81,10 +73,7 @@ export function OperationsDetailTable({
                 Inc.
               </th>
               <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
-                Sdl#
-              </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
-                Last Op Selection
+                Sel
               </th>
             </tr>
           </thead>
@@ -112,9 +101,6 @@ export function OperationsDetailTable({
                 <td className="py-2.5 text-center text-slate-500 font-medium">
                   {op.inc || "-"}
                 </td>
-                <td className="py-2.5 text-center text-slate-500 font-medium">
-                  {op.sdl || "-"}
-                </td>
                 <td className="py-2.5 text-center">
                   <input
                     type="checkbox"
@@ -138,32 +124,6 @@ export function OperationsDetailTable({
             ))}
           </tbody>
         </table>
-      </div>
-
-      <div className="grid grid-cols-2 gap-4 border-t border-[#f1f5f9] pt-4 mt-1">
-        <div className="flex flex-col gap-1.5">
-          <label className="font-bold text-[#475569] text-[11px]">
-            Remarks
-          </label>
-          <input
-            type="text"
-            value={remarks}
-            onChange={(e) => onRemarksChange(e.target.value)}
-            placeholder="Enter remarks (optional)"
-            className="px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-[#f8fafc] focus:outline-none"
-          />
-        </div>
-        <div className="flex flex-col gap-1.5 w-32 self-end">
-          <label className="font-bold text-[#475569] text-[11px]">
-            Rework Qty
-          </label>
-          <input
-            type="text"
-            value={reworkQtyMain}
-            onChange={(e) => onReworkQtyMainChange(e.target.value)}
-            className="px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-[#f8fafc] text-center"
-          />
-        </div>
       </div>
     </div>
   );

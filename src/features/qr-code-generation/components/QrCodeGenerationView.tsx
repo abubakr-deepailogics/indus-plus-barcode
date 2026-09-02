@@ -45,14 +45,8 @@ export function QrCodeGenerationView() {
 
           <OperationsDetailTable
             operations={facade.activeStyle.operations}
-            remarks={facade.activeStyle.remarks}
-            reworkQtyMain={facade.activeStyle.reworkQtyMain}
             onOperationChange={facade.handleOperationChange}
             onAllOperationsSelChange={facade.handleAllOperationsSelChange}
-            onRemarksChange={(v) => facade.handleFieldChange("remarks", v)}
-            onReworkQtyMainChange={(v) =>
-              facade.handleFieldChange("reworkQtyMain", v)
-            }
           />
         </div>
 

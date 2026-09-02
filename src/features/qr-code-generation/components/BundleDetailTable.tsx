@@ -183,9 +183,6 @@ export function BundleDetailTable({
                 Char
               </th>
               <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
-                Line
-              </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
                 Bundle #
               </th>
               <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
@@ -196,9 +193,6 @@ export function BundleDetailTable({
               </th>
               <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
                 Pcs
-              </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
-                R.Pcs
               </th>
               <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
                 Sel
@@ -214,9 +208,6 @@ export function BundleDetailTable({
                 <td className="py-2.5 text-center text-slate-500 font-bold uppercase">
                   {bd.char}
                 </td>
-                <td className="py-2.5 text-center text-slate-500 font-medium">
-                  {bd.line}
-                </td>
                 <td className="py-2.5 text-center text-purple-600 font-bold font-mono">
                   {bundleDisplayNos.get(bd.id) ?? bd.bundleNo}
                 </td>
@@ -228,9 +219,6 @@ export function BundleDetailTable({
                 </td>
                 <td className="py-2.5 text-center text-slate-900 font-bold">
                   {bd.pcs}
-                </td>
-                <td className="py-2.5 text-center text-slate-400 font-medium">
-                  {bd.rPcs || "-"}
                 </td>
                 <td className="py-2.5 text-center">
                   <input

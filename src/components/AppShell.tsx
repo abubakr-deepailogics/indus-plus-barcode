@@ -77,7 +77,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     // { label: "Industrial Engineering", href: "#", hasDropdown: true },
     { label: "Cut Report", href: "/industrial-engineering/cut-report", hasDropdown: false },
     { label: "Style Bulletin", href: "/industrial-engineering/style-bulletin", hasDropdown: false },
-    { label: "QR Code Generation", href: "/industrial-engineering/qr-code-generation-finishing", hasDropdown: false },
+    { label: "Coupon Generation", href: "/industrial-engineering/coupon-generation", hasDropdown: false },
     { label: "Coupon Scanning", href: "/industrial-engineering/coupon-scanning", hasDropdown: false },
     { label: "Coupon Tracing", href: "/industrial-engineering/coupon-tracing", hasDropdown: false },
     { label: "Rework Coupon", href: "/industrial-engineering/rework-coupon", hasDropdown: false },
