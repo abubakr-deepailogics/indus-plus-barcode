@@ -1,7 +1,11 @@
 "use client";
 
 import { useState, useMemo, useEffect } from "react";
-import type { QrCodeStyleData, PageSetupConfig } from "../types";
+import type {
+  OperationsDetailRow,
+  QrCodeStyleData,
+  PageSetupConfig,
+} from "../types";
 import { useGenerateCouponPdf } from "./useGenerateCouponPdf";
 import { useAuth } from "@/features/auth/context/auth-context";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
@@ -9,6 +13,11 @@ import { useWorkOrderParam } from "@/lib/use-work-order-param";
 interface WorkerItem {
   EmployeeID: number;
   FirstName: string;
+}
+
+function isZeroRateOp(op: OperationsDetailRow): boolean {
+  const rate = Number(op.rate);
+  return !op.rate || Number.isNaN(rate) || rate === 0;
 }
 
 interface QrCodeGenerationFacade {
@@ -52,6 +61,10 @@ interface QrCodeGenerationFacade {
   confirmGenerateCoupons: () => Promise<void>;
   isSelectionGenerated: boolean;
   handleDirectPrint: (codeType: "qr" | "barcode") => Promise<void>;
+
+  zeroRateOperations: OperationsDetailRow[];
+  includeZeroRateOps: boolean;
+  setIncludeZeroRateOps: (include: boolean) => void;
 }
 
 const emptyStyle: QrCodeStyleData = {
@@ -108,13 +121,34 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   >("confirm");
   const [couponModalError, setCouponModalError] = useState("");
   const [generatedCount, setGeneratedCount] = useState(0);
-  const [generateProgress, setGenerateProgress] = useState<{ done: number; total: number } | null>(null);
+  const [generateProgress, setGenerateProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
 
-  const [lastGeneratedSelectionKey, setLastGeneratedSelectionKey] = useState<string>("");
+  const [lastGeneratedSelectionKey, setLastGeneratedSelectionKey] =
+    useState<string>("");
+  const [includeZeroRateOps, setIncludeZeroRateOps] = useState(false);
+
+  const zeroRateOperations = useMemo(
+    () =>
+      activeStyle.operations.filter(
+        (op) => op.lastOpSection && isZeroRateOp(op),
+      ),
+    [activeStyle.operations],
+  );
 
   const currentSelectionKey = useMemo(() => {
-    const selBundles = activeStyle.bundles.filter((b) => b.sel).map((b) => b.id).sort().join(",");
-    const selOps = activeStyle.operations.filter((o) => o.lastOpSection).map((o) => o.id).sort().join(",");
+    const selBundles = activeStyle.bundles
+      .filter((b) => b.sel)
+      .map((b) => b.id)
+      .sort()
+      .join(",");
+    const selOps = activeStyle.operations
+      .filter((o) => o.lastOpSection)
+      .map((o) => o.id)
+      .sort()
+      .join(",");
     return `${selBundles}|${selOps}`;
   }, [activeStyle.bundles, activeStyle.operations]);
 
@@ -124,7 +158,13 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     const hasOps = activeStyle.operations.some((o) => o.lastOpSection);
     if (!hasBundles || !hasOps) return false;
     return currentSelectionKey === lastGeneratedSelectionKey;
-  }, [activeStyle.workOrder, currentSelectionKey, lastGeneratedSelectionKey, activeStyle.bundles, activeStyle.operations]);
+  }, [
+    activeStyle.workOrder,
+    currentSelectionKey,
+    lastGeneratedSelectionKey,
+    activeStyle.bundles,
+    activeStyle.operations,
+  ]);
 
   // Dynamic dropdown lists
   const [customersList, setCustomersList] = useState<string[]>([]);
@@ -450,12 +490,21 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       return;
     }
 
+    setIncludeZeroRateOps(false);
     setGenerateModalState("confirm");
     setCouponModalError("");
     setShowGenerateModal(true);
   };
 
   const confirmGenerateCoupons = async () => {
+    const operationsToSend = includeZeroRateOps
+      ? activeStyle.operations
+      : activeStyle.operations.map((op) =>
+          op.lastOpSection && isZeroRateOp(op)
+            ? { ...op, lastOpSection: false }
+            : op,
+        );
+
     setGenerateModalState("generating");
     setGeneratingCoupons(true);
     setGenerateProgress(null);
@@ -468,7 +517,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         body: JSON.stringify({
           workOrder: activeStyle.workOrder,
           bundles: activeStyle.bundles,
-          operations: activeStyle.operations,
+          operations: operationsToSend,
         }),
       });
 
@@ -517,7 +566,8 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       buffer += decoder.decode();
       if (buffer.trim()) {
         const parsed = JSON.parse(buffer);
-        if (parsed.status === "error") throw new Error(parsed.message || "Failed to generate coupons.");
+        if (parsed.status === "error")
+          throw new Error(parsed.message || "Failed to generate coupons.");
         if (parsed.status === "complete") finalData = parsed;
       }
 
@@ -525,7 +575,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         throw new Error("Failed to generate coupons.");
       }
 
-      setGeneratedCount(finalData.couponCount);
+      setGeneratedCount(finalData.cardCount);
       setGenerateModalState("success");
 
       // Update coupons count in UI
@@ -596,5 +646,9 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     confirmGenerateCoupons,
     isSelectionGenerated,
     handleDirectPrint,
+
+    zeroRateOperations,
+    includeZeroRateOps,
+    setIncludeZeroRateOps,
   };
 }
