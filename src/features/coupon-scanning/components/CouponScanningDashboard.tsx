@@ -5,10 +5,16 @@ import { useCouponScanning } from "@/features/coupon-scanning/hooks/useCouponSca
 import { InformationPanel } from "@/features/coupon-scanning/components/InformationPanel";
 import { ScanningDetailsTable } from "@/features/coupon-scanning/components/ScanningDetailsTable";
 import { ScanModals } from "@/features/coupon-scanning/components/ScanModals";
+import { useConfirmNavigation } from "@/lib/use-confirm-navigation";
 import { format } from "date-fns";
 
 export function CouponScanningDashboard() {
   const couponScanning = useCouponScanning();
+
+  useConfirmNavigation(
+    true,
+    "Are you sure you want to leave the Coupon Scanning page? Any unsaved scanning data will be lost.",
+  );
   const {
     employeeCode,
     employeeName,
