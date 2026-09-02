@@ -10,6 +10,42 @@ import { GenerateCouponsModal } from "./GenerateCouponsModal";
 import { CodeTypeSelectionModal } from "./CodeTypeSelectionModal";
 import { Loader2 } from "lucide-react";
 
+function DetailTableSkeleton() {
+  const rows = Array.from({ length: 6 });
+  return (
+    <div className="lg:col-span-6 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4 animate-pulse">
+      <div className="flex items-center justify-between border-b border-[#f1f5f9] pb-2">
+        <div className="h-4 bg-slate-200 rounded w-32"></div>
+        <div className="h-3 bg-slate-200 rounded w-40"></div>
+      </div>
+      <div className="overflow-x-auto">
+        <table className="w-full text-left border-collapse min-w-[500px]">
+          <thead>
+            <tr className="border-b border-[#e2e8f0]">
+              {Array.from({ length: 7 }).map((_, i) => (
+                <th key={i} className="py-2">
+                  <div className="h-3 bg-slate-200 rounded w-12"></div>
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-[#f1f5f9]">
+            {rows.map((_, rowIndex) => (
+              <tr key={rowIndex}>
+                {Array.from({ length: 7 }).map((_, colIndex) => (
+                  <td key={colIndex} className="py-2.5">
+                    <div className="h-3 bg-slate-100 rounded w-full"></div>
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
 export function QrCodeGenerationView() {
   const facade = useQrCodeGenerationFacade();
 
@@ -33,21 +69,30 @@ export function QrCodeGenerationView() {
 
         {/* Main Grid: Bundle Detail (left) + Operations (right) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-2">
-          <BundleDetailTable
-            bundles={facade.activeStyle.bundles}
-            reworkQtyBundle={facade.activeStyle.reworkQtyBundle}
-            subTotal={facade.activeStyle.subTotal}
-            total={facade.activeStyle.total}
-            onBundleSelChange={facade.handleBundleSelChange}
-            onAllBundlesSelChange={facade.handleAllBundlesSelChange}
-            onReworkQtyBundleChange={facade.handleReworkQtyBundleChange}
-          />
+          {facade.isLoadingWorkOrder ? (
+            <>
+              <DetailTableSkeleton />
+              <DetailTableSkeleton />
+            </>
+          ) : (
+            <>
+              <BundleDetailTable
+                bundles={facade.activeStyle.bundles}
+                reworkQtyBundle={facade.activeStyle.reworkQtyBundle}
+                subTotal={facade.activeStyle.subTotal}
+                total={facade.activeStyle.total}
+                onBundleSelChange={facade.handleBundleSelChange}
+                onAllBundlesSelChange={facade.handleAllBundlesSelChange}
+                onReworkQtyBundleChange={facade.handleReworkQtyBundleChange}
+              />
 
-          <OperationsDetailTable
-            operations={facade.activeStyle.operations}
-            onOperationChange={facade.handleOperationChange}
-            onAllOperationsSelChange={facade.handleAllOperationsSelChange}
-          />
+              <OperationsDetailTable
+                operations={facade.activeStyle.operations}
+                onOperationChange={facade.handleOperationChange}
+                onAllOperationsSelChange={facade.handleAllOperationsSelChange}
+              />
+            </>
+          )}
         </div>
 
         {/* Footer bar */}

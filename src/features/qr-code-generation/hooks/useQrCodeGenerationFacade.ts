@@ -13,6 +13,7 @@ interface WorkerItem {
 
 interface QrCodeGenerationFacade {
   activeStyle: QrCodeStyleData;
+  isLoadingWorkOrder: boolean;
   showSearchModal: boolean;
   searchQuery: string;
   selectedIdx: number;
@@ -78,6 +79,7 @@ const emptyStyle: QrCodeStyleData = {
 export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   const { user } = useAuth();
   const [activeStyle, setActiveStyle] = useState<QrCodeStyleData>(emptyStyle);
+  const [isLoadingWorkOrder, setIsLoadingWorkOrder] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIdx, setSelectedIdx] = useState(0);
@@ -228,6 +230,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   // Load details for a selected Work Order
   const fetchWorkOrderDetails = async (wo: string) => {
     if (!wo) return;
+    setIsLoadingWorkOrder(true);
     try {
       const response = await fetch(
         `/api/open-order?work_order=${encodeURIComponent(wo)}&t=${Date.now()}`,
@@ -314,6 +317,8 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       setLastGeneratedSelectionKey("");
     } catch (err) {
       console.error("Error fetching work order details:", err);
+    } finally {
+      setIsLoadingWorkOrder(false);
     }
   };
 
@@ -557,6 +562,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
 
   return {
     activeStyle,
+    isLoadingWorkOrder,
     showSearchModal,
     searchQuery,
     selectedIdx,
