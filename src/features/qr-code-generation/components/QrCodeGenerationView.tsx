@@ -159,6 +159,9 @@ export function QrCodeGenerationView() {
           errorMessage={facade.couponModalError}
           onClose={() => facade.setShowGenerateModal(false)}
           onConfirm={facade.confirmGenerateCoupons}
+          zeroRateOperations={facade.zeroRateOperations}
+          includeZeroRateOps={facade.includeZeroRateOps}
+          onIncludeZeroRateOpsChange={facade.setIncludeZeroRateOps}
         />
       )}
 

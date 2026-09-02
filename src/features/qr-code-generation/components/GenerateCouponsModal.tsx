@@ -1,7 +1,8 @@
 "use client";
 
 import React from "react";
-import { X, Loader2, CheckCircle2, AlertCircle } from "lucide-react";
+import { X, Loader2, CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react";
+import type { OperationsDetailRow } from "../types";
 
 interface GenerateCouponsModalProps {
   state: "confirm" | "generating" | "success" | "error";
@@ -12,6 +13,9 @@ interface GenerateCouponsModalProps {
   errorMessage?: string;
   onClose: () => void;
   onConfirm: () => void;
+  zeroRateOperations?: OperationsDetailRow[];
+  includeZeroRateOps?: boolean;
+  onIncludeZeroRateOpsChange?: (include: boolean) => void;
 }
 
 export function GenerateCouponsModal({
@@ -23,8 +27,15 @@ export function GenerateCouponsModal({
   errorMessage = "",
   onClose,
   onConfirm,
+  zeroRateOperations = [],
+  includeZeroRateOps = false,
+  onIncludeZeroRateOpsChange,
 }: GenerateCouponsModalProps) {
-  const totalToGenerate = selectedBundlesCount * selectedOperationsCount;
+  const effectiveOperationsCount = includeZeroRateOps
+    ? selectedOperationsCount
+    : selectedOperationsCount - zeroRateOperations.length;
+  const totalToGenerate = selectedBundlesCount * effectiveOperationsCount;
+  const nothingToGenerate = totalToGenerate === 0;
 
   React.useEffect(() => {
     if (state === "generating") return;
@@ -83,7 +94,7 @@ export function GenerateCouponsModal({
                     Operations
                   </span>
                   <span className="text-base font-extrabold text-slate-800">
-                    {selectedOperationsCount}
+                    {effectiveOperationsCount}
                   </span>
                 </div>
                 <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-3 flex flex-col items-center">
@@ -96,6 +107,30 @@ export function GenerateCouponsModal({
                 </div>
               </div>
 
+              {/* Rate-0 warning — these operations are excluded by default */}
+              {zeroRateOperations.length > 0 && (
+                <div className="bg-amber-50/60 border border-amber-200 rounded-xl p-3 text-left mb-4">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-amber-800 font-semibold leading-relaxed">
+                      {zeroRateOperations.length} of {selectedOperationsCount}{" "}
+                      selected operations have Piece Rate 0 and won&apos;t be generated.
+                    </p>
+                  </div>
+                  <label className="flex items-center gap-2 mt-2.5 pl-5.5 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={includeZeroRateOps}
+                      onChange={(e) => onIncludeZeroRateOpsChange?.(e.target.checked)}
+                      className="rounded border-amber-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
+                    />
+                    <span className="text-[11px] font-bold text-amber-800">
+                      Generate for these too
+                    </span>
+                  </label>
+                </div>
+              )}
+
               {/* Actions */}
               <div className="flex gap-2 w-full mt-2">
                 <button
@@ -106,7 +141,8 @@ export function GenerateCouponsModal({
                 </button>
                 <button
                   onClick={onConfirm}
-                  className="flex-1 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+                  disabled={nothingToGenerate}
+                  className="flex-1 bg-[#4f46e5] hover:bg-[#4338ca] disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
                 >
                   Yes, Generate
                 </button>
@@ -146,7 +182,7 @@ export function GenerateCouponsModal({
                 Coupons Generated Successfully!
               </h4>
               <p className="text-xs text-[#64748b] font-medium mb-5">
-                Total coupon identities registered: <strong className="text-emerald-600">{generatedCount}</strong>
+                Total coupons generated: <strong className="text-emerald-600">{generatedCount}</strong>
               </p>
               <button
                 onClick={onClose}
