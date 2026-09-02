@@ -530,20 +530,17 @@ export function EmployeeReportDashboard() {
                       <th className="py-2.5 px-3 text-center">Output (Pcs)</th>
                       <th className="py-2.5 px-3 text-right">SAM Earned</th>
                       <th className="py-2.5 px-3 text-right">Total Amount</th>
-                      <th className="py-2.5 px-3 text-right">Share</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {summary.operations?.length === 0 ? (
                       <tr>
-                        <td colSpan={9} className="py-8 text-center text-slate-400 font-medium">
+                        <td colSpan={8} className="py-8 text-center text-slate-400 font-medium">
                           No operations recorded for this period.
                         </td>
                       </tr>
                     ) : (
                       summary.operations?.map((op, idx) => {
-                        const share =
-                          summary.totalAmount > 0 ? (op.totalAmount / summary.totalAmount) * 100 : 0;
                         return (
                           <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
                             <td className="py-2.5 px-3">
@@ -579,19 +576,6 @@ export function EmployeeReportDashboard() {
                             <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
                               Rs. {formatAmount(op.totalAmount)}
                             </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <div className="w-12 bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                                  <div
-                                    className="bg-indigo-600 h-full rounded-full"
-                                    style={{ width: `${Math.min(100, share)}%` }}
-                                  />
-                                </div>
-                                <span className="font-mono text-[10px] font-bold text-slate-600 w-8 text-right">
-                                  {share.toFixed(1)}%
-                                </span>
-                              </div>
-                            </td>
                           </tr>
                         );
                       })
@@ -615,9 +599,6 @@ export function EmployeeReportDashboard() {
                         <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                           Rs. {formatAmount(summary.totalAmount)}
                         </td>
-                        <td className="py-2.5 px-3 text-right font-mono text-[10px]">
-                          100.0%
-                        </td>
                       </tr>
                     </tfoot>
                   )}
@@ -637,20 +618,17 @@ export function EmployeeReportDashboard() {
                       <th className="py-2.5 px-3 text-center">Total Output (Pcs)</th>
                       <th className="py-2.5 px-3 text-right">SAM Earned</th>
                       <th className="py-2.5 px-3 text-right">Total Amount</th>
-                      <th className="py-2.5 px-3 text-right">Share</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
                     {summary.workOrders?.length === 0 ? (
                       <tr>
-                        <td colSpan={7} className="py-8 text-center text-slate-400 font-medium">
+                        <td colSpan={6} className="py-8 text-center text-slate-400 font-medium">
                           No work orders recorded for this period.
                         </td>
                       </tr>
                     ) : (
                       summary.workOrders?.map((wo, idx) => {
-                        const share =
-                          summary.totalAmount > 0 ? (wo.totalAmount / summary.totalAmount) * 100 : 0;
                         return (
                           <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
                             <td className="py-2.5 px-3">
@@ -672,19 +650,6 @@ export function EmployeeReportDashboard() {
                             </td>
                             <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
                               Rs. {formatAmount(wo.totalAmount)}
-                            </td>
-                            <td className="py-2.5 px-3 text-right">
-                              <div className="flex items-center justify-end gap-1.5">
-                                <div className="w-12 bg-slate-100 rounded-full h-1.5 overflow-hidden">
-                                  <div
-                                    className="bg-cyan-600 h-full rounded-full"
-                                    style={{ width: `${Math.min(100, share)}%` }}
-                                  />
-                                </div>
-                                <span className="font-mono text-[10px] font-bold text-slate-600 w-8 text-right">
-                                  {share.toFixed(1)}%
-                                </span>
-                              </div>
                             </td>
                           </tr>
                         );
@@ -708,9 +673,6 @@ export function EmployeeReportDashboard() {
                         </td>
                         <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                           Rs. {formatAmount(summary.totalAmount)}
-                        </td>
-                        <td className="py-2.5 px-3 text-right font-mono text-[10px]">
-                          100.0%
                         </td>
                       </tr>
                     </tfoot>
