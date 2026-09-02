@@ -12,7 +12,8 @@ import {
   X,
   ScanLine,
   Search as SearchIcon,
-  RotateCcw
+  RotateCcw,
+  Users
 } from "lucide-react";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -79,7 +80,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     { label: "QR Code Generation", href: "/industrial-engineering/qr-code-generation-finishing", hasDropdown: false },
     { label: "Coupon Scanning", href: "/industrial-engineering/coupon-scanning", hasDropdown: false },
     { label: "Coupon Tracing", href: "/industrial-engineering/coupon-tracing", hasDropdown: false },
-    { label: "Rework Coupon", href: "/industrial-engineering/rework-coupon", hasDropdown: false }
+    { label: "Rework Coupon", href: "/industrial-engineering/rework-coupon", hasDropdown: false },
+    { label: "Reports", href: "/industrial-engineering/reports", hasDropdown: false }
   ];
 
   return (
@@ -475,6 +477,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <h4 className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider mb-2">
                   Analysis
                 </h4>
+                <Link
+                  href="/industrial-engineering/reports"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center">
+                    <Users className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    Employee Report
+                  </span>
+                </Link>
                 <Link
                   href="#"
                   onClick={() => setIsIeOpen(false)}
