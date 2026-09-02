@@ -1,4 +1,4 @@
-import { getPool, sql } from "@/lib/db";
+import { getPool } from "@/lib/db";
 import { generateCouponPdf } from "@/features/qr-code-generation/services/pdf-generation.service";
 import { buildCouponCards } from "@/features/qr-code-generation/services/coupon-pairing.service";
 import { registerCoupons, countCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
@@ -15,9 +15,10 @@ interface GenerateRequestBody {
   codeType: "qr" | "barcode";
 }
 
-// Generates the QR-coupon PDF once and stores it — repeat downloads read
-// the stored bytes (GET /api/qr-code-generation/pdf/[id]) instead of
-// re-rendering thousands of QR codes every time.
+// Renders the PDF and streams it straight back in this response — nothing
+// is persisted server-side. Coupon *identity* is still registered in
+// dbo.QrCode_Coupon (that's the durable record scan/rework rely on); the
+// rendered bytes themselves are print-and-discard, regenerated on demand.
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<GenerateRequestBody>;
   const { workOrder, saleOrderNo, styleCode, bundles, operations, layout, margins, codeType } = body;
@@ -61,78 +62,44 @@ export async function POST(request: Request) {
     // of coupons don't mean thousands of round trips.
     await registerCoupons(pool, workOrder, buildCouponCards(selectedBundles, selectedOperations));
 
-    // Explicit timeout override — the driver default (15s) can be too
-    // tight for a large work order's PDF blob (thousands of coupons =
-    // tens of MB) going over the wire in one INSERT. @types/mssql doesn't
-    // declare the per-request conf overload that the JS lib supports
-    // (mssql/lib/base/connection-pool.js `request(conf)`), hence the cast.
-    const result = await (pool.request as (conf?: { requestTimeout: number }) => sql.Request)({
-      requestTimeout: 120_000,
-    })
-      .input("workOrder", sql.NVarChar, workOrder)
-      .input("saleOrderNo", sql.NVarChar, saleOrderNo || null)
-      .input("styleCode", sql.NVarChar, styleCode ?? "")
-      .input("cardCount", sql.Int, cardCount)
-      .input("pdf", sql.VarBinary(sql.MAX), buffer)
-      .query(
-        `INSERT INTO dbo.QrCode_Pdf_Batch (WorkOrder, SaleOrderNo, StyleCode, CardCount, Pdf)
-         OUTPUT INSERTED.Id, INSERTED.CreatedAt
-         VALUES (@workOrder, @saleOrderNo, @styleCode, @cardCount, @pdf)`,
-      );
-
     // Distinct coupons registered for this work order so far (post-dedup) —
     // the real "coupons generated" count, not this batch's render size.
     const couponCount = await countCoupons(pool, workOrder);
 
-    const row = result.recordset[0];
-    return Response.json({
-      id: row.Id,
-      cardCount,
-      couponCount,
-      createdAt: row.CreatedAt,
+    // Counts travel as headers since the body is the PDF itself, not JSON —
+    // the caller reads X-Card-Count/X-Coupon-Count off the response.
+    return new Response(new Uint8Array(buffer), {
+      headers: {
+        "Content-Type": "application/pdf",
+        "Content-Disposition": `inline; filename="coupons-${workOrder}.pdf"`,
+        "X-Card-Count": String(cardCount),
+        "X-Coupon-Count": String(couponCount),
+      },
     });
   } catch (err: unknown) {
-    console.error("PDF batch generation error:", err);
+    console.error("PDF generation error:", err);
     const message = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
 }
 
-// Lists past batches so the UI can offer re-download without regenerating.
-// No work_order → lists every batch (most recent first); with work_order →
-// scoped to that order, and also returns the distinct coupon count for it.
+// Coupon count for a work order, shown next to the Generate button —
+// independent of any stored PDF (there isn't one); backed by
+// dbo.QrCode_Coupon directly.
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = searchParams.get("work_order") || "";
 
+  if (!workOrder) {
+    return Response.json({ error: "work_order is required." }, { status: 400 });
+  }
+
   try {
     const pool = await getPool("pitSystem");
-    if (workOrder) {
-      const [batchResult, couponCount] = await Promise.all([
-        pool
-          .request()
-          .input("workOrder", sql.NVarChar, workOrder)
-          .query(
-            `SELECT Id, WorkOrder, SaleOrderNo, StyleCode, CardCount, CreatedAt
-             FROM dbo.QrCode_Pdf_Batch
-             WHERE WorkOrder = @workOrder
-             ORDER BY CreatedAt DESC`,
-          ),
-        countCoupons(pool, workOrder),
-      ]);
-      return Response.json({ batches: batchResult.recordset, couponCount });
-    }
-
-    const result = await pool
-      .request()
-      .query(
-        `SELECT TOP 200 Id, WorkOrder, SaleOrderNo, StyleCode, CardCount, CreatedAt
-         FROM dbo.QrCode_Pdf_Batch
-         ORDER BY CreatedAt DESC`,
-      );
-    return Response.json({ batches: result.recordset });
+    const couponCount = await countCoupons(pool, workOrder);
+    return Response.json({ couponCount });
   } catch (err: unknown) {
-    console.error("PDF batch list error:", err);
+    console.error("Coupon count lookup error:", err);
     const message = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }

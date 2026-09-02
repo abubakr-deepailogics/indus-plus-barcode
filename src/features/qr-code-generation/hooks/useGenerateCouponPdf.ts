@@ -8,9 +8,11 @@ import type { CouponLayout, QrCodeStyleData } from "../types";
 // open-order, rework-coupon). Two separate actions:
 // - handleGenerateCoupons: registers coupon rows in the DB only (dedup'd),
 //   no PDF involved.
-// - handleDownloadPdf: renders + stores + downloads the PDF for whatever
-//   coupons exist (also registers any not yet in the DB, so printing never
-//   skips a coupon that generate-coupons hasn't been run for).
+// - handleDownloadPdf: renders + prints the PDF for whatever coupons exist
+//   (also registers any not yet in the DB, so printing never skips a
+//   coupon that generate-coupons hasn't been run for). The PDF itself is
+//   never persisted — it's streamed back in the same request and handed
+//   to the browser as a local blob: URL.
 export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrder" | "saleOrderNo" | "styleCode" | "bundles" | "operations">) {
   const [generatingCoupons, setGeneratingCoupons] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
@@ -119,13 +121,21 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
           codeType,
         }),
       });
-      const data = await res.json();
       if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
         throw new Error(data.error || "Failed to generate PDF.");
       }
-      if (typeof data.couponCount === "number") setCouponCount(data.couponCount);
-      const pdfUrl = `/api/qr-code-generation/pdf/${data.id}`;
+      const couponCountHeader = res.headers.get("X-Coupon-Count");
+      if (couponCountHeader !== null) setCouponCount(Number(couponCountHeader));
+
+      // Not persisted server-side — the response body is the PDF itself, so
+      // it's wrapped in a local blob: URL for the print iframe rather than
+      // pointed at a re-fetchable server URL. Revoked once printing has had
+      // time to pick it up.
+      const blob = await res.blob();
+      const pdfUrl = URL.createObjectURL(blob);
       printPdf(pdfUrl, () => setGeneratingPdf(false));
+      setTimeout(() => URL.revokeObjectURL(pdfUrl), 65_000);
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to generate PDF.");
       setGeneratingPdf(false);

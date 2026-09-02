@@ -192,6 +192,48 @@ function drawBarcode(
   doc.restore();
 }
 
+// Draws a QR code as vector rects instead of embedding a raster PNG —
+// same approach as drawBarcode above. QRCode.create() is synchronous (no
+// PNG encode) and returns the raw module bit-matrix with no quiet zone,
+// matching the old `margin: 0` toBuffer() option this replaces. At
+// hundreds of thousands of codes per PDF, this is the difference between
+// one embedded image XObject per card (slow to encode, bloats the file)
+// and a handful of fill operators — each row's dark modules are merged
+// into runs, and every rect across the whole code shares one fill() call.
+function drawQrCode(
+  doc: any,
+  x: number,
+  y: number,
+  size: number,
+  value: string,
+) {
+  const { modules } = QRCode.create(value, { errorCorrectionLevel: "M" });
+  const moduleCount = modules.size;
+  const moduleSize = size / moduleCount;
+
+  doc.save();
+  doc.fillColor("#000000");
+  for (let row = 0; row < moduleCount; row++) {
+    let runStart = -1;
+    for (let col = 0; col <= moduleCount; col++) {
+      const dark = col < moduleCount && modules.get(row, col);
+      if (dark && runStart === -1) {
+        runStart = col;
+      } else if (!dark && runStart !== -1) {
+        doc.rect(
+          x + runStart * moduleSize,
+          y + row * moduleSize,
+          (col - runStart) * moduleSize,
+          moduleSize,
+        );
+        runStart = -1;
+      }
+    }
+  }
+  doc.fill();
+  doc.restore();
+}
+
 interface GeneratePdfParams {
   workOrder: string;
   saleOrderNo: string;
@@ -376,12 +418,30 @@ export async function generateCouponPdf({
   }
   drawGridLines();
 
-  // ponytail: cards are rendered and flushed one at a time (not held as
-  // PDFKit objects all at once), so memory stays flat for thousands of
-  // cards. If this needs to run against tens of thousands, move to a
-  // streaming HTTP response instead of buffering the whole PDF before
-  // the DB insert.
+  // Per-render-invariant values, computed once instead of once per card —
+  // workOrder/date don't change card to card, and .font() only needs
+  // setting once (the constructor's `font: FONT_PATH` already makes it the
+  // doc's default; text() calls never switch away from it), so re-setting
+  // either inside a 500k-card loop was pure wasted work.
+  doc.font(FONT_PATH);
+  const workOrderShort = stripPrefix(workOrder);
+  const shortDate = formatShortDate();
+
+  // Cards are rendered and flushed one at a time (not held as PDFKit
+  // objects all at once), so memory stays flat for thousands of cards.
+  // QR/barcode drawing is all synchronous vector ops now (see drawQrCode/
+  // drawBarcode) — with no per-card await, a large batch (tens of
+  // thousands of cards) would otherwise run as one uninterrupted
+  // synchronous stretch and stall every other request this Node process
+  // is serving for the whole render. Yielding back to the event loop
+  // periodically keeps the process responsive to other requests without
+  // slowing this one down meaningfully.
+  const EVENT_LOOP_YIELD_EVERY = 500;
   for (let i = 0; i < cards.length; i++) {
+    if (i > 0 && i % EVENT_LOOP_YIELD_EVERY === 0) {
+      await new Promise((resolve) => setImmediate(resolve));
+    }
+
     const { bundle, op } = cards[i];
     const { page, col, row } = slots[i];
 
@@ -402,7 +462,6 @@ export async function generateCouponPdf({
     // Coupon code is the scannable payload for both formats below (scan/rework
     // routes match on it) — not printed as text, per the smaller box's space budget.
     const couponCode = buildCouponCode(workOrder, bundle.bundleNo, op.opNo);
-    const workOrderShort = stripPrefix(workOrder);
     // What's printed as B# is the display-only per-cut rank (1, 2, 3...),
     // not the real bundle number — same rank shown in BundleDetailTable, so
     // the printed coupon matches what the user saw on screen when they
@@ -420,7 +479,6 @@ export async function generateCouponPdf({
       // 3x3 Grid fields at the top
       const colW = cardW / 3;
       const rowH = 4.8;
-      const shortDate = formatShortDate();
 
       const fields: {
         label: string;
@@ -451,14 +509,13 @@ export async function generateCouponPdf({
         const cx = cardX + field.col * colW;
         const cy = cardY + field.row * rowH;
 
-        doc.fillColor("#000000").font(FONT_PATH).text(field.label, cx, cy, {
+        doc.fillColor("#000000").text(field.label, cx, cy, {
           width: field.labelW,
           height: rowH,
           lineBreak: false,
         });
         doc
           .fillColor("#000000")
-          .font(FONT_PATH)
           .text(field.value, cx + field.labelW + 0.5, cy, {
             width: colW - field.labelW - 0.5,
             height: rowH,
@@ -482,7 +539,6 @@ export async function generateCouponPdf({
       doc
         .fillColor("#000000")
         .fontSize(4.8)
-        .font(FONT_PATH)
         .text(op.operationName, cardX, opNameY, {
           width: cardW,
           height: opNameH,
@@ -493,11 +549,6 @@ export async function generateCouponPdf({
       // QR encodes only the coupon code — same payload as the barcode branch —
       // so a scan of either format matches CouponCode in the DB the same way.
       // The rest of the card's fields are printed as text alongside it instead.
-      const qrPng = await QRCode.toBuffer(couponCode, {
-        errorCorrectionLevel: "M",
-        margin: 0,
-        width: 150,
-      });
 
       // QR spans the full left-to-op-name height, flush right, as large as
       // the box allows. WO/Section (own lines, so long section names don't
@@ -512,7 +563,7 @@ export async function generateCouponPdf({
       // Shifted left of the box's right edge so the QR has its own margin
       // instead of sitting flush against the border.
       const qrX = cardX + cardW - qrSize - 1.5;
-      doc.image(qrPng, qrX, cardY, { width: qrSize, height: qrSize });
+      drawQrCode(doc, qrX, cardY, qrSize, couponCode);
 
       const textW = qrX - cardX - 3;
       doc.fontSize(4.5);
