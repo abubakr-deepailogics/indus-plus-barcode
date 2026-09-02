@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react";
 import type { QrCodeStyleData, PageSetupConfig } from "../types";
 import { useGenerateCouponPdf } from "./useGenerateCouponPdf";
 import { useAuth } from "@/features/auth/context/auth-context";
+import { useWorkOrderParam } from "@/lib/use-work-order-param";
 
 interface WorkerItem {
   EmployeeID: number;
@@ -316,10 +317,19 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     }
   };
 
+  // Shared Work Order search: seeds this page's search from the global/URL
+  // Work Order (set by Cut Report, Style Bulletin or Coupon Tracing) on
+  // mount. Searches committed on this page (below) propagate back out via
+  // setSharedWorkOrder.
+  const { setWorkOrder: setSharedWorkOrder } = useWorkOrderParam((wo) => {
+    fetchWorkOrderDetails(wo);
+  });
+
   const handleModalSearch = async () => {
     const selected = searchResults[selectedIdx];
     if (selected) {
       await fetchWorkOrderDetails(selected.workOrder);
+      setSharedWorkOrder(selected.workOrder);
     }
     setShowSearchModal(false);
   };
@@ -332,6 +342,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     // Debounce/trigger fetch details if it matches completely
     if (value.trim().length >= 4) {
       fetchWorkOrderDetails(value.trim());
+      setSharedWorkOrder(value.trim());
     }
   };
 

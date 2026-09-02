@@ -16,6 +16,7 @@ import { PageSetupModal } from "@/features/qr-code-generation/components/PageSet
 import { CodeTypeSelectionModal } from "@/features/qr-code-generation/components/CodeTypeSelectionModal";
 import type { PageSetupConfig } from "@/features/qr-code-generation/types";
 import { DEFAULT_MARGINS } from "@/features/qr-code-generation/types";
+import { useWorkOrderParam } from "@/lib/use-work-order-param";
 
 interface CouponRow {
   Id: number;
@@ -164,8 +165,7 @@ export default function CouponTracingPage() {
     }
   };
 
-  const handleTrace = () => {
-    const workOrder = code.trim();
+  const runTrace = (workOrder: string) => {
     setTracedWorkOrder(workOrder);
     setCouponPage(1);
     setFromCutFilter("");
@@ -177,6 +177,22 @@ export default function CouponTracingPage() {
       setCouponTotal(0);
     }
   };
+
+  // Shared Work Order search: seeds this page's trace from the global/URL
+  // Work Order (set by Cut Report, Style Bulletin or Coupon Generation) on
+  // mount, and propagates a trace committed here to the other pages.
+  const { setWorkOrder } = useWorkOrderParam((wo) => {
+    setCode(wo);
+    runTrace(wo);
+  });
+
+  const commitTrace = (workOrder: string) => {
+    setCode(workOrder);
+    runTrace(workOrder);
+    setWorkOrder(workOrder);
+  };
+
+  const handleTrace = () => commitTrace(code.trim());
 
   const handleUnscanCoupon = async (couponCode: string) => {
     if (
@@ -265,15 +281,7 @@ export default function CouponTracingPage() {
           <Autocomplete<string>
             value={code}
             onChange={setCode}
-            onSelect={(val) => {
-              setCode(val);
-              setTracedWorkOrder(val);
-              setCouponPage(1);
-              setFromCutFilter("");
-              setToCutFilter("");
-              fetchSectionOptions(val);
-              fetchCoupons(val, 1);
-            }}
+            onSelect={(val) => commitTrace(val)}
             fetchSuggestions={fetchWorkOrderSuggestions}
             renderSuggestion={(item) => <span>{item}</span>}
             getSuggestionValue={(item) => item}

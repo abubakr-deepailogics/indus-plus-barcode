@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   Search, AlertCircle,
   Info,
@@ -19,6 +19,7 @@ import type {
 } from "@/features/qr-code-generation/types";
 import { useGenerateCouponPdf } from "@/features/qr-code-generation/hooks/useGenerateCouponPdf";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
+import { useWorkOrderParam } from "@/lib/use-work-order-param";
 
 interface CutDetailRow {
   RowId: number;
@@ -231,6 +232,24 @@ export default function OpenOrderPage() {
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
   const [isWoFocused, setIsWoFocused] = useState(false);
   const activeTab = "cut_report";
+
+  // Shared Work Order search: seeds this page's search from the global/URL
+  // Work Order (set by Style Bulletin, Coupon Generation or Coupon Tracing)
+  // on mount, and propagates a search committed here to the other pages.
+  const { setWorkOrder } = useWorkOrderParam(
+    useCallback((wo: string) => {
+      setSearchQuery(wo);
+      setActiveSearchQuery(wo);
+    }, []),
+  );
+  const commitSearch = useCallback(
+    (value: string) => {
+      setSearchQuery(value);
+      setActiveSearchQuery(value);
+      setWorkOrder(value);
+    },
+    [setWorkOrder],
+  );
   const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
   const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
   // Operations to include in coupon generation — defaults to "all" (set
@@ -737,8 +756,7 @@ export default function OpenOrderPage() {
         if (activeIndex >= 0 && activeIndex < suggestions.length) {
           e.preventDefault();
           const selected = suggestions[activeIndex];
-          setSearchQuery(selected);
-          setActiveSearchQuery(selected);
+          commitSearch(selected);
           setShowSuggestions(false);
           setIsWoFocused(false);
           setActiveIndex(-1);
@@ -763,8 +781,7 @@ export default function OpenOrderPage() {
         return;
       }
       const nextQuery = match || trimmed;
-      setSearchQuery(nextQuery);
-      setActiveSearchQuery(nextQuery);
+      commitSearch(nextQuery);
       setShowSuggestions(false);
       setIsWoFocused(false);
       setActiveIndex(-1);
@@ -995,8 +1012,7 @@ export default function OpenOrderPage() {
                         key={suggestion}
                         type="button"
                         onClick={() => {
-                          setSearchQuery(suggestion);
-                          setActiveSearchQuery(suggestion);
+                          commitSearch(suggestion);
                           setShowSuggestions(false);
                           setIsWoFocused(false);
                         }}
