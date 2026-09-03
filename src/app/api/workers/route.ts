@@ -1,4 +1,10 @@
-import { getPool, sql, WORKERS_VIEW } from "@/lib/db";
+import {
+  getPool,
+  sql,
+  WORKERS_VIEW,
+  CURRENT_PAY_CYCLE_START_SQL,
+} from "@/lib/db";
+import { fetchPieceRates } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 
 export const dynamic = "force-dynamic";
 
@@ -24,48 +30,61 @@ export async function GET(request: Request) {
     if (code) {
       const codeNum = parseInt(code);
       if (isNaN(codeNum)) {
-        return Response.json({ error: "Invalid employee code format." }, { status: 400 });
+        return Response.json(
+          { error: "Invalid employee code format." },
+          { status: 400 },
+        );
       }
 
-      const [workerResult, scanCountsResult] = await Promise.all([
-        hrmsPool
-          .request()
-          .input("code", sql.Int, codeNum)
-          .query(`
+      const [workerResult, scanRowsResult] = await Promise.all([
+        hrmsPool.request().input("code", sql.Int, codeNum).query(`
             SELECT TOP 1 EmployeeID, FirstName, DesignationName, ParentDepartment, DepartmentName
             FROM ${WORKERS_VIEW}
             WHERE EmployeeID = @code
           `),
         (await getPool("pitSystem"))
           .request()
-          .input("code", sql.NVarChar, String(codeNum))
-          .query(`
-            SELECT
-              (
-                SELECT COUNT(*)
-                FROM dbo.QrCode_Coupon
-                WHERE EmployeeCode = @code
-                  AND IsScanned = 1
-                  AND ScannedAt IS NOT NULL
-                  AND CAST(ScannedAt AS DATE) = CAST(GETDATE() AS DATE)
-              ) AS AlreadyDailyScan,
-              (
-                SELECT COUNT(*)
-                FROM dbo.QrCode_Coupon
-                WHERE EmployeeCode = @code
-                  AND IsScanned = 1
-                  AND ScannedAt IS NOT NULL
-                  AND ScannedAt >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
-              ) AS AlreadyMonthlyScan
+          .input("code", sql.NVarChar, String(codeNum)).query(`
+            SELECT WorkOrder, OpNo,
+              CASE WHEN CAST(ScannedAt AS DATE) = CAST(GETDATE() AS DATE) THEN 1 ELSE 0 END AS IsToday
+            FROM dbo.QrCode_Coupon
+            WHERE EmployeeCode = @code
+              AND IsScanned = 1
+              AND ScannedAt IS NOT NULL
+              AND ScannedAt >= ${CURRENT_PAY_CYCLE_START_SQL}
           `),
       ]);
 
       if (workerResult.recordset.length === 0) {
         return Response.json(null);
       }
+
+      const scanRows = scanRowsResult.recordset as {
+        WorkOrder: string;
+        OpNo: string;
+        IsToday: number;
+      }[];
+      const withRates = await fetchPieceRates(scanRows);
+
+      let dailyScan = 0;
+      let monthlyScan = 0;
+      let dailyScanPrice = 0;
+      let monthlyScanPrice = 0;
+      for (const row of withRates) {
+        monthlyScan++;
+        monthlyScanPrice += row.Rate ?? 0;
+        if (row.IsToday) {
+          dailyScan++;
+          dailyScanPrice += row.Rate ?? 0;
+        }
+      }
+
       return Response.json({
         ...workerResult.recordset[0],
-        ...scanCountsResult.recordset[0],
+        AlreadyDailyScan: dailyScan,
+        AlreadyMonthlyScan: monthlyScan,
+        AlreadyDailyScanPrice: dailyScanPrice,
+        AlreadyMonthlyScanPrice: monthlyScanPrice,
       });
     }
 
@@ -73,8 +92,7 @@ export async function GET(request: Request) {
     if (query) {
       const result = await hrmsPool
         .request()
-        .input("q", sql.NVarChar, `%${query.trim()}%`)
-        .query(`
+        .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
           SELECT DISTINCT TOP 10 EmployeeID, FirstName, DesignationName, ParentDepartment, DepartmentName
           FROM ${WORKERS_VIEW}
           WHERE CAST(EmployeeID AS VARCHAR(50)) LIKE @q OR FirstName LIKE @q

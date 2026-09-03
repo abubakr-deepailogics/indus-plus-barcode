@@ -57,7 +57,7 @@ export function CouponScanningDashboard() {
         <div className="text-center mb-6">
           <h1 className="text-lg font-bold uppercase tracking-wider">Scanned Coupons Report</h1>
           <p className="text-[10px] text-gray-500 mt-1">
-            Generated on {format(new Date(), "dd-MM-yyyy HH:mm:ss")}
+            Generated on {format(new Date(), "dd-MM-yyyy hh:mm:ss a")}
           </p>
         </div>
 

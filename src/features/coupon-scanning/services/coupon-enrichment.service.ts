@@ -17,7 +17,8 @@ const IN_LIST_CHUNK_SIZE = 2000; // stays well under SQL Server's ~2100 paramete
 
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  for (let i = 0; i < items.length; i += size)
+    out.push(items.slice(i, i + size));
   return out;
 }
 
@@ -101,7 +102,8 @@ async function fetchStyleBulletinByOp(
     );
     for (const row of result.recordset as StyleBulletinRow[]) {
       const existing = map.get(row.Operation_Code);
-      if (!existing || row.RowId < existing.RowId) map.set(row.Operation_Code, row);
+      if (!existing || row.RowId < existing.RowId)
+        map.set(row.Operation_Code, row);
     }
   }
   return map;
@@ -142,8 +144,14 @@ export async function enrichCouponRows<
     workOrders.map(async (wo) => {
       const woRows = rows.filter((r) => r.WorkOrder === wo);
       const [cutMap, opMap] = await Promise.all([
-        fetchCutDetailByBundle(wo, woRows.map((r) => r.BundleNo)),
-        fetchStyleBulletinByOp(wo, woRows.map((r) => r.OpNo)),
+        fetchCutDetailByBundle(
+          wo,
+          woRows.map((r) => r.BundleNo),
+        ),
+        fetchStyleBulletinByOp(
+          wo,
+          woRows.map((r) => r.OpNo),
+        ),
       ]);
       cutMaps.set(wo, cutMap);
       opMaps.set(wo, opMap);
@@ -171,6 +179,33 @@ export async function enrichCouponRows<
       Rate: rate,
       Value: qty != null && rate != null ? Number(qty) * Number(rate) : null,
     };
+  });
+}
+
+export async function fetchPieceRates<
+  T extends { WorkOrder: string; OpNo: string },
+>(rows: T[]): Promise<(T & { Rate: number | null })[]> {
+  if (rows.length === 0) return [];
+
+  const workOrders = [...new Set(rows.map((r) => r.WorkOrder))];
+  const opMaps = new Map<string, Map<string, StyleBulletinRow>>();
+  await Promise.all(
+    workOrders.map(async (wo) => {
+      const woRows = rows.filter((r) => r.WorkOrder === wo);
+      opMaps.set(
+        wo,
+        await fetchStyleBulletinByOp(
+          wo,
+          woRows.map((r) => r.OpNo),
+        ),
+      );
+    }),
+  );
+
+  return rows.map((row) => {
+    const op = opMaps.get(row.WorkOrder)?.get(row.OpNo);
+    const rate = (op?.Piece_Rate as number | null | undefined) ?? null;
+    return { ...row, Rate: rate };
   });
 }
 

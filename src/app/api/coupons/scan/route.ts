@@ -1,4 +1,4 @@
-import { getPool, sql } from "@/lib/db";
+import { getPool, sql, SCANNED_AT_FROM_DATE_SQL } from "@/lib/db";
 import {
   enrichCouponRows,
   withinCutRange,
@@ -110,7 +110,7 @@ export async function GET(request: Request) {
           SET IsScanned = 1,
               EmployeeCode = NULLIF(@employeeCode, ''),
               ScanBy = NULLIF(@scanBy, ''),
-              ScannedAt = COALESCE(TRY_CAST(NULLIF(@scanDate, '') AS DATETIME), GETDATE())
+              ScannedAt = ${SCANNED_AT_FROM_DATE_SQL}
           WHERE CouponCode = @barcode
         `);
 
@@ -154,7 +154,7 @@ export async function GET(request: Request) {
           SET IsScanned = 1,
               EmployeeCode = NULLIF(@employeeCode, ''),
               ScanBy = NULLIF(@scanBy, ''),
-              ScannedAt = COALESCE(TRY_CAST(NULLIF(@scanDate, '') AS DATETIME), GETDATE())
+              ScannedAt = ${SCANNED_AT_FROM_DATE_SQL}
           WHERE CouponCode IN (${placeholders.join(", ")})
         `);
     }

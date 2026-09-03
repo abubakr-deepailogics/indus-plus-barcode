@@ -28,6 +28,8 @@ export interface Worker {
   DesignationName?: string;
   AlreadyDailyScan?: number;
   AlreadyMonthlyScan?: number;
+  AlreadyDailyScanPrice?: number;
+  AlreadyMonthlyScanPrice?: number;
 }
 
 export interface OperationSuggestion {

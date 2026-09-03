@@ -5,6 +5,7 @@ import { useAuth } from "@/features/auth/context/auth-context";
 import {
   ScanningRow,
   Worker,
+  CouponApiItem,
   makeEmptyRow,
   getErrorMessage,
   describeFailedScans,
@@ -18,6 +19,10 @@ function makeEmptyRows() {
   return Array.from({ length: EMPTY_ROW_COUNT }, (_, i) => makeEmptyRow(i + 1));
 }
 
+function sumRates(items: CouponApiItem[]): number {
+  return items.reduce((sum, item) => sum + (Number(item.Rate) || 0), 0);
+}
+
 export function useCouponScanning() {
   const { user } = useAuth();
   // Information panel state
@@ -26,6 +31,8 @@ export function useCouponScanning() {
   const [designation, setDesignation] = useState("");
   const [alreadyDailyScan, setAlreadyDailyScan] = useState("");
   const [alreadyMonthlyScan, setAlreadyMonthlyScan] = useState("");
+  const [alreadyDailyScanPrice, setAlreadyDailyScanPrice] = useState("");
+  const [alreadyMonthlyScanPrice, setAlreadyMonthlyScanPrice] = useState("");
   const [lineId, setLineId] = useState("");
   const [scanBy, setScanBy] = useState(() => {
     return user?.displayName || user?.email?.split("@")[0] || "";
@@ -65,7 +72,9 @@ export function useCouponScanning() {
   // the current Dated value. null = not yet checked for this exact
   // employee/date pair — distinct from `false` (checked, and absent) so
   // callers can tell "unknown, still need to verify" from "verified absent".
-  const [isEmployeePresent, setIsEmployeePresent] = useState<boolean | null>(null);
+  const [isEmployeePresent, setIsEmployeePresent] = useState<boolean | null>(
+    null,
+  );
   const [checkingAttendance, setCheckingAttendance] = useState(false);
 
   // Stale attendance result from a previous employee/date pair must never
@@ -109,33 +118,43 @@ export function useCouponScanning() {
   // synchronously (e.g. picking a date from the calendar) would otherwise
   // read the pre-update `dated` from this closure, since the state update
   // hasn't re-rendered yet — passing the just-set value sidesteps that.
-  const verifyAttendance = useCallback(async (overrideDate?: string): Promise<boolean> => {
-    const dateToCheck = overrideDate ?? dated;
-    if (!employeeCode.trim() || !dateToCheck) {
-      setIsEmployeePresent(null);
-      return false;
-    }
-    setCheckingAttendance(true);
-    try {
-      const result = await couponScanningService.checkAttendance(employeeCode, dateToCheck);
-      if (!result.ok) {
-        raiseError(result.error);
+  const verifyAttendance = useCallback(
+    async (overrideDate?: string): Promise<boolean> => {
+      const dateToCheck = overrideDate ?? dated;
+      if (!employeeCode.trim() || !dateToCheck) {
         setIsEmployeePresent(null);
         return false;
       }
-      setIsEmployeePresent(result.present);
-      if (!result.present) {
-        raiseError("This employee was not marked present on the selected date — scanning is disabled.");
+      setCheckingAttendance(true);
+      try {
+        const result = await couponScanningService.checkAttendance(
+          employeeCode,
+          dateToCheck,
+        );
+        if (!result.ok) {
+          raiseError(result.error);
+          setIsEmployeePresent(null);
+          return false;
+        }
+        setIsEmployeePresent(result.present);
+        if (!result.present) {
+          raiseError(
+            "This employee was not marked present on the selected date — scanning is disabled.",
+          );
+        }
+        return result.present;
+      } catch (err) {
+        raiseError(
+          getErrorMessage(err, "Failed to check employee attendance."),
+        );
+        setIsEmployeePresent(null);
+        return false;
+      } finally {
+        setCheckingAttendance(false);
       }
-      return result.present;
-    } catch (err) {
-      raiseError(getErrorMessage(err, "Failed to check employee attendance."));
-      setIsEmployeePresent(null);
-      return false;
-    } finally {
-      setCheckingAttendance(false);
-    }
-  }, [employeeCode, dated]);
+    },
+    [employeeCode, dated],
+  );
 
   // useCallback keeps these referentially stable across renders — Autocomplete
   // re-runs its fetch effect whenever `fetchSuggestions` changes identity, so
@@ -149,10 +168,12 @@ export function useCouponScanning() {
   }, []);
 
   const fetchWorkOrderSuggestions = useCallback((query: string) => {
-    return couponScanningService.fetchWorkOrderSuggestions(query).catch((err) => {
-      console.error("WO suggestions fetch error:", err);
-      return [];
-    });
+    return couponScanningService
+      .fetchWorkOrderSuggestions(query)
+      .catch((err) => {
+        console.error("WO suggestions fetch error:", err);
+        return [];
+      });
   }, []);
 
   const fetchBundleSuggestions = useCallback(
@@ -298,7 +319,9 @@ export function useCouponScanning() {
               : dated || new Date().toLocaleDateString(),
           };
 
-          const existingIdx = updatedRows.findIndex((row) => row.barCode === code);
+          const existingIdx = updatedRows.findIndex(
+            (row) => row.barCode === code,
+          );
           if (existingIdx !== -1) {
             updatedRows[existingIdx] = {
               ...updatedRows[existingIdx],
@@ -331,6 +354,13 @@ export function useCouponScanning() {
         setAlreadyMonthlyScan((prev) =>
           String((parseInt(prev, 10) || 0) + newlyScannedCount),
         );
+        const newlyScannedPrice = sumRates(scanResult.scanned);
+        setAlreadyDailyScanPrice((prev) =>
+          ((parseFloat(prev) || 0) + newlyScannedPrice).toFixed(2),
+        );
+        setAlreadyMonthlyScanPrice((prev) =>
+          ((parseFloat(prev) || 0) + newlyScannedPrice).toFixed(2),
+        );
       }
 
       setIsScanning(false);
@@ -353,7 +383,10 @@ export function useCouponScanning() {
       console.error("Combined search and scan error:", err);
       setIsScanning(false);
       setErrorMessage(
-        getErrorMessage(err, "An unexpected error occurred during search and scan."),
+        getErrorMessage(
+          err,
+          "An unexpected error occurred during search and scan.",
+        ),
       );
       setShowErrorModal(true);
     }
@@ -366,6 +399,8 @@ export function useCouponScanning() {
     setDesignation("");
     setAlreadyDailyScan("");
     setAlreadyMonthlyScan("");
+    setAlreadyDailyScanPrice("");
+    setAlreadyMonthlyScanPrice("");
     setLineId("");
     setScanBy(user?.displayName || user?.email?.split("@")[0] || "");
     setDated("");
@@ -454,7 +489,9 @@ export function useCouponScanning() {
         return;
       }
 
-      const byCode = new Map(result.scanned.map((item) => [item.CouponCode, item]));
+      const byCode = new Map(
+        result.scanned.map((item) => [item.CouponCode, item]),
+      );
       setRows((prev) =>
         prev.map((row) => {
           const item = row.barCode ? byCode.get(row.barCode) : undefined;
@@ -471,8 +508,19 @@ export function useCouponScanning() {
       );
 
       if (result.scanned.length > 0) {
-        setAlreadyDailyScan((prev) => String((parseInt(prev) || 0) + result.scanned.length));
-        setAlreadyMonthlyScan((prev) => String((parseInt(prev) || 0) + result.scanned.length));
+        setAlreadyDailyScan((prev) =>
+          String((parseInt(prev) || 0) + result.scanned.length),
+        );
+        setAlreadyMonthlyScan((prev) =>
+          String((parseInt(prev) || 0) + result.scanned.length),
+        );
+        const newlyScannedPrice = sumRates(result.scanned);
+        setAlreadyDailyScanPrice((prev) =>
+          ((parseFloat(prev) || 0) + newlyScannedPrice).toFixed(2),
+        );
+        setAlreadyMonthlyScanPrice((prev) =>
+          ((parseFloat(prev) || 0) + newlyScannedPrice).toFixed(2),
+        );
       }
 
       if (result.failed.length > 0) {
@@ -492,7 +540,9 @@ export function useCouponScanning() {
       }
     } catch (err) {
       console.error("Batch scan error:", err);
-      raiseError(getErrorMessage(err, "An unexpected error occurred while scanning."));
+      raiseError(
+        getErrorMessage(err, "An unexpected error occurred while scanning."),
+      );
     }
   }, [employeeCode, scanBy, dated, isEmployeePresent, verifyAttendance]);
 
@@ -518,7 +568,10 @@ export function useCouponScanning() {
       const updatedRows = [...prev];
       const targetIndex = updatedRows.findIndex((row) => !row.barCode);
       if (targetIndex !== -1) {
-        updatedRows[targetIndex] = { ...updatedRows[targetIndex], barCode: code };
+        updatedRows[targetIndex] = {
+          ...updatedRows[targetIndex],
+          barCode: code,
+        };
       } else {
         updatedRows.push({
           ...makeEmptyRow(updatedRows.length + 1),
@@ -566,6 +619,13 @@ export function useCouponScanning() {
         setAlreadyMonthlyScan((prev) =>
           String(Math.max(0, (parseInt(prev) || 0) - 1)),
         );
+        const unscannedPrice = Number(row.rate) || 0;
+        setAlreadyDailyScanPrice((prev) =>
+          Math.max(0, (parseFloat(prev) || 0) - unscannedPrice).toFixed(2),
+        );
+        setAlreadyMonthlyScanPrice((prev) =>
+          Math.max(0, (parseFloat(prev) || 0) - unscannedPrice).toFixed(2),
+        );
       } catch (err) {
         console.error("Unscan error:", err);
         setScanError("An error occurred while unscanning the coupon.");
@@ -594,6 +654,12 @@ export function useCouponScanning() {
       if (fullWorker) {
         setAlreadyDailyScan(String(fullWorker.AlreadyDailyScan ?? 0));
         setAlreadyMonthlyScan(String(fullWorker.AlreadyMonthlyScan ?? 0));
+        setAlreadyDailyScanPrice(
+          (fullWorker.AlreadyDailyScanPrice ?? 0).toFixed(2),
+        );
+        setAlreadyMonthlyScanPrice(
+          (fullWorker.AlreadyMonthlyScanPrice ?? 0).toFixed(2),
+        );
       }
     } catch (err) {
       console.error("Failed to fetch worker scan stats:", err);
@@ -725,6 +791,10 @@ export function useCouponScanning() {
     setAlreadyDailyScan,
     alreadyMonthlyScan,
     setAlreadyMonthlyScan,
+    alreadyDailyScanPrice,
+    setAlreadyDailyScanPrice,
+    alreadyMonthlyScanPrice,
+    setAlreadyMonthlyScanPrice,
     lineId,
     setLineId,
     scanBy,
