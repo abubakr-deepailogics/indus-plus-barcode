@@ -79,9 +79,11 @@ export default function CouponTracingPage() {
   });
 
   const fetchWorkOrderRows = useCallback(
-    async (filters: { workOrder: string }): Promise<WorkOrderSearchRow[]> => {
+    async (filters: { workOrder: string; customer: string; saleOrderNo: string }): Promise<WorkOrderSearchRow[]> => {
       const params = new URLSearchParams();
       if (filters.workOrder) params.set("work_order", filters.workOrder);
+      if (filters.customer) params.set("customer", filters.customer);
+      if (filters.saleOrderNo) params.set("sale_order_no", filters.saleOrderNo);
       const res = await fetch(`/api/coupons/work-orders?${params.toString()}`);
       return res.ok ? res.json() : [];
     },
@@ -572,8 +574,6 @@ export default function CouponTracingPage() {
           setShowWorkOrderModal(false);
         }}
         fetchRows={fetchWorkOrderRows}
-        showCustomerColumn={false}
-        showSaleOrderNoColumn={false}
       />
 
       {/* Generating PDF Loader Overlay */}
