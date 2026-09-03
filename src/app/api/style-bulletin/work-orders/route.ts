@@ -18,7 +18,9 @@ export async function GET(request: Request) {
   try {
     const pool = await getPool("indusPlus");
     const request_ = pool.request();
-    const conditions: string[] = ["[Order No] IS NOT NULL AND [Order No] <> ''"];
+    const conditions: string[] = [
+      "[Order No] IS NOT NULL AND [Order No] <> ''",
+    ];
 
     if (workOrder) {
       request_.input("workOrder", sql.NVarChar, `%${workOrder}%`);
@@ -26,7 +28,7 @@ export async function GET(request: Request) {
     }
     if (customer) {
       request_.input("customer", sql.NVarChar, `%${customer}%`);
-      conditions.push("[Customer Name] LIKE @customer");
+      conditions.push("UPPER([Customer Name]) LIKE UPPER(@customer)");
     }
     if (saleOrderNo) {
       request_.input("saleOrderNo", sql.NVarChar, `%${saleOrderNo}%`);

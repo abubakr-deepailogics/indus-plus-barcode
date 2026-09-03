@@ -66,7 +66,7 @@ export async function GET(request: Request) {
       }
       if (customer) {
         indusRequest.input("customer", sql.NVarChar, `%${customer}%`);
-        conditions.push("[Customer Name] LIKE @customer");
+        conditions.push("UPPER([Customer Name]) LIKE UPPER(@customer)");
       }
       if (saleOrderNo) {
         indusRequest.input("saleOrderNo", sql.NVarChar, `%${saleOrderNo}%`);

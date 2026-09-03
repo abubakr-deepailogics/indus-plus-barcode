@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     }
     if (customer) {
       request_.input("customer", sql.NVarChar, `%${customer}%`);
-      conditions.push("[Customer Name] LIKE @customer");
+      conditions.push("UPPER([Customer Name]) LIKE UPPER(@customer)");
     }
     if (saleOrderNo) {
       request_.input("saleOrderNo", sql.NVarChar, `%${saleOrderNo}%`);
@@ -34,7 +34,8 @@ export async function GET(request: Request) {
 
     // No filters yet → most-recent-first default list, mirroring the same
     // empty-query fallback /api/open-order/suggestions already uses.
-    const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+    const where =
+      conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
     const orderDirection = conditions.length > 0 ? "ASC" : "DESC";
 
     const result = await request_.query(`
