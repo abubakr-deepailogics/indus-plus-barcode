@@ -4,7 +4,7 @@ import { useQrCodeGenerationFacade } from "../hooks/useQrCodeGenerationFacade";
 import { ParametersPanel } from "./ParametersPanel";
 import { OperationsDetailTable } from "./OperationsDetailTable";
 import { BundleDetailTable } from "./BundleDetailTable";
-import { StyleSearchModal } from "./StyleSearchModal";
+import { WorkOrderSearchModal } from "@/components/work-order-search-modal";
 import { PageSetupModal } from "./PageSetupModal";
 import { GenerateCouponsModal } from "./GenerateCouponsModal";
 import { CodeTypeSelectionModal } from "./CodeTypeSelectionModal";
@@ -56,10 +56,8 @@ export function QrCodeGenerationView() {
         {/* Main Parameters Panel */}
         <ParametersPanel
           activeStyle={facade.activeStyle}
-          onWorkOrderInputChange={facade.handleWorkOrderInputChange}
-          onOpenSearchModal={facade.openSearchModal}
+          onOpenWorkOrderSearch={() => facade.setShowWorkOrderModal(true)}
           onOpenPageSetupModal={() => facade.setShowCodeTypeModal(true)}
-          onFieldChange={facade.handleFieldChange}
           onGenerateCoupons={facade.handleGenerateCoupons}
           generatingCoupons={facade.generatingCoupons}
           customersList={facade.customersList}
@@ -111,20 +109,14 @@ export function QrCodeGenerationView() {
           </div>
         </footer>
 
-        {/* Search Modal */}
-        {facade.showSearchModal && (
-          <StyleSearchModal
-            searchQuery={facade.searchQuery}
-            onSearchQueryChange={facade.setSearchQuery}
-            filteredStyles={facade.filteredStyles}
-            allStyles={facade.filteredStyles}
-            selectedIdx={facade.selectedIdx}
-            onSelectIdx={facade.setSelectedIdx}
-            onConfirm={facade.handleModalSearch}
-            onClose={() => facade.setShowSearchModal(false)}
-          />
-        )}
       </div>
+
+      <WorkOrderSearchModal
+        open={facade.showWorkOrderModal}
+        onClose={() => facade.setShowWorkOrderModal(false)}
+        onSelect={facade.handleSelectWorkOrder}
+        fetchRows={facade.fetchWorkOrderRows}
+      />
 
       {/* Page Setup Modal */}
       {facade.showPageSetupModal && (

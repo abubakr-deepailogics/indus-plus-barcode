@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useEffect } from "react";
+import { useCallback, useState, useMemo, useEffect } from "react";
 import type {
   OperationsDetailRow,
   QrCodeStyleData,
@@ -9,6 +9,7 @@ import type {
 import { useGenerateCouponPdf } from "./useGenerateCouponPdf";
 import { useAuth } from "@/features/auth/context/auth-context";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
+import type { WorkOrderSearchRow } from "@/components/work-order-search-modal";
 
 interface WorkerItem {
   EmployeeID: number;
@@ -23,23 +24,20 @@ function isZeroRateOp(op: OperationsDetailRow): boolean {
 interface QrCodeGenerationFacade {
   activeStyle: QrCodeStyleData;
   isLoadingWorkOrder: boolean;
-  showSearchModal: boolean;
-  searchQuery: string;
-  selectedIdx: number;
+  showWorkOrderModal: boolean;
+  setShowWorkOrderModal: (show: boolean) => void;
+  fetchWorkOrderRows: (filters: {
+    workOrder: string;
+    customer: string;
+    saleOrderNo: string;
+  }) => Promise<WorkOrderSearchRow[]>;
+  handleSelectWorkOrder: (row: WorkOrderSearchRow) => void;
   showPageSetupModal: boolean;
   pageSetup: PageSetupConfig;
-  filteredStyles: QrCodeStyleData[];
-  handleModalSearch: () => void;
-  handleWorkOrderInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  setSearchQuery: (value: string) => void;
-  setSelectedIdx: (idx: number) => void;
-  setShowSearchModal: (show: boolean) => void;
   setShowPageSetupModal: (show: boolean) => void;
   showCodeTypeModal: boolean;
   setShowCodeTypeModal: (show: boolean) => void;
   setPageSetup: (config: PageSetupConfig) => void;
-  openSearchModal: () => void;
-  handleFieldChange: (field: keyof QrCodeStyleData, value: string) => void;
   handleOperationChange: (id: number, field: string, value: boolean) => void;
   handleBundleSelChange: (id: number, checked: boolean) => void;
   handleAllBundlesSelChange: (checked: boolean) => void;
@@ -93,9 +91,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   const { user } = useAuth();
   const [activeStyle, setActiveStyle] = useState<QrCodeStyleData>(emptyStyle);
   const [isLoadingWorkOrder, setIsLoadingWorkOrder] = useState(false);
-  const [showSearchModal, setShowSearchModal] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [selectedIdx, setSelectedIdx] = useState(0);
+  const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
   const [showPageSetupModal, setShowPageSetupModal] = useState(false);
   const [showCodeTypeModal, setShowCodeTypeModal] = useState(false);
   const [pageSetup, setPageSetup] = useState<PageSetupConfig>({
@@ -112,8 +108,6 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     codeType: "qr",
   });
 
-  const [searchResults, setSearchResults] = useState<QrCodeStyleData[]>([]);
-  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
   const [generatingCoupons, setGeneratingCoupons] = useState(false);
 
   // Generation Modal States
@@ -172,31 +166,34 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   const [customersList, setCustomersList] = useState<string[]>([]);
   const [workersList, setWorkersList] = useState<WorkerItem[]>([]);
 
-  // Set default datetime client side
   useEffect(() => {
-    setActiveStyle((prev) => ({
-      ...prev,
-      generateDatetime: new Date()
-        .toLocaleString("en-GB", {
-          day: "2-digit",
-          month: "2-digit",
-          year: "2-digit",
-          hour: "2-digit",
-          minute: "2-digit",
-        })
-        .replace(",", ""),
-    }));
+    queueMicrotask(() => {
+      setActiveStyle((prev) => ({
+        ...prev,
+        generateDatetime: new Date()
+          .toLocaleString("en-GB", {
+            day: "2-digit",
+            month: "2-digit",
+            year: "2-digit",
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+          .replace(",", ""),
+      }));
+    });
   }, []);
 
-  // Set default generateBy to logged in user name
+  // Set default generateBy to logged in user name — same deferral reason
+  // as above.
   useEffect(() => {
-    if (user) {
+    if (!user) return;
+    queueMicrotask(() => {
       const name = user.displayName || user.email?.split("@")[0] || "";
       setActiveStyle((prev) => ({
         ...prev,
         generateBy: prev.generateBy || name,
       }));
-    }
+    });
   }, [user]);
 
   // Fetch dropdown collections & initial suggestions on mount
@@ -220,52 +217,12 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
           const workers = await workersRes.json();
           setWorkersList(workers);
         }
-
-        // Fetch default work orders suggestions
-        const defWoRes = await fetch("/api/open-order/suggestions?query=");
-        if (defWoRes.ok) {
-          const wos: string[] = await defWoRes.json();
-          const mapped = wos.map((wo) => ({
-            ...emptyStyle,
-            workOrder: wo,
-            customer: "Select to load...",
-            styleCode: "Select to load...",
-          }));
-          setSearchResults(mapped);
-        }
       } catch (err) {
         console.error("Failed to load initial search metadata:", err);
       }
     };
     loadInitialMetadata();
   }, []);
-
-  // Fetch suggestions for Work Orders dynamically
-  useEffect(() => {
-    const fetchSuggestions = async () => {
-      const trimmed = searchQuery.trim();
-      try {
-        const res = await fetch(
-          `/api/open-order/suggestions?query=${encodeURIComponent(trimmed)}`,
-        );
-        if (res.ok) {
-          const suggestions: string[] = await res.json();
-          const mapped = suggestions.map((wo) => ({
-            ...emptyStyle,
-            workOrder: wo,
-            customer: "Select to load...",
-            styleCode: "Select to load...",
-          }));
-          setSearchResults(mapped);
-        }
-      } catch (err) {
-        console.error("Suggestions fetch error:", err);
-      }
-    };
-
-    const timeout = setTimeout(fetchSuggestions, 300);
-    return () => clearTimeout(timeout);
-  }, [searchQuery]);
 
   // Load details for a selected Work Order
   const fetchWorkOrderDetails = async (wo: string) => {
@@ -370,49 +327,31 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     fetchWorkOrderDetails(wo);
   });
 
-  const handleModalSearch = async () => {
-    const selected = searchResults[selectedIdx];
-    if (selected) {
-      await fetchWorkOrderDetails(selected.workOrder);
-      setSharedWorkOrder(selected.workOrder);
-    }
-    setShowSearchModal(false);
-  };
+  // Backs the shared Work Order search modal — same indusPlus table Cut
+  // Report reads from (see /api/open-order/work-orders), so both pages
+  // share this route.
+  const fetchWorkOrderRows = useCallback(
+    async (filters: {
+      workOrder: string;
+      customer: string;
+      saleOrderNo: string;
+    }): Promise<WorkOrderSearchRow[]> => {
+      const params = new URLSearchParams();
+      if (filters.workOrder) params.set("work_order", filters.workOrder);
+      if (filters.customer) params.set("customer", filters.customer);
+      if (filters.saleOrderNo) params.set("sale_order_no", filters.saleOrderNo);
+      const res = await fetch(
+        `/api/open-order/work-orders?${params.toString()}`,
+      );
+      return res.ok ? res.json() : [];
+    },
+    [],
+  );
 
-  const handleWorkOrderInputChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const value = e.target.value;
-    setActiveStyle((prev) => ({ ...prev, workOrder: value }));
-    // Debounce/trigger fetch details if it matches completely
-    if (value.trim().length >= 4) {
-      fetchWorkOrderDetails(value.trim());
-      setSharedWorkOrder(value.trim());
-    }
-  };
-
-  const openSearchModal = async () => {
-    setSearchQuery("");
-    try {
-      const res = await fetch("/api/open-order/suggestions?query=");
-      if (res.ok) {
-        const wos: string[] = await res.json();
-        const mapped = wos.map((wo) => ({
-          ...emptyStyle,
-          workOrder: wo,
-          customer: "Select to load...",
-          styleCode: "Select to load...",
-        }));
-        setSearchResults(mapped);
-      }
-    } catch (e) {
-      console.error("Error loading search suggestions:", e);
-    }
-    setShowSearchModal(true);
-  };
-
-  const handleFieldChange = (field: keyof QrCodeStyleData, value: string) => {
-    setActiveStyle((prev) => ({ ...prev, [field]: value }));
+  const handleSelectWorkOrder = (row: WorkOrderSearchRow) => {
+    fetchWorkOrderDetails(row.workOrder);
+    setSharedWorkOrder(row.workOrder);
+    setShowWorkOrderModal(false);
   };
 
   const handleOperationChange = (id: number, field: string, value: boolean) => {
@@ -613,23 +552,16 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   return {
     activeStyle,
     isLoadingWorkOrder,
-    showSearchModal,
-    searchQuery,
-    selectedIdx,
+    showWorkOrderModal,
+    setShowWorkOrderModal,
+    fetchWorkOrderRows,
+    handleSelectWorkOrder,
     showPageSetupModal,
     pageSetup,
-    filteredStyles: searchResults,
-    handleModalSearch,
-    handleWorkOrderInputChange,
-    setSearchQuery,
-    setSelectedIdx,
-    setShowSearchModal,
     setShowPageSetupModal,
     showCodeTypeModal,
     setShowCodeTypeModal,
     setPageSetup,
-    openSearchModal,
-    handleFieldChange,
     handleOperationChange,
     handleBundleSelChange,
     handleAllBundlesSelChange,

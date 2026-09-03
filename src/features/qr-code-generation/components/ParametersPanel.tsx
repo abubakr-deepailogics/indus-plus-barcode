@@ -1,7 +1,7 @@
 "use client";
 
 import React from "react";
-import { Autocomplete } from "@/components/ui/autocomplete";
+import { Search } from "lucide-react";
 import type { QrCodeStyleData } from "../types";
 
 interface WorkerItem {
@@ -10,10 +10,8 @@ interface WorkerItem {
 }
 interface ParametersPanelProps {
   activeStyle: QrCodeStyleData;
-  onWorkOrderInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  onOpenSearchModal: () => void;
+  onOpenWorkOrderSearch: () => void;
   onOpenPageSetupModal: () => void;
-  onFieldChange: (field: keyof QrCodeStyleData, value: string) => void;
   onGenerateCoupons: () => void;
   generatingCoupons?: boolean;
   customersList: string[];
@@ -22,10 +20,8 @@ interface ParametersPanelProps {
 }
 export function ParametersPanel({
   activeStyle,
-  onWorkOrderInputChange,
-  onOpenSearchModal,
+  onOpenWorkOrderSearch,
   onOpenPageSetupModal,
-  onFieldChange,
   onGenerateCoupons,
   generatingCoupons = false,
   customersList = [],
@@ -41,30 +37,16 @@ export function ParametersPanel({
             <label className="font-bold text-[#475569] text-[11px]">
               Work Order
             </label>
-            <div className="relative w-full">
-              <Autocomplete<string>
-                value={activeStyle.workOrder}
-                onChange={(val) => onFieldChange("workOrder", val)}
-                onSelect={(val) => {
-                  onWorkOrderInputChange({
-                    target: { value: val }
-                  } as React.ChangeEvent<HTMLInputElement>);
-                }}
-                fetchSuggestions={async (q) => {
-                  const res = await fetch(`/api/open-order/suggestions?query=${encodeURIComponent(q)}`);
-                  if (res.ok) {
-                    return res.json();
-                  }
-                  return [];
-                }}
-                renderSuggestion={(item) => <span className="font-semibold text-slate-700">{item}</span>}
-                getSuggestionValue={(item) => item}
-                minChars={2}
-                placeholder="Enter Work Order"
-                className="w-full"
-                inputClassName="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-white text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-              />
-            </div>
+            <button
+              type="button"
+              onClick={onOpenWorkOrderSearch}
+              className="relative w-full text-left cursor-pointer"
+            >
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94a3b8]" />
+              <span className="block w-full pl-9 pr-3 py-2 rounded-xl border border-[#e2e8f0] bg-white text-xs text-slate-800 font-semibold hover:border-[#4f46e5] transition-all truncate">
+                {activeStyle.workOrder || "Search Work Order..."}
+              </span>
+            </button>
           </div>
           <div className="flex flex-col gap-1.5">
             <label className="font-bold text-[#475569] text-[11px]">
