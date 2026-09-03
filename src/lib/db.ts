@@ -165,3 +165,11 @@ export const SCANNED_AT_FROM_DATE_SQL = `
     GETDATE()
   )
 `;
+
+export const CURRENT_PAY_CYCLE_START_SQL = `
+  CASE
+    WHEN DAY(GETDATE()) >= 24
+      THEN DATEADD(day, 23, DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0))
+    ELSE DATEADD(day, 23, DATEADD(month, DATEDIFF(month, 0, GETDATE()) - 1, 0))
+  END
+`;

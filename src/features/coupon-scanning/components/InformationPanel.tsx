@@ -38,13 +38,13 @@ function parseDateString(str: string): Date | null {
 
 function isValidSelectedDate(date: Date): boolean {
   if (date.getDay() === 0) return false; // Sunday
-  
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const comp = new Date(date);
   comp.setHours(0, 0, 0, 0);
   if (comp > today) return false; // Future
-  
+
   return true;
 }
 
@@ -68,6 +68,8 @@ export function InformationPanel(props: Facade) {
     scanBy,
     alreadyDailyScan,
     alreadyMonthlyScan,
+    alreadyDailyScanPrice,
+    alreadyMonthlyScanPrice,
     scanCouponCode,
     setScanCouponCode,
     workOrder,
@@ -110,9 +112,12 @@ export function InformationPanel(props: Facade) {
     }
   }
 
-  const displayValue = typedValue !== null
-    ? typedValue
-    : (dated ? format(new Date(dated), "dd-MM-yyyy") : "");
+  const displayValue =
+    typedValue !== null
+      ? typedValue
+      : dated
+        ? format(new Date(dated), "dd-MM-yyyy")
+        : "";
 
   // Dated is gated on Employee Code — same "disabled until the field
   // before it is filled" convention as From Cut/To Cut/Bundle No/Operation
@@ -255,7 +260,11 @@ export function InformationPanel(props: Facade) {
               <div className="relative flex items-center w-full">
                 <input
                   type="text"
-                  placeholder={isEmployeeCodeFilled ? "DD-MM-YYYY" : "Enter Employee Code first"}
+                  placeholder={
+                    isEmployeeCodeFilled
+                      ? "DD-MM-YYYY"
+                      : "Enter Employee Code first"
+                  }
                   value={displayValue}
                   onChange={(e) => {
                     const val = e.target.value;
@@ -386,7 +395,7 @@ export function InformationPanel(props: Facade) {
           </div>
 
           {/* Row 3 */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
             {/* Scan By */}
             <label className="flex flex-col gap-0.5">
               <span className="font-bold text-[#475569] text-[10px] uppercase">
@@ -401,7 +410,7 @@ export function InformationPanel(props: Facade) {
               />
             </label>
 
-            {/* Already Daily Scan */}
+            {/* Already Daily Scan: coupon count + total operation price */}
             <label className="flex flex-col gap-0.5">
               <span className="font-bold text-[#475569] text-[10px] uppercase">
                 Already Daily Scan
@@ -414,8 +423,20 @@ export function InformationPanel(props: Facade) {
                 className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-500 bg-slate-50 focus:outline-none cursor-default"
               />
             </label>
+            <label className="flex flex-col gap-0.5">
+              <span className="font-bold text-[#475569] text-[10px] uppercase">
+                Daily Scan Price
+              </span>
+              <input
+                type="text"
+                readOnly
+                placeholder="0.00"
+                value={alreadyDailyScanPrice}
+                className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-500 bg-slate-50 focus:outline-none cursor-default"
+              />
+            </label>
 
-            {/* Already Monthly Scan */}
+            {/* Already Monthly Scan: coupon count + total operation price */}
             <label className="flex flex-col gap-0.5">
               <span className="font-bold text-[#475569] text-[10px] uppercase">
                 Already Monthly Scan
@@ -425,6 +446,18 @@ export function InformationPanel(props: Facade) {
                 readOnly
                 placeholder="Enter monthly scan"
                 value={alreadyMonthlyScan}
+                className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-500 bg-slate-50 focus:outline-none cursor-default"
+              />
+            </label>
+            <label className="flex flex-col gap-0.5">
+              <span className="font-bold text-[#475569] text-[10px] uppercase">
+                Monthly Scan Price
+              </span>
+              <input
+                type="text"
+                readOnly
+                placeholder="0.00"
+                value={alreadyMonthlyScanPrice}
                 className="px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-500 bg-slate-50 focus:outline-none cursor-default"
               />
             </label>
