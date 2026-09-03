@@ -21,6 +21,7 @@ import { useGenerateCouponPdf } from "@/features/qr-code-generation/hooks/useGen
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { classifyDepartment } from "@/lib/department-classification";
+import { WorkOrderSearchModal, type WorkOrderSearchRow } from "@/components/work-order-search-modal";
 
 interface CutDetailRow {
   RowId: number;
@@ -234,9 +235,8 @@ export default function OpenOrderPage() {
     [],
   );
 
-  const [searchQuery, setSearchQuery] = useState("");
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
-  const [isWoFocused, setIsWoFocused] = useState(false);
+  const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
   const activeTab = "cut_report";
 
   // Shared Work Order search: seeds this page's search from the global/URL
@@ -244,17 +244,26 @@ export default function OpenOrderPage() {
   // on mount, and propagates a search committed here to the other pages.
   const { setWorkOrder } = useWorkOrderParam(
     useCallback((wo: string) => {
-      setSearchQuery(wo);
       setActiveSearchQuery(wo);
     }, []),
   );
   const commitSearch = useCallback(
     (value: string) => {
-      setSearchQuery(value);
       setActiveSearchQuery(value);
       setWorkOrder(value);
     },
     [setWorkOrder],
+  );
+  const fetchWorkOrderRows = useCallback(
+    async (filters: { workOrder: string; customer: string; saleOrderNo: string }): Promise<WorkOrderSearchRow[]> => {
+      const params = new URLSearchParams();
+      if (filters.workOrder) params.set("work_order", filters.workOrder);
+      if (filters.customer) params.set("customer", filters.customer);
+      if (filters.saleOrderNo) params.set("sale_order_no", filters.saleOrderNo);
+      const res = await fetch(`/api/open-order/work-orders?${params.toString()}`);
+      return res.ok ? res.json() : [];
+    },
+    [],
   );
   const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
   const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
@@ -321,13 +330,6 @@ export default function OpenOrderPage() {
   const [isTransitioning, setIsTransitioning] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
   const [hasSearched, setHasSearched] = useState(false);
-
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [activeIndex, setActiveIndex] = useState(-1);
-  const containerRef = useRef<HTMLDivElement>(null);
-  const dropdownRef = useRef<HTMLDivElement>(null);
 
   const [showPageSetupModal, setShowPageSetupModal] = useState(false);
   const [pageSetup, setPageSetup] = useState<PageSetupConfig>({
@@ -665,110 +667,6 @@ export default function OpenOrderPage() {
     }
   };
 
-  // Fetch autocomplete suggestions as user types
-  useEffect(() => {
-    if (searchQuery.trim().length < 2) {
-      setSuggestions([]);
-      setSuggestionsLoading(false);
-      return;
-    }
-
-    setSuggestionsLoading(true);
-    const delayDebounceFn = setTimeout(async () => {
-      try {
-        const response = await fetch(
-          `/api/open-order/suggestions?query=${encodeURIComponent(searchQuery)}`,
-        );
-        setSuggestions(response.ok ? (await response.json()) || [] : []);
-      } catch (err) {
-        console.error("Suggestions fetch error:", err);
-        setSuggestions([]);
-      } finally {
-        setSuggestionsLoading(false);
-      }
-    }, 200); // Shorter debounce for suggestion lists
-
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchQuery]);
-
-  // Handle click outside suggestions container to close dropdown
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (
-        containerRef.current &&
-        !containerRef.current.contains(event.target as Node)
-      ) {
-        setShowSuggestions(false);
-        setIsWoFocused(false);
-      }
-    }
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside);
-    };
-  }, []);
-
-  useEffect(() => {
-    setActiveIndex(-1);
-  }, [suggestions]);
-
-  useEffect(() => {
-    if (activeIndex >= 0 && dropdownRef.current) {
-      const activeElement = dropdownRef.current.children[activeIndex] as HTMLElement;
-      if (activeElement) {
-        activeElement.scrollIntoView({ block: "nearest" });
-      }
-    }
-  }, [activeIndex]);
-
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (showSuggestions && suggestions.length > 0) {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setActiveIndex((prev) => (prev < suggestions.length - 1 ? prev + 1 : 0));
-        return;
-      }
-      if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setActiveIndex((prev) => (prev > 0 ? prev - 1 : suggestions.length - 1));
-        return;
-      }
-      if (e.key === "Enter") {
-        if (activeIndex >= 0 && activeIndex < suggestions.length) {
-          e.preventDefault();
-          const selected = suggestions[activeIndex];
-          commitSearch(selected);
-          setShowSuggestions(false);
-          setIsWoFocused(false);
-          setActiveIndex(-1);
-          return;
-        }
-      }
-    }
-
-    if (e.key === "Escape") {
-      setShowSuggestions(false);
-      setIsWoFocused(false);
-      setActiveIndex(-1);
-    } else if (e.key === "Enter") {
-      const trimmed = searchQuery.trim();
-      // Autocomplete-only: free text that doesn't match a real Work Order
-      // must not trigger a search (an empty field is still allowed through,
-      // to let the user clear the current results).
-      const match = trimmed
-        ? suggestions.find((s) => s.toLowerCase() === trimmed.toLowerCase())
-        : "";
-      if (trimmed && !match) {
-        return;
-      }
-      const nextQuery = match || trimmed;
-      commitSearch(nextQuery);
-      setShowSuggestions(false);
-      setIsWoFocused(false);
-      setActiveIndex(-1);
-    }
-  };
-
   // Fetch data from API only when the active (committed) search query
   // changes — typing alone must not refetch/replace the table.
   useEffect(() => {
@@ -957,58 +855,18 @@ export default function OpenOrderPage() {
           {/* Card 1: Order Info */}
           <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
           
-            <div className="relative" ref={containerRef}>
+            <div>
               <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Work Order</span>
-              <div className="relative mt-1.5">
+              <button
+                type="button"
+                onClick={() => setShowWorkOrderModal(true)}
+                className="relative mt-1.5 w-full text-left cursor-pointer"
+              >
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94a3b8]" />
-                <input
-                  type="text"
-                  value={isWoFocused ? searchQuery : (cutDetails[0]?.Work_Order || activeSearchQuery || searchQuery)}
-                  onChange={(e) => {
-                    setSearchQuery(e.target.value);
-                    setShowSuggestions(true);
-                  }}
-                  onFocus={() => {
-                    setIsWoFocused(true);
-                    setShowSuggestions(true);
-                  }}
-                  onKeyDown={handleKeyDown}
-                  placeholder="Search W/O..."
-                  className="w-full pl-9 pr-3 py-1 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-                />
-              </div>
-              {/* Autocomplete Suggestions Dropdown Overlay */}
-              {showSuggestions && searchQuery.trim().length >= 2 && !suggestionsLoading && (
-                <div
-                  ref={dropdownRef}
-                  className="absolute left-0 right-0 top-full mt-1 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 max-h-60 overflow-y-auto divide-y divide-[#f1f5f9] animate-fade-in"
-                >
-                  {suggestions.length === 0 ? (
-                    <div className="px-4 py-3 text-xs font-semibold text-slate-400 text-center">
-                      No results found
-                    </div>
-                  ) : (
-                    suggestions.map((suggestion, idx) => (
-                      <button
-                        key={suggestion}
-                        type="button"
-                        onClick={() => {
-                          commitSearch(suggestion);
-                          setShowSuggestions(false);
-                          setIsWoFocused(false);
-                        }}
-                        className={`w-full text-left px-4 py-2 text-xs font-semibold transition-all cursor-pointer block ${
-                          idx === activeIndex
-                            ? "bg-indigo-50 text-[#4f46e5]"
-                            : "hover:bg-indigo-50/50 text-slate-700 hover:text-[#4f46e5]"
-                        }`}
-                      >
-                        {suggestion}
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
+                <span className="block w-full pl-9 pr-3 py-1 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 hover:border-[#4f46e5] transition-all truncate">
+                  {cutDetails[0]?.Work_Order || activeSearchQuery || "Search W/O..."}
+                </span>
+              </button>
             </div>
               <div>
               <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Sale Order No</span>
@@ -1142,6 +1000,16 @@ export default function OpenOrderPage() {
           generatingPdf={generatingPdf}
         />
       )}
+
+      <WorkOrderSearchModal
+        open={showWorkOrderModal}
+        onClose={() => setShowWorkOrderModal(false)}
+        onSelect={(row) => {
+          commitSearch(row.workOrder);
+          setShowWorkOrderModal(false);
+        }}
+        fetchRows={fetchWorkOrderRows}
+      />
 
       {/* Hidden file input for Attachment upload */}
       <input

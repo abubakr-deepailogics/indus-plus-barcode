@@ -32,7 +32,7 @@ export function PageSetupModal({
   }, [onClose]);
   return (
     <div className="no-print fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] max-w-[500px] w-full p-6 animate-scale-up text-xs text-[#334155] font-sans">
+      <div className="bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] max-w-[700px] w-full p-6 animate-scale-up text-xs text-[#334155] font-sans">
         {/* Modal Header */}
         <div className="flex items-center justify-between pb-4 mb-4 border-b border-gray-100">
           <h3 className="text-sm font-extrabold text-[#0f172a]">Page Setup</h3>
@@ -63,11 +63,11 @@ export function PageSetupModal({
                     <div className="h-1 bg-gray-300 rounded w-full" />
                     <div className="h-1 bg-gray-250 rounded w-full" />
                     <div className="h-1 bg-gray-250 rounded w-full" />
-                    
+
                     <div className="h-1 bg-gray-250 rounded w-full" />
                     <div className="h-1 bg-gray-300 rounded w-full" />
                     <div className="h-1 bg-gray-250 rounded w-full" />
-                    
+
                     <div className="h-1 bg-gray-250 rounded w-full" />
                     <div className="h-1 bg-gray-250 rounded w-full" />
                     <div className="h-1 bg-gray-300 rounded w-full" />
@@ -139,62 +139,62 @@ export function PageSetupModal({
           </div>
         </div>
 
-        {/* Coupon Layout Section */}
-        <div className="mb-5 border border-gray-100 rounded-2xl p-4 bg-gray-50/30">
-          <div className="flex items-center gap-2 mb-3">
-            <FileText className="w-4 h-4 text-[#4f46e5]" />
-            <span className="font-bold text-[#4f46e5] text-[11px] uppercase tracking-wider">
-              Coupon Layout
-            </span>
-            <div className="flex-1 h-[1px] bg-gray-100" />
-          </div>
-          <div className="flex flex-col gap-2.5 pl-1">
-            {(
-              [
-                {
-                  value: "same-page",
-                  label: "Same Page",
-                  desc: "Operations share pages; each operation starts a new row.",
-                },
-                {
-                  value: "same-line",
-                  label: "Same Line",
-                  desc: "Operations pack tightly and can share a row.",
-                },
-                {
-                  value: "different-pages",
-                  label: "Different Pages",
-                  desc: "Each operation starts on a fresh page.",
-                },
-              ] as const
-            ).map((opt) => (
-              <label
-                key={opt.value}
-                className="flex items-start gap-2 cursor-pointer"
-              >
-                <input
-                  type="radio"
-                  name="layout"
-                  checked={pageSetup.layout === opt.value}
-                  onChange={() =>
-                    onPageSetupChange({ ...pageSetup, layout: opt.value })
-                  }
-                  className="mt-0.5 text-[#4f46e5] focus:ring-indigo-500"
-                />
-                <span>
-                  <span className="font-bold text-gray-700">{opt.label}</span>
-                  <span className="block text-[10px] text-gray-500">
-                    {opt.desc}
+        <div className="mb-6 grid grid-cols-2 gap-4 items-start">
+          {/* Coupon Layout Section */}
+          <div className="border border-gray-100 rounded-2xl p-4 bg-gray-50/30 h-full">
+            <div className="flex items-center gap-2 mb-3">
+              <FileText className="w-4 h-4 text-[#4f46e5]" />
+              <span className="font-bold text-[#4f46e5] text-[11px] uppercase tracking-wider">
+                Coupon Layout
+              </span>
+              <div className="flex-1 h-[1px] bg-gray-100" />
+            </div>
+            <div className="flex flex-col gap-2.5 pl-1">
+              {(
+                [
+                  {
+                    value: "same-page",
+                    label: "Same Page",
+                    desc: "Operations share pages; each operation starts a new row.",
+                  },
+                  {
+                    value: "same-line",
+                    label: "Same Line",
+                    desc: "Operations pack tightly and can share a row.",
+                  },
+                  {
+                    value: "different-pages",
+                    label: "Different Pages",
+                    desc: "Each operation starts on a fresh page.",
+                  },
+                ] as const
+              ).map((opt) => (
+                <label
+                  key={opt.value}
+                  className="flex items-start gap-2 cursor-pointer"
+                >
+                  <input
+                    type="radio"
+                    name="layout"
+                    checked={pageSetup.layout === opt.value}
+                    onChange={() =>
+                      onPageSetupChange({ ...pageSetup, layout: opt.value })
+                    }
+                    className="mt-0.5 text-[#4f46e5] focus:ring-indigo-500"
+                  />
+                  <span>
+                    <span className="font-bold text-gray-700">{opt.label}</span>
+                    <span className="block text-[10px] text-gray-500">
+                      {opt.desc}
+                    </span>
                   </span>
-                </span>
-              </label>
-            ))}
+                </label>
+              ))}
+            </div>
           </div>
-        </div>
 
-        {/* Margins Section */}
-        <div className="mb-6">
-          <div className="border border-gray-100 rounded-2xl p-4 bg-gray-50/30">
+          {/* Margins Section */}
+          <div className="border border-gray-100 rounded-2xl p-4 bg-gray-50/30 h-full">
             <div className="flex items-center gap-1.5 mb-3">
               <FileText className="w-3.5 h-3.5 text-[#4f46e5]" />
               <span className="font-bold text-[#4f46e5] text-[11px] uppercase tracking-wider">

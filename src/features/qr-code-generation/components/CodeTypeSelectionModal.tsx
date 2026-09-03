@@ -31,7 +31,7 @@ export function CodeTypeSelectionModal({
 
   return (
     <div className="no-print fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4 animate-fade-in">
-      <div className="bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] max-w-[550px] w-full p-6 animate-scale-up text-xs text-[#334155] font-sans">
+      <div className="bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] max-w-[640px] w-full p-6 animate-scale-up text-xs text-[#334155] font-sans">
         {/* Header */}
         <div className="flex items-center justify-between pb-4 mb-5 border-b border-gray-100">
           <h3 className="text-sm font-extrabold text-[#0f172a] uppercase tracking-wider">

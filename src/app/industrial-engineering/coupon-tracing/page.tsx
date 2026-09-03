@@ -2,7 +2,7 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useCallback, useState, useEffect, useMemo } from "react";
 import {
   Search,
   Download,
@@ -13,6 +13,10 @@ import {
 import { format } from "date-fns";
 import { printPdf } from "@/lib/print";
 import { Autocomplete } from "@/components/ui/autocomplete";
+import {
+  WorkOrderSearchModal,
+  type WorkOrderSearchRow,
+} from "@/components/work-order-search-modal";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
 import { CodeTypeSelectionModal } from "@/features/qr-code-generation/components/CodeTypeSelectionModal";
 import type { PageSetupConfig } from "@/features/qr-code-generation/types";
@@ -43,8 +47,8 @@ const SCANNED_OPTIONS = [
 ] as const;
 
 export default function CouponTracingPage() {
-  const [code, setCode] = useState("");
   const [errorMsg, setErrorMsg] = useState("");
+  const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
 
   // Individual coupons for the traced work order — always fetched one page
   // at a time (a work order can have thousands of coupons).
@@ -75,19 +79,17 @@ export default function CouponTracingPage() {
     codeType: "qr",
   });
 
-  const fetchWorkOrderSuggestions = async (query: string) => {
-    try {
-      const response = await fetch(
-        `/api/open-order/suggestions?query=${encodeURIComponent(query)}&only_generated=true`,
-      );
-      if (response.ok) {
-        return await response.json();
-      }
-    } catch (err) {
-      console.error("Suggestions fetch error:", err);
-    }
-    return [];
-  };
+  const fetchWorkOrderRows = useCallback(
+    async (filters: { workOrder: string; customer: string; saleOrderNo: string }): Promise<WorkOrderSearchRow[]> => {
+      const params = new URLSearchParams();
+      if (filters.workOrder) params.set("work_order", filters.workOrder);
+      if (filters.customer) params.set("customer", filters.customer);
+      if (filters.saleOrderNo) params.set("sale_order_no", filters.saleOrderNo);
+      const res = await fetch(`/api/coupons/work-orders?${params.toString()}`);
+      return res.ok ? res.json() : [];
+    },
+    [],
+  );
 
   const fetchBundleSuggestions = async (query: string) => {
     if (!tracedWorkOrder) return [];
@@ -183,17 +185,13 @@ export default function CouponTracingPage() {
   // Work Order (set by Cut Report, Style Bulletin or Coupon Generation) on
   // mount, and propagates a trace committed here to the other pages.
   const { setWorkOrder } = useWorkOrderParam((wo) => {
-    setCode(wo);
     runTrace(wo);
   });
 
   const commitTrace = (workOrder: string) => {
-    setCode(workOrder);
     runTrace(workOrder);
     setWorkOrder(workOrder);
   };
-
-  const handleTrace = () => commitTrace(code.trim());
 
   const handleUnscanCoupon = async (couponCode: string) => {
     if (
@@ -279,25 +277,15 @@ export default function CouponTracingPage() {
     <div className="flex flex-col gap-6 max-w-[900px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
       <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm">
         <div className="flex items-stretch gap-3">
-          <Autocomplete<string>
-            value={code}
-            onChange={setCode}
-            onSelect={(val) => commitTrace(val)}
-            fetchSuggestions={fetchWorkOrderSuggestions}
-            renderSuggestion={(item) => <span>{item}</span>}
-            getSuggestionValue={(item) => item}
-            placeholder="Coupon code, bundle ID, or work order"
-            className="flex-grow"
-            inputClassName="w-full px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-            onKeyDown={(e) => e.key === "Enter" && handleTrace()}
-          />
           <button
-            onClick={handleTrace}
-            disabled={!code.trim() || couponsLoading}
-            className="flex items-center justify-center gap-2 bg-[#4f46e5] text-white px-5 py-2.5 rounded-xl font-bold shadow-sm hover:bg-[#4338ca] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+            type="button"
+            onClick={() => setShowWorkOrderModal(true)}
+            className="relative flex-grow text-left cursor-pointer"
           >
-            <Search className="w-3.5 h-3.5" />
-            <span>{couponsLoading ? "Searching…" : "Trace"}</span>
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94a3b8]" />
+            <span className="block w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 hover:border-[#4f46e5] transition-all truncate">
+              {tracedWorkOrder || "Search Work Order..."}
+            </span>
           </button>
         </div>
       </div>
@@ -577,6 +565,16 @@ export default function CouponTracingPage() {
           setShowCodeTypeModal(false);
           setShowPageSetupModal(true);
         }}
+      />
+
+      <WorkOrderSearchModal
+        open={showWorkOrderModal}
+        onClose={() => setShowWorkOrderModal(false)}
+        onSelect={(row) => {
+          commitTrace(row.workOrder);
+          setShowWorkOrderModal(false);
+        }}
+        fetchRows={fetchWorkOrderRows}
       />
 
       {/* Generating PDF Loader Overlay */}
