@@ -20,6 +20,7 @@ import type {
 import { useGenerateCouponPdf } from "@/features/qr-code-generation/hooks/useGenerateCouponPdf";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
+import { classifyDepartment } from "@/lib/department-classification";
 
 interface CutDetailRow {
   RowId: number;
@@ -50,6 +51,11 @@ interface StyleBulletinRow {
   Operation_Sequence?: number;
   Machine_Type?: string;
   SkillLevel?: string | number;
+  // Department for this operation, looked up from S_OperationsCatalog by
+  // Operation Code (see styleBulletinByFilter in src/lib/db.ts). This is
+  // the only source used for department classification — NOT Section
+  // (a floor-layout subdivision) and NOT Operation_Name text-matching.
+  Department?: string;
   Piece_Rate?: number;
   Smv_Sam?: number;
   First_Operation_Section_Wise?: number;
@@ -281,32 +287,7 @@ export default function OpenOrderPage() {
     };
   }, []);
 
-  const getDepartment = (row: StyleBulletinRow): "cutting" | "washing" | "sewing" | "finishing" => {
-    const section = (row.Section || "").toLowerCase();
-    const opName = (row.Operation_Name || "").toLowerCase();
-    
-    if (section.includes("cut") || opName.includes("cut")) return "cutting";
-    if (section.includes("wash") || opName.includes("wash")) return "washing";
-    
-    if (
-      section.includes("finish") ||
-      section.includes("pack") ||
-      section.includes("press") ||
-      section.includes("iron") ||
-      section.includes("quality") ||
-      section.includes("carton") ||
-      opName.includes("finish") ||
-      opName.includes("pack") ||
-      opName.includes("press") ||
-      opName.includes("iron") ||
-      opName.includes("quality") ||
-      opName.includes("carton")
-    ) {
-      return "finishing";
-    }
-    
-    return "sewing";
-  };
+  const getDepartment = (row: StyleBulletinRow) => classifyDepartment(row);
 
   const uniqueSections = useMemo(() => {
     const sections = styleBulletins.map((row) => row.Section).filter(Boolean) as string[];

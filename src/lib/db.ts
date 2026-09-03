@@ -93,8 +93,14 @@ export function cutDetailByFilter(whereSql: string, orderBy = "Cut, Bundle_Id") 
 export const STYLE_BULLETIN_TABLE = "dbo.StyleBullettinInt";
 
 // Operations lookup also renamed in production: dbo.Operations -> dbo.S_OperationsCatalog.
-// OperationCode/SkillLevel (the only columns this app joins on) are named
-// identically in both, so no column aliasing is needed — just the table name.
+// OperationCode/SkillLevel/Department (the only columns this app joins on)
+// are named identically in both, so no column aliasing is needed — just the
+// table name. Department here ("Sewing"/"Washing"/"Cutting"/"Finishing") is
+// the actual department for that operation code, keyed 1:1 by OperationCode
+// (verified no duplicate/conflicting rows) — it is the source of truth for
+// department, NOT StyleBullettinInt's own Section column (a floor-layout
+// subdivision like "Before Spray"/"Small Part", unrelated to department) and
+// NOT a guess off Operation Name text.
 export const OPERATIONS_CATALOG_TABLE = "dbo.S_OperationsCatalog";
 
 // hrms has no dbo.Workers table — worker info is exposed as this view.
@@ -139,7 +145,8 @@ export function styleBulletinByFilter(
         TRY_CAST([Smv/Sam] AS FLOAT) AS Smv_Sam,
         [First Operation Section Wise] AS First_Operation_Section_Wise,
         [Last Operation Section Wise] AS Last_Operation_Section_Wise,
-        op.SkillLevel
+        op.SkillLevel,
+        op.Department
       FROM ${STYLE_BULLETIN_TABLE} sb
       LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op ON sb.[Operation Code] = op.OperationCode
       WHERE ${whereSql}
