@@ -1,3 +1,10 @@
+// The reports page can be searched by three different dimensions — an
+// employee, a work order, or a (global, catalog-level) operation code — and
+// every mode shows the same shape of dashboard (totals, breakdowns, coupon
+// trail). `mode` discriminates which one is the search subject; the other
+// two dimensions always show up as breakdown tables regardless of mode.
+export type ReportSearchMode = "employee" | "workOrder" | "operation";
+
 export interface EmployeeReportInfo {
   EmployeeID: number | string;
   FirstName?: string;
@@ -5,6 +12,27 @@ export interface EmployeeReportInfo {
   ParentDepartment?: string;
   DepartmentName?: string;
 }
+
+// What's being searched for, resolved against its canonical source (hrms for
+// an employee, the cut detail view for a work order, the style bulletin for
+// an operation) so a mistyped/nonexistent value 404s before any coupon data
+// is queried.
+export type ReportSubject =
+  | { mode: "employee"; employee: EmployeeReportInfo }
+  | {
+      mode: "workOrder";
+      workOrder: string;
+      customerName?: string | null;
+      saleOrderNo?: string | null;
+      orderQty?: number | null;
+    }
+  | {
+      mode: "operation";
+      operationCode: string;
+      operationName?: string | null;
+      department?: string | null;
+      skillLevel?: string | null;
+    };
 
 export interface OperationReportItem {
   operationCode: string;
@@ -27,6 +55,18 @@ export interface WorkOrderReportItem {
   operationsCount: number;
 }
 
+export interface EmployeeBreakdownItem {
+  employeeCode: string;
+  employeeName: string;
+  designation?: string | null;
+  couponCount: number;
+  totalQty: number;
+  totalSam: number;
+  totalAmount: number;
+  operationsCount: number;
+  workOrdersCount: number;
+}
+
 export interface CouponReportItem {
   couponCode: string;
   workOrder: string;
@@ -42,10 +82,12 @@ export interface CouponReportItem {
   rate?: number | null;
   value?: number | null;
   scannedAt?: string | null;
+  employeeCode?: string | null;
+  employeeName?: string | null;
 }
 
-export interface EmployeeReportSummary {
-  employee: EmployeeReportInfo;
+export interface ReportSummary {
+  subject: ReportSubject;
 
   // Banner Quick Stats
   todayScans: number;
@@ -57,13 +99,20 @@ export interface EmployeeReportSummary {
   lastScannedCoupon?: string | null;
   lastScannedAt?: string | null;
 
-  // Work Orders Card
+  // Coverage counts — whichever of these matches the search mode is always
+  // 1 (searching a single employee/work order/operation); the other two are
+  // the actually useful counts and drive the breakdown tabs.
   totalWorkOrders: number;
+  totalEmployees: number;
+  totalOperations: number;
+
   recentWorkOrder?: string | null;
   recentCutNo?: string | null;
   recentBundleNo?: string | null;
   recentOperationName?: string | null;
   recentOperationCode?: string | null;
+  recentEmployeeCode?: string | null;
+  recentEmployeeName?: string | null;
 
   // Total Amount Card
   totalAmount: number;
@@ -71,9 +120,11 @@ export interface EmployeeReportSummary {
   totalSam: number;
   avgRatePerPiece: number;
 
-  // Detailed Breakdowns
+  // Detailed Breakdowns — always all three; the dashboard hides whichever
+  // one is trivial (equal to the search subject itself).
   operations: OperationReportItem[];
   workOrders: WorkOrderReportItem[];
+  employees: EmployeeBreakdownItem[];
   coupons: CouponReportItem[];
 }
 
@@ -82,6 +133,14 @@ export interface EmployeeReportSummary {
 export interface ReportDateRange {
   from?: Date;
   to?: Date;
+}
+
+// Common shape the search Autocomplete renders regardless of mode — each
+// mode's suggestion fetcher adapts its API's native shape into this.
+export interface ReportSearchSuggestion {
+  value: string;
+  label: string;
+  sublabel?: string;
 }
 
 export function getErrorMessage(err: unknown, fallback: string): string {
