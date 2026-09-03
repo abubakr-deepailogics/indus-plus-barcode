@@ -10,6 +10,7 @@ import {
   ChevronRight,
   Loader2,
 } from "lucide-react";
+import { format } from "date-fns";
 import { printPdf } from "@/lib/print";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
@@ -515,11 +516,11 @@ export default function CouponTracingPage() {
                     </td>
                     <td className="px-4 py-3 text-[#334155] text-left">
                       {c.ScannedAt
-                        ? new Date(c.ScannedAt).toLocaleString()
+                        ? format(new Date(c.ScannedAt), "dd/MM/yyyy, hh:mm:ss a")
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-[#334155] text-left">
-                      {new Date(c.CreatedAt).toLocaleString()}
+                      {format(new Date(c.CreatedAt), "dd/MM/yyyy, hh:mm:ss a")}
                     </td>
                   </tr>
                 ))

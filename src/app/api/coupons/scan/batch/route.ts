@@ -1,4 +1,4 @@
-import { getPool, sql } from "@/lib/db";
+import { getPool, sql, SCANNED_AT_FROM_DATE_SQL } from "@/lib/db";
 import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 
 export const dynamic = "force-dynamic";
@@ -72,7 +72,7 @@ export async function POST(request: Request) {
       SET IsScanned = 1,
           EmployeeCode = NULLIF(@employeeCode, ''),
           ScanBy = NULLIF(@scanBy, ''),
-          ScannedAt = COALESCE(TRY_CAST(NULLIF(@scanDate, '') AS DATETIME), GETDATE())
+          ScannedAt = ${SCANNED_AT_FROM_DATE_SQL}
       OUTPUT inserted.CouponCode INTO @Updated
       FROM dbo.QrCode_Coupon c
       INNER JOIN @Codes src ON src.CouponCode = c.CouponCode

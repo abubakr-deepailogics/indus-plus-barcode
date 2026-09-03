@@ -75,7 +75,10 @@ export const CUT_DETAIL_COLUMNS_SQL = `
 // the view anymore and instead sorts/numbers the entire (large) view before
 // filtering, which reliably times out. Filtering first keeps the window
 // function scoped to the already-small, already-filtered result.
-export function cutDetailByFilter(whereSql: string, orderBy = "Cut, Bundle_Id") {
+export function cutDetailByFilter(
+  whereSql: string,
+  orderBy = "Cut, Bundle_Id",
+) {
   return `
     WITH Filtered AS (
       SELECT ${CUT_DETAIL_COLUMNS_SQL}
@@ -148,3 +151,17 @@ export function styleBulletinByFilter(
     FROM Filtered
   `;
 }
+
+// Combines a caller-supplied scan date (date-only — the coupon-scanning
+// "Dated" picker, see InformationPanel.tsx, never carries a time) with the
+// current time-of-day, so a scan against a backdated "Dated" value still
+// records a real scan time instead of landing at literal midnight (which
+// previously showed as a wrong, fixed ~5am once read back through the
+// browser's local timezone). Falls back to GETDATE() entirely when no scan
+// date was supplied. Caller must bind `@scanDate` as an input on the request.
+export const SCANNED_AT_FROM_DATE_SQL = `
+  COALESCE(
+    CAST(TRY_CAST(NULLIF(@scanDate, '') AS DATE) AS DATETIME) + CAST(CAST(GETDATE() AS TIME) AS DATETIME),
+    GETDATE()
+  )
+`;
