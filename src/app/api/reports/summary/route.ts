@@ -18,19 +18,33 @@ export async function GET(request: Request) {
   const value = (searchParams.get("value") || "").trim();
   const from = (searchParams.get("from") || "").trim();
   const to = (searchParams.get("to") || "").trim();
+  const isAllEmployees =
+    by === "employee" && searchParams.get("all") === "true";
 
   if (!by || !VALID_MODES.includes(by as ReportSearchMode)) {
     return Response.json(
-      { error: "A valid 'by' parameter (employee, workOrder, or operation) is required." },
+      {
+        error:
+          "A valid 'by' parameter (employee, workOrder, or operation) is required.",
+      },
       { status: 400 },
     );
   }
-  if (!value) {
-    return Response.json({ error: "A search value is required." }, { status: 400 });
+  if (!isAllEmployees && !value) {
+    return Response.json(
+      { error: "A search value is required." },
+      { status: 400 },
+    );
   }
 
   try {
-    const result = await buildReportSummary(by as ReportSearchMode, value, from, to);
+    const result = await buildReportSummary(
+      by as ReportSearchMode,
+      value,
+      from,
+      to,
+      { all: isAllEmployees },
+    );
     if (!result.ok) {
       return Response.json({ error: result.error }, { status: result.status });
     }

@@ -1,8 +1,16 @@
 "use client";
 
 import { useCallback, useState } from "react";
-import { fetchReportSummary } from "../services/reports.service";
-import { getErrorMessage, type ReportDateRange, type ReportSearchMode, type ReportSummary } from "../types";
+import {
+  fetchAllEmployeesReportSummary,
+  fetchReportSummary,
+} from "../services/reports.service";
+import {
+  getErrorMessage,
+  type ReportDateRange,
+  type ReportSearchMode,
+  type ReportSummary,
+} from "../types";
 
 export function useReportSearch() {
   const [mode, setMode] = useState<ReportSearchMode>("employee");
@@ -11,6 +19,7 @@ export function useReportSearch() {
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [isAllEmployees, setIsAllEmployees] = useState(false);
 
   // `valueOverride`/`rangeOverride`/`modeOverride` exist for the same reason:
   // callers that just changed searchValue/dateRange/mode via setState
@@ -19,7 +28,11 @@ export function useReportSearch() {
   // React state isn't readable until the next render — so the fresh value is
   // passed straight through instead of being read back off state.
   const search = useCallback(
-    async (valueOverride?: string, rangeOverride?: ReportDateRange, modeOverride?: ReportSearchMode) => {
+    async (
+      valueOverride?: string,
+      rangeOverride?: ReportDateRange,
+      modeOverride?: ReportSearchMode,
+    ) => {
       const activeMode = modeOverride ?? mode;
       const value = (valueOverride ?? searchValue).trim();
       if (!value) {
@@ -29,6 +42,7 @@ export function useReportSearch() {
       }
 
       const range = rangeOverride ?? dateRange;
+      setIsAllEmployees(false);
       setIsLoading(true);
       setError(null);
       try {
@@ -49,6 +63,31 @@ export function useReportSearch() {
     [mode, searchValue, dateRange],
   );
 
+  const searchAllEmployees = useCallback(
+    async (rangeOverride?: ReportDateRange) => {
+      const range = rangeOverride ?? dateRange;
+      setSearchValue("");
+      setIsAllEmployees(true);
+      setIsLoading(true);
+      setError(null);
+      try {
+        const result = await fetchAllEmployeesReportSummary(range);
+        if (!result.ok) {
+          setSummary(null);
+          setError(result.error);
+          return;
+        }
+        setSummary(result.data);
+      } catch (err) {
+        setSummary(null);
+        setError(getErrorMessage(err, "Failed to fetch report."));
+      } finally {
+        setIsLoading(false);
+      }
+    },
+    [dateRange],
+  );
+
   // Switching what's being searched by (employee/work order/operation)
   // starts clean — a leftover value or result from the previous mode isn't
   // meaningful in the new one.
@@ -57,14 +96,19 @@ export function useReportSearch() {
     setSearchValue("");
     setSummary(null);
     setError(null);
+    setIsAllEmployees(false);
   }, []);
 
   const applyDateRange = useCallback(
     (range: ReportDateRange) => {
       setDateRange(range);
-      if (searchValue.trim()) search(undefined, range);
+      if (isAllEmployees) {
+        searchAllEmployees(range);
+      } else if (searchValue.trim()) {
+        search(undefined, range);
+      }
     },
-    [searchValue, search],
+    [searchValue, search, isAllEmployees, searchAllEmployees],
   );
 
   return {
@@ -78,5 +122,7 @@ export function useReportSearch() {
     isLoading,
     error,
     search,
+    searchAllEmployees,
+    isAllEmployees,
   };
 }

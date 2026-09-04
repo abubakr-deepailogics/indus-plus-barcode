@@ -49,7 +49,10 @@ const COLUMN_BY_MODE: Record<ReportSearchMode, string> = {
 async function resolveSubject(
   mode: ReportSearchMode,
   value: string,
-): Promise<{ ok: true; subject: ReportSubject; boundValue: string } | { ok: false; status: number; error: string }> {
+): Promise<
+  | { ok: true; subject: ReportSubject; boundValue: string }
+  | { ok: false; status: number; error: string }
+> {
   if (mode === "employee") {
     const employeeIdNum = parseInt(value, 10);
     if (isNaN(employeeIdNum)) {
@@ -58,8 +61,7 @@ async function resolveSubject(
     const hrmsPool = await getPool("hrms");
     const workerResult = await hrmsPool
       .request()
-      .input("code", sql.Int, employeeIdNum)
-      .query(`
+      .input("code", sql.Int, employeeIdNum).query(`
         SELECT TOP 1 EmployeeID, FirstName, DesignationName, ParentDepartment, DepartmentName
         FROM ${WORKERS_VIEW}
         WHERE EmployeeID = @code
@@ -76,9 +78,7 @@ async function resolveSubject(
 
   if (mode === "workOrder") {
     const indusPool = await getPool("indusPlus");
-    const woResult = await indusPool
-      .request()
-      .input("wo", sql.NVarChar, value)
+    const woResult = await indusPool.request().input("wo", sql.NVarChar, value)
       .query(`
         SELECT TOP 1
           [Work Order #] AS Work_Order,
@@ -109,9 +109,7 @@ async function resolveSubject(
   // OPERATIONS_CATALOG_TABLE in db.ts), and StyleBullettinInt/S_OperationsCatalog
   // are both on indusPlus, so this is a plain single-server join.
   const indusPool = await getPool("indusPlus");
-  const opResult = await indusPool
-    .request()
-    .input("code", sql.NVarChar, value)
+  const opResult = await indusPool.request().input("code", sql.NVarChar, value)
     .query(`
       SELECT TOP 1 sb.[Operation Code] AS Operation_Code, sb.[Operation Name] AS Operation_Name,
              op.Department, op.SkillLevel
@@ -141,21 +139,36 @@ export async function buildReportSummary(
   rawValue: string,
   from: string,
   to: string,
+  options: { all?: boolean } = {},
 ): Promise<BuildReportSummaryResult> {
+  const isAllEmployees = mode === "employee" && options.all === true;
   const value = rawValue.trim();
-  if (!value) {
+  if (!isAllEmployees && !value) {
     return { ok: false, status: 400, error: "A search value is required." };
   }
 
-  const subjectResult = await resolveSubject(mode, value);
-  if (!subjectResult.ok) return subjectResult;
-  const { subject, boundValue } = subjectResult;
+  let subject: ReportSubject;
+  let boundValue = value;
+  if (isAllEmployees) {
+    subject = { mode: "employee", all: true };
+  } else {
+    const subjectResult = await resolveSubject(mode, value);
+    if (!subjectResult.ok) return subjectResult;
+    subject = subjectResult.subject;
+    boundValue = subjectResult.boundValue;
+  }
 
   const pitPool = await getPool("pitSystem");
   const column = COLUMN_BY_MODE[mode];
 
-  const couponConditions = [`${column} = @value`, "IsScanned = 1"];
-  const couponRequest = pitPool.request().input("value", sql.NVarChar, boundValue);
+  const couponConditions = ["IsScanned = 1"];
+  const couponRequest = pitPool.request();
+  if (isAllEmployees) {
+    couponConditions.push(`${column} IS NOT NULL`);
+  } else {
+    couponRequest.input("value", sql.NVarChar, boundValue);
+    couponConditions.push(`${column} = @value`);
+  }
   if (from) {
     couponRequest.input("from", sql.Date, from);
     couponConditions.push("ScannedAt >= @from");
@@ -167,6 +180,15 @@ export async function buildReportSummary(
     couponConditions.push("ScannedAt < DATEADD(day, 1, @to)");
   }
 
+  const scanCountsRequest = pitPool.request();
+  let scanCountsScope: string;
+  if (isAllEmployees) {
+    scanCountsScope = `${column} IS NOT NULL`;
+  } else {
+    scanCountsRequest.input("value", sql.NVarChar, boundValue);
+    scanCountsScope = `${column} = @value`;
+  }
+
   const [couponResult, scanCountsResult] = await Promise.all([
     couponRequest.query(`
       SELECT CouponCode, WorkOrder, BundleNo, OpNo, EmployeeCode, ScannedAt
@@ -174,21 +196,18 @@ export async function buildReportSummary(
       WHERE ${couponConditions.join(" AND ")}
       ORDER BY ScannedAt DESC
     `),
-    pitPool
-      .request()
-      .input("value", sql.NVarChar, boundValue)
-      .query(`
-        SELECT
-          (
-            SELECT COUNT(*) FROM dbo.QrCode_Coupon
-            WHERE ${column} = @value AND IsScanned = 1 AND ScannedAt IS NOT NULL
-              AND CAST(ScannedAt AS DATE) = CAST(GETDATE() AS DATE)
-          ) AS TodayScans,
-          (
-            SELECT COUNT(*) FROM dbo.QrCode_Coupon
-            WHERE ${column} = @value AND IsScanned = 1 AND ScannedAt IS NOT NULL
-              AND ScannedAt >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
-          ) AS MonthScans
+    scanCountsRequest.query(`
+      SELECT
+        (
+          SELECT COUNT(*) FROM dbo.QrCode_Coupon
+          WHERE ${scanCountsScope} AND IsScanned = 1 AND ScannedAt IS NOT NULL
+            AND CAST(ScannedAt AS DATE) = CAST(GETDATE() AS DATE)
+        ) AS TodayScans,
+        (
+          SELECT COUNT(*) FROM dbo.QrCode_Coupon
+          WHERE ${scanCountsScope} AND IsScanned = 1 AND ScannedAt IS NOT NULL
+            AND ScannedAt >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
+        ) AS MonthScans
       `),
   ]);
 
@@ -197,8 +216,13 @@ export async function buildReportSummary(
 
   // Employee display names for the breakdown + coupon trail — one batch
   // lookup for every distinct EmployeeCode seen, rather than one per row.
-  const employeeCodes = [...new Set(enriched.map((r) => r.EmployeeCode).filter(Boolean))];
-  const employeeInfoByCode = new Map<string, { name: string; designation: string | null }>();
+  const employeeCodes = [
+    ...new Set(enriched.map((r) => r.EmployeeCode).filter(Boolean)),
+  ];
+  const employeeInfoByCode = new Map<
+    string,
+    { name: string; designation: string | null }
+  >();
   if (employeeCodes.length > 0) {
     const hrmsPool = await getPool("hrms");
     const empRequest = hrmsPool.request();
@@ -220,7 +244,10 @@ export async function buildReportSummary(
   }
 
   const totalAmount = enriched.reduce((sum, row) => sum + (row.Value ?? 0), 0);
-  const totalQty = enriched.reduce((sum, row) => sum + (Number(row.Qty) || 0), 0);
+  const totalQty = enriched.reduce(
+    (sum, row) => sum + (Number(row.Qty) || 0),
+    0,
+  );
   const totalSam = enriched.reduce((sum, row) => {
     const qty = Number(row.Qty) || 0;
     const smv = Number(row.Smv) || 0;
@@ -233,10 +260,16 @@ export async function buildReportSummary(
   const latest = enriched.length > 0 ? enriched[0] : null;
 
   const opMap = new Map<string, OperationReportItem>();
-  const woMap = new Map<string, WorkOrderReportItem & { operations: Set<string> }>();
+  const woMap = new Map<
+    string,
+    WorkOrderReportItem & { operations: Set<string> }
+  >();
   const empMap = new Map<
     string,
-    EmployeeBreakdownItem & { operationCodes: Set<string>; workOrderCodes: Set<string> }
+    EmployeeBreakdownItem & {
+      operationCodes: Set<string>;
+      workOrderCodes: Set<string>;
+    }
   >();
   const sectionCounts = new Map<string, number>();
 
@@ -246,8 +279,10 @@ export async function buildReportSummary(
     const smv = row.Smv != null ? Number(row.Smv) : null;
     const val = row.Value != null ? Number(row.Value) : null;
     const opCode = row.OprCode || row.OpNo || "UNKNOWN";
-    const opName = row.OperationName != null ? String(row.OperationName) : opCode;
-    const section = row.SectionName != null ? String(row.SectionName) : "General";
+    const opName =
+      row.OperationName != null ? String(row.OperationName) : opCode;
+    const section =
+      row.SectionName != null ? String(row.SectionName) : "General";
     const empInfo = employeeInfoByCode.get(row.EmployeeCode);
     const empName = empInfo?.name ?? row.EmployeeCode ?? null;
 
@@ -352,7 +387,9 @@ export async function buildReportSummary(
     }
   }
 
-  const operations = Array.from(opMap.values()).sort((a, b) => b.totalAmount - a.totalAmount);
+  const operations = Array.from(opMap.values()).sort(
+    (a, b) => b.totalAmount - a.totalAmount,
+  );
   const workOrders = Array.from(woMap.values())
     .map((w) => ({
       workOrder: w.workOrder,
@@ -380,7 +417,9 @@ export async function buildReportSummary(
   const scanCounts = scanCountsResult.recordset[0] || {};
   const todayScans = Number(scanCounts.TodayScans) || 0;
   const monthScans = Number(scanCounts.MonthScans) || 0;
-  const latestEmpInfo = latest ? employeeInfoByCode.get(latest.EmployeeCode) : undefined;
+  const latestEmpInfo = latest
+    ? employeeInfoByCode.get(latest.EmployeeCode)
+    : undefined;
 
   const summary: ReportSummary = {
     subject,
@@ -399,7 +438,8 @@ export async function buildReportSummary(
     recentWorkOrder: latest?.WorkOrder ?? null,
     recentCutNo: latest?.CutNo != null ? String(latest.CutNo) : null,
     recentBundleNo: latest?.BundleNo != null ? String(latest.BundleNo) : null,
-    recentOperationName: latest?.OperationName != null ? String(latest.OperationName) : null,
+    recentOperationName:
+      latest?.OperationName != null ? String(latest.OperationName) : null,
     recentOperationCode: latest?.OprCode ?? latest?.OpNo ?? null,
     recentEmployeeCode: latest?.EmployeeCode ?? null,
     recentEmployeeName: latestEmpInfo?.name ?? latest?.EmployeeCode ?? null,

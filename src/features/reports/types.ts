@@ -18,7 +18,8 @@ export interface EmployeeReportInfo {
 // an operation) so a mistyped/nonexistent value 404s before any coupon data
 // is queried.
 export type ReportSubject =
-  | { mode: "employee"; employee: EmployeeReportInfo }
+  | { mode: "employee"; all?: false; employee: EmployeeReportInfo }
+  | { mode: "employee"; all: true }
   | {
       mode: "workOrder";
       workOrder: string;

@@ -14,10 +14,15 @@ import {
   ChevronRight,
   Scissors,
   FileSpreadsheet,
+  Users,
   type LucideIcon,
 } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import {
   fetchEmployeeSearchSuggestions,
@@ -33,7 +38,10 @@ import type {
 } from "../types";
 
 function formatAmount(value: number): string {
-  return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 function formatTimestamp(timestamp?: string | null): string {
@@ -62,16 +70,28 @@ function getInitials(name?: string): string {
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-function formatEmployeeLabel(code?: string | null, name?: string | null): string {
+function formatEmployeeLabel(
+  code?: string | null,
+  name?: string | null,
+): string {
   if (!code && !name) return "—";
   if (name && name !== code) return `${name} (#${code ?? "—"})`;
   return code ? `#${code}` : name || "—";
 }
 
 const PRESETS: { label: string; range: () => ReportDateRange }[] = [
-  { label: "Last 7 Days", range: () => ({ from: subDays(new Date(), 6), to: new Date() }) },
-  { label: "Last 30 Days", range: () => ({ from: subDays(new Date(), 29), to: new Date() }) },
-  { label: "This Month", range: () => ({ from: startOfMonth(new Date()), to: new Date() }) },
+  {
+    label: "Last 7 Days",
+    range: () => ({ from: subDays(new Date(), 6), to: new Date() }),
+  },
+  {
+    label: "Last 30 Days",
+    range: () => ({ from: subDays(new Date(), 29), to: new Date() }),
+  },
+  {
+    label: "This Month",
+    range: () => ({ from: startOfMonth(new Date()), to: new Date() }),
+  },
   { label: "All Time", range: () => ({}) },
 ];
 
@@ -82,7 +102,12 @@ const ITEMS_PER_PAGE = 15;
 // off the mode, so switching modes never needs its own bespoke JSX branch.
 const MODE_CONFIG: Record<
   ReportSearchMode,
-  { label: string; fieldLabel: string; placeholder: string; fetchSuggestions: (query: string) => Promise<ReportSearchSuggestion[]> }
+  {
+    label: string;
+    fieldLabel: string;
+    placeholder: string;
+    fetchSuggestions: (query: string) => Promise<ReportSearchSuggestion[]>;
+  }
 > = {
   employee: {
     label: "Employee",
@@ -111,13 +136,19 @@ type BreakdownDimension = "operations" | "workOrders" | "employees";
 // is trivial (exactly the subject being searched) — this is the one place
 // that decides which two dimensions are actually worth showing per mode,
 // both for the on-screen tabs and for what prints.
-const BREAKDOWN_DIMENSIONS: Record<ReportSearchMode, [BreakdownDimension, BreakdownDimension]> = {
+const BREAKDOWN_DIMENSIONS: Record<
+  ReportSearchMode,
+  [BreakdownDimension, BreakdownDimension]
+> = {
   employee: ["operations", "workOrders"],
   workOrder: ["employees", "operations"],
   operation: ["employees", "workOrders"],
 };
 
-const TAB_META: Record<BreakdownDimension, { label: string; icon: LucideIcon }> = {
+const TAB_META: Record<
+  BreakdownDimension,
+  { label: string; icon: LucideIcon }
+> = {
   operations: { label: "Operations Breakdown", icon: Scissors },
   workOrders: { label: "Work Orders", icon: ClipboardList },
   employees: { label: "Employees", icon: UserRound },
@@ -148,7 +179,8 @@ function getCard2Config(summary: ReportSummary): Card2Config {
     summary.recentCutNo != null || summary.recentBundleNo != null
       ? `Cut ${summary.recentCutNo ?? "—"} | Bundle #${summary.recentBundleNo ?? "—"}`
       : "—";
-  const currentOperation = summary.recentOperationName || summary.recentOperationCode || "—";
+  const currentOperation =
+    summary.recentOperationName || summary.recentOperationCode || "—";
 
   if (subject.mode === "employee") {
     return {
@@ -171,9 +203,18 @@ function getCard2Config(summary: ReportSummary): Card2Config {
       icon: UserRound,
       iconClassName: "bg-cyan-50 text-cyan-600",
       value: `${summary.totalEmployees} ${summary.totalEmployees === 1 ? "Worker" : "Workers"}`,
-      badge: formatEmployeeLabel(summary.recentEmployeeCode, summary.recentEmployeeName),
+      badge: formatEmployeeLabel(
+        summary.recentEmployeeCode,
+        summary.recentEmployeeName,
+      ),
       rows: [
-        { label: "Recent Employee", value: formatEmployeeLabel(summary.recentEmployeeCode, summary.recentEmployeeName) },
+        {
+          label: "Recent Employee",
+          value: formatEmployeeLabel(
+            summary.recentEmployeeCode,
+            summary.recentEmployeeName,
+          ),
+        },
         { label: "Active Line Item", value: activeLineItem },
         { label: "Current Operation", value: currentOperation },
       ],
@@ -188,7 +229,13 @@ function getCard2Config(summary: ReportSummary): Card2Config {
     value: `${summary.totalEmployees} ${summary.totalEmployees === 1 ? "Worker" : "Workers"}`,
     badge: `${summary.totalWorkOrders} ${summary.totalWorkOrders === 1 ? "Work Order" : "Work Orders"}`,
     rows: [
-      { label: "Recent Employee", value: formatEmployeeLabel(summary.recentEmployeeCode, summary.recentEmployeeName) },
+      {
+        label: "Recent Employee",
+        value: formatEmployeeLabel(
+          summary.recentEmployeeCode,
+          summary.recentEmployeeName,
+        ),
+      },
       { label: "Work Orders Used In", value: String(summary.totalWorkOrders) },
       { label: "Recent Work Order", value: summary.recentWorkOrder || "—" },
     ],
@@ -207,19 +254,32 @@ export function EmployeeReportDashboard() {
     isLoading,
     error,
     search,
+    searchAllEmployees,
   } = useReportSearch();
 
-  const availableTabs = useMemo<TabKey[]>(() => [...BREAKDOWN_DIMENSIONS[mode], "coupons"], [mode]);
+  const isAllEmployeesSummary =
+    summary?.subject.mode === "employee" && summary.subject.all === true;
+  const availableTabs = useMemo<TabKey[]>(() => {
+    const dims = isAllEmployeesSummary
+      ? (["employees", ...BREAKDOWN_DIMENSIONS[mode]] as BreakdownDimension[])
+      : BREAKDOWN_DIMENSIONS[mode];
+    return [...dims, "coupons"];
+  }, [mode, isAllEmployeesSummary]);
   const [activeTab, setActiveTab] = useState<TabKey>("operations");
   // Derived rather than reset via effect: whichever tab is active only
   // matters if it's still one of the current mode's tabs, otherwise fall
   // back to that mode's first (and most relevant) tab.
-  const effectiveTab = availableTabs.includes(activeTab) ? activeTab : availableTabs[0];
+  const effectiveTab = availableTabs.includes(activeTab)
+    ? activeTab
+    : availableTabs[0];
 
   const [couponSearch, setCouponSearch] = useState("");
   const [couponPage, setCouponPage] = useState(1);
 
-  const rangePopoverActionsRef = useRef<{ close: () => void; unmount: () => void } | null>(null);
+  const rangePopoverActionsRef = useRef<{
+    close: () => void;
+    unmount: () => void;
+  } | null>(null);
 
   const modeConfig = MODE_CONFIG[mode];
 
@@ -258,13 +318,17 @@ export function EmployeeReportDashboard() {
     );
   }, [coupons, couponSearch]);
 
-  const totalPages = Math.max(1, Math.ceil(filteredCoupons.length / ITEMS_PER_PAGE));
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredCoupons.length / ITEMS_PER_PAGE),
+  );
   const paginatedCoupons = useMemo(() => {
     const start = (couponPage - 1) * ITEMS_PER_PAGE;
     return filteredCoupons.slice(start, start + ITEMS_PER_PAGE);
   }, [filteredCoupons, couponPage]);
 
-  const showEmployeeColumn = summary?.subject.mode !== "employee";
+  const showEmployeeColumn =
+    summary?.subject.mode !== "employee" || isAllEmployeesSummary;
   const card2 = summary ? getCard2Config(summary) : null;
 
   return (
@@ -303,28 +367,45 @@ export function EmployeeReportDashboard() {
             <span className="font-bold text-[#475569] text-[10px] uppercase">
               {modeConfig.fieldLabel} <span className="text-red-500">*</span>
             </span>
-            <Autocomplete<ReportSearchSuggestion>
-              key={mode}
-              value={searchValue}
-              onChange={setSearchValue}
-              onSelect={handleSelect}
-              fetchSuggestions={modeConfig.fetchSuggestions}
-              renderSuggestion={(item) => (
-                <>
-                  <span className="text-[#4f46e5] font-bold">{item.label}</span>
-                  {item.sublabel && (
-                    <span className="text-[9px] text-slate-400 font-medium bg-slate-100 px-1.5 py-0.5 rounded uppercase">
-                      {item.sublabel}
-                    </span>
+            <div className="flex items-center gap-2">
+              <div className="flex-1 min-w-0">
+                <Autocomplete<ReportSearchSuggestion>
+                  key={mode}
+                  value={searchValue}
+                  onChange={setSearchValue}
+                  onSelect={handleSelect}
+                  fetchSuggestions={modeConfig.fetchSuggestions}
+                  renderSuggestion={(item) => (
+                    <>
+                      <span className="text-[#4f46e5] font-bold">
+                        {item.label}
+                      </span>
+                      {item.sublabel && (
+                        <span className="text-[9px] text-slate-400 font-medium bg-slate-100 px-1.5 py-0.5 rounded uppercase">
+                          {item.sublabel}
+                        </span>
+                      )}
+                    </>
                   )}
-                </>
+                  getSuggestionValue={(item) => item.value}
+                  placeholder={modeConfig.placeholder}
+                  inputClassName="w-full px-3.5 py-2 rounded-xl border border-[#e2e8f0] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  onKeyDown={handleKeyDown}
+                  minChars={1}
+                />
+              </div>
+              {mode === "employee" && (
+                <button
+                  type="button"
+                  onClick={() => searchAllEmployees()}
+                  disabled={isLoading}
+                  title="Fetch a combined report for all employees"
+                  className="shrink-0 px-3 py-2 rounded-xl border border-[#e2e8f0] bg-white text-[10px] font-bold uppercase tracking-wider text-slate-600 hover:bg-indigo-50 hover:text-[#4f46e5] hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
+                >
+                  All
+                </button>
               )}
-              getSuggestionValue={(item) => item.value}
-              placeholder={modeConfig.placeholder}
-              inputClassName="w-full px-3.5 py-2 rounded-xl border border-[#e2e8f0] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
-              onKeyDown={handleKeyDown}
-              minChars={1}
-            />
+            </div>
           </div>
 
           {/* Tenure / date range */}
@@ -357,7 +438,11 @@ export function EmployeeReportDashboard() {
                   <Calendar
                     mode="range"
                     captionLayout="dropdown"
-                    selected={dateRange.from || dateRange.to ? { from: dateRange.from, to: dateRange.to } : undefined}
+                    selected={
+                      dateRange.from || dateRange.to
+                        ? { from: dateRange.from, to: dateRange.to }
+                        : undefined
+                    }
                     onSelect={(range) => {
                       const next = { from: range?.from, to: range?.to };
                       applyDateRange(next);
@@ -393,7 +478,7 @@ export function EmployeeReportDashboard() {
           <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
             {/* Left: Icon/Avatar + Details */}
             <div className="flex items-center gap-3.5">
-              {summary.subject.mode === "employee" ? (
+              {summary.subject.mode === "employee" && !summary.subject.all ? (
                 <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#4f46e5] to-[#6366f1] text-white font-black text-lg flex items-center justify-center shadow-md shadow-indigo-100 shrink-0">
                   {getInitials(summary.subject.employee.FirstName)}
                 </div>
@@ -401,23 +486,33 @@ export function EmployeeReportDashboard() {
                 <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#4f46e5] to-[#6366f1] text-white flex items-center justify-center shadow-md shadow-indigo-100 shrink-0">
                   {summary.subject.mode === "workOrder" ? (
                     <ClipboardList className="w-6 h-6" />
-                  ) : (
+                  ) : summary.subject.mode === "operation" ? (
                     <Scissors className="w-6 h-6" />
+                  ) : (
+                    <Users className="w-6 h-6" />
                   )}
                 </div>
               )}
               <div className="flex flex-col gap-1">
                 <div className="flex items-center gap-2 flex-wrap">
-                  {summary.subject.mode === "employee" && (
-                    <>
+                  {summary.subject.mode === "employee" &&
+                    !summary.subject.all && (
+                      <>
+                        <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
+                          {summary.subject.employee.FirstName?.trim() ||
+                            "Unknown Employee"}
+                        </h1>
+                        <span className="px-2.5 py-0.5 rounded-lg bg-indigo-50 text-[#4f46e5] font-black text-xs border border-indigo-100/80 font-mono">
+                          #{summary.subject.employee.EmployeeID}
+                        </span>
+                      </>
+                    )}
+                  {summary.subject.mode === "employee" &&
+                    summary.subject.all && (
                       <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
-                        {summary.subject.employee.FirstName?.trim() || "Unknown Employee"}
+                        All Employees
                       </h1>
-                      <span className="px-2.5 py-0.5 rounded-lg bg-indigo-50 text-[#4f46e5] font-black text-xs border border-indigo-100/80 font-mono">
-                        #{summary.subject.employee.EmployeeID}
-                      </span>
-                    </>
-                  )}
+                    )}
                   {summary.subject.mode === "workOrder" && (
                     <>
                       <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight font-mono">
@@ -433,7 +528,8 @@ export function EmployeeReportDashboard() {
                   {summary.subject.mode === "operation" && (
                     <>
                       <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
-                        {summary.subject.operationName || summary.subject.operationCode}
+                        {summary.subject.operationName ||
+                          summary.subject.operationCode}
                       </h1>
                       <span className="px-2.5 py-0.5 rounded-lg bg-indigo-50 text-[#4f46e5] font-black text-xs border border-indigo-100/80 font-mono">
                         {summary.subject.operationCode}
@@ -446,21 +542,36 @@ export function EmployeeReportDashboard() {
                   </span>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap text-xs text-slate-500 font-medium">
-                  {summary.subject.mode === "employee" && (
-                    <>
-                      {summary.subject.employee.DesignationName && (
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">
-                          {summary.subject.employee.DesignationName}
-                        </span>
-                      )}
-                      {summary.subject.employee.DepartmentName && (
-                        <span className="text-slate-600 font-semibold">{summary.subject.employee.DepartmentName}</span>
-                      )}
-                      {summary.subject.employee.ParentDepartment && (
-                        <span className="text-slate-400">· {summary.subject.employee.ParentDepartment}</span>
-                      )}
-                    </>
-                  )}
+                  {summary.subject.mode === "employee" &&
+                    !summary.subject.all && (
+                      <>
+                        {summary.subject.employee.DesignationName && (
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">
+                            {summary.subject.employee.DesignationName}
+                          </span>
+                        )}
+                        {summary.subject.employee.DepartmentName && (
+                          <span className="text-slate-600 font-semibold">
+                            {summary.subject.employee.DepartmentName}
+                          </span>
+                        )}
+                        {summary.subject.employee.ParentDepartment && (
+                          <span className="text-slate-400">
+                            · {summary.subject.employee.ParentDepartment}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  {summary.subject.mode === "employee" &&
+                    summary.subject.all && (
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">
+                        {summary.totalEmployees.toLocaleString()}{" "}
+                        {summary.totalEmployees === 1
+                          ? "Employee"
+                          : "Employees"}{" "}
+                        in scope
+                      </span>
+                    )}
                   {summary.subject.mode === "workOrder" && (
                     <>
                       {summary.subject.customerName && (
@@ -469,7 +580,9 @@ export function EmployeeReportDashboard() {
                         </span>
                       )}
                       {summary.subject.orderQty != null && (
-                        <span className="text-slate-600 font-semibold">Order Qty: {summary.subject.orderQty.toLocaleString()}</span>
+                        <span className="text-slate-600 font-semibold">
+                          Order Qty: {summary.subject.orderQty.toLocaleString()}
+                        </span>
                       )}
                     </>
                   )}
@@ -481,7 +594,9 @@ export function EmployeeReportDashboard() {
                         </span>
                       )}
                       {summary.subject.skillLevel && (
-                        <span className="text-slate-600 font-semibold">Skill: {summary.subject.skillLevel}</span>
+                        <span className="text-slate-600 font-semibold">
+                          Skill: {summary.subject.skillLevel}
+                        </span>
                       )}
                     </>
                   )}
@@ -532,16 +647,24 @@ export function EmployeeReportDashboard() {
 
               <div className="pt-3.5 border-t border-slate-100 flex flex-col gap-2.5 text-xs">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-slate-500 font-medium text-[11px]">Last Timestamp</span>
+                  <span className="text-slate-500 font-medium text-[11px]">
+                    Last Timestamp
+                  </span>
                   <span
                     className="font-semibold text-slate-700 text-[11px] truncate max-w-[150px]"
-                    title={summary.lastScannedAt ? new Date(summary.lastScannedAt).toLocaleString() : undefined}
+                    title={
+                      summary.lastScannedAt
+                        ? new Date(summary.lastScannedAt).toLocaleString()
+                        : undefined
+                    }
                   >
                     {formatTimestamp(summary.lastScannedAt)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-slate-500 font-medium text-[11px]">Selected Scope</span>
+                  <span className="text-slate-500 font-medium text-[11px]">
+                    Selected Scope
+                  </span>
                   <span className="font-semibold text-[#4f46e5] text-[11px] truncate max-w-[150px]">
                     {formatRangeLabel(dateRange)}
                   </span>
@@ -554,7 +677,9 @@ export function EmployeeReportDashboard() {
               <div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
-                    <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${card2.iconClassName}`}>
+                    <span
+                      className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${card2.iconClassName}`}
+                    >
                       <card2.icon className="w-4.5 h-4.5" />
                     </span>
                     <span className="text-[10px] font-bold text-[#64748b] uppercase tracking-wider">
@@ -577,8 +702,13 @@ export function EmployeeReportDashboard() {
 
               <div className="pt-3.5 border-t border-slate-100 flex flex-col gap-2.5 text-xs">
                 {card2.rows.map((row) => (
-                  <div key={row.label} className="flex items-center justify-between gap-2">
-                    <span className="text-slate-500 font-medium text-[11px]">{row.label}</span>
+                  <div
+                    key={row.label}
+                    className="flex items-center justify-between gap-2"
+                  >
+                    <span className="text-slate-500 font-medium text-[11px]">
+                      {row.label}
+                    </span>
                     <span
                       className="font-semibold text-slate-700 text-[11px] truncate max-w-[150px]"
                       title={row.value}
@@ -616,19 +746,29 @@ export function EmployeeReportDashboard() {
 
               <div className="pt-3.5 border-t border-slate-100 flex flex-col gap-2.5 text-xs">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-slate-500 font-medium text-[11px]">Total Output</span>
+                  <span className="text-slate-500 font-medium text-[11px]">
+                    Total Output
+                  </span>
                   <span className="font-bold text-slate-800 text-[11px]">
                     {summary.totalQty.toLocaleString()} Pcs
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-slate-500 font-medium text-[11px]">Standard SAM</span>
+                  <span className="text-slate-500 font-medium text-[11px]">
+                    Standard SAM
+                  </span>
                   <span className="font-semibold text-slate-700 text-[11px]">
-                    {summary.totalSam.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} min
+                    {summary.totalSam.toLocaleString("en-US", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}{" "}
+                    min
                   </span>
                 </div>
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-slate-500 font-medium text-[11px]">Avg Rate / Pc</span>
+                  <span className="text-slate-500 font-medium text-[11px]">
+                    Avg Rate / Pc
+                  </span>
                   <span className="font-semibold text-emerald-700 text-[11px]">
                     {summary.totalQty > 0
                       ? `Rs. ${formatAmount(summary.avgRatePerPiece)}`
@@ -645,7 +785,13 @@ export function EmployeeReportDashboard() {
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 px-4 pt-3 pb-0 gap-3 bg-slate-50/50">
               <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0">
                 {availableTabs.map((tab) => {
-                  const meta = tab === "coupons" ? { label: "Scanned Coupons Trail", icon: FileSpreadsheet } : TAB_META[tab];
+                  const meta =
+                    tab === "coupons"
+                      ? {
+                          label: "Scanned Coupons Trail",
+                          icon: FileSpreadsheet,
+                        }
+                      : TAB_META[tab];
                   const count = summary[tab]?.length || 0;
                   const Icon = meta.icon;
                   return (
@@ -712,16 +858,24 @@ export function EmployeeReportDashboard() {
                   <tbody className="divide-y divide-slate-100">
                     {summary.operations.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-8 text-center text-slate-400 font-medium">
+                        <td
+                          colSpan={8}
+                          className="py-8 text-center text-slate-400 font-medium"
+                        >
                           No operations recorded for this period.
                         </td>
                       </tr>
                     ) : (
                       summary.operations.map((op, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
+                        <tr
+                          key={idx}
+                          className="hover:bg-slate-50/70 transition-colors"
+                        >
                           <td className="py-2.5 px-3">
                             <div className="flex flex-col">
-                              <span className="font-bold text-slate-900">{op.operationName}</span>
+                              <span className="font-bold text-slate-900">
+                                {op.operationName}
+                              </span>
                               <span className="text-[10px] font-mono text-indigo-600 font-bold">
                                 {op.operationCode}
                               </span>
@@ -733,7 +887,9 @@ export function EmployeeReportDashboard() {
                             </span>
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-700">
-                            {op.rate != null ? `Rs. ${op.rate.toFixed(2)}` : "—"}
+                            {op.rate != null
+                              ? `Rs. ${op.rate.toFixed(2)}`
+                              : "—"}
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono text-slate-700">
                             {op.smv != null ? op.smv.toFixed(2) : "—"}
@@ -766,7 +922,9 @@ export function EmployeeReportDashboard() {
                         <td className="py-2.5 px-3 text-center text-[#4f46e5]">
                           {summary.totalQty.toLocaleString()}
                         </td>
-                        <td className="py-2.5 px-3 text-right">{summary.totalSam.toFixed(2)} min</td>
+                        <td className="py-2.5 px-3 text-right">
+                          {summary.totalSam.toFixed(2)} min
+                        </td>
                         <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                           Rs. {formatAmount(summary.totalAmount)}
                         </td>
@@ -786,7 +944,9 @@ export function EmployeeReportDashboard() {
                       <th className="py-2.5 px-3">Work Order #</th>
                       <th className="py-2.5 px-3 text-center">Operations</th>
                       <th className="py-2.5 px-3 text-center">Coupons</th>
-                      <th className="py-2.5 px-3 text-center">Total Output (Pcs)</th>
+                      <th className="py-2.5 px-3 text-center">
+                        Total Output (Pcs)
+                      </th>
                       <th className="py-2.5 px-3 text-right">SAM Earned</th>
                       <th className="py-2.5 px-3 text-right">Total Amount</th>
                     </tr>
@@ -794,13 +954,19 @@ export function EmployeeReportDashboard() {
                   <tbody className="divide-y divide-slate-100">
                     {summary.workOrders.length === 0 ? (
                       <tr>
-                        <td colSpan={6} className="py-8 text-center text-slate-400 font-medium">
+                        <td
+                          colSpan={6}
+                          className="py-8 text-center text-slate-400 font-medium"
+                        >
                           No work orders recorded for this period.
                         </td>
                       </tr>
                     ) : (
                       summary.workOrders.map((wo, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
+                        <tr
+                          key={idx}
+                          className="hover:bg-slate-50/70 transition-colors"
+                        >
                           <td className="py-2.5 px-3">
                             <span className="font-mono font-bold text-[#4f46e5] bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
                               {wo.workOrder}
@@ -837,7 +1003,9 @@ export function EmployeeReportDashboard() {
                         <td className="py-2.5 px-3 text-center text-[#4f46e5]">
                           {summary.totalQty.toLocaleString()}
                         </td>
-                        <td className="py-2.5 px-3 text-right">{summary.totalSam.toFixed(2)} min</td>
+                        <td className="py-2.5 px-3 text-right">
+                          {summary.totalSam.toFixed(2)} min
+                        </td>
                         <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                           Rs. {formatAmount(summary.totalAmount)}
                         </td>
@@ -867,16 +1035,24 @@ export function EmployeeReportDashboard() {
                   <tbody className="divide-y divide-slate-100">
                     {summary.employees.length === 0 ? (
                       <tr>
-                        <td colSpan={8} className="py-8 text-center text-slate-400 font-medium">
+                        <td
+                          colSpan={8}
+                          className="py-8 text-center text-slate-400 font-medium"
+                        >
                           No employees recorded for this period.
                         </td>
                       </tr>
                     ) : (
                       summary.employees.map((emp, idx) => (
-                        <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
+                        <tr
+                          key={idx}
+                          className="hover:bg-slate-50/70 transition-colors"
+                        >
                           <td className="py-2.5 px-3">
                             <div className="flex flex-col">
-                              <span className="font-bold text-slate-900">{emp.employeeName}</span>
+                              <span className="font-bold text-slate-900">
+                                {emp.employeeName}
+                              </span>
                               <span className="text-[10px] font-mono text-indigo-600 font-bold">
                                 #{emp.employeeCode}
                               </span>
@@ -921,7 +1097,9 @@ export function EmployeeReportDashboard() {
                         <td className="py-2.5 px-3 text-center text-[#4f46e5]">
                           {summary.totalQty.toLocaleString()}
                         </td>
-                        <td className="py-2.5 px-3 text-right">{summary.totalSam.toFixed(2)} min</td>
+                        <td className="py-2.5 px-3 text-right">
+                          {summary.totalSam.toFixed(2)} min
+                        </td>
                         <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                           Rs. {formatAmount(summary.totalAmount)}
                         </td>
@@ -945,7 +1123,9 @@ export function EmployeeReportDashboard() {
                         <th className="py-2.5 px-3 text-center">Bundle #</th>
                         <th className="py-2.5 px-3 text-center">Qty (Pcs)</th>
                         <th className="py-2.5 px-3">Operation</th>
-                        {showEmployeeColumn && <th className="py-2.5 px-3">Employee</th>}
+                        {showEmployeeColumn && (
+                          <th className="py-2.5 px-3">Employee</th>
+                        )}
                         <th className="py-2.5 px-3 text-right">Rate</th>
                         <th className="py-2.5 px-3 text-right">Value</th>
                         <th className="py-2.5 px-3 text-right">Scanned At</th>
@@ -954,24 +1134,34 @@ export function EmployeeReportDashboard() {
                     <tbody className="divide-y divide-slate-100">
                       {paginatedCoupons.length === 0 ? (
                         <tr>
-                          <td colSpan={showEmployeeColumn ? 10 : 9} className="py-8 text-center text-slate-400 font-medium">
+                          <td
+                            colSpan={showEmployeeColumn ? 10 : 9}
+                            className="py-8 text-center text-slate-400 font-medium"
+                          >
                             No matching coupons found.
                           </td>
                         </tr>
                       ) : (
                         paginatedCoupons.map((c, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50/70 transition-colors">
+                          <tr
+                            key={idx}
+                            className="hover:bg-slate-50/70 transition-colors"
+                          >
                             <td className="py-2 px-3 font-mono font-bold text-slate-800 text-[11px]">
                               #{c.couponCode}
                             </td>
-                            <td className="py-2 px-3 font-mono text-slate-600">{c.workOrder}</td>
+                            <td className="py-2 px-3 font-mono text-slate-600">
+                              {c.workOrder}
+                            </td>
                             <td className="py-2 px-3 text-center font-semibold text-slate-700">
                               {c.cutNo || "—"}
                             </td>
                             <td className="py-2 px-3 text-center font-semibold text-slate-700">
                               {c.bundleNo || "—"}
                             </td>
-                            <td className="py-2 px-3 text-center font-black text-[#4f46e5]">{c.qty ?? "—"}</td>
+                            <td className="py-2 px-3 text-center font-black text-[#4f46e5]">
+                              {c.qty ?? "—"}
+                            </td>
                             <td className="py-2 px-3">
                               <span className="font-semibold text-slate-800 text-[11px]">
                                 {c.operationName || c.operationCode || "—"}
@@ -980,18 +1170,30 @@ export function EmployeeReportDashboard() {
                             {showEmployeeColumn && (
                               <td className="py-2 px-3">
                                 <span className="font-semibold text-slate-800 text-[11px]">
-                                  {formatEmployeeLabel(c.employeeCode, c.employeeName)}
+                                  {formatEmployeeLabel(
+                                    c.employeeCode,
+                                    c.employeeName,
+                                  )}
                                 </span>
                               </td>
                             )}
                             <td className="py-2 px-3 text-right font-mono text-slate-600">
-                              {c.rate != null ? `Rs. ${c.rate.toFixed(2)}` : "—"}
+                              {c.rate != null
+                                ? `Rs. ${c.rate.toFixed(2)}`
+                                : "—"}
                             </td>
                             <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono">
-                              {c.value != null ? `Rs. ${c.value.toFixed(2)}` : "—"}
+                              {c.value != null
+                                ? `Rs. ${c.value.toFixed(2)}`
+                                : "—"}
                             </td>
                             <td className="py-2 px-3 text-right text-[11px] text-slate-500 font-medium whitespace-nowrap">
-                              {c.scannedAt ? format(new Date(c.scannedAt), "dd MMM, hh:mm a") : "—"}
+                              {c.scannedAt
+                                ? format(
+                                    new Date(c.scannedAt),
+                                    "dd MMM, hh:mm a",
+                                  )
+                                : "—"}
                             </td>
                           </tr>
                         ))
@@ -1004,8 +1206,11 @@ export function EmployeeReportDashboard() {
                 <div className="flex items-center justify-between px-4 py-3 border-t border-slate-100 bg-slate-50/50 text-xs text-slate-600">
                   <span className="font-medium">
                     Showing {(couponPage - 1) * ITEMS_PER_PAGE + 1} to{" "}
-                    {Math.min(couponPage * ITEMS_PER_PAGE, filteredCoupons.length)} of{" "}
-                    {filteredCoupons.length} coupons
+                    {Math.min(
+                      couponPage * ITEMS_PER_PAGE,
+                      filteredCoupons.length,
+                    )}{" "}
+                    of {filteredCoupons.length} coupons
                   </span>
                   <div className="flex items-center gap-1.5">
                     <button
@@ -1022,7 +1227,9 @@ export function EmployeeReportDashboard() {
                     <button
                       type="button"
                       disabled={couponPage >= totalPages}
-                      onClick={() => setCouponPage((p) => Math.min(totalPages, p + 1))}
+                      onClick={() =>
+                        setCouponPage((p) => Math.min(totalPages, p + 1))
+                      }
                       className="p-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -1119,75 +1326,166 @@ export function EmployeeReportDashboard() {
               <tbody>
                 <tr>
                   <td style={{ width: "35%" }}>
-                    {summary.subject.mode === "employee" && (
-                      <div className="flex flex-col gap-1">
-                        <div><strong>EMPLOYEE:</strong> {summary.subject.employee.FirstName?.trim() || "—"}</div>
-                        <div><strong>EMPLOYEE ID:</strong> #{summary.subject.employee.EmployeeID}</div>
-                      </div>
-                    )}
+                    {summary.subject.mode === "employee" &&
+                      !summary.subject.all && (
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            <strong>EMPLOYEE:</strong>{" "}
+                            {summary.subject.employee.FirstName?.trim() || "—"}
+                          </div>
+                          <div>
+                            <strong>EMPLOYEE ID:</strong> #
+                            {summary.subject.employee.EmployeeID}
+                          </div>
+                        </div>
+                      )}
+                    {summary.subject.mode === "employee" &&
+                      summary.subject.all && (
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            <strong>SCOPE:</strong> All Employees
+                          </div>
+                          <div>
+                            <strong>EMPLOYEES COVERED:</strong>{" "}
+                            {summary.totalEmployees}
+                          </div>
+                        </div>
+                      )}
                     {summary.subject.mode === "workOrder" && (
                       <div className="flex flex-col gap-1">
-                        <div><strong>WORK ORDER:</strong> {summary.subject.workOrder}</div>
-                        <div><strong>SALE ORDER #:</strong> {summary.subject.saleOrderNo || "—"}</div>
+                        <div>
+                          <strong>WORK ORDER:</strong>{" "}
+                          {summary.subject.workOrder}
+                        </div>
+                        <div>
+                          <strong>SALE ORDER #:</strong>{" "}
+                          {summary.subject.saleOrderNo || "—"}
+                        </div>
                       </div>
                     )}
                     {summary.subject.mode === "operation" && (
                       <div className="flex flex-col gap-1">
-                        <div><strong>OPERATION:</strong> {summary.subject.operationName || "—"}</div>
-                        <div><strong>OPERATION CODE:</strong> {summary.subject.operationCode}</div>
+                        <div>
+                          <strong>OPERATION:</strong>{" "}
+                          {summary.subject.operationName || "—"}
+                        </div>
+                        <div>
+                          <strong>OPERATION CODE:</strong>{" "}
+                          {summary.subject.operationCode}
+                        </div>
                       </div>
                     )}
                   </td>
                   <td style={{ width: "35%" }}>
-                    {summary.subject.mode === "employee" && (
-                      <div className="flex flex-col gap-1">
-                        <div><strong>DESIGNATION:</strong> {summary.subject.employee.DesignationName || "—"}</div>
-                        <div><strong>DEPARTMENT:</strong> {summary.subject.employee.DepartmentName || summary.subject.employee.ParentDepartment || "—"}</div>
-                      </div>
-                    )}
+                    {summary.subject.mode === "employee" &&
+                      !summary.subject.all && (
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            <strong>DESIGNATION:</strong>{" "}
+                            {summary.subject.employee.DesignationName || "—"}
+                          </div>
+                          <div>
+                            <strong>DEPARTMENT:</strong>{" "}
+                            {summary.subject.employee.DepartmentName ||
+                              summary.subject.employee.ParentDepartment ||
+                              "—"}
+                          </div>
+                        </div>
+                      )}
+                    {summary.subject.mode === "employee" &&
+                      summary.subject.all && (
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            <strong>WORK ORDERS COVERED:</strong>{" "}
+                            {summary.totalWorkOrders}
+                          </div>
+                          <div>
+                            <strong>OPERATIONS COVERED:</strong>{" "}
+                            {summary.totalOperations}
+                          </div>
+                        </div>
+                      )}
                     {summary.subject.mode === "workOrder" && (
                       <div className="flex flex-col gap-1">
-                        <div><strong>CUSTOMER:</strong> {summary.subject.customerName || "—"}</div>
-                        <div><strong>ORDER QTY:</strong> {summary.subject.orderQty != null ? summary.subject.orderQty.toLocaleString() : "—"}</div>
+                        <div>
+                          <strong>CUSTOMER:</strong>{" "}
+                          {summary.subject.customerName || "—"}
+                        </div>
+                        <div>
+                          <strong>ORDER QTY:</strong>{" "}
+                          {summary.subject.orderQty != null
+                            ? summary.subject.orderQty.toLocaleString()
+                            : "—"}
+                        </div>
                       </div>
                     )}
                     {summary.subject.mode === "operation" && (
                       <div className="flex flex-col gap-1">
-                        <div><strong>DEPARTMENT:</strong> {summary.subject.department || "—"}</div>
-                        <div><strong>SKILL LEVEL:</strong> {summary.subject.skillLevel || "—"}</div>
+                        <div>
+                          <strong>DEPARTMENT:</strong>{" "}
+                          {summary.subject.department || "—"}
+                        </div>
+                        <div>
+                          <strong>SKILL LEVEL:</strong>{" "}
+                          {summary.subject.skillLevel || "—"}
+                        </div>
                       </div>
                     )}
                   </td>
                   <td style={{ width: "30%" }}>
                     <div className="flex flex-col gap-1">
-                      <div><strong>REPORT TENURE:</strong> {formatRangeLabel(dateRange)}</div>
-                      <div><strong>PRINTED AT:</strong> {format(new Date(), "dd MMM yyyy, hh:mm a")}</div>
+                      <div>
+                        <strong>REPORT TENURE:</strong>{" "}
+                        {formatRangeLabel(dateRange)}
+                      </div>
+                      <div>
+                        <strong>PRINTED AT:</strong>{" "}
+                        {format(new Date(), "dd MMM yyyy, hh:mm a")}
+                      </div>
                     </div>
                   </td>
                 </tr>
                 <tr>
                   <td colSpan={3}>
                     <div className="grid grid-cols-4 gap-2 text-[9.5px]">
-                      <div><strong>COUPONS SCANNED:</strong> {summary.totalCoupons.toLocaleString()}</div>
-                      <div><strong>{card2.title.toUpperCase()}:</strong> {card2.value}</div>
-                      <div><strong>TOTAL OUTPUT (PCS):</strong> {summary.totalQty.toLocaleString()}</div>
-                      <div><strong>TOTAL AMOUNT (RS.):</strong> Rs. {formatAmount(summary.totalAmount)}</div>
+                      <div>
+                        <strong>COUPONS SCANNED:</strong>{" "}
+                        {summary.totalCoupons.toLocaleString()}
+                      </div>
+                      <div>
+                        <strong>{card2.title.toUpperCase()}:</strong>{" "}
+                        {card2.value}
+                      </div>
+                      <div>
+                        <strong>TOTAL OUTPUT (PCS):</strong>{" "}
+                        {summary.totalQty.toLocaleString()}
+                      </div>
+                      <div>
+                        <strong>TOTAL AMOUNT (RS.):</strong> Rs.{" "}
+                        {formatAmount(summary.totalAmount)}
+                      </div>
                     </div>
                   </td>
                 </tr>
               </tbody>
             </table>
 
-            {/* Breakdown tables — whichever two dimensions aren't the search
-                subject itself (same rule as the on-screen tabs). */}
-            {BREAKDOWN_DIMENSIONS[mode].map((dimension) => {
+            {(isAllEmployeesSummary
+              ? ([
+                  "employees",
+                  ...BREAKDOWN_DIMENSIONS[mode],
+                ] as BreakdownDimension[])
+              : BREAKDOWN_DIMENSIONS[mode]
+            ).map((dimension) => {
               const items = summary[dimension];
               if (items.length === 0) return null;
 
               if (dimension === "operations") {
                 return (
                   <div key={dimension}>
-                    <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">Operations Breakdown</h3>
+                    <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
+                      Operations Breakdown
+                    </h3>
                     <table className="print-ops-table">
                       <thead>
                         <tr>
@@ -1207,23 +1505,49 @@ export function EmployeeReportDashboard() {
                         {summary.operations.map((op, idx) => (
                           <tr key={idx}>
                             <td className="text-center">{idx + 1}</td>
-                            <td className="font-mono font-bold">{op.operationCode}</td>
+                            <td className="font-mono font-bold">
+                              {op.operationCode}
+                            </td>
                             <td>{op.operationName}</td>
                             <td>{op.section || "—"}</td>
-                            <td className="text-right font-mono">{op.rate != null ? `Rs. ${op.rate.toFixed(2)}` : "—"}</td>
-                            <td className="text-right font-mono">{op.smv != null ? op.smv.toFixed(2) : "—"}</td>
-                            <td className="text-center font-bold">{op.couponCount.toLocaleString()}</td>
-                            <td className="text-center font-bold">{op.totalQty.toLocaleString()}</td>
-                            <td className="text-right">{op.totalSam.toFixed(2)} min</td>
-                            <td className="text-right font-bold">Rs. {formatAmount(op.totalAmount)}</td>
+                            <td className="text-right font-mono">
+                              {op.rate != null
+                                ? `Rs. ${op.rate.toFixed(2)}`
+                                : "—"}
+                            </td>
+                            <td className="text-right font-mono">
+                              {op.smv != null ? op.smv.toFixed(2) : "—"}
+                            </td>
+                            <td className="text-center font-bold">
+                              {op.couponCount.toLocaleString()}
+                            </td>
+                            <td className="text-center font-bold">
+                              {op.totalQty.toLocaleString()}
+                            </td>
+                            <td className="text-right">
+                              {op.totalSam.toFixed(2)} min
+                            </td>
+                            <td className="text-right font-bold">
+                              Rs. {formatAmount(op.totalAmount)}
+                            </td>
                           </tr>
                         ))}
                         <tr className="print-totals-row">
-                          <td colSpan={6} className="text-right uppercase">Grand Total</td>
-                          <td className="text-center">{summary.totalCoupons.toLocaleString()}</td>
-                          <td className="text-center">{summary.totalQty.toLocaleString()}</td>
-                          <td className="text-right">{summary.totalSam.toFixed(2)} min</td>
-                          <td className="text-right">Rs. {formatAmount(summary.totalAmount)}</td>
+                          <td colSpan={6} className="text-right uppercase">
+                            Grand Total
+                          </td>
+                          <td className="text-center">
+                            {summary.totalCoupons.toLocaleString()}
+                          </td>
+                          <td className="text-center">
+                            {summary.totalQty.toLocaleString()}
+                          </td>
+                          <td className="text-right">
+                            {summary.totalSam.toFixed(2)} min
+                          </td>
+                          <td className="text-right">
+                            Rs. {formatAmount(summary.totalAmount)}
+                          </td>
                         </tr>
                       </tbody>
                     </table>
@@ -1234,7 +1558,9 @@ export function EmployeeReportDashboard() {
               if (dimension === "workOrders") {
                 return (
                   <div key={dimension}>
-                    <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">Work Orders Summary</h3>
+                    <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
+                      Work Orders Summary
+                    </h3>
                     <table className="print-ops-table">
                       <thead>
                         <tr>
@@ -1244,19 +1570,33 @@ export function EmployeeReportDashboard() {
                           <th className="text-center w-20">COUPONS</th>
                           <th className="text-center w-24">OUTPUT (PCS)</th>
                           <th className="text-right w-24">SAM EARNED</th>
-                          <th className="text-right w-28">TOTAL AMOUNT (RS.)</th>
+                          <th className="text-right w-28">
+                            TOTAL AMOUNT (RS.)
+                          </th>
                         </tr>
                       </thead>
                       <tbody>
                         {summary.workOrders.map((wo, idx) => (
                           <tr key={idx}>
                             <td className="text-center">{idx + 1}</td>
-                            <td className="font-mono font-bold">{wo.workOrder}</td>
-                            <td className="text-center">{wo.operationsCount}</td>
-                            <td className="text-center">{wo.couponCount.toLocaleString()}</td>
-                            <td className="text-center">{wo.totalQty.toLocaleString()}</td>
-                            <td className="text-right">{wo.totalSam.toFixed(2)} min</td>
-                            <td className="text-right font-bold">Rs. {formatAmount(wo.totalAmount)}</td>
+                            <td className="font-mono font-bold">
+                              {wo.workOrder}
+                            </td>
+                            <td className="text-center">
+                              {wo.operationsCount}
+                            </td>
+                            <td className="text-center">
+                              {wo.couponCount.toLocaleString()}
+                            </td>
+                            <td className="text-center">
+                              {wo.totalQty.toLocaleString()}
+                            </td>
+                            <td className="text-right">
+                              {wo.totalSam.toFixed(2)} min
+                            </td>
+                            <td className="text-right font-bold">
+                              Rs. {formatAmount(wo.totalAmount)}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -1267,7 +1607,9 @@ export function EmployeeReportDashboard() {
 
               return (
                 <div key={dimension}>
-                  <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">Employees Summary</h3>
+                  <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
+                    Employees Summary
+                  </h3>
                   <table className="print-ops-table">
                     <thead>
                       <tr>
@@ -1284,12 +1626,22 @@ export function EmployeeReportDashboard() {
                       {summary.employees.map((emp, idx) => (
                         <tr key={idx}>
                           <td className="text-center">{idx + 1}</td>
-                          <td className="font-mono font-bold">{emp.employeeName} (#{emp.employeeCode})</td>
+                          <td className="font-mono font-bold">
+                            {emp.employeeName} (#{emp.employeeCode})
+                          </td>
                           <td>{emp.designation || "—"}</td>
-                          <td className="text-center">{emp.couponCount.toLocaleString()}</td>
-                          <td className="text-center">{emp.totalQty.toLocaleString()}</td>
-                          <td className="text-right">{emp.totalSam.toFixed(2)} min</td>
-                          <td className="text-right font-bold">Rs. {formatAmount(emp.totalAmount)}</td>
+                          <td className="text-center">
+                            {emp.couponCount.toLocaleString()}
+                          </td>
+                          <td className="text-center">
+                            {emp.totalQty.toLocaleString()}
+                          </td>
+                          <td className="text-right">
+                            {emp.totalSam.toFixed(2)} min
+                          </td>
+                          <td className="text-right font-bold">
+                            Rs. {formatAmount(emp.totalAmount)}
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -1301,13 +1653,19 @@ export function EmployeeReportDashboard() {
             {/* Signature Block */}
             <div className="flex justify-between items-end mt-12 pt-4 text-xs">
               <div className="text-center">
-                <div className="border-t border-black w-36 pt-1 font-bold">Prepared By</div>
+                <div className="border-t border-black w-36 pt-1 font-bold">
+                  Prepared By
+                </div>
               </div>
               <div className="text-center">
-                <div className="border-t border-black w-36 pt-1 font-bold">Checked By (IE)</div>
+                <div className="border-t border-black w-36 pt-1 font-bold">
+                  Checked By (IE)
+                </div>
               </div>
               <div className="text-center">
-                <div className="border-t border-black w-36 pt-1 font-bold">Approved By</div>
+                <div className="border-t border-black w-36 pt-1 font-bold">
+                  Approved By
+                </div>
               </div>
             </div>
           </div>
