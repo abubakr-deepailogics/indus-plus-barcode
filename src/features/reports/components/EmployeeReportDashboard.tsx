@@ -265,6 +265,7 @@ export function EmployeeReportDashboard() {
     error,
     search,
     searchAll,
+    isAllMode,
   } = useReportSearch();
 
   // Whether the current summary came from the "All" action — its own
@@ -304,9 +305,9 @@ export function EmployeeReportDashboard() {
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter") search();
+      if (e.key === "Enter" && searchValue.trim()) search();
     },
-    [search],
+    [search, searchValue],
   );
 
   // Filtered coupons for itemized audit trail
@@ -374,7 +375,7 @@ export function EmployeeReportDashboard() {
         </div>
 
         <div className="flex flex-col md:flex-row items-end gap-3">
-          <div className="flex flex-col gap-1 relative w-full md:w-80">
+          <div className="flex flex-col gap-1 relative w-full md:w-96">
             <span className="font-bold text-[#475569] text-[10px] uppercase">
               {modeConfig.fieldLabel} <span className="text-red-500">*</span>
             </span>
@@ -413,7 +414,11 @@ export function EmployeeReportDashboard() {
                 onClick={() => searchAll()}
                 disabled={isLoading}
                 title={`View a combined report across every ${modeConfig.label.toLowerCase()}, without picking one`}
-                className="shrink-0 px-3.5 py-2 rounded-xl border border-indigo-200 bg-indigo-50/60 text-[10px] font-bold uppercase tracking-wider text-[#4f46e5] hover:bg-indigo-100 hover:border-indigo-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer whitespace-nowrap"
+                className={`shrink-0 px-3.5 py-2 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed ${
+                  isAllMode
+                    ? "bg-[#4f46e5] border-[#4f46e5] text-white shadow-sm"
+                    : "bg-indigo-50/60 border-indigo-200 text-[#4f46e5] hover:bg-indigo-100 hover:border-indigo-300"
+                }`}
               >
                 All {modeConfig.label}s
               </button>
@@ -471,7 +476,12 @@ export function EmployeeReportDashboard() {
 
           <button
             onClick={() => search()}
-            disabled={isLoading}
+            disabled={isLoading || !searchValue.trim()}
+            title={
+              !searchValue.trim()
+                ? `Enter a ${modeConfig.label.toLowerCase()} to search, or use "All ${modeConfig.label}s" instead`
+                : undefined
+            }
             className="flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-[#4f46e5] text-white text-xs font-bold hover:bg-[#4338ca] disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shadow-sm shrink-0 w-full md:w-auto"
           >
             <Search className="w-3.5 h-3.5" />
