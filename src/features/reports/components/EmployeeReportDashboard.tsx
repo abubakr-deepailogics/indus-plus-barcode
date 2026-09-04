@@ -24,6 +24,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
+import { downloadCsv } from "@/lib/csv-export";
 import {
   fetchEmployeeSearchSuggestions,
   fetchOperationSearchSuggestions,
@@ -273,14 +274,23 @@ export function EmployeeReportDashboard() {
   const isAllSummary = summary?.subject.all === true;
   const availableTabs = useMemo<TabKey[]>(() => {
     const dims = isAllSummary
-      ? ([OWN_DIMENSION_BY_MODE[mode], ...BREAKDOWN_DIMENSIONS[mode]] as BreakdownDimension[])
+      ? ([
+          OWN_DIMENSION_BY_MODE[mode],
+          ...BREAKDOWN_DIMENSIONS[mode],
+        ] as BreakdownDimension[])
       : BREAKDOWN_DIMENSIONS[mode];
     return [...dims, "coupons"];
   }, [mode, isAllSummary]);
   const [activeTab, setActiveTab] = useState<TabKey>("operations");
-  // Derived rather than reset via effect: whichever tab is active only
-  // matters if it's still one of the current mode's tabs, otherwise fall
-  // back to that mode's first (and most relevant) tab.
+
+  const [tabsForSummary, setTabsForSummary] = useState<ReportSummary | null>(
+    null,
+  );
+  if (summary !== tabsForSummary) {
+    setTabsForSummary(summary);
+    setActiveTab(availableTabs[0]);
+  }
+
   const effectiveTab = availableTabs.includes(activeTab)
     ? activeTab
     : availableTabs[0];
@@ -342,6 +352,130 @@ export function EmployeeReportDashboard() {
   const showEmployeeColumn =
     summary?.subject.mode !== "employee" || isAllSummary;
   const card2 = summary ? getCard2Config(summary) : null;
+
+  // Exports whichever breakdown tab is currently open (not the whole
+  // report) — that's the table the user is looking at when they click
+  // Export, and matches the coupons tab's own search filter rather than
+  // re-deriving a separate scope.
+  const handleExport = useCallback(() => {
+    if (!summary) return;
+
+    let headers: string[];
+    let rows: (string | number | null | undefined)[][];
+
+    if (effectiveTab === "operations") {
+      headers = [
+        "Operation Code",
+        "Operation Name",
+        "Section",
+        "Rate",
+        "SMV",
+        "Coupons",
+        "Output (Pcs)",
+        "SAM Earned",
+        "Total Amount",
+      ];
+      rows = summary.operations.map((op) => [
+        op.operationCode,
+        op.operationName,
+        op.section,
+        op.rate,
+        op.smv,
+        op.couponCount,
+        op.totalQty,
+        Number(op.totalSam.toFixed(2)),
+        Number(op.totalAmount.toFixed(2)),
+      ]);
+    } else if (effectiveTab === "workOrders") {
+      headers = [
+        "Work Order #",
+        "Operations",
+        "Coupons",
+        "Output (Pcs)",
+        "SAM Earned",
+        "Total Amount",
+      ];
+      rows = summary.workOrders.map((wo) => [
+        wo.workOrder,
+        wo.operationsCount,
+        wo.couponCount,
+        wo.totalQty,
+        Number(wo.totalSam.toFixed(2)),
+        Number(wo.totalAmount.toFixed(2)),
+      ]);
+    } else if (effectiveTab === "employees") {
+      headers = [
+        "Employee Code",
+        "Employee Name",
+        "Designation",
+        "Operations",
+        "Work Orders",
+        "Coupons",
+        "Output (Pcs)",
+        "SAM Earned",
+        "Total Amount",
+      ];
+      rows = summary.employees.map((emp) => [
+        emp.employeeCode,
+        emp.employeeName,
+        emp.designation,
+        emp.operationsCount,
+        emp.workOrdersCount,
+        emp.couponCount,
+        emp.totalQty,
+        Number(emp.totalSam.toFixed(2)),
+        Number(emp.totalAmount.toFixed(2)),
+      ]);
+    } else {
+      headers = [
+        "Coupon Code",
+        "Work Order",
+        "Cut #",
+        "Bundle #",
+        "Qty (Pcs)",
+        "Operation",
+        ...(showEmployeeColumn ? ["Employee"] : []),
+        "Rate",
+        "Value",
+        "Scanned At",
+      ];
+      rows = filteredCoupons.map((c) => [
+        c.couponCode,
+        c.workOrder,
+        c.cutNo,
+        c.bundleNo,
+        c.qty,
+        c.operationName || c.operationCode,
+        ...(showEmployeeColumn
+          ? [formatEmployeeLabel(c.employeeCode, c.employeeName)]
+          : []),
+        c.rate,
+        c.value,
+        c.scannedAt
+          ? format(new Date(c.scannedAt), "dd MMM yyyy, hh:mm a")
+          : "",
+      ]);
+    }
+
+    const subjectSlug =
+      summary.subject.mode === "employee"
+        ? summary.subject.all
+          ? "all-employees"
+          : `employee-${summary.subject.employee.EmployeeID}`
+        : summary.subject.mode === "workOrder"
+          ? summary.subject.all
+            ? "all-work-orders"
+            : summary.subject.workOrder
+          : summary.subject.all
+            ? "all-operations"
+            : summary.subject.operationCode;
+
+    downloadCsv(
+      `report-${subjectSlug}-${effectiveTab}-${format(new Date(), "yyyyMMdd-HHmm")}`,
+      headers,
+      rows,
+    );
+  }, [summary, effectiveTab, filteredCoupons, showEmployeeColumn]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -844,7 +978,7 @@ export function EmployeeReportDashboard() {
           <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden flex flex-col no-print">
             {/* Tab Header Navigation */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 px-4 pt-3 pb-0 gap-3 bg-slate-50/50">
-              <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0">
+              <div className="flex items-center gap-2 overflow-x-auto min-w-0 pb-2 sm:pb-0">
                 {availableTabs.map((tab) => {
                   const meta =
                     tab === "coupons"
@@ -882,22 +1016,33 @@ export function EmployeeReportDashboard() {
                 })}
               </div>
 
-              {/* Tab contextual quick-search for coupons */}
-              {effectiveTab === "coupons" && (
-                <div className="relative pb-2.5 sm:pb-2 w-full sm:w-64">
-                  <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
-                  <input
-                    type="text"
-                    value={couponSearch}
-                    onChange={(e) => {
-                      setCouponSearch(e.target.value);
-                      setCouponPage(1);
-                    }}
-                    placeholder="Search coupons, orders, ops…"
-                    className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
-                  />
-                </div>
-              )}
+              <div className="flex items-center gap-2 pb-2.5 sm:pb-2 w-full sm:w-auto shrink-0">
+                {/* Tab contextual quick-search for coupons */}
+                {effectiveTab === "coupons" && (
+                  <div className="relative w-full sm:w-64">
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-2.5" />
+                    <input
+                      type="text"
+                      value={couponSearch}
+                      onChange={(e) => {
+                        setCouponSearch(e.target.value);
+                        setCouponPage(1);
+                      }}
+                      placeholder="Search coupons, orders, ops…"
+                      className="w-full pl-8 pr-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
+                    />
+                  </div>
+                )}
+                <button
+                  type="button"
+                  onClick={handleExport}
+                  title="Export this table to Excel (.csv)"
+                  className="shrink-0 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] font-bold uppercase tracking-wider text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all cursor-pointer"
+                >
+                  <FileSpreadsheet className="w-3.5 h-3.5" />
+                  Export
+                </button>
+              </div>
             </div>
 
             {/* Tab: Operations Breakdown Table */}
