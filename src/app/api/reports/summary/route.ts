@@ -12,14 +12,17 @@ const VALID_MODES: ReportSearchMode[] = ["employee", "workOrder", "operation"];
 // report-summary-builder.service.ts), everything else about the response
 // shape is identical across modes. `from`/`to` are optional and inclusive on
 // both ends; omitting either (or both) reports all-time totals.
+//
+// `all=true` (no `value`) aggregates across every employee/work order/
+// operation for the given `by`, instead of one — the only case `value`
+// isn't required.
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const by = searchParams.get("by");
   const value = (searchParams.get("value") || "").trim();
   const from = (searchParams.get("from") || "").trim();
   const to = (searchParams.get("to") || "").trim();
-  const isAllEmployees =
-    by === "employee" && searchParams.get("all") === "true";
+  const isAll = searchParams.get("all") === "true";
 
   if (!by || !VALID_MODES.includes(by as ReportSearchMode)) {
     return Response.json(
@@ -30,7 +33,7 @@ export async function GET(request: Request) {
       { status: 400 },
     );
   }
-  if (!isAllEmployees && !value) {
+  if (!isAll && !value) {
     return Response.json(
       { error: "A search value is required." },
       { status: 400 },
@@ -43,7 +46,7 @@ export async function GET(request: Request) {
       value,
       from,
       to,
-      { all: isAllEmployees },
+      { all: isAll },
     );
     if (!result.ok) {
       return Response.json({ error: result.error }, { status: result.status });

@@ -2,7 +2,7 @@
 
 import { useCallback, useState } from "react";
 import {
-  fetchAllEmployeesReportSummary,
+  fetchAllReportSummary,
   fetchReportSummary,
 } from "../services/reports.service";
 import {
@@ -19,7 +19,10 @@ export function useReportSearch() {
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [isAllEmployees, setIsAllEmployees] = useState(false);
+  // Tracks whether the current summary came from the "All" action rather
+  // than a specific search value, so a date-range change knows which of the
+  // two to re-run.
+  const [isAllMode, setIsAllMode] = useState(false);
 
   // `valueOverride`/`rangeOverride`/`modeOverride` exist for the same reason:
   // callers that just changed searchValue/dateRange/mode via setState
@@ -42,7 +45,7 @@ export function useReportSearch() {
       }
 
       const range = rangeOverride ?? dateRange;
-      setIsAllEmployees(false);
+      setIsAllMode(false);
       setIsLoading(true);
       setError(null);
       try {
@@ -63,15 +66,18 @@ export function useReportSearch() {
     [mode, searchValue, dateRange],
   );
 
-  const searchAllEmployees = useCallback(
+  // Same flow as `search`, but aggregates every employee/work order/
+  // operation (whichever the current mode is) instead of one — triggered
+  // only by the "All" action beside the search field.
+  const searchAll = useCallback(
     async (rangeOverride?: ReportDateRange) => {
       const range = rangeOverride ?? dateRange;
       setSearchValue("");
-      setIsAllEmployees(true);
+      setIsAllMode(true);
       setIsLoading(true);
       setError(null);
       try {
-        const result = await fetchAllEmployeesReportSummary(range);
+        const result = await fetchAllReportSummary(mode, range);
         if (!result.ok) {
           setSummary(null);
           setError(result.error);
@@ -85,7 +91,7 @@ export function useReportSearch() {
         setIsLoading(false);
       }
     },
-    [dateRange],
+    [mode, dateRange],
   );
 
   // Switching what's being searched by (employee/work order/operation)
@@ -96,19 +102,19 @@ export function useReportSearch() {
     setSearchValue("");
     setSummary(null);
     setError(null);
-    setIsAllEmployees(false);
+    setIsAllMode(false);
   }, []);
 
   const applyDateRange = useCallback(
     (range: ReportDateRange) => {
       setDateRange(range);
-      if (isAllEmployees) {
-        searchAllEmployees(range);
+      if (isAllMode) {
+        searchAll(range);
       } else if (searchValue.trim()) {
         search(undefined, range);
       }
     },
-    [searchValue, search, isAllEmployees, searchAllEmployees],
+    [searchValue, search, isAllMode, searchAll],
   );
 
   return {
@@ -122,7 +128,7 @@ export function useReportSearch() {
     isLoading,
     error,
     search,
-    searchAllEmployees,
-    isAllEmployees,
+    searchAll,
+    isAllMode,
   };
 }

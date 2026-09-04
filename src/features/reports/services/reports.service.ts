@@ -33,10 +33,14 @@ export async function fetchReportSummary(
   return fetchSummaryByParams(params);
 }
 
-export async function fetchAllEmployeesReportSummary(
+// Same report shape as a single-value search in the given mode, aggregated
+// across every employee/work order/operation instead of one — used by the
+// "All" action beside the search field.
+export async function fetchAllReportSummary(
+  mode: ReportSearchMode,
   range?: ReportDateRange,
 ): Promise<{ ok: true; data: ReportSummary } | { ok: false; error: string }> {
-  const params = new URLSearchParams({ by: "employee", all: "true" });
+  const params = new URLSearchParams({ by: mode, all: "true" });
   if (range?.from) params.set("from", format(range.from, "yyyy-MM-dd"));
   if (range?.to) params.set("to", format(range.to, "yyyy-MM-dd"));
   return fetchSummaryByParams(params);

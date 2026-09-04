@@ -145,6 +145,16 @@ const BREAKDOWN_DIMENSIONS: Record<
   operation: ["employees", "workOrders"],
 };
 
+// The one dimension BREAKDOWN_DIMENSIONS always excludes for a mode — its
+// own subject. Trivial (one row) for a single-value search, but genuinely
+// useful once the "All" action makes that mode's own breakdown span many
+// rows instead of one.
+const OWN_DIMENSION_BY_MODE: Record<ReportSearchMode, BreakdownDimension> = {
+  employee: "employees",
+  workOrder: "workOrders",
+  operation: "operations",
+};
+
 const TAB_META: Record<
   BreakdownDimension,
   { label: string; icon: LucideIcon }
@@ -254,17 +264,18 @@ export function EmployeeReportDashboard() {
     isLoading,
     error,
     search,
-    searchAllEmployees,
+    searchAll,
   } = useReportSearch();
 
-  const isAllEmployeesSummary =
-    summary?.subject.mode === "employee" && summary.subject.all === true;
+  // Whether the current summary came from the "All" action — its own
+  // dimension's breakdown is worth a tab (see OWN_DIMENSION_BY_MODE).
+  const isAllSummary = summary?.subject.all === true;
   const availableTabs = useMemo<TabKey[]>(() => {
-    const dims = isAllEmployeesSummary
-      ? (["employees", ...BREAKDOWN_DIMENSIONS[mode]] as BreakdownDimension[])
+    const dims = isAllSummary
+      ? ([OWN_DIMENSION_BY_MODE[mode], ...BREAKDOWN_DIMENSIONS[mode]] as BreakdownDimension[])
       : BREAKDOWN_DIMENSIONS[mode];
     return [...dims, "coupons"];
-  }, [mode, isAllEmployeesSummary]);
+  }, [mode, isAllSummary]);
   const [activeTab, setActiveTab] = useState<TabKey>("operations");
   // Derived rather than reset via effect: whichever tab is active only
   // matters if it's still one of the current mode's tabs, otherwise fall
@@ -328,7 +339,7 @@ export function EmployeeReportDashboard() {
   }, [filteredCoupons, couponPage]);
 
   const showEmployeeColumn =
-    summary?.subject.mode !== "employee" || isAllEmployeesSummary;
+    summary?.subject.mode !== "employee" || isAllSummary;
   const card2 = summary ? getCard2Config(summary) : null;
 
   return (
@@ -367,7 +378,7 @@ export function EmployeeReportDashboard() {
             <span className="font-bold text-[#475569] text-[10px] uppercase">
               {modeConfig.fieldLabel} <span className="text-red-500">*</span>
             </span>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2.5">
               <div className="flex-1 min-w-0">
                 <Autocomplete<ReportSearchSuggestion>
                   key={mode}
@@ -394,17 +405,18 @@ export function EmployeeReportDashboard() {
                   minChars={1}
                 />
               </div>
-              {mode === "employee" && (
-                <button
-                  type="button"
-                  onClick={() => searchAllEmployees()}
-                  disabled={isLoading}
-                  title="Fetch a combined report for all employees"
-                  className="shrink-0 px-3 py-2 rounded-xl border border-[#e2e8f0] bg-white text-[10px] font-bold uppercase tracking-wider text-slate-600 hover:bg-indigo-50 hover:text-[#4f46e5] hover:border-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
-                >
-                  All
-                </button>
-              )}
+              <span className="shrink-0 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                or
+              </span>
+              <button
+                type="button"
+                onClick={() => searchAll()}
+                disabled={isLoading}
+                title={`View a combined report across every ${modeConfig.label.toLowerCase()}, without picking one`}
+                className="shrink-0 px-3.5 py-2 rounded-xl border border-indigo-200 bg-indigo-50/60 text-[10px] font-bold uppercase tracking-wider text-[#4f46e5] hover:bg-indigo-100 hover:border-indigo-300 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer whitespace-nowrap"
+              >
+                All {modeConfig.label}s
+              </button>
             </div>
           </div>
 
@@ -482,14 +494,16 @@ export function EmployeeReportDashboard() {
                 <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#4f46e5] to-[#6366f1] text-white font-black text-lg flex items-center justify-center shadow-md shadow-indigo-100 shrink-0">
                   {getInitials(summary.subject.employee.FirstName)}
                 </div>
+              ) : summary.subject.all ? (
+                <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#4f46e5] to-[#6366f1] text-white flex items-center justify-center shadow-md shadow-indigo-100 shrink-0">
+                  <Users className="w-6 h-6" />
+                </div>
               ) : (
                 <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#4f46e5] to-[#6366f1] text-white flex items-center justify-center shadow-md shadow-indigo-100 shrink-0">
                   {summary.subject.mode === "workOrder" ? (
                     <ClipboardList className="w-6 h-6" />
-                  ) : summary.subject.mode === "operation" ? (
-                    <Scissors className="w-6 h-6" />
                   ) : (
-                    <Users className="w-6 h-6" />
+                    <Scissors className="w-6 h-6" />
                   )}
                 </div>
               )}
@@ -513,29 +527,43 @@ export function EmployeeReportDashboard() {
                         All Employees
                       </h1>
                     )}
-                  {summary.subject.mode === "workOrder" && (
-                    <>
-                      <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight font-mono">
-                        Work Order #{summary.subject.workOrder}
-                      </h1>
-                      {summary.subject.saleOrderNo && (
-                        <span className="px-2.5 py-0.5 rounded-lg bg-indigo-50 text-[#4f46e5] font-black text-xs border border-indigo-100/80 font-mono">
-                          SO #{summary.subject.saleOrderNo}
-                        </span>
-                      )}
-                    </>
-                  )}
-                  {summary.subject.mode === "operation" && (
-                    <>
+                  {summary.subject.mode === "workOrder" &&
+                    !summary.subject.all && (
+                      <>
+                        <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight font-mono">
+                          Work Order #{summary.subject.workOrder}
+                        </h1>
+                        {summary.subject.saleOrderNo && (
+                          <span className="px-2.5 py-0.5 rounded-lg bg-indigo-50 text-[#4f46e5] font-black text-xs border border-indigo-100/80 font-mono">
+                            SO #{summary.subject.saleOrderNo}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  {summary.subject.mode === "workOrder" &&
+                    summary.subject.all && (
                       <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
-                        {summary.subject.operationName ||
-                          summary.subject.operationCode}
+                        All Work Orders
                       </h1>
-                      <span className="px-2.5 py-0.5 rounded-lg bg-indigo-50 text-[#4f46e5] font-black text-xs border border-indigo-100/80 font-mono">
-                        {summary.subject.operationCode}
-                      </span>
-                    </>
-                  )}
+                    )}
+                  {summary.subject.mode === "operation" &&
+                    !summary.subject.all && (
+                      <>
+                        <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
+                          {summary.subject.operationName ||
+                            summary.subject.operationCode}
+                        </h1>
+                        <span className="px-2.5 py-0.5 rounded-lg bg-indigo-50 text-[#4f46e5] font-black text-xs border border-indigo-100/80 font-mono">
+                          {summary.subject.operationCode}
+                        </span>
+                      </>
+                    )}
+                  {summary.subject.mode === "operation" &&
+                    summary.subject.all && (
+                      <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
+                        All Operations
+                      </h1>
+                    )}
                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-100">
                     <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     Active
@@ -572,34 +600,57 @@ export function EmployeeReportDashboard() {
                         in scope
                       </span>
                     )}
-                  {summary.subject.mode === "workOrder" && (
-                    <>
-                      {summary.subject.customerName && (
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">
-                          {summary.subject.customerName}
-                        </span>
-                      )}
-                      {summary.subject.orderQty != null && (
-                        <span className="text-slate-600 font-semibold">
-                          Order Qty: {summary.subject.orderQty.toLocaleString()}
-                        </span>
-                      )}
-                    </>
-                  )}
-                  {summary.subject.mode === "operation" && (
-                    <>
-                      {summary.subject.department && (
-                        <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">
-                          {summary.subject.department}
-                        </span>
-                      )}
-                      {summary.subject.skillLevel && (
-                        <span className="text-slate-600 font-semibold">
-                          Skill: {summary.subject.skillLevel}
-                        </span>
-                      )}
-                    </>
-                  )}
+                  {summary.subject.mode === "workOrder" &&
+                    !summary.subject.all && (
+                      <>
+                        {summary.subject.customerName && (
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">
+                            {summary.subject.customerName}
+                          </span>
+                        )}
+                        {summary.subject.orderQty != null && (
+                          <span className="text-slate-600 font-semibold">
+                            Order Qty:{" "}
+                            {summary.subject.orderQty.toLocaleString()}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  {summary.subject.mode === "workOrder" &&
+                    summary.subject.all && (
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">
+                        {summary.totalWorkOrders.toLocaleString()}{" "}
+                        {summary.totalWorkOrders === 1
+                          ? "Work Order"
+                          : "Work Orders"}{" "}
+                        in scope
+                      </span>
+                    )}
+                  {summary.subject.mode === "operation" &&
+                    !summary.subject.all && (
+                      <>
+                        {summary.subject.department && (
+                          <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">
+                            {summary.subject.department}
+                          </span>
+                        )}
+                        {summary.subject.skillLevel && (
+                          <span className="text-slate-600 font-semibold">
+                            Skill: {summary.subject.skillLevel}
+                          </span>
+                        )}
+                      </>
+                    )}
+                  {summary.subject.mode === "operation" &&
+                    summary.subject.all && (
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">
+                        {summary.totalOperations.toLocaleString()}{" "}
+                        {summary.totalOperations === 1
+                          ? "Operation"
+                          : "Operations"}{" "}
+                        in scope
+                      </span>
+                    )}
                 </div>
               </div>
             </div>
@@ -1351,30 +1402,56 @@ export function EmployeeReportDashboard() {
                           </div>
                         </div>
                       )}
-                    {summary.subject.mode === "workOrder" && (
-                      <div className="flex flex-col gap-1">
-                        <div>
-                          <strong>WORK ORDER:</strong>{" "}
-                          {summary.subject.workOrder}
+                    {summary.subject.mode === "workOrder" &&
+                      !summary.subject.all && (
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            <strong>WORK ORDER:</strong>{" "}
+                            {summary.subject.workOrder}
+                          </div>
+                          <div>
+                            <strong>SALE ORDER #:</strong>{" "}
+                            {summary.subject.saleOrderNo || "—"}
+                          </div>
                         </div>
-                        <div>
-                          <strong>SALE ORDER #:</strong>{" "}
-                          {summary.subject.saleOrderNo || "—"}
+                      )}
+                    {summary.subject.mode === "workOrder" &&
+                      summary.subject.all && (
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            <strong>SCOPE:</strong> All Work Orders
+                          </div>
+                          <div>
+                            <strong>WORK ORDERS COVERED:</strong>{" "}
+                            {summary.totalWorkOrders}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    {summary.subject.mode === "operation" && (
-                      <div className="flex flex-col gap-1">
-                        <div>
-                          <strong>OPERATION:</strong>{" "}
-                          {summary.subject.operationName || "—"}
+                      )}
+                    {summary.subject.mode === "operation" &&
+                      !summary.subject.all && (
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            <strong>OPERATION:</strong>{" "}
+                            {summary.subject.operationName || "—"}
+                          </div>
+                          <div>
+                            <strong>OPERATION CODE:</strong>{" "}
+                            {summary.subject.operationCode}
+                          </div>
                         </div>
-                        <div>
-                          <strong>OPERATION CODE:</strong>{" "}
-                          {summary.subject.operationCode}
+                      )}
+                    {summary.subject.mode === "operation" &&
+                      summary.subject.all && (
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            <strong>SCOPE:</strong> All Operations
+                          </div>
+                          <div>
+                            <strong>OPERATIONS COVERED:</strong>{" "}
+                            {summary.totalOperations}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
                   </td>
                   <td style={{ width: "35%" }}>
                     {summary.subject.mode === "employee" &&
@@ -1405,32 +1482,60 @@ export function EmployeeReportDashboard() {
                           </div>
                         </div>
                       )}
-                    {summary.subject.mode === "workOrder" && (
-                      <div className="flex flex-col gap-1">
-                        <div>
-                          <strong>CUSTOMER:</strong>{" "}
-                          {summary.subject.customerName || "—"}
+                    {summary.subject.mode === "workOrder" &&
+                      !summary.subject.all && (
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            <strong>CUSTOMER:</strong>{" "}
+                            {summary.subject.customerName || "—"}
+                          </div>
+                          <div>
+                            <strong>ORDER QTY:</strong>{" "}
+                            {summary.subject.orderQty != null
+                              ? summary.subject.orderQty.toLocaleString()
+                              : "—"}
+                          </div>
                         </div>
-                        <div>
-                          <strong>ORDER QTY:</strong>{" "}
-                          {summary.subject.orderQty != null
-                            ? summary.subject.orderQty.toLocaleString()
-                            : "—"}
+                      )}
+                    {summary.subject.mode === "workOrder" &&
+                      summary.subject.all && (
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            <strong>EMPLOYEES COVERED:</strong>{" "}
+                            {summary.totalEmployees}
+                          </div>
+                          <div>
+                            <strong>OPERATIONS COVERED:</strong>{" "}
+                            {summary.totalOperations}
+                          </div>
                         </div>
-                      </div>
-                    )}
-                    {summary.subject.mode === "operation" && (
-                      <div className="flex flex-col gap-1">
-                        <div>
-                          <strong>DEPARTMENT:</strong>{" "}
-                          {summary.subject.department || "—"}
+                      )}
+                    {summary.subject.mode === "operation" &&
+                      !summary.subject.all && (
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            <strong>DEPARTMENT:</strong>{" "}
+                            {summary.subject.department || "—"}
+                          </div>
+                          <div>
+                            <strong>SKILL LEVEL:</strong>{" "}
+                            {summary.subject.skillLevel || "—"}
+                          </div>
                         </div>
-                        <div>
-                          <strong>SKILL LEVEL:</strong>{" "}
-                          {summary.subject.skillLevel || "—"}
+                      )}
+                    {summary.subject.mode === "operation" &&
+                      summary.subject.all && (
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            <strong>EMPLOYEES COVERED:</strong>{" "}
+                            {summary.totalEmployees}
+                          </div>
+                          <div>
+                            <strong>WORK ORDERS COVERED:</strong>{" "}
+                            {summary.totalWorkOrders}
+                          </div>
                         </div>
-                      </div>
-                    )}
+                      )}
                   </td>
                   <td style={{ width: "30%" }}>
                     <div className="flex flex-col gap-1">
@@ -1470,9 +1575,9 @@ export function EmployeeReportDashboard() {
               </tbody>
             </table>
 
-            {(isAllEmployeesSummary
+            {(isAllSummary
               ? ([
-                  "employees",
+                  OWN_DIMENSION_BY_MODE[mode],
                   ...BREAKDOWN_DIMENSIONS[mode],
                 ] as BreakdownDimension[])
               : BREAKDOWN_DIMENSIONS[mode]

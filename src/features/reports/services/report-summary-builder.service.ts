@@ -141,16 +141,24 @@ export async function buildReportSummary(
   to: string,
   options: { all?: boolean } = {},
 ): Promise<BuildReportSummaryResult> {
-  const isAllEmployees = mode === "employee" && options.all === true;
+  // "All <mode>" reuses that mode's column/query shape but drops the
+  // equality filter — every other dimension (aggregation, breakdowns,
+  // coupon trail) is identical to a single-value search in that mode.
+  const isAll = options.all === true;
   const value = rawValue.trim();
-  if (!isAllEmployees && !value) {
+  if (!isAll && !value) {
     return { ok: false, status: 400, error: "A search value is required." };
   }
 
   let subject: ReportSubject;
   let boundValue = value;
-  if (isAllEmployees) {
-    subject = { mode: "employee", all: true };
+  if (isAll) {
+    subject =
+      mode === "employee"
+        ? { mode: "employee", all: true }
+        : mode === "workOrder"
+          ? { mode: "workOrder", all: true }
+          : { mode: "operation", all: true };
   } else {
     const subjectResult = await resolveSubject(mode, value);
     if (!subjectResult.ok) return subjectResult;
@@ -163,7 +171,7 @@ export async function buildReportSummary(
 
   const couponConditions = ["IsScanned = 1"];
   const couponRequest = pitPool.request();
-  if (isAllEmployees) {
+  if (isAll) {
     couponConditions.push(`${column} IS NOT NULL`);
   } else {
     couponRequest.input("value", sql.NVarChar, boundValue);
@@ -182,7 +190,7 @@ export async function buildReportSummary(
 
   const scanCountsRequest = pitPool.request();
   let scanCountsScope: string;
-  if (isAllEmployees) {
+  if (isAll) {
     scanCountsScope = `${column} IS NOT NULL`;
   } else {
     scanCountsRequest.input("value", sql.NVarChar, boundValue);

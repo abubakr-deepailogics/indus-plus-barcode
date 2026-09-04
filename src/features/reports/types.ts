@@ -17,23 +17,33 @@ export interface EmployeeReportInfo {
 // an employee, the cut detail view for a work order, the style bulletin for
 // an operation) so a mistyped/nonexistent value 404s before any coupon data
 // is queried.
+// Each mode has an "all" sibling (mode kept the same, `all: true` instead of
+// the resolved single subject) — everything downstream (coupon query,
+// breakdowns, coupon trail) already keys off `mode`, so "all employees" /
+// "all work orders" / "all operations" only need to flip this flag rather
+// than becoming three more ReportSearchModes with their own branches
+// everywhere.
 export type ReportSubject =
   | { mode: "employee"; all?: false; employee: EmployeeReportInfo }
   | { mode: "employee"; all: true }
   | {
       mode: "workOrder";
+      all?: false;
       workOrder: string;
       customerName?: string | null;
       saleOrderNo?: string | null;
       orderQty?: number | null;
     }
+  | { mode: "workOrder"; all: true }
   | {
       mode: "operation";
+      all?: false;
       operationCode: string;
       operationName?: string | null;
       department?: string | null;
       skillLevel?: string | null;
-    };
+    }
+  | { mode: "operation"; all: true };
 
 export interface OperationReportItem {
   operationCode: string;
