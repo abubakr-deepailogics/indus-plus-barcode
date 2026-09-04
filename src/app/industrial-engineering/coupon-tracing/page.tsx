@@ -504,11 +504,11 @@ export default function CouponTracingPage() {
                     </td>
                     <td className="px-4 py-3 text-[#334155] text-left">
                       {c.ScannedAt
-                        ? format(new Date(c.ScannedAt), "dd/MM/yyyy, hh:mm:ss a")
+                        ? format(new Date(c.ScannedAt), "dd/MM/yyyy")
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-[#334155] text-left">
-                      {format(new Date(c.CreatedAt), "dd/MM/yyyy, hh:mm:ss a")}
+                      {format(new Date(c.CreatedAt), "dd/MM/yyyy")}
                     </td>
                   </tr>
                 ))
