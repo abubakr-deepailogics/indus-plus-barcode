@@ -1,6 +1,12 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import {
   Search,
   AlertCircle,
@@ -27,7 +33,10 @@ import { useGenerateCouponPdf } from "@/features/qr-code-generation/hooks/useGen
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { classifyDepartment } from "@/lib/department-classification";
-import { WorkOrderSearchModal, type WorkOrderSearchRow } from "@/components/work-order-search-modal";
+import {
+  WorkOrderSearchModal,
+  type WorkOrderSearchRow,
+} from "@/components/work-order-search-modal";
 
 interface StyleBulletinAttachment {
   Id: number;
@@ -120,7 +129,6 @@ function TableSkeleton({ columnsCount }: { columnsCount: number }) {
 }
 
 export default function OpenOrderPage() {
-
   const { user } = useAuth();
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
@@ -142,19 +150,27 @@ export default function OpenOrderPage() {
     [setWorkOrder],
   );
   const fetchWorkOrderRows = useCallback(
-    async (filters: { workOrder: string; customer: string; saleOrderNo: string }): Promise<WorkOrderSearchRow[]> => {
+    async (filters: {
+      workOrder: string;
+      customer: string;
+      saleOrderNo: string;
+    }): Promise<WorkOrderSearchRow[]> => {
       const params = new URLSearchParams();
       if (filters.workOrder) params.set("work_order", filters.workOrder);
       if (filters.customer) params.set("customer", filters.customer);
       if (filters.saleOrderNo) params.set("sale_order_no", filters.saleOrderNo);
-      const res = await fetch(`/api/style-bulletin/work-orders?${params.toString()}`);
+      const res = await fetch(
+        `/api/style-bulletin/work-orders?${params.toString()}`,
+      );
       return res.ok ? res.json() : [];
     },
     [],
   );
   const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
   const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
-  const [selectedDeptFilter, setSelectedDeptFilter] = useState<"all" | "cutting" | "washing" | "sewing" | "finishing">("all");
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState<
+    "all" | "cutting" | "washing" | "sewing" | "finishing"
+  >("all");
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
   const [selectedMachines, setSelectedMachines] = useState<string[]>([]);
   const [machineDropdownOpen, setMachineDropdownOpen] = useState(false);
@@ -163,7 +179,10 @@ export default function OpenOrderPage() {
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (machineRef.current && !machineRef.current.contains(event.target as Node)) {
+      if (
+        machineRef.current &&
+        !machineRef.current.contains(event.target as Node)
+      ) {
         setMachineDropdownOpen(false);
       }
     }
@@ -188,7 +207,9 @@ export default function OpenOrderPage() {
   }, [styleBulletins, selectedDeptFilter, getDepartment]);
 
   const uniqueMachines = useMemo(() => {
-    const machines = styleBulletins.map((row) => row.Machine_Type).filter(Boolean) as string[];
+    const machines = styleBulletins
+      .map((row) => row.Machine_Type)
+      .filter(Boolean) as string[];
     return Array.from(new Set(machines));
   }, [styleBulletins]);
 
@@ -200,15 +221,22 @@ export default function OpenOrderPage() {
     let result = styleBulletins;
 
     if (selectedDeptFilter !== "all") {
-      result = result.filter((row) => getDepartment(row) === selectedDeptFilter);
+      result = result.filter(
+        (row) => getDepartment(row) === selectedDeptFilter,
+      );
     }
 
     if (selectedSections.length > 0) {
-      result = result.filter((row) => row.Section && selectedSections.includes(row.Section));
+      result = result.filter(
+        (row) => row.Section && selectedSections.includes(row.Section),
+      );
     }
 
     if (selectedMachines.length > 0) {
-      result = result.filter((row) => row.Machine_Type && selectedMachines.includes(row.Machine_Type));
+      result = result.filter(
+        (row) =>
+          row.Machine_Type && selectedMachines.includes(row.Machine_Type),
+      );
     }
 
     return result;
@@ -252,7 +280,9 @@ export default function OpenOrderPage() {
   const [rowAttachments, setRowAttachments] = useState<
     Record<number, { name: string; url: string; type: string }>
   >({});
-  const [activeRowIdForUpload, setActiveRowIdForUpload] = useState<number | null>(null);
+  const [activeRowIdForUpload, setActiveRowIdForUpload] = useState<
+    number | null
+  >(null);
   const [previewFile, setPreviewFile] = useState<{
     name: string;
     url: string;
@@ -262,8 +292,11 @@ export default function OpenOrderPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Persisted style bulletin attachments (dbo.StyleBulletin_Attachment), keyed by work order.
-  const [bulletinAttachments, setBulletinAttachments] = useState<StyleBulletinAttachment[]>([]);
-  const [bulletinAttachmentsLoading, setBulletinAttachmentsLoading] = useState(false);
+  const [bulletinAttachments, setBulletinAttachments] = useState<
+    StyleBulletinAttachment[]
+  >([]);
+  const [bulletinAttachmentsLoading, setBulletinAttachmentsLoading] =
+    useState(false);
   const [bulletinAttachmentError, setBulletinAttachmentError] = useState("");
 
   const styleBulletinColumns = useMemo<ColumnDef<StyleBulletinRow>[]>(
@@ -321,7 +354,7 @@ export default function OpenOrderPage() {
         ),
         size: 260,
       },
-     
+
       {
         accessorKey: "SkillLevel",
         header: ({ column }) => (
@@ -357,7 +390,11 @@ export default function OpenOrderPage() {
             const val = row.original.Piece_Rate;
             return sum + (val ?? 0);
           }, 0);
-          return <div className="text-right font-bold text-slate-700">{total.toFixed(4)}</div>;
+          return (
+            <div className="text-right font-bold text-slate-700">
+              {total.toFixed(4)}
+            </div>
+          );
         },
         size: 70,
       },
@@ -381,7 +418,11 @@ export default function OpenOrderPage() {
             const val = row.original.Smv_Sam;
             return sum + (val ?? 0);
           }, 0);
-          return <div className="text-right font-bold text-purple-600">{total.toFixed(2)}</div>;
+          return (
+            <div className="text-right font-bold text-purple-600">
+              {total.toFixed(2)}
+            </div>
+          );
         },
         size: 70,
       },
@@ -476,7 +517,6 @@ export default function OpenOrderPage() {
         ),
         size: 80,
       },
-
     ],
     [rowAttachments, filteredStyleBulletins, getDepartment],
   );
@@ -514,12 +554,16 @@ export default function OpenOrderPage() {
     setBulletinAttachmentsLoading(true);
     setBulletinAttachmentError("");
     try {
-      const res = await fetch(`/api/style-bulletin/attachments?workOrder=${encodeURIComponent(workOrder)}`);
+      const res = await fetch(
+        `/api/style-bulletin/attachments?workOrder=${encodeURIComponent(workOrder)}`,
+      );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load attachments.");
       setBulletinAttachments(data);
     } catch (err) {
-      setBulletinAttachmentError(err instanceof Error ? err.message : "Failed to load attachments.");
+      setBulletinAttachmentError(
+        err instanceof Error ? err.message : "Failed to load attachments.",
+      );
     } finally {
       setBulletinAttachmentsLoading(false);
     }
@@ -538,24 +582,35 @@ export default function OpenOrderPage() {
     form.append("createdBy", user?.email || "");
 
     try {
-      const res = await fetch("/api/style-bulletin/attachments", { method: "POST", body: form });
+      const res = await fetch("/api/style-bulletin/attachments", {
+        method: "POST",
+        body: form,
+      });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to upload attachment.");
+      if (!res.ok)
+        throw new Error(data.error || "Failed to upload attachment.");
       await loadBulletinAttachments(workOrder);
     } catch (err) {
-      setBulletinAttachmentError(err instanceof Error ? err.message : "Failed to upload attachment.");
+      setBulletinAttachmentError(
+        err instanceof Error ? err.message : "Failed to upload attachment.",
+      );
     }
   };
 
   const handleDeleteBulletinAttachment = async (id: number) => {
     setBulletinAttachmentError("");
     try {
-      const res = await fetch(`/api/style-bulletin/attachments?id=${id}`, { method: "DELETE" });
+      const res = await fetch(`/api/style-bulletin/attachments?id=${id}`, {
+        method: "DELETE",
+      });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to delete attachment.");
+      if (!res.ok)
+        throw new Error(data.error || "Failed to delete attachment.");
       setBulletinAttachments((prev) => prev.filter((a) => a.Id !== id));
     } catch (err) {
-      setBulletinAttachmentError(err instanceof Error ? err.message : "Failed to delete attachment.");
+      setBulletinAttachmentError(
+        err instanceof Error ? err.message : "Failed to delete attachment.",
+      );
     }
   };
 
@@ -631,8 +686,14 @@ export default function OpenOrderPage() {
         setStyleBulletins(data.styleBulletins || []);
 
         // Compute and set totalSam & totalRate
-        const computedSam = (data.styleBulletins || []).reduce((acc: number, curr: any) => acc + (curr.Smv_Sam ?? 0), 0);
-        const computedRate = (data.styleBulletins || []).reduce((acc: number, curr: any) => acc + (curr.Piece_Rate ?? 0), 0);
+        const computedSam = (data.styleBulletins || []).reduce(
+          (acc: number, curr: any) => acc + (curr.Smv_Sam ?? 0),
+          0,
+        );
+        const computedRate = (data.styleBulletins || []).reduce(
+          (acc: number, curr: any) => acc + (curr.Piece_Rate ?? 0),
+          0,
+        );
         setTotalSam(computedSam.toFixed(2));
         setTotalRate(computedRate.toFixed(4));
 
@@ -670,7 +731,9 @@ export default function OpenOrderPage() {
 
   // Dynamically derive style bulletin metadata from fetched style bulletins and cut details
   const styleBulletinMetadata = useMemo(() => {
-    const planQty = cutDetails[0]?.Order_Qty_After_Add ?? cutDetails.reduce((acc, curr) => acc + (curr.Bundle_Qty ?? 0), 0);
+    const planQty =
+      cutDetails[0]?.Order_Qty_After_Add ??
+      cutDetails.reduce((acc, curr) => acc + (curr.Bundle_Qty ?? 0), 0);
 
     return {
       amNo: cutDetails[0]?.Work_Order || activeSearchQuery || "",
@@ -681,10 +744,10 @@ export default function OpenOrderPage() {
     };
   }, [styleBulletins, cutDetails, activeSearchQuery]);
 
-  // Group operations by Section for printing layout
+  // Group operations by Section for printing layout — grouped from
   const groupedOperations = useMemo(() => {
     const groups: Record<string, StyleBulletinRow[]> = {};
-    styleBulletins.forEach((op) => {
+    filteredStyleBulletins.forEach((op) => {
       const sec = op.Section || "Other";
       if (!groups[sec]) {
         groups[sec] = [];
@@ -692,7 +755,7 @@ export default function OpenOrderPage() {
       groups[sec].push(op);
     });
     return groups;
-  }, [styleBulletins]);
+  }, [filteredStyleBulletins]);
 
   const isSkeletonActive = isLoading || isTransitioning;
 
@@ -716,9 +779,7 @@ export default function OpenOrderPage() {
 
     const operations = styleBulletins
       .slice()
-      .sort(
-        (a, b) => (a.Operation_Sequence ?? 0) - (b.Operation_Sequence ?? 0),
-      )
+      .sort((a, b) => (a.Operation_Sequence ?? 0) - (b.Operation_Sequence ?? 0))
       .map((row) => ({
         id: row.RowId,
         section: row.Section ?? "",
@@ -755,10 +816,21 @@ export default function OpenOrderPage() {
     };
   }, [activeSearchQuery, cutDetails, styleBulletins]);
 
-  const { handleGenerateCoupons, generatingCoupons, handleDownloadPdf: downloadPdf, generatingPdf, couponCount } =
-    useGenerateCouponPdf(
-      activeStyle ?? { workOrder: "", saleOrderNo: "", styleCode: "", bundles: [], operations: [] },
-    );
+  const {
+    handleGenerateCoupons,
+    generatingCoupons,
+    handleDownloadPdf: downloadPdf,
+    generatingPdf,
+    couponCount,
+  } = useGenerateCouponPdf(
+    activeStyle ?? {
+      workOrder: "",
+      saleOrderNo: "",
+      styleCode: "",
+      bundles: [],
+      operations: [],
+    },
+  );
   const handleGeneratePdf = async () => {
     await downloadPdf(pageSetup.layout);
     setShowPageSetupModal(false);
@@ -767,222 +839,276 @@ export default function OpenOrderPage() {
   return (
     <>
       <div className="no-print flex flex-col gap-6 max-w-[1400px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
-
         {/* Dynamic Metadata Cards Row */}
 
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 animate-fade-in">
-              {/* Left Form Panel: Basic Style Details */}
-              <div className="lg:col-span-3 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
-                {/* Row 1: W/O # & Customer */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-[#475569] text-[10px] uppercase">W/O # &amp; Customer</label>
-                  <button
-                    type="button"
-                    onClick={() => setShowWorkOrderModal(true)}
-                    className="relative w-full text-left cursor-pointer"
-                  >
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94a3b8]" />
-                    <span className="block w-full pl-9 pr-3 py-1 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 hover:border-[#4f46e5] transition-all truncate">
-                      {styleBulletinMetadata.amNo
-                        ? `${styleBulletinMetadata.amNo}${
-                            styleBulletinMetadata.customer ? ` (${styleBulletinMetadata.customer})` : ""
-                          }`
-                        : "Search W/O..."}
-                    </span>
-                  </button>
-                </div>
-                {/* Row 2: Sale Order No & Order Qty */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="font-bold text-[#475569] text-[10px] uppercase">Sale Order No</label>
-                    <input type="text" readOnly value={styleBulletinMetadata.styleCode} className="px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 font-semibold focus:outline-none w-full" />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="font-bold text-[#475569] text-[10px] uppercase">Order Qty</label>
-                    <input type="text" readOnly value={styleBulletinMetadata.planQty} className="px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold w-full" />
-                  </div>
-                </div>
-                {/* Row 3: Fabric Code & Wash */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="font-bold text-[#475569] text-[10px] uppercase">Fabric Code</label>
-                    <input type="text" readOnly value={cutDetails[0]?.Fabric_Code_Main_Body || ""} className="px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold w-full" />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="font-bold text-[#475569] text-[10px] uppercase">Wash</label>
-                    <input type="text" readOnly value={cutDetails[0]?.Wash || ""} className="px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold w-full" />
-                  </div>
-                </div>
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 animate-fade-in">
+          {/* Left Form Panel: Basic Style Details */}
+          <div className="lg:col-span-3 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
+            {/* Row 1: W/O # & Customer */}
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-[#475569] text-[10px] uppercase">
+                W/O # &amp; Customer
+              </label>
+              <button
+                type="button"
+                onClick={() => setShowWorkOrderModal(true)}
+                className="relative w-full text-left cursor-pointer"
+              >
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94a3b8]" />
+                <span className="block w-full pl-9 pr-3 py-1 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 hover:border-[#4f46e5] transition-all truncate">
+                  {styleBulletinMetadata.amNo
+                    ? `${styleBulletinMetadata.amNo}${
+                        styleBulletinMetadata.customer
+                          ? ` (${styleBulletinMetadata.customer})`
+                          : ""
+                      }`
+                    : "Search W/O..."}
+                </span>
+              </button>
+            </div>
+            {/* Row 2: Sale Order No & Order Qty */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="font-bold text-[#475569] text-[10px] uppercase">
+                  Sale Order No
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={styleBulletinMetadata.styleCode}
+                  className="px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 font-semibold focus:outline-none w-full"
+                />
               </div>
-
-              {/* Middle Form Panel 1: SMD Details */}
-              <div className="lg:col-span-2 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-[#475569] text-[10px] uppercase">Description</label>
-                  <input
-                    type="text"
-                    value={description}
-                    readOnly
-                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-[#475569] text-[10px] uppercase">Style Description</label>
-                  <input
-                    type="text"
-                    value={styleDescription}
-                    readOnly
-                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
-                  />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-[#475569] text-[10px] uppercase">Style Category</label>
-                  <input
-                    type="text"
-                    value={styleCategory}
-                    readOnly
-                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
-                  />
-                </div>
-              
+              <div className="flex flex-col gap-1.5">
+                <label className="font-bold text-[#475569] text-[10px] uppercase">
+                  Order Qty
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={styleBulletinMetadata.planQty}
+                  className="px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold w-full"
+                />
               </div>
-
-              {/* Middle Form Panel 2: Targets & Piece Rates */}
-              <div className="lg:col-span-3 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
-                {/* Row 1: Target & Target Unit/Min */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="font-bold text-[#475569] text-[10px] uppercase">Target</label>
-                    <input
-                      type="text"
-                      value={target}
-                      readOnly
-                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="font-bold text-[#475569] text-[10px] uppercase">Target Unit/Min</label>
-                    <input
-                      type="text"
-                      value={targetUnitMin}
-                      readOnly
-                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
-                    />
-                  </div>
-                </div>
-                {/* Row 2: Start Time */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-[#475569] text-[10px] uppercase">Start Time</label>
-                  <input
-                    type="text"
-                    value={startTime}
-                    readOnly
-                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
-                  />
-                </div>
-                {/* Row 3: Forward for Approval */}
-                <div className="flex flex-col gap-1.5">
-                  <label className="font-bold text-[#475569] text-[10px] uppercase">Forward for Approval</label>
-                  <input
-                    type="text"
-                    value={forwardForApproval}
-                    readOnly
-                    className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
-                  />
-                </div>
+            </div>
+            {/* Row 3: Fabric Code & Wash */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="font-bold text-[#475569] text-[10px] uppercase">
+                  Fabric Code
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={cutDetails[0]?.Fabric_Code_Main_Body || ""}
+                  className="px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold w-full"
+                />
               </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="font-bold text-[#475569] text-[10px] uppercase">
+                  Wash
+                </label>
+                <input
+                  type="text"
+                  readOnly
+                  value={cutDetails[0]?.Wash || ""}
+                  className="px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold w-full"
+                />
+              </div>
+            </div>
+          </div>
 
-              {/* Right Form Panel: SAM Summary & Approvals */}
-              <div className="lg:col-span-4 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
-                {/* Row 1: Head/Reqd | Total SAM | Total Rate */}
-                <div className="grid grid-cols-3 gap-3">
-                  <div className="flex flex-col gap-1">
-                    <span className="font-bold text-[#64748b] text-[10px] uppercase">Head/Reqd</span>
-                    <input
-                      type="text"
-                      value={headReqd}
-                      readOnly
-                      className="w-full px-3 py-1 border border-[#e2e8f0] rounded-xl bg-slate-50 text-xs text-slate-500 focus:outline-none font-semibold text-center cursor-not-allowed"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="font-bold text-[#64748b] text-[10px] uppercase">Total SAM</span>
-                    <input
-                      type="text"
-                      readOnly
-                      value={totalSam}
-                      onChange={(e) => setTotalSam(e.target.value)}
-                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 font-semibold focus:outline-none"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <span className="font-bold text-[#64748b] text-[10px] uppercase">Total Rate</span>
-                    <input
-                      type="text"
-                      readOnly
-                      value={totalRate}
-                      onChange={(e) => setTotalRate(e.target.value)}
-                      className="w-full px-3 py-1 border border-[#e2e8f0] rounded-xl bg-slate-50 font-semibold focus:outline-none"
-                    />
-                  </div>
-                </div>
+          {/* Middle Form Panel 1: SMD Details */}
+          <div className="lg:col-span-2 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-[#475569] text-[10px] uppercase">
+                Description
+              </label>
+              <input
+                type="text"
+                value={description}
+                readOnly
+                className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-[#475569] text-[10px] uppercase">
+                Style Description
+              </label>
+              <input
+                type="text"
+                value={styleDescription}
+                readOnly
+                className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
+              />
+            </div>
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-[#475569] text-[10px] uppercase">
+                Style Category
+              </label>
+              <input
+                type="text"
+                value={styleCategory}
+                readOnly
+                className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
+              />
+            </div>
+          </div>
 
-                {/* Row 2: App Date & App By */}
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex flex-col gap-1.5">
-                    <label className="font-bold text-[#475569] text-[10px] uppercase">App Date</label>
-                    <input
-                      type="text"
-                      value={appDate}
-                      readOnly
-                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 focus:outline-none font-semibold text-center cursor-not-allowed"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-1.5">
-                    <label className="font-bold text-[#475569] text-[10px] uppercase">App By</label>
-                    <input
-                      type="text"
-                      value={appBy}
-                      readOnly
-                      className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 focus:outline-none font-semibold text-center cursor-not-allowed"
-                    />
-                  </div>
-                </div>
+          {/* Middle Form Panel 2: Targets & Piece Rates */}
+          <div className="lg:col-span-3 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
+            {/* Row 1: Target & Target Unit/Min */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="font-bold text-[#475569] text-[10px] uppercase">
+                  Target
+                </label>
+                <input
+                  type="text"
+                  value={target}
+                  readOnly
+                  className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="font-bold text-[#475569] text-[10px] uppercase">
+                  Target Unit/Min
+                </label>
+                <input
+                  type="text"
+                  value={targetUnitMin}
+                  readOnly
+                  className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
+                />
+              </div>
+            </div>
+            {/* Row 2: Start Time */}
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-[#475569] text-[10px] uppercase">
+                Start Time
+              </label>
+              <input
+                type="text"
+                value={startTime}
+                readOnly
+                className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
+              />
+            </div>
+            {/* Row 3: Forward for Approval */}
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-[#475569] text-[10px] uppercase">
+                Forward for Approval
+              </label>
+              <input
+                type="text"
+                value={forwardForApproval}
+                readOnly
+                className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
+              />
+            </div>
+          </div>
 
-                {/* Row 3: Status on Left, Print on Right */}
-                <div className="flex items-center justify-between gap-4 pt-1.5 mt-1 border-t border-[#f1f5f9]">
-                  <div className="flex items-center gap-2">
-                    <span className="text-[10px] font-bold text-[#94a3b8] uppercase">Status</span>
-                    <select
-                      value={status}
-                      onChange={(e) => setStatus(e.target.value)}
-                      className={`px-3 py-1.5 rounded-xl font-bold border text-xs focus:outline-none transition-all cursor-pointer ${
-                        status === "Approved"
-                          ? "bg-emerald-50 text-emerald-700 border-emerald-200"
-                          : status === "Pending"
-                          ? "bg-amber-50 text-amber-700 border-amber-200"
-                          : "bg-slate-50 text-slate-700 border-slate-200"
-                      }`}
-                    >
-                      <option value="Approved">Approved</option>
-                      <option value="Pending">Pending</option>
-                      <option value="Draft">Draft</option>
-                    </select>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => window.print()}
-                    disabled={styleBulletins.length === 0}
-                    className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-slate-700 disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
-                  >
-                    <Printer className="w-3.5 h-3.5" />
-                    <span>Print</span>
-                  </button>
-                </div>
+          {/* Right Form Panel: SAM Summary & Approvals */}
+          <div className="lg:col-span-4 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
+            {/* Row 1: Head/Reqd | Total SAM | Total Rate */}
+            <div className="grid grid-cols-3 gap-3">
+              <div className="flex flex-col gap-1">
+                <span className="font-bold text-[#64748b] text-[10px] uppercase">
+                  Head/Reqd
+                </span>
+                <input
+                  type="text"
+                  value={headReqd}
+                  readOnly
+                  className="w-full px-3 py-1 border border-[#e2e8f0] rounded-xl bg-slate-50 text-xs text-slate-500 focus:outline-none font-semibold text-center cursor-not-allowed"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="font-bold text-[#64748b] text-[10px] uppercase">
+                  Total SAM
+                </span>
+                <input
+                  type="text"
+                  readOnly
+                  value={totalSam}
+                  onChange={(e) => setTotalSam(e.target.value)}
+                  className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 font-semibold focus:outline-none"
+                />
+              </div>
+              <div className="flex flex-col gap-1">
+                <span className="font-bold text-[#64748b] text-[10px] uppercase">
+                  Total Rate
+                </span>
+                <input
+                  type="text"
+                  readOnly
+                  value={totalRate}
+                  onChange={(e) => setTotalRate(e.target.value)}
+                  className="w-full px-3 py-1 border border-[#e2e8f0] rounded-xl bg-slate-50 font-semibold focus:outline-none"
+                />
               </div>
             </div>
 
+            {/* Row 2: App Date & App By */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="flex flex-col gap-1.5">
+                <label className="font-bold text-[#475569] text-[10px] uppercase">
+                  App Date
+                </label>
+                <input
+                  type="text"
+                  value={appDate}
+                  readOnly
+                  className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 focus:outline-none font-semibold text-center cursor-not-allowed"
+                />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="font-bold text-[#475569] text-[10px] uppercase">
+                  App By
+                </label>
+                <input
+                  type="text"
+                  value={appBy}
+                  readOnly
+                  className="w-full px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 focus:outline-none font-semibold text-center cursor-not-allowed"
+                />
+              </div>
+            </div>
 
+            {/* Row 3: Status on Left, Print on Right */}
+            <div className="flex items-center justify-between gap-4 pt-1.5 mt-1 border-t border-[#f1f5f9]">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] font-bold text-[#94a3b8] uppercase">
+                  Status
+                </span>
+                <select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value)}
+                  className={`px-3 py-1.5 rounded-xl font-bold border text-xs focus:outline-none transition-all cursor-pointer ${
+                    status === "Approved"
+                      ? "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      : status === "Pending"
+                        ? "bg-amber-50 text-amber-700 border-amber-200"
+                        : "bg-slate-50 text-slate-700 border-slate-200"
+                  }`}
+                >
+                  <option value="Approved">Approved</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Draft">Draft</option>
+                </select>
+              </div>
+              <button
+                type="button"
+                onClick={() => window.print()}
+                disabled={styleBulletins.length === 0}
+                className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-slate-700 disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Print</span>
+              </button>
+            </div>
+          </div>
+        </div>
 
         {/* Main Results / Table Block */}
         {errorMsg ? (
@@ -1005,7 +1131,8 @@ export default function OpenOrderPage() {
                 Ready to Search
               </h3>
               <p className="text-xs text-[#64748b] mt-1">
-                Please enter a Work Order number in the W/O field above (for example,{" "}
+                Please enter a Work Order number in the W/O field above (for
+                example,{" "}
                 <code className="bg-[#f1f5f9] px-1.5 py-0.5 rounded font-mono text-[#4f46e5]">
                   W/O-003355
                 </code>
@@ -1024,14 +1151,15 @@ export default function OpenOrderPage() {
               </h3>
               <p className="text-xs text-[#64748b] mt-1">
                 We couldn&apos;t find any records for work order{" "}
-                <strong className="text-slate-800">`{activeSearchQuery}`</strong>{" "}
+                <strong className="text-slate-800">
+                  `{activeSearchQuery}`
+                </strong>{" "}
                 in the Style Bulletin table.
               </p>
             </div>
           </div>
         ) : (
           <div className="flex flex-col gap-4 animate-fade-in">
-
             {/* Section Panel + DataTable, side by side at equal height */}
             <div className="flex items-stretch gap-4">
               <div className="w-56 shrink-0 bg-white border border-[#e2e8f0] rounded-2xl shadow-sm flex flex-col overflow-hidden">
@@ -1048,7 +1176,9 @@ export default function OpenOrderPage() {
                         : "hover:bg-slate-50 text-slate-500 hover:text-slate-700"
                     }`}
                   >
-                    {selectedDeptFilter === "all" ? "All Sections" : selectedDeptFilter}
+                    {selectedDeptFilter === "all"
+                      ? "All Sections"
+                      : selectedDeptFilter}
                   </button>
                   <div className="h-[1px] bg-slate-100 my-1" />
                   {uniqueSections.map((section) => {
@@ -1063,7 +1193,9 @@ export default function OpenOrderPage() {
                           checked={isChecked}
                           onChange={() =>
                             setSelectedSections((prev) =>
-                              isChecked ? prev.filter((s) => s !== section) : [...prev, section]
+                              isChecked
+                                ? prev.filter((s) => s !== section)
+                                : [...prev, section],
                             )
                           }
                           className="w-3 h-3 rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 focus:ring-offset-0 cursor-pointer"
@@ -1077,60 +1209,81 @@ export default function OpenOrderPage() {
 
               {/* DataTable Component */}
               <div className="flex-1 min-w-0">
-              <DataTable
-                columns={styleBulletinColumns}
-                data={filteredStyleBulletins}
-                showColumnsDropdown={false}
-
-                toolbarChildren={
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDeptFilter(selectedDeptFilter === "cutting" ? "all" : "cutting")}
-                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
-                        selectedDeptFilter === "cutting"
-                          ? "bg-sky-50 text-sky-700 border-sky-200"
-                          : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      cutting
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDeptFilter(selectedDeptFilter === "sewing" ? "all" : "sewing")}
-                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
-                        selectedDeptFilter === "sewing"
-                          ? "bg-amber-50 text-amber-600 border-amber-200"
-                          : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      sewing
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDeptFilter(selectedDeptFilter === "washing" ? "all" : "washing")}
-                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
-                        selectedDeptFilter === "washing"
-                          ? "bg-red-50 text-red-600 border-red-200"
-                          : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      washing
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setSelectedDeptFilter(selectedDeptFilter === "finishing" ? "all" : "finishing")}
-                      className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
-                        selectedDeptFilter === "finishing"
-                          ? "bg-purple-50 text-purple-600 border-purple-200"
-                          : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
-                      }`}
-                    >
-                      finishing
-                    </button>
-                  </div>
-                }
-              />
+                <DataTable
+                  columns={styleBulletinColumns}
+                  data={filteredStyleBulletins}
+                  showColumnsDropdown={false}
+                  toolbarChildren={
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedDeptFilter(
+                            selectedDeptFilter === "cutting"
+                              ? "all"
+                              : "cutting",
+                          )
+                        }
+                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                          selectedDeptFilter === "cutting"
+                            ? "bg-sky-50 text-sky-700 border-sky-200"
+                            : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        cutting
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedDeptFilter(
+                            selectedDeptFilter === "sewing" ? "all" : "sewing",
+                          )
+                        }
+                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                          selectedDeptFilter === "sewing"
+                            ? "bg-amber-50 text-amber-600 border-amber-200"
+                            : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        sewing
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedDeptFilter(
+                            selectedDeptFilter === "washing"
+                              ? "all"
+                              : "washing",
+                          )
+                        }
+                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                          selectedDeptFilter === "washing"
+                            ? "bg-red-50 text-red-600 border-red-200"
+                            : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        washing
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setSelectedDeptFilter(
+                            selectedDeptFilter === "finishing"
+                              ? "all"
+                              : "finishing",
+                          )
+                        }
+                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                          selectedDeptFilter === "finishing"
+                            ? "bg-purple-50 text-purple-600 border-purple-200"
+                            : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
+                        }`}
+                      >
+                        finishing
+                      </button>
+                    </div>
+                  }
+                />
               </div>
             </div>
           </div>
@@ -1158,17 +1311,24 @@ export default function OpenOrderPage() {
             </div>
 
             {bulletinAttachmentError && (
-              <p className="text-red-600 text-[11px] font-semibold">{bulletinAttachmentError}</p>
+              <p className="text-red-600 text-[11px] font-semibold">
+                {bulletinAttachmentError}
+              </p>
             )}
 
             {bulletinAttachmentsLoading ? (
-              <p className="text-[#64748b] text-[11px]">Loading attachments...</p>
+              <p className="text-[#64748b] text-[11px]">
+                Loading attachments...
+              </p>
             ) : bulletinAttachments.length === 0 ? (
               <p className="text-[#94a3b8] text-[11px]">No attachments yet.</p>
             ) : (
               <div className="flex flex-col gap-2">
                 {bulletinAttachments.map((a) => (
-                  <div key={a.Id} className="flex items-center justify-between gap-2 border border-[#e2e8f0] rounded-xl px-3 py-2.5">
+                  <div
+                    key={a.Id}
+                    className="flex items-center justify-between gap-2 border border-[#e2e8f0] rounded-xl px-3 py-2.5"
+                  >
                     <a
                       href={`/api/style-bulletin/attachments/${a.Id}`}
                       target="_blank"
@@ -1181,9 +1341,12 @@ export default function OpenOrderPage() {
                         <Paperclip className="w-4 h-4 text-[#4f46e5] shrink-0" />
                       )}
                       <span className="flex flex-col min-w-0">
-                        <span className="truncate font-semibold text-[#334155] text-[11px]">{a.FileName}</span>
+                        <span className="truncate font-semibold text-[#334155] text-[11px]">
+                          {a.FileName}
+                        </span>
                         <span className="text-[10px] text-[#94a3b8]">
-                          {new Date(a.CreatedAt).toLocaleString()}{a.CreatedBy ? ` · ${a.CreatedBy}` : ""}
+                          {new Date(a.CreatedAt).toLocaleString()}
+                          {a.CreatedBy ? ` · ${a.CreatedBy}` : ""}
                         </span>
                       </span>
                     </a>
@@ -1416,30 +1579,50 @@ export default function OpenOrderPage() {
         <h2 className="text-center font-extrabold text-sm uppercase tracking-wide mb-3 border-b-2 border-black pb-2">
           OB Preview for Indus Plus Pvt Limited
         </h2>
-        
+
         <table className="print-header-table">
           <tbody>
             <tr>
               <td style={{ width: "35%" }}>
                 <div className="flex flex-col gap-1">
-                  <div><strong>OB STAGE:</strong> {styleCategory}</div>
-                  <div><strong>PO#:</strong> {styleBulletinMetadata.styleCode}</div>
-                  <div><strong>W/O #:</strong> {styleBulletinMetadata.amNo}</div>
-                  <div><strong>STYLE #:</strong> {styleBulletinMetadata.styleCode}</div>
-                  <div><strong>STYLE Name:</strong> {styleDescription}</div>
+                  <div>
+                    <strong>OB STAGE:</strong> {styleCategory}
+                  </div>
+                  <div>
+                    <strong>PO#:</strong> {styleBulletinMetadata.styleCode}
+                  </div>
+                  <div>
+                    <strong>W/O #:</strong> {styleBulletinMetadata.amNo}
+                  </div>
+                  <div>
+                    <strong>STYLE #:</strong> {styleBulletinMetadata.styleCode}
+                  </div>
+                  <div>
+                    <strong>STYLE Name:</strong> {styleDescription}
+                  </div>
                 </div>
               </td>
               <td style={{ width: "30%" }}>
                 <div className="flex flex-col gap-1">
-                  <div><strong>OUT PUT:</strong> {target}</div>
-                  <div><strong>EFFICIENCY:</strong> {targetUnitMin}</div>
-                  <div><strong>SHIFT TIME:</strong> {startTime}</div>
+                  <div>
+                    <strong>OUT PUT:</strong> {target}
+                  </div>
+                  <div>
+                    <strong>EFFICIENCY:</strong> {targetUnitMin}
+                  </div>
+                  <div>
+                    <strong>SHIFT TIME:</strong> {startTime}
+                  </div>
                 </div>
               </td>
               <td style={{ width: "35%" }}>
                 <div className="flex flex-col gap-1">
-                  <div><strong>OPERATORS - SEWING:</strong> {headReqd}</div>
-                  <div><strong>HELPERS:</strong> {forwardForApproval}</div>
+                  <div>
+                    <strong>OPERATORS - SEWING:</strong> {headReqd}
+                  </div>
+                  <div>
+                    <strong>HELPERS:</strong> {forwardForApproval}
+                  </div>
                 </div>
               </td>
             </tr>
@@ -1450,11 +1633,17 @@ export default function OpenOrderPage() {
         {Object.keys(groupedOperations).map((sectionName) => {
           const ops = groupedOperations[sectionName];
           if (ops.length === 0) return null;
-          
+
           // Calculate Totals for this section
-          const totalSectionSam = ops.reduce((acc, curr) => acc + (curr.Smv_Sam ?? 0), 0);
-          const totalSectionRate = ops.reduce((acc, curr) => acc + (curr.Piece_Rate ?? 0), 0);
-          
+          const totalSectionSam = ops.reduce(
+            (acc, curr) => acc + (curr.Smv_Sam ?? 0),
+            0,
+          );
+          const totalSectionRate = ops.reduce(
+            (acc, curr) => acc + (curr.Piece_Rate ?? 0),
+            0,
+          );
+
           return (
             <div key={sectionName} className="mb-4">
               <div className="print-section-title uppercase">{sectionName}</div>
@@ -1483,22 +1672,35 @@ export default function OpenOrderPage() {
                       <td className="font-mono">{op.Operation_Code}</td>
                       <td>{op.Operation_Name}</td>
                       <td className="text-center">{op.SkillLevel ?? "-"}</td>
-                      <td className="text-right">{op.Piece_Rate?.toFixed(4) ?? "0.0000"}</td>
-                      <td className="text-right">{op.Smv_Sam?.toFixed(2) ?? "0.00"}</td>
+                      <td className="text-right">
+                        {op.Piece_Rate?.toFixed(4) ?? "0.0000"}
+                      </td>
+                      <td className="text-right">
+                        {op.Smv_Sam?.toFixed(2) ?? "0.00"}
+                      </td>
                       <td className="text-center">{op.Bi_Hourly_Tgt ?? "-"}</td>
                       <td className="text-center">{op.Shift_Tgt ?? "-"}</td>
                       <td className="text-center">
-                        {op.Machine_Type && op.Machine_Type.toLowerCase() !== "manual" ? "Y" : "N"}
+                        {op.Machine_Type &&
+                        op.Machine_Type.toLowerCase() !== "manual"
+                          ? "Y"
+                          : "N"}
                       </td>
                       <td>{op.Machine_Type ?? "Manual"}</td>
-                      <td className="text-center">{op.No_Of_Operations ?? "-"}</td>
+                      <td className="text-center">
+                        {op.No_Of_Operations ?? "-"}
+                      </td>
                       <td className="text-center">{op.DL ?? "-"}</td>
                       <td className="text-center">{op.No_Mc ?? "-"}</td>
                     </tr>
                   ))}
                   <tr className="print-totals-row">
-                    <td colSpan={4} className="text-right uppercase">Total</td>
-                    <td className="text-right">{totalSectionRate.toFixed(4)}</td>
+                    <td colSpan={4} className="text-right uppercase">
+                      Total
+                    </td>
+                    <td className="text-right">
+                      {totalSectionRate.toFixed(4)}
+                    </td>
                     <td className="text-right">{totalSectionSam.toFixed(2)}</td>
                     <td colSpan={7}></td>
                   </tr>
