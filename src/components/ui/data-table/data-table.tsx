@@ -19,6 +19,12 @@ import {
 import { ChevronDown, Search } from "lucide-react";
 import { FilterPanel } from "./filter-panel";
 import { FilterItem, advancedFilterFn } from "./utils";
+import { CsvExportButton } from "@/components/ui/csv-export-button";
+
+export interface DataTableCsvColumn<TData> {
+  header: string;
+  accessor: (row: TData) => string | number | null | undefined;
+}
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -28,6 +34,12 @@ interface DataTableProps<TData, TValue> {
   toolbarRightChildren?: React.ReactNode;
   maxHeight?: string;
   showColumnsDropdown?: boolean;
+  // When provided, renders an "Export" button in the toolbar that downloads
+  // the currently filtered/sorted rows (i.e. exactly what's on screen) as CSV.
+  csv?: {
+    filename: string;
+    columns: DataTableCsvColumn<TData>[];
+  };
 }
 
 export function DataTable<TData, TValue>({
@@ -38,6 +50,7 @@ export function DataTable<TData, TValue>({
   toolbarRightChildren,
   maxHeight = "max-h-[370px]",
   showColumnsDropdown = true,
+  csv,
 }: DataTableProps<TData, TValue>) {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
@@ -215,6 +228,15 @@ export function DataTable<TData, TValue>({
                 })}
             </DropdownMenuContent>
           </DropdownMenu>
+        )}
+        {csv && (
+          <CsvExportButton
+            filename={csv.filename}
+            headers={csv.columns.map((c) => c.header)}
+            rows={table
+              .getRowModel()
+              .rows.map((row) => csv.columns.map((c) => c.accessor(row.original)))}
+          />
         )}
         <div className="ml-auto flex items-center gap-3">
           {toolbarRightChildren}

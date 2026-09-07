@@ -5,6 +5,7 @@ import { Barcode, ChevronDown } from "lucide-react";
 import type { QrCodeStyleData, PageSetupConfig } from "@/features/qr-code-generation/types";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
 import { useGenerateCouponPdf } from "@/features/qr-code-generation/hooks/useGenerateCouponPdf";
+import { CsvExportButton } from "@/components/ui/csv-export-button";
 import {
   Dialog,
   DialogContent,
@@ -349,6 +350,38 @@ export default function ReworkCouponPage() {
   const customerName = cutDetails[0]?.Customer_Name || "";
   const cutQty = cutDetails[0]?.Bundle_Qty;
 
+  const samCsvRows = useMemo(
+    () =>
+      filteredStyleBulletins.map((row) => [
+        row.Operation_Sequence ?? "",
+        row.Operation_Code ?? "",
+        row.Operation_Name ?? "",
+        row.Smv_Sam?.toFixed(2) ?? "",
+        row.Smv_Sam?.toFixed(2) ?? "",
+        row.Piece_Rate?.toFixed(4) ?? "",
+        row.Piece_Rate?.toFixed(4) ?? "",
+        reworkQty,
+        1,
+      ]),
+    [filteredStyleBulletins, reworkQty],
+  );
+
+  const bundleCsvRows = useMemo(
+    () =>
+      cutDetails.map((row) => [
+        row.Sale_Order_No ?? "",
+        row.Cut ?? "",
+        row.Color ?? "",
+        row.Bundle_Id ?? "",
+        row.Shade || "A",
+        row.Shrinkage || "0%",
+        row.Size ?? "",
+        row.Inseam ?? "",
+        row.Bundle_Qty ?? "",
+      ]),
+    [cutDetails],
+  );
+
   // Build printing config
   const activeStyle: QrCodeStyleData | null = useMemo(() => {
     if (cutDetails.length === 0) return null;
@@ -529,7 +562,14 @@ export default function ReworkCouponPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
           {/* SAM Details Panel */}
           <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-xs flex flex-col h-full lg:col-span-7">
-            <h2 className="text-sm font-bold text-[#4f46e5] mb-4">SAM Details</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-bold text-[#4f46e5]">SAM Details</h2>
+              <CsvExportButton
+                filename={`rework-sam-${workOrder}-cut${cut}-bundle${bundleId}`}
+                headers={["Seq #", "Op #", "Op Name", "SAM (Op)", "SAM (Ord)", "Rate (Op)", "Rate (Ord)", "Qty", "No. of B"]}
+                rows={samCsvRows}
+              />
+            </div>
             <div className="overflow-x-auto flex-grow">
               <table className="w-full text-left border-collapse border border-slate-200 text-[11px] text-[#334155] table-layout:fixed">
                 <thead>
@@ -607,7 +647,14 @@ export default function ReworkCouponPage() {
 
           {/* Bundle / Barcode Details Panel */}
           <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-xs flex flex-col h-full lg:col-span-5">
-            <h2 className="text-sm font-bold text-[#4f46e5] mb-4">Bundle / Barcode Details</h2>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-sm font-bold text-[#4f46e5]">Bundle / Barcode Details</h2>
+              <CsvExportButton
+                filename={`rework-bundle-${workOrder}-cut${cut}-bundle${bundleId}`}
+                headers={["ANL #", "Cut #", "Char", "Bndl #", "Shade", "Shrinkage", "Size #", "Inseam", "Pcs"]}
+                rows={bundleCsvRows}
+              />
+            </div>
             <div className="overflow-x-auto flex-grow max-h-[300px] overflow-auto">
               <table className="w-full text-left border-collapse border border-slate-200 text-[11px] text-[#334155] table-layout:fixed">
                 <thead>

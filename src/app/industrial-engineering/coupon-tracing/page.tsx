@@ -13,6 +13,8 @@ import {
 import { format } from "date-fns";
 import { printPdf } from "@/lib/print";
 import { Autocomplete } from "@/components/ui/autocomplete";
+import { CsvExportButton } from "@/components/ui/csv-export-button";
+import { downloadCsv } from "@/lib/csv-export";
 import {
   WorkOrderSearchModal,
   type WorkOrderSearchRow,
@@ -221,6 +223,76 @@ export default function CouponTracingPage() {
     }
   };
 
+  // Coupons are always server-paginated (200/page cap), so a CSV export
+  // has to walk every page matching the current filters rather than just
+  // dumping whatever page is on screen.
+  const handleExportCsv = useCallback(async () => {
+    if (!tracedWorkOrder || couponTotal === 0) return;
+
+    const pageSize = 200;
+    const totalPages = Math.max(1, Math.ceil(couponTotal / pageSize));
+    const allCoupons: CouponRow[] = [];
+
+    try {
+      for (let page = 1; page <= totalPages; page++) {
+        const params = new URLSearchParams({
+          work_order: tracedWorkOrder,
+          page: String(page),
+          page_size: String(pageSize),
+        });
+        if (bundleFilter.trim()) params.set("bundle_no", bundleFilter.trim());
+        if (opFilter.trim()) params.set("op_no", opFilter.trim());
+        if (sectionFilter) params.set("section", sectionFilter);
+        if (scannedFilter) params.set("is_scanned", scannedFilter);
+        if (fromCutFilter.trim()) params.set("from_cut", fromCutFilter.trim());
+        if (toCutFilter.trim()) params.set("to_cut", toCutFilter.trim());
+        const res = await fetch(`/api/qr-code-generation/coupons?${params}`);
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Failed to load coupons for export.");
+        allCoupons.push(...(data.coupons || []));
+      }
+
+      downloadCsv(
+        `coupon-tracing-${tracedWorkOrder}`,
+        [
+          "Cut No",
+          "Bundle No",
+          "Section",
+          "Operation Name",
+          "Emp Code",
+          "Emp Name",
+          "Scanned",
+          "Scan Date",
+          "Created At",
+        ],
+        allCoupons.map((c) => [
+          c.CutNo || "",
+          c.BundleNo,
+          c.Section || "",
+          c.OpName || c.OpNo,
+          c.EmployeeCode || "",
+          c.EmployeeName || "",
+          c.IsScanned ? "Scanned" : "Not scanned",
+          c.ScannedAt ? format(new Date(c.ScannedAt), "dd/MM/yyyy") : "",
+          format(new Date(c.CreatedAt), "dd/MM/yyyy"),
+        ]),
+      );
+    } catch (err) {
+      setErrorMsg(
+        err instanceof Error ? err.message : "Failed to export coupons.",
+      );
+    }
+  }, [
+    tracedWorkOrder,
+    couponTotal,
+    bundleFilter,
+    opFilter,
+    sectionFilter,
+    scannedFilter,
+    fromCutFilter,
+    toCutFilter,
+  ]);
+
   const couponPageCount = Math.max(
     1,
     Math.ceil(couponTotal / COUPON_PAGE_SIZE),
@@ -322,6 +394,10 @@ export default function CouponTracingPage() {
                 <Download className="w-3.5 h-3.5" />
                 Download PDF
               </button>
+              <CsvExportButton
+                onExport={handleExportCsv}
+                disabled={couponTotal === 0}
+              />
             </div>
           </div>
 

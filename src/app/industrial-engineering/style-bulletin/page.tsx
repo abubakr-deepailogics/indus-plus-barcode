@@ -1081,6 +1081,23 @@ export default function OpenOrderPage() {
                 columns={styleBulletinColumns}
                 data={filteredStyleBulletins}
                 showColumnsDropdown={false}
+                csv={{
+                  filename: `style-bulletin-${cutDetails[0]?.Work_Order || activeSearchQuery || "export"}`,
+                  columns: [
+                    { header: "Sequence", accessor: (row) => row.Operation_Sequence },
+                    { header: "Op Code", accessor: (row) => row.Operation_Code },
+                    { header: "Op Name", accessor: (row) => row.Operation_Name },
+                    { header: "Skill Level", accessor: (row) => row.SkillLevel },
+                    { header: "Piece Rate", accessor: (row) => row.Piece_Rate },
+                    { header: "SMV / SAM", accessor: (row) => row.Smv_Sam },
+                    { header: "Machine Type", accessor: (row) => row.Machine_Type },
+                    { header: "Bi Hourly TGT", accessor: (row) => row.Bi_Hourly_Tgt },
+                    { header: "Shift TGT", accessor: (row) => row.Shift_Tgt },
+                    { header: "# of Operations", accessor: (row) => row.No_Of_Operations },
+                    { header: "DL", accessor: (row) => row.DL },
+                    { header: "No M/C", accessor: (row) => row.No_Mc },
+                  ],
+                }}
 
                 toolbarChildren={
                   <div className="flex items-center gap-2 flex-wrap">
