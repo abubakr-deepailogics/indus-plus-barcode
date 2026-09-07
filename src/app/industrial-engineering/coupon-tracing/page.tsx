@@ -42,6 +42,7 @@ interface CouponRow {
   EmployeeName?: string | null;
   ScanBy?: string | null;
   ScannedAt?: string | null;
+  SystemScannedAt?: string | null;
 }
 
 const COUPON_PAGE_SIZE = 50;

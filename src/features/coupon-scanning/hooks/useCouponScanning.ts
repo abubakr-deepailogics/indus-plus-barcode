@@ -35,13 +35,13 @@ export function useCouponScanning() {
   const [alreadyMonthlyScanPrice, setAlreadyMonthlyScanPrice] = useState("");
   const [lineId, setLineId] = useState("");
   const [scanBy, setScanBy] = useState(() => {
-    return user?.displayName || user?.email?.split("@")[0] || "";
+    return user?.email || user?.displayName || "";
   });
 
   const [prevUser, setPrevUser] = useState(user);
   if (user !== prevUser) {
     setPrevUser(user);
-    setScanBy(user?.displayName || user?.email?.split("@")[0] || "");
+    setScanBy(user?.email || user?.displayName || "");
   }
 
   const [dated, setDated] = useState("");
@@ -402,7 +402,7 @@ export function useCouponScanning() {
     setAlreadyDailyScanPrice("");
     setAlreadyMonthlyScanPrice("");
     setLineId("");
-    setScanBy(user?.displayName || user?.email?.split("@")[0] || "");
+    setScanBy(user?.email || user?.displayName || "");
     setDated("");
     setEmployeeName("");
     setSection("");
