@@ -72,7 +72,8 @@ export async function POST(request: Request) {
       SET IsScanned = 1,
           EmployeeCode = NULLIF(@employeeCode, ''),
           ScanBy = NULLIF(@scanBy, ''),
-          ScannedAt = ${SCANNED_AT_FROM_DATE_SQL}
+          ScannedAt = ${SCANNED_AT_FROM_DATE_SQL},
+          SystemScannedAt = GETDATE()
       OUTPUT inserted.CouponCode INTO @Updated
       FROM dbo.QrCode_Coupon c
       INNER JOIN @Codes src ON src.CouponCode = c.CouponCode

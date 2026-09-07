@@ -116,6 +116,11 @@ export default function OpenOrderPage() {
             {row.original.RowId}
           </span>
         ),
+        footer: ({ table }) => (
+          <div className="text-slate-800">
+            Total: {table.getFilteredRowModel().rows.length}
+          </div>
+        ),
         size: 60,
       },
       {
@@ -132,6 +137,19 @@ export default function OpenOrderPage() {
             {row.original.Cut}
           </div>
         ),
+        footer: ({ table }) => {
+          const uniqueCuts = new Set(
+            table
+              .getFilteredRowModel()
+              .rows.map((row) => row.original.Cut)
+              .filter((cut) => cut !== undefined && cut !== null),
+          );
+          return (
+            <div className="text-center text-indigo-600">
+              Total: {uniqueCuts.size}
+            </div>
+          );
+        },
         size: 70,
       },
        {
@@ -160,6 +178,12 @@ export default function OpenOrderPage() {
         cell: ({ row }) => (
           <div className="text-right font-bold">{row.original.Bundle_Qty}</div>
         ),
+        footer: ({ table }) => {
+          const total = table.getFilteredRowModel().rows.reduce((sum, row) => {
+            return sum + (row.original.Bundle_Qty ?? 0);
+          }, 0);
+          return <div className="text-right text-slate-800">Total: {total}</div>;
+        },
         size: 90,
       },
       {
@@ -975,6 +999,20 @@ export default function OpenOrderPage() {
             <DataTable
               columns={cutReportColumns}
               data={cutDetails}
+              csv={{
+                filename: `cut-report-${cutDetails[0]?.Work_Order || activeSearchQuery || "export"}`,
+                columns: [
+                  { header: "Row ID", accessor: (row) => row.RowId },
+                  { header: "Cut", accessor: (row) => row.Cut },
+                  { header: "Bundle ID", accessor: (row) => row.Bundle_Id },
+                  { header: "Bundle Qty", accessor: (row) => row.Bundle_Qty },
+                  { header: "Inseam", accessor: (row) => row.Inseam },
+                  { header: "Size", accessor: (row) => row.Size },
+                  { header: "Color", accessor: (row) => row.Color },
+                  { header: "Shade", accessor: (row) => row.Shade },
+                  { header: "Shrinkage", accessor: (row) => row.Shrinkage },
+                ],
+              }}
               toolbarChildren={
                 <button
                   type="button"

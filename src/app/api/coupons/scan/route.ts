@@ -110,7 +110,8 @@ export async function GET(request: Request) {
           SET IsScanned = 1,
               EmployeeCode = NULLIF(@employeeCode, ''),
               ScanBy = NULLIF(@scanBy, ''),
-              ScannedAt = ${SCANNED_AT_FROM_DATE_SQL}
+              ScannedAt = ${SCANNED_AT_FROM_DATE_SQL},
+              SystemScannedAt = GETDATE()
           WHERE CouponCode = @barcode
         `);
 
@@ -154,7 +155,8 @@ export async function GET(request: Request) {
           SET IsScanned = 1,
               EmployeeCode = NULLIF(@employeeCode, ''),
               ScanBy = NULLIF(@scanBy, ''),
-              ScannedAt = ${SCANNED_AT_FROM_DATE_SQL}
+              ScannedAt = ${SCANNED_AT_FROM_DATE_SQL},
+              SystemScannedAt = GETDATE()
           WHERE CouponCode IN (${placeholders.join(", ")})
         `);
     }

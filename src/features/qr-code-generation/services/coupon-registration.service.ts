@@ -140,7 +140,9 @@ export interface CouponListRow {
   OpName?: string | null;
   EmployeeCode?: string | null;
   EmployeeName?: string | null;
+  ScanBy?: string | null;
   ScannedAt?: string | null;
+  SystemScannedAt?: string | null;
 }
 
 export interface CouponListFilters {
@@ -281,8 +283,8 @@ export async function listCoupons(
       .query(`
         SELECT
           c.Id, c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.Section, c.IsScanned, c.CreatedAt, c.CutNo,
-          c.EmployeeCode,
-          c.ScannedAt
+          c.EmployeeCode, c.ScanBy,
+          c.ScannedAt, c.SystemScannedAt
         FROM dbo.QrCode_Coupon c
         WHERE ${where}
         ORDER BY c.Id
@@ -311,8 +313,8 @@ export async function listAllCoupons(
     request.query(`
       SELECT
         c.Id, c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.Section, c.IsScanned, c.CreatedAt, c.CutNo,
-        c.EmployeeCode,
-        c.ScannedAt
+        c.EmployeeCode, c.ScanBy,
+        c.ScannedAt, c.SystemScannedAt
       FROM dbo.QrCode_Coupon c
       WHERE ${where}
       ORDER BY c.Id

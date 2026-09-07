@@ -24,7 +24,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
-import { downloadCsv } from "@/lib/csv-export";
+import { CsvExportButton } from "@/components/ui/csv-export-button";
 import {
   fetchEmployeeSearchSuggestions,
   fetchOperationSearchSuggestions,
@@ -357,8 +357,8 @@ export function EmployeeReportDashboard() {
   // report) — that's the table the user is looking at when they click
   // Export, and matches the coupons tab's own search filter rather than
   // re-deriving a separate scope.
-  const handleExport = useCallback(() => {
-    if (!summary) return;
+  const exportData = useMemo(() => {
+    if (!summary) return null;
 
     let headers: string[];
     let rows: (string | number | null | undefined)[][];
@@ -470,11 +470,11 @@ export function EmployeeReportDashboard() {
             ? "all-operations"
             : summary.subject.operationCode;
 
-    downloadCsv(
-      `report-${subjectSlug}-${effectiveTab}-${format(new Date(), "yyyyMMdd-HHmm")}`,
+    return {
+      filename: `report-${subjectSlug}-${effectiveTab}-${format(new Date(), "yyyyMMdd-HHmm")}`,
       headers,
       rows,
-    );
+    };
   }, [summary, effectiveTab, filteredCoupons, showEmployeeColumn]);
 
   return (
@@ -1033,15 +1033,12 @@ export function EmployeeReportDashboard() {
                     />
                   </div>
                 )}
-                <button
-                  type="button"
-                  onClick={handleExport}
-                  title="Export this table to Excel (.csv)"
-                  className="shrink-0 flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-[10px] font-bold uppercase tracking-wider text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all cursor-pointer"
-                >
-                  <FileSpreadsheet className="w-3.5 h-3.5" />
-                  Export
-                </button>
+                <CsvExportButton
+                  filename={exportData?.filename ?? "report-export"}
+                  headers={exportData?.headers ?? []}
+                  rows={exportData?.rows ?? []}
+                  disabled={!exportData}
+                />
               </div>
             </div>
 

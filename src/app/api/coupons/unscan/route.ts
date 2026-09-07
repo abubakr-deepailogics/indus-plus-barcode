@@ -24,7 +24,8 @@ export async function POST(request: Request) {
         SET IsScanned = 0,
             EmployeeCode = NULL,
             ScanBy = NULL,
-            ScannedAt = NULL
+            ScannedAt = NULL,
+            SystemScannedAt = NULL
         WHERE CouponCode = @couponCode
       `);
 

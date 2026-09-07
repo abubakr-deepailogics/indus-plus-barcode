@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useRef, FocusEvent } from "react";
+import { useEffect, useMemo, useRef, FocusEvent } from "react";
 import { FileText, Printer } from "lucide-react";
+import { CsvExportButton } from "@/components/ui/csv-export-button";
 import type { useCouponScanning } from "../hooks/useCouponScanning";
 
 type Facade = ReturnType<typeof useCouponScanning>;
@@ -65,6 +66,28 @@ export function ScanningDetailsTable(props: Facade) {
     }, 10);
   };
 
+  const csvRows = useMemo(
+    () =>
+      rows
+        .filter((row) => row.barCode)
+        .map((row) => [
+          row.barCode,
+          row.anlCode,
+          row.cutNo,
+          row.bundleNo,
+          row.qty,
+          row.inseam,
+          row.sizeCode,
+          row.sectionName,
+          row.operationName,
+          row.skillCode,
+          row.smv,
+          row.rate,
+          row.value,
+        ]),
+    [rows],
+  );
+
   // Auto-scroll the table to the bottom as rows fill in, so the row a
   // just-scanned coupon landed in stays in view during a fast scan burst.
   const tableContainerRef = useRef<HTMLDivElement>(null);
@@ -98,6 +121,12 @@ export function ScanningDetailsTable(props: Facade) {
             <Printer className="w-3 h-3 text-[#4f46e5]" />
             <span>Print Scanned</span>
           </button>
+          <CsvExportButton
+            filename={`scanning-details-${employeeCode || "employee"}-${dated || "date"}`}
+            headers={["Coupon Code", "W/O #", "Cut #", "Bundle #", "Qty", "Inseam", "Size #", "Section Name", "Operation Name", "Skill #", "SMV", "Rate", "Value"]}
+            rows={csvRows}
+            className="bg-white border border-[#e2e8f0] hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 text-slate-700 disabled:opacity-50 py-1 px-2.5 rounded-lg font-bold transition-all shadow-sm cursor-pointer text-[10px] flex items-center justify-center gap-1.5 disabled:cursor-not-allowed"
+          />
           <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest bg-slate-50 px-2 py-0.5 rounded border border-slate-100">
             Rate Section
           </span>

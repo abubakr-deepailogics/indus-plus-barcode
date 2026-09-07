@@ -52,7 +52,6 @@ export function QrCodeGenerationView() {
   return (
     <>
       <div className="no-print flex flex-col gap-6 max-w-345 mx-auto text-xs text-[#334155] animate-fade-in relative pb-16">
-
         {/* Main Parameters Panel */}
         <ParametersPanel
           activeStyle={facade.activeStyle}
@@ -94,7 +93,7 @@ export function QrCodeGenerationView() {
         </div>
 
         {/* Footer bar */}
-        <footer className="fixed bottom-0 left-0 right-0 bg-[#f8fafc] border-t border-[#e2e8f0] px-6 py-2.5 flex items-center justify-between text-[11px] text-[#64748b] font-semibold z-35">
+        {/* <footer className="fixed bottom-0 left-0 right-0 bg-[#f8fafc] border-t border-[#e2e8f0] px-6 py-2.5 flex items-center justify-between text-[11px] text-[#64748b] font-semibold z-35">
           <div>
             Record: <span className="text-[#334155]">1/1</span> | Choices in
             list: <span className="text-[#334155]">1</span> | Choices in full
@@ -107,8 +106,7 @@ export function QrCodeGenerationView() {
             <span className="font-bold text-[#475569]">&lt;OSC&gt;</span>
             <span className="font-bold text-[#475569]">&lt;DBG&gt;</span>
           </div>
-        </footer>
-
+        </footer> */}
       </div>
 
       <WorkOrderSearchModal
@@ -144,8 +142,13 @@ export function QrCodeGenerationView() {
       {facade.showGenerateModal && (
         <GenerateCouponsModal
           state={facade.generateModalState}
-          selectedBundlesCount={facade.activeStyle.bundles.filter((b) => b.sel).length}
-          selectedOperationsCount={facade.activeStyle.operations.filter((op) => op.lastOpSection).length}
+          selectedBundlesCount={
+            facade.activeStyle.bundles.filter((b) => b.sel).length
+          }
+          selectedOperationsCount={
+            facade.activeStyle.operations.filter((op) => op.lastOpSection)
+              .length
+          }
           generatedCount={facade.generatedCount}
           progress={facade.generateProgress}
           errorMessage={facade.couponModalError}
@@ -162,8 +165,12 @@ export function QrCodeGenerationView() {
         <div className="fixed inset-0 bg-[#0f172a]/30 backdrop-blur-sm flex flex-col items-center justify-center z-[9999] animate-fade-in no-print">
           <div className="bg-white rounded-2xl p-6 shadow-2xl border border-[#e2e8f0] flex flex-col items-center max-w-[280px] text-center">
             <Loader2 className="w-8 h-8 text-[#4f46e5] animate-spin mb-3" />
-            <h4 className="text-xs font-extrabold text-[#0f172a] uppercase tracking-wider mb-1">Generating PDF...</h4>
-            <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">Preparing coupon sheets. Please wait.</p>
+            <h4 className="text-xs font-extrabold text-[#0f172a] uppercase tracking-wider mb-1">
+              Generating PDF...
+            </h4>
+            <p className="text-[10px] text-slate-400 font-semibold leading-relaxed">
+              Preparing coupon sheets. Please wait.
+            </p>
           </div>
         </div>
       )}
