@@ -107,6 +107,28 @@ export function useCouponScanning() {
     setShowErrorModal(true);
   };
 
+  // Alert clip for the one error a scanner-gun operator hits constantly
+  // (re-scanning an already-scanned coupon, screen out of view). Not used
+  // for any other error on this page. Reuses one Audio element instead of
+  // constructing a new one per call, and rewinds before each play so rapid
+  // repeat "already scanned" scans (a burst hitting the same duplicate)
+  // restart the clip rather than being dropped while the previous play is
+  // still finishing.
+  const alreadyScannedAudioRef = useRef<HTMLAudioElement | null>(null);
+  const playAlreadyScannedSound = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (!alreadyScannedAudioRef.current) {
+      alreadyScannedAudioRef.current = new Audio(
+        "/sounds/already-scanned-error.mp3",
+      );
+    }
+    const audio = alreadyScannedAudioRef.current;
+    audio.currentTime = 0;
+    audio.play().catch((err) => {
+      console.error("Failed to play already-scanned alert sound:", err);
+    });
+  }, []);
+
   // Verifies attendance for the current employeeCode/dated pair and caches
   // the result in isEmployeePresent — called both from the UI the moment
   // Dated is committed (InformationPanel, to gate/focus the scanner field)
@@ -368,6 +390,9 @@ export function useCouponScanning() {
 
       if (scanResult.failed.length > 0) {
         setScanError(describeFailedScans(scanResult.failed));
+        if (scanResult.failed.some((f) => f.reason === "already_scanned")) {
+          playAlreadyScannedSound();
+        }
       } else {
         setScanError("");
       }
@@ -525,6 +550,9 @@ export function useCouponScanning() {
 
       if (result.failed.length > 0) {
         setScanError(describeFailedScans(result.failed));
+        if (result.failed.some((f) => f.reason === "already_scanned")) {
+          playAlreadyScannedSound();
+        }
         // Drop failed codes' rows back to empty so the slot isn't stuck
         // showing an unscanned "pending" row forever.
         const failedCodes = new Set(result.failed.map((f) => f.code));
@@ -544,7 +572,14 @@ export function useCouponScanning() {
         getErrorMessage(err, "An unexpected error occurred while scanning."),
       );
     }
-  }, [employeeCode, scanBy, dated, isEmployeePresent, verifyAttendance]);
+  }, [
+    employeeCode,
+    scanBy,
+    dated,
+    isEmployeePresent,
+    verifyAttendance,
+    playAlreadyScannedSound,
+  ]);
 
   const handleScannerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== "Enter" && e.key !== "Tab") return;
