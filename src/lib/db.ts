@@ -114,6 +114,9 @@ export const OPERATIONS_CATALOG_TABLE = "dbo.S_OperationsCatalog";
 // different SQL Server instances, not just different databases on one
 // server, so this view can never be joined in the same query as
 // dbo.QrCode_Coupon/dbo.StyleBullettinInt; fetch separately and merge in JS.
+// Also carries EmpStatus ('Active' for current employees) — every lookup
+// against this view must filter WHERE EmpStatus = 'Active' so terminated/
+// inactive employees never surface in search or scanning (see workers/route.ts).
 export const WORKERS_VIEW = "dbo.S_EmpDataPITSView";
 
 // Attendance/biometric-punch view, also hrms-only (see WORKERS_VIEW above).

@@ -33,6 +33,7 @@ export async function GET(request: Request) {
             SELECT DISTINCT TOP 20 EmployeeID, FirstName
             FROM ${WORKERS_VIEW}
             WHERE FirstName IS NOT NULL
+              AND EmpStatus = 'Active'
               AND (CAST(EmployeeID AS VARCHAR(20)) LIKE @q OR FirstName LIKE @q)
             ORDER BY EmployeeID
           `);
@@ -41,7 +42,7 @@ export async function GET(request: Request) {
         const result = await pool.request().query(`
           SELECT DISTINCT TOP 20 EmployeeID, FirstName
           FROM ${WORKERS_VIEW}
-          WHERE FirstName IS NOT NULL
+          WHERE FirstName IS NOT NULL AND EmpStatus = 'Active'
           ORDER BY EmployeeID
         `);
         return Response.json(result.recordset);

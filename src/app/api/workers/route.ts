@@ -40,7 +40,7 @@ export async function GET(request: Request) {
         hrmsPool.request().input("code", sql.Int, codeNum).query(`
             SELECT TOP 1 EmployeeID, FirstName, DesignationName, ParentDepartment, DepartmentName
             FROM ${WORKERS_VIEW}
-            WHERE EmployeeID = @code
+            WHERE EmployeeID = @code AND EmpStatus = 'Active'
           `),
         (await getPool("pitSystem"))
           .request()
@@ -95,7 +95,8 @@ export async function GET(request: Request) {
         .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
           SELECT DISTINCT TOP 10 EmployeeID, FirstName, DesignationName, ParentDepartment, DepartmentName
           FROM ${WORKERS_VIEW}
-          WHERE CAST(EmployeeID AS VARCHAR(50)) LIKE @q OR FirstName LIKE @q
+          WHERE (CAST(EmployeeID AS VARCHAR(50)) LIKE @q OR FirstName LIKE @q)
+            AND EmpStatus = 'Active'
           ORDER BY EmployeeID
         `);
 
