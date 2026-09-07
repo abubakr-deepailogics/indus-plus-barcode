@@ -172,29 +172,29 @@ export function BundleDetailTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[420px] border border-[#f1f5f9] rounded-xl">
         <table className="w-full text-left border-collapse min-w-[500px]">
           <thead>
             <tr className="border-b border-[#e2e8f0]">
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
                 Cut #
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
                 Char
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
                 Bundle #
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
                 Inseam
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
                 Size #
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
                 Pcs
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
                 Sel
               </th>
             </tr>

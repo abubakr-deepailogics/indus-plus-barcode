@@ -47,32 +47,32 @@ export function OperationsDetailTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto">
+      <div className="overflow-auto max-h-[420px] border border-[#f1f5f9] rounded-xl">
         <table className="w-full text-left border-collapse min-w-[500px]">
           <thead>
             <tr className="border-b border-[#e2e8f0]">
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left sticky top-0 z-10 bg-white">
                 Section
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
                 Seq #
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
                 Op #
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left sticky top-0 z-10 bg-white">
                 Operation
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
                 SMV
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
                 Rate
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
                 Inc.
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
                 Sel
               </th>
             </tr>
