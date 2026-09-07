@@ -140,6 +140,7 @@ export interface CouponListRow {
   OpName?: string | null;
   EmployeeCode?: string | null;
   EmployeeName?: string | null;
+  ScanBy?: string | null;
   ScannedAt?: string | null;
 }
 
@@ -281,7 +282,7 @@ export async function listCoupons(
       .query(`
         SELECT
           c.Id, c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.Section, c.IsScanned, c.CreatedAt, c.CutNo,
-          c.EmployeeCode,
+          c.EmployeeCode, c.ScanBy,
           c.ScannedAt
         FROM dbo.QrCode_Coupon c
         WHERE ${where}
@@ -311,7 +312,7 @@ export async function listAllCoupons(
     request.query(`
       SELECT
         c.Id, c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.Section, c.IsScanned, c.CreatedAt, c.CutNo,
-        c.EmployeeCode,
+        c.EmployeeCode, c.ScanBy,
         c.ScannedAt
       FROM dbo.QrCode_Coupon c
       WHERE ${where}

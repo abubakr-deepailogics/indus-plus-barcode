@@ -9,6 +9,8 @@ import {
   ChevronLeft,
   ChevronRight,
   Loader2,
+  Check,
+  X,
 } from "lucide-react";
 import { format } from "date-fns";
 import { printPdf } from "@/lib/print";
@@ -38,6 +40,7 @@ interface CouponRow {
   OpName?: string | null;
   EmployeeCode?: string | null;
   EmployeeName?: string | null;
+  ScanBy?: string | null;
   ScannedAt?: string | null;
 }
 
@@ -262,6 +265,7 @@ export default function CouponTracingPage() {
           "Emp Code",
           "Emp Name",
           "Scanned",
+          "Scan By",
           "Scan Date",
           "Created At",
         ],
@@ -273,6 +277,7 @@ export default function CouponTracingPage() {
           c.EmployeeCode || "",
           c.EmployeeName || "",
           c.IsScanned ? "Scanned" : "Not scanned",
+          c.ScanBy || "",
           c.ScannedAt ? format(new Date(c.ScannedAt), "dd/MM/yyyy") : "",
           format(new Date(c.CreatedAt), "dd/MM/yyyy"),
         ]),
@@ -500,6 +505,9 @@ export default function CouponTracingPage() {
                   Scanned
                 </th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+                  Scan By
+                </th>
+                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
                   Scan Date
                 </th>
                 <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
@@ -511,7 +519,7 @@ export default function CouponTracingPage() {
               {couponsLoading ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-4 py-6 text-center text-[#94a3b8]"
                   >
                     Loading…
@@ -520,7 +528,7 @@ export default function CouponTracingPage() {
               ) : coupons.length === 0 ? (
                 <tr>
                   <td
-                    colSpan={9}
+                    colSpan={10}
                     className="px-4 py-6 text-center text-[#94a3b8]"
                   >
                     No coupons match
@@ -556,27 +564,39 @@ export default function CouponTracingPage() {
                     </td>
                     <td className="px-4 py-3 text-left">
                       <div className="flex items-center gap-2">
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            c.IsScanned
-                              ? "bg-emerald-50 text-emerald-700"
-                              : "bg-slate-100 text-slate-500"
-                          }`}
-                        >
-                          {c.IsScanned ? "Scanned" : "Not scanned"}
-                        </span>
-                        {c.IsScanned && (
-                          <button
-                            onClick={() => handleUnscanCoupon(c.CouponCode)}
-                            disabled={unscanningCode === c.CouponCode}
-                            className="text-[#ef4444] hover:text-[#dc2626] font-bold text-[10px] px-2 py-1 rounded bg-red-50 hover:bg-red-100 border border-red-100 transition-all cursor-pointer disabled:opacity-50"
+                        {c.IsScanned ? (
+                          <>
+                            <span
+                              className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700"
+                              title="Scanned"
+                            >
+                              <Check className="w-4 h-4 stroke-[2.5]" />
+                            </span>
+                            <button
+                              onClick={() => handleUnscanCoupon(c.CouponCode)}
+                              disabled={unscanningCode === c.CouponCode}
+                              title="Unscan coupon"
+                              className="inline-flex items-center justify-center w-6 h-6 rounded bg-red-50 hover:bg-red-100 text-red-600 border border-red-100 transition-all cursor-pointer disabled:opacity-50"
+                            >
+                              {unscanningCode === c.CouponCode ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <X className="w-3.5 h-3.5 stroke-[2.5]" />
+                              )}
+                            </button>
+                          </>
+                        ) : (
+                          <span
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-slate-400"
+                            title="Not scanned"
                           >
-                            {unscanningCode === c.CouponCode
-                              ? "Unscanning..."
-                              : "Unscan"}
-                          </button>
+                            <X className="w-4 h-4 stroke-[2.5]" />
+                          </span>
                         )}
                       </div>
+                    </td>
+                    <td className="px-4 py-3 text-[#334155] text-left font-medium">
+                      {c.ScanBy || "—"}
                     </td>
                     <td className="px-4 py-3 text-[#334155] text-left">
                       {c.ScannedAt
