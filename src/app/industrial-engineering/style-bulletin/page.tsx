@@ -1700,34 +1700,34 @@ export default function OpenOrderPage() {
                     <th className="text-center" style={{ width: "5%" }}>
                       S.NO
                     </th>
-                    <th style={{ width: "9%" }}>OP Code</th>
-                    <th style={{ width: "22%" }}>Operation Description</th>
+                    <th style={{ width: "8%" }}>OP Code</th>
+                    <th style={{ width: "50%" }}>Operation Description</th>
                     <th className="text-center" style={{ width: "6%" }}>
-                      Skill Level
+                      Skill
                     </th>
-                    <th className="text-right" style={{ width: "7%" }}>
-                      Piece Rate
+                    <th className="text-right" style={{ width: "6%" }}>
+                      Rate
                     </th>
-                    <th className="text-right" style={{ width: "5%" }}>
+                    <th className="text-right" style={{ width: "4%" }}>
                       SAM
                     </th>
-                    <th className="text-center" style={{ width: "7%" }}>
-                      Bi Hourly Tgt
-                    </th>
                     <th className="text-center" style={{ width: "6%" }}>
-                      Shift Tgt
+                      Bi Hr Tgt
                     </th>
                     <th className="text-center" style={{ width: "5%" }}>
+                      Shift
+                    </th>
+                    <th className="text-center" style={{ width: "4%" }}>
                       M/C Y/N
                     </th>
-                    <th style={{ width: "10%" }}>Machine Type/Class</th>
-                    <th className="text-center" style={{ width: "9%" }}>
-                      #of Operations
+                    <th style={{ width: "8%" }}>Mc Type</th>
+                    <th className="text-center" style={{ width: "8%" }}>
+                      #Ops
                     </th>
                     <th className="text-center" style={{ width: "4%" }}>
                       DL
                     </th>
-                    <th className="text-center" style={{ width: "5%" }}>
+                    <th className="text-center" style={{ width: "6%" }}>
                       No M/C
                     </th>
                   </tr>
