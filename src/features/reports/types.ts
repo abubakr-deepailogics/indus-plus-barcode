@@ -3,7 +3,7 @@
 // every mode shows the same shape of dashboard (totals, breakdowns, coupon
 // trail). `mode` discriminates which one is the search subject; the other
 // two dimensions always show up as breakdown tables regardless of mode.
-export type ReportSearchMode = "employee" | "workOrder" | "operation";
+export type ReportSearchMode = "employee" | "workOrder" | "operation" | "section";
 
 export interface EmployeeReportInfo {
   EmployeeID: number | string;
@@ -43,7 +43,9 @@ export type ReportSubject =
       department?: string | null;
       skillLevel?: string | null;
     }
-  | { mode: "operation"; all: true };
+  | { mode: "operation"; all: true }
+  | { mode: "section"; all?: false; section: string; operationsCount: number }
+  | { mode: "section"; all: true };
 
 export interface OperationReportItem {
   operationCode: string;
@@ -64,6 +66,25 @@ export interface WorkOrderReportItem {
   totalSam: number;
   totalAmount: number;
   operationsCount: number;
+}
+
+export interface SectionReportItem {
+  section: string;
+  couponCount: number;
+  totalQty: number;
+  totalSam: number;
+  totalAmount: number;
+  operationsCount: number;
+}
+
+export interface BundleReportItem {
+  bundleNo: string;
+  cutNo?: string | null;
+  workOrder: string;
+  couponCount: number;
+  totalQty: number;
+  totalSam: number;
+  totalAmount: number;
 }
 
 export interface EmployeeBreakdownItem {
@@ -137,6 +158,12 @@ export interface ReportSummary {
   workOrders: WorkOrderReportItem[];
   employees: EmployeeBreakdownItem[];
   coupons: CouponReportItem[];
+
+  // Extra breakdowns, only surfaced by the dashboard in Work Order mode
+  // (per-section / per-bundle progress within the order) — always populated
+  // here since they're free byproducts of the same aggregation pass.
+  sections: SectionReportItem[];
+  bundles: BundleReportItem[];
 }
 
 // Inclusive on both ends; either end left undefined means "open" (all-time

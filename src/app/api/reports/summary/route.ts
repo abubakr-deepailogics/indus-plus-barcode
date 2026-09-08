@@ -3,9 +3,14 @@ import type { ReportSearchMode } from "@/features/reports/types";
 
 export const dynamic = "force-dynamic";
 
-const VALID_MODES: ReportSearchMode[] = ["employee", "workOrder", "operation"];
+const VALID_MODES: ReportSearchMode[] = [
+  "employee",
+  "workOrder",
+  "operation",
+  "section",
+];
 
-// GET /api/reports/summary?by=employee|workOrder|operation&value=<...>&from=<yyyy-MM-dd>&to=<yyyy-MM-dd>
+// GET /api/reports/summary?by=employee|workOrder|operation|section&value=<...>&from=<yyyy-MM-dd>&to=<yyyy-MM-dd>
 //
 // Single endpoint behind all three "search by" modes on the reports page —
 // `by` picks which QrCode_Coupon column scopes the report (see
@@ -28,7 +33,7 @@ export async function GET(request: Request) {
     return Response.json(
       {
         error:
-          "A valid 'by' parameter (employee, workOrder, or operation) is required.",
+          "A valid 'by' parameter (employee, workOrder, operation, or section) is required.",
       },
       { status: 400 },
     );

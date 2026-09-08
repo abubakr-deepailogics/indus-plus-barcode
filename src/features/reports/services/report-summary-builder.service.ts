@@ -8,12 +8,14 @@ import {
 } from "@/lib/db";
 import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import type {
+  BundleReportItem,
   CouponReportItem,
   EmployeeBreakdownItem,
   OperationReportItem,
   ReportSearchMode,
   ReportSubject,
   ReportSummary,
+  SectionReportItem,
   WorkOrderReportItem,
 } from "../types";
 
@@ -37,22 +39,58 @@ interface RawCouponRow {
   ScannedAt: string | null;
 }
 
-// Which QrCode_Coupon column + bound value scopes every query to the
-// searched dimension. Everything downstream (aggregation, breakdowns,
-// coupon trail) is identical across modes once this is decided.
+// Which QrCode_Coupon column scopes every query to the searched dimension.
+// Everything downstream (aggregation, breakdowns, coupon trail) is
+// identical across modes once this is decided. "section" has no column of
+// its own on QrCode_Coupon (section is a style-bulletin attribute of the
+// operation, resolved via OP_CODES_BY_SECTION below) — it still scopes on
+// OpNo, just against a set of codes instead of one value.
 const COLUMN_BY_MODE: Record<ReportSearchMode, string> = {
   employee: "EmployeeCode",
   workOrder: "WorkOrder",
   operation: "OpNo",
+  section: "OpNo",
 };
+
+const IN_LIST_CHUNK_SIZE = 2000; // stays well under SQL Server's ~2100 parameter cap
+
+// Every distinct Operation Code belonging to the given section, from the
+// (global, catalog-level) style bulletin — same source operation mode
+// resolves a single code against. A section can span many operation codes,
+// so this is a set rather than a single boundValue.
+async function fetchOperationCodesForSection(
+  section: string,
+): Promise<string[]> {
+  const indusPool = await getPool("indusPlus");
+  const result = await indusPool.request().input("section", sql.NVarChar, section)
+    .query(`
+      SELECT DISTINCT [Operation Code] AS Operation_Code
+      FROM ${STYLE_BULLETIN_TABLE}
+      WHERE Section = @section
+    `);
+  return result.recordset.map((r) => String(r.Operation_Code));
+}
 
 async function resolveSubject(
   mode: ReportSearchMode,
   value: string,
 ): Promise<
-  | { ok: true; subject: ReportSubject; boundValue: string }
+  | { ok: true; subject: ReportSubject; boundValue: string; opCodes?: string[] }
   | { ok: false; status: number; error: string }
 > {
+  if (mode === "section") {
+    const opCodes = await fetchOperationCodesForSection(value);
+    if (opCodes.length === 0) {
+      return { ok: false, status: 404, error: "Section not found." };
+    }
+    return {
+      ok: true,
+      subject: { mode: "section", section: value, operationsCount: opCodes.length },
+      boundValue: value,
+      opCodes,
+    };
+  }
+
   if (mode === "employee") {
     const employeeIdNum = parseInt(value, 10);
     if (isNaN(employeeIdNum)) {
@@ -152,26 +190,44 @@ export async function buildReportSummary(
 
   let subject: ReportSubject;
   let boundValue = value;
+  let opCodes: string[] | undefined;
   if (isAll) {
     subject =
       mode === "employee"
         ? { mode: "employee", all: true }
         : mode === "workOrder"
           ? { mode: "workOrder", all: true }
-          : { mode: "operation", all: true };
+          : mode === "operation"
+            ? { mode: "operation", all: true }
+            : { mode: "section", all: true };
   } else {
     const subjectResult = await resolveSubject(mode, value);
     if (!subjectResult.ok) return subjectResult;
     subject = subjectResult.subject;
     boundValue = subjectResult.boundValue;
+    opCodes = subjectResult.opCodes;
   }
 
   const pitPool = await getPool("pitSystem");
   const column = COLUMN_BY_MODE[mode];
 
+  // Section scopes on a set of operation codes rather than one value — same
+  // column (OpNo), IN (...) instead of "= @value". Chunked the same way the
+  // rest of the codebase chunks IN-lists against SQL Server's parameter cap.
+  const buildInClause = (req: sql.Request, codes: string[]) =>
+    codes
+      .map((code, i) => {
+        req.input(`op${i}`, sql.NVarChar, code);
+        return `@op${i}`;
+      })
+      .join(", ");
+
   const couponConditions = ["IsScanned = 1"];
   const couponRequest = pitPool.request();
-  if (isAll) {
+  if (mode === "section" && !isAll) {
+    const codes = (opCodes ?? []).slice(0, IN_LIST_CHUNK_SIZE);
+    couponConditions.push(`${column} IN (${buildInClause(couponRequest, codes)})`);
+  } else if (isAll) {
     couponConditions.push(`${column} IS NOT NULL`);
   } else {
     couponRequest.input("value", sql.NVarChar, boundValue);
@@ -190,7 +246,10 @@ export async function buildReportSummary(
 
   const scanCountsRequest = pitPool.request();
   let scanCountsScope: string;
-  if (isAll) {
+  if (mode === "section" && !isAll) {
+    const codes = (opCodes ?? []).slice(0, IN_LIST_CHUNK_SIZE);
+    scanCountsScope = `${column} IN (${buildInClause(scanCountsRequest, codes)})`;
+  } else if (isAll) {
     scanCountsScope = `${column} IS NOT NULL`;
   } else {
     scanCountsRequest.input("value", sql.NVarChar, boundValue);
@@ -280,6 +339,11 @@ export async function buildReportSummary(
     }
   >();
   const sectionCounts = new Map<string, number>();
+  const sectionMap = new Map<
+    string,
+    SectionReportItem & { operations: Set<string> }
+  >();
+  const bundleMap = new Map<string, BundleReportItem>();
 
   const couponItems: CouponReportItem[] = enriched.map((row) => {
     const qty = row.Qty != null ? Number(row.Qty) : null;
@@ -339,6 +403,47 @@ export async function buildReportSummary(
       existingWo.totalSam += (qty || 0) * (smv || 0);
       existingWo.totalAmount += val || 0;
       existingWo.operations.add(opCode);
+    }
+
+    // Aggregate Section
+    const existingSection = sectionMap.get(section);
+    if (!existingSection) {
+      sectionMap.set(section, {
+        section,
+        couponCount: 1,
+        totalQty: qty || 0,
+        totalSam: (qty || 0) * (smv || 0),
+        totalAmount: val || 0,
+        operationsCount: 0,
+        operations: new Set([opCode]),
+      });
+    } else {
+      existingSection.couponCount += 1;
+      existingSection.totalQty += qty || 0;
+      existingSection.totalSam += (qty || 0) * (smv || 0);
+      existingSection.totalAmount += val || 0;
+      existingSection.operations.add(opCode);
+    }
+
+    // Aggregate Bundle (bundle numbers repeat across work orders, so key on
+    // both together rather than assuming BundleNo is globally unique)
+    const bundleKey = `${row.WorkOrder}::${row.BundleNo}`;
+    const existingBundle = bundleMap.get(bundleKey);
+    if (!existingBundle) {
+      bundleMap.set(bundleKey, {
+        bundleNo: row.BundleNo,
+        cutNo: row.CutNo != null ? String(row.CutNo) : null,
+        workOrder: row.WorkOrder,
+        couponCount: 1,
+        totalQty: qty || 0,
+        totalSam: (qty || 0) * (smv || 0),
+        totalAmount: val || 0,
+      });
+    } else {
+      existingBundle.couponCount += 1;
+      existingBundle.totalQty += qty || 0;
+      existingBundle.totalSam += (qty || 0) * (smv || 0);
+      existingBundle.totalAmount += val || 0;
     }
 
     // Aggregate Employee
@@ -408,6 +513,20 @@ export async function buildReportSummary(
       operationsCount: w.operations.size,
     }))
     .sort((a, b) => b.totalAmount - a.totalAmount);
+  const sections = Array.from(sectionMap.values())
+    .map((s) => ({
+      section: s.section,
+      couponCount: s.couponCount,
+      totalQty: s.totalQty,
+      totalSam: s.totalSam,
+      totalAmount: s.totalAmount,
+      operationsCount: s.operations.size,
+    }))
+    .sort((a, b) => b.totalAmount - a.totalAmount);
+  const bundles = Array.from(bundleMap.values()).sort((a, b) => {
+    if (a.workOrder !== b.workOrder) return a.workOrder.localeCompare(b.workOrder);
+    return a.bundleNo.localeCompare(b.bundleNo);
+  });
   const employees = Array.from(empMap.values())
     .map((e) => ({
       employeeCode: e.employeeCode,
@@ -461,6 +580,8 @@ export async function buildReportSummary(
     workOrders,
     employees,
     coupons: couponItems,
+    sections,
+    bundles,
   };
 
   return { ok: true, data: summary };

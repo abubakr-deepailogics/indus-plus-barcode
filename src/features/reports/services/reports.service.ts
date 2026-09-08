@@ -88,3 +88,15 @@ export async function fetchOperationSearchSuggestions(
       : op.operationCode,
   }));
 }
+
+export async function fetchSectionSearchSuggestions(
+  query: string,
+): Promise<ReportSearchSuggestion[]> {
+  const params = new URLSearchParams({ query });
+  const response = await fetch(
+    `/api/reports/section-suggestions?${params.toString()}`,
+  );
+  if (!response.ok) return [];
+  const sections: string[] = await response.json();
+  return sections.map((s) => ({ value: s, label: s }));
+}

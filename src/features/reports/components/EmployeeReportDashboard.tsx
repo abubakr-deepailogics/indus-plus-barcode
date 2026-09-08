@@ -15,6 +15,8 @@ import {
   Scissors,
   FileSpreadsheet,
   Users,
+  Layers,
+  Package,
   type LucideIcon,
 } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
@@ -28,6 +30,7 @@ import { CsvExportButton } from "@/components/ui/csv-export-button";
 import {
   fetchEmployeeSearchSuggestions,
   fetchOperationSearchSuggestions,
+  fetchSectionSearchSuggestions,
   fetchWorkOrderSearchSuggestions,
 } from "../services/reports.service";
 import { useReportSearch } from "../hooks/useReportSearch";
@@ -128,22 +131,32 @@ const MODE_CONFIG: Record<
     placeholder: "Enter operation code or name",
     fetchSuggestions: fetchOperationSearchSuggestions,
   },
+  section: {
+    label: "Section",
+    fieldLabel: "Section",
+    placeholder: "Enter section name",
+    fetchSuggestions: fetchSectionSearchSuggestions,
+  },
 };
 
-type BreakdownDimension = "operations" | "workOrders" | "employees";
+type BreakdownDimension =
+  | "operations"
+  | "workOrders"
+  | "employees"
+  | "sections"
+  | "bundles";
 
-// Every report always carries all three breakdown dimensions (operations,
-// work orders, employees), but whichever one matches the search mode itself
-// is trivial (exactly the subject being searched) — this is the one place
-// that decides which two dimensions are actually worth showing per mode,
-// both for the on-screen tabs and for what prints.
-const BREAKDOWN_DIMENSIONS: Record<
-  ReportSearchMode,
-  [BreakdownDimension, BreakdownDimension]
-> = {
+// Every report always carries every breakdown dimension, but whichever one
+// matches the search mode itself is trivial (exactly the subject being
+// searched) — this is the one place that decides which dimensions are
+// actually worth showing per mode, both for the on-screen tabs and for what
+// prints. Sections/bundles only make sense once you're already scoped to a
+// single work order (or "all work orders"), so they're work-order-only.
+const BREAKDOWN_DIMENSIONS: Record<ReportSearchMode, BreakdownDimension[]> = {
   employee: ["operations", "workOrders"],
-  workOrder: ["employees", "operations"],
+  workOrder: ["employees", "operations", "sections", "bundles"],
   operation: ["employees", "workOrders"],
+  section: ["employees", "workOrders", "operations", "bundles"],
 };
 
 // The one dimension BREAKDOWN_DIMENSIONS always excludes for a mode — its
@@ -154,6 +167,7 @@ const OWN_DIMENSION_BY_MODE: Record<ReportSearchMode, BreakdownDimension> = {
   employee: "employees",
   workOrder: "workOrders",
   operation: "operations",
+  section: "sections",
 };
 
 const TAB_META: Record<
@@ -163,6 +177,8 @@ const TAB_META: Record<
   operations: { label: "Operations Breakdown", icon: Scissors },
   workOrders: { label: "Work Orders", icon: ClipboardList },
   employees: { label: "Employees", icon: UserRound },
+  sections: { label: "Sections", icon: Layers },
+  bundles: { label: "Bundles", icon: Package },
 };
 
 type TabKey = BreakdownDimension | "coupons";
@@ -232,13 +248,37 @@ function getCard2Config(summary: ReportSummary): Card2Config {
     };
   }
 
-  // operation
+  if (subject.mode === "operation") {
+    return {
+      title: "Employees",
+      icon: UserRound,
+      iconClassName: "bg-cyan-50 text-cyan-600",
+      value: `${summary.totalEmployees} ${summary.totalEmployees === 1 ? "Worker" : "Workers"}`,
+      badge: `${summary.totalWorkOrders} ${summary.totalWorkOrders === 1 ? "Work Order" : "Work Orders"}`,
+      rows: [
+        {
+          label: "Recent Employee",
+          value: formatEmployeeLabel(
+            summary.recentEmployeeCode,
+            summary.recentEmployeeName,
+          ),
+        },
+        {
+          label: "Work Orders Used In",
+          value: String(summary.totalWorkOrders),
+        },
+        { label: "Recent Work Order", value: summary.recentWorkOrder || "—" },
+      ],
+    };
+  }
+
+  // section
   return {
     title: "Employees",
     icon: UserRound,
     iconClassName: "bg-cyan-50 text-cyan-600",
     value: `${summary.totalEmployees} ${summary.totalEmployees === 1 ? "Worker" : "Workers"}`,
-    badge: `${summary.totalWorkOrders} ${summary.totalWorkOrders === 1 ? "Work Order" : "Work Orders"}`,
+    badge: `${summary.totalOperations} ${summary.totalOperations === 1 ? "Operation" : "Operations"}`,
     rows: [
       {
         label: "Recent Employee",
@@ -247,7 +287,7 @@ function getCard2Config(summary: ReportSummary): Card2Config {
           summary.recentEmployeeName,
         ),
       },
-      { label: "Work Orders Used In", value: String(summary.totalWorkOrders) },
+      { label: "Operations in Section", value: String(summary.totalOperations) },
       { label: "Recent Work Order", value: summary.recentWorkOrder || "—" },
     ],
   };
@@ -403,6 +443,42 @@ export function EmployeeReportDashboard() {
         Number(wo.totalSam.toFixed(2)),
         Number(wo.totalAmount.toFixed(2)),
       ]);
+    } else if (effectiveTab === "sections") {
+      headers = [
+        "Section",
+        "Operations",
+        "Coupons",
+        "Output (Pcs)",
+        "SAM Earned",
+        "Total Amount",
+      ];
+      rows = summary.sections.map((s) => [
+        s.section,
+        s.operationsCount,
+        s.couponCount,
+        s.totalQty,
+        Number(s.totalSam.toFixed(2)),
+        Number(s.totalAmount.toFixed(2)),
+      ]);
+    } else if (effectiveTab === "bundles") {
+      headers = [
+        "Bundle #",
+        "Cut #",
+        "Work Order",
+        "Coupons",
+        "Output (Pcs)",
+        "SAM Earned",
+        "Total Amount",
+      ];
+      rows = summary.bundles.map((b) => [
+        b.bundleNo,
+        b.cutNo,
+        b.workOrder,
+        b.couponCount,
+        b.totalQty,
+        Number(b.totalSam.toFixed(2)),
+        Number(b.totalAmount.toFixed(2)),
+      ]);
     } else if (effectiveTab === "employees") {
       headers = [
         "Employee Code",
@@ -466,9 +542,13 @@ export function EmployeeReportDashboard() {
           ? summary.subject.all
             ? "all-work-orders"
             : summary.subject.workOrder
-          : summary.subject.all
-            ? "all-operations"
-            : summary.subject.operationCode;
+          : summary.subject.mode === "operation"
+            ? summary.subject.all
+              ? "all-operations"
+              : summary.subject.operationCode
+            : summary.subject.all
+              ? "all-sections"
+              : summary.subject.section;
 
     return {
       filename: `report-${subjectSlug}-${effectiveTab}-${format(new Date(), "yyyyMMdd-HHmm")}`,
@@ -508,12 +588,13 @@ export function EmployeeReportDashboard() {
           </div>
         </div>
 
-        <div className="flex flex-col md:flex-row items-end gap-3">
-          <div className="flex flex-col gap-1 relative w-full md:w-96">
+        <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+          {/* Search field + its "or All X" alternative, grouped as one unit */}
+          <div className="flex flex-col gap-1 flex-1 min-w-0">
             <span className="font-bold text-[#475569] text-[10px] uppercase">
               {modeConfig.fieldLabel} <span className="text-red-500">*</span>
             </span>
-            <div className="flex items-center gap-2.5">
+            <div className="flex flex-col sm:flex-row sm:items-stretch gap-2">
               <div className="flex-1 min-w-0">
                 <Autocomplete<ReportSearchSuggestion>
                   key={mode}
@@ -535,37 +616,42 @@ export function EmployeeReportDashboard() {
                   )}
                   getSuggestionValue={(item) => item.value}
                   placeholder={modeConfig.placeholder}
-                  inputClassName="w-full px-3.5 py-2 rounded-xl border border-[#e2e8f0] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  inputClassName="w-full h-9 px-3.5 rounded-xl border border-[#e2e8f0] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
                   onKeyDown={handleKeyDown}
                   minChars={1}
                 />
               </div>
-              <span className="shrink-0 text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                or
-              </span>
-              <button
-                type="button"
-                onClick={() => searchAll()}
-                disabled={isLoading}
-                title={`View a combined report across every ${modeConfig.label.toLowerCase()}, without picking one`}
-                className={`shrink-0 px-3.5 py-2 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed ${
-                  isAllMode
-                    ? "bg-[#4f46e5] border-[#4f46e5] text-white shadow-sm"
-                    : "bg-indigo-50/60 border-indigo-200 text-[#4f46e5] hover:bg-indigo-100 hover:border-indigo-300"
-                }`}
-              >
-                All {modeConfig.label}s
-              </button>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                  or
+                </span>
+                <button
+                  type="button"
+                  onClick={() => searchAll()}
+                  disabled={isLoading}
+                  title={`View a combined report across every ${modeConfig.label.toLowerCase()}, without picking one`}
+                  className={`h-9 px-3.5 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isAllMode
+                      ? "bg-[#4f46e5] border-[#4f46e5] text-white shadow-sm"
+                      : "bg-indigo-50/60 border-indigo-200 text-[#4f46e5] hover:bg-indigo-100 hover:border-indigo-300"
+                  }`}
+                >
+                  All {modeConfig.label}s
+                </button>
+              </div>
             </div>
           </div>
 
+          {/* Divider — only visible once the row has room to sit side by side */}
+          <div className="hidden lg:block w-px self-stretch bg-slate-200" />
+
           {/* Tenure / date range */}
-          <div className="flex flex-col gap-1 relative w-full md:w-72">
+          <div className="flex flex-col gap-1 w-full lg:w-64 shrink-0">
             <span className="font-bold text-[#475569] text-[10px] uppercase">
               Tenure / Scope
             </span>
             <Popover actionsRef={rangePopoverActionsRef}>
-              <PopoverTrigger className="w-full flex items-center gap-2 px-3.5 py-2 rounded-xl border border-[#e2e8f0] text-xs font-semibold text-slate-800 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white cursor-pointer">
+              <PopoverTrigger className="w-full h-9 flex items-center gap-2 px-3.5 rounded-xl border border-[#e2e8f0] text-xs font-semibold text-slate-800 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white cursor-pointer">
                 <CalendarIcon className="w-4 h-4 text-slate-400 shrink-0" />
                 <span className="truncate">{formatRangeLabel(dateRange)}</span>
               </PopoverTrigger>
@@ -616,7 +702,7 @@ export function EmployeeReportDashboard() {
                 ? `Enter a ${modeConfig.label.toLowerCase()} to search, or use "All ${modeConfig.label}s" instead`
                 : undefined
             }
-            className="flex items-center justify-center gap-2 px-5 py-2 rounded-xl bg-[#4f46e5] text-white text-xs font-bold hover:bg-[#4338ca] disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shadow-sm shrink-0 w-full md:w-auto"
+            className="flex items-center justify-center gap-2 h-9 px-5 rounded-xl bg-[#4f46e5] text-white text-xs font-bold hover:bg-[#4338ca] disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shadow-sm shrink-0 w-full lg:w-auto"
           >
             <Search className="w-3.5 h-3.5" />
             {isLoading ? "Searching…" : "Search"}
@@ -628,7 +714,34 @@ export function EmployeeReportDashboard() {
         )}
       </div>
 
-      {summary && card2 && (
+      {/* Loading skeleton — shown while a search/searchAll request is in flight */}
+      {isLoading && (
+        <div className="flex flex-col gap-6 no-print animate-pulse">
+          <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-24" />
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+            <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-40" />
+            <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-40" />
+            <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-40" />
+          </div>
+          <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-72" />
+        </div>
+      )}
+
+      {/* Idle empty state — nothing searched yet, no error, not loading */}
+      {!isLoading && !summary && !error && (
+        <div className="flex flex-col items-center justify-center gap-2.5 bg-white border border-dashed border-[#e2e8f0] rounded-2xl py-16 no-print text-center">
+          <Search className="w-8 h-8 text-slate-300" />
+          <p className="text-sm font-bold text-slate-500">
+            Search for an employee, work order, operation, or section to view
+            its report
+          </p>
+          <p className="text-xs text-slate-400">
+            Or use &ldquo;All {modeConfig.label}s&rdquo; for a combined view
+          </p>
+        </div>
+      )}
+
+      {!isLoading && summary && card2 && (
         <>
           {/* Subject Header Banner */}
           <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
@@ -646,6 +759,8 @@ export function EmployeeReportDashboard() {
                 <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#4f46e5] to-[#6366f1] text-white flex items-center justify-center shadow-md shadow-indigo-100 shrink-0">
                   {summary.subject.mode === "workOrder" ? (
                     <ClipboardList className="w-6 h-6" />
+                  ) : summary.subject.mode === "section" ? (
+                    <Layers className="w-6 h-6" />
                   ) : (
                     <Scissors className="w-6 h-6" />
                   )}
@@ -706,6 +821,26 @@ export function EmployeeReportDashboard() {
                     summary.subject.all && (
                       <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
                         All Operations
+                      </h1>
+                    )}
+                  {summary.subject.mode === "section" &&
+                    !summary.subject.all && (
+                      <>
+                        <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
+                          {summary.subject.section}
+                        </h1>
+                        <span className="px-2.5 py-0.5 rounded-lg bg-indigo-50 text-[#4f46e5] font-black text-xs border border-indigo-100/80 font-mono">
+                          {summary.subject.operationsCount}{" "}
+                          {summary.subject.operationsCount === 1
+                            ? "Operation"
+                            : "Operations"}
+                        </span>
+                      </>
+                    )}
+                  {summary.subject.mode === "section" &&
+                    summary.subject.all && (
+                      <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
+                        All Sections
                       </h1>
                     )}
                   <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-100">
@@ -792,6 +927,26 @@ export function EmployeeReportDashboard() {
                         {summary.totalOperations === 1
                           ? "Operation"
                           : "Operations"}{" "}
+                        in scope
+                      </span>
+                    )}
+                  {summary.subject.mode === "section" &&
+                    !summary.subject.all && (
+                      <span className="text-slate-600 font-semibold">
+                        {summary.totalWorkOrders.toLocaleString()}{" "}
+                        {summary.totalWorkOrders === 1
+                          ? "Work Order"
+                          : "Work Orders"}{" "}
+                        touched
+                      </span>
+                    )}
+                  {summary.subject.mode === "section" &&
+                    summary.subject.all && (
+                      <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">
+                        {summary.sections.length.toLocaleString()}{" "}
+                        {summary.sections.length === 1
+                          ? "Section"
+                          : "Sections"}{" "}
                         in scope
                       </span>
                     )}
@@ -1118,6 +1273,173 @@ export function EmployeeReportDashboard() {
                       <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
                         <td className="py-2.5 px-3" colSpan={4}>
                           Total ({summary.operations.length} Operations)
+                        </td>
+                        <td className="py-2.5 px-3 text-center text-slate-900">
+                          {summary.totalCoupons.toLocaleString()}
+                        </td>
+                        <td className="py-2.5 px-3 text-center text-[#4f46e5]">
+                          {summary.totalQty.toLocaleString()}
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          {summary.totalSam.toFixed(2)} min
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
+                          Rs. {formatAmount(summary.totalAmount)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            )}
+
+            {/* Tab: Sections Breakdown Table (Work Order mode only) */}
+            {effectiveTab === "sections" && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
+                      <th className="py-2.5 px-3">Section</th>
+                      <th className="py-2.5 px-3 text-center">Operations</th>
+                      <th className="py-2.5 px-3 text-center">Coupons</th>
+                      <th className="py-2.5 px-3 text-center">Output (Pcs)</th>
+                      <th className="py-2.5 px-3 text-right">SAM Earned</th>
+                      <th className="py-2.5 px-3 text-right">Total Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {summary.sections.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="py-8 text-center text-slate-400 font-medium"
+                        >
+                          No sections recorded for this period.
+                        </td>
+                      </tr>
+                    ) : (
+                      summary.sections.map((s, idx) => (
+                        <tr
+                          key={idx}
+                          className="hover:bg-slate-50/70 transition-colors"
+                        >
+                          <td className="py-2.5 px-3">
+                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">
+                              {s.section}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-semibold text-slate-700">
+                            {s.operationsCount}
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-bold text-slate-800">
+                            {s.couponCount.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
+                            {s.totalQty.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
+                            {s.totalSam.toFixed(2)} min
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
+                            Rs. {formatAmount(s.totalAmount)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  {summary.sections.length > 0 && (
+                    <tfoot>
+                      <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
+                        <td className="py-2.5 px-3" colSpan={2}>
+                          Total ({summary.sections.length} Sections)
+                        </td>
+                        <td className="py-2.5 px-3 text-center text-slate-900">
+                          {summary.totalCoupons.toLocaleString()}
+                        </td>
+                        <td className="py-2.5 px-3 text-center text-[#4f46e5]">
+                          {summary.totalQty.toLocaleString()}
+                        </td>
+                        <td className="py-2.5 px-3 text-right">
+                          {summary.totalSam.toFixed(2)} min
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
+                          Rs. {formatAmount(summary.totalAmount)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            )}
+
+            {/* Tab: Bundles Breakdown Table (Work Order mode only) */}
+            {effectiveTab === "bundles" && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
+                      <th className="py-2.5 px-3">Bundle #</th>
+                      <th className="py-2.5 px-3">Cut #</th>
+                      {isAllSummary && <th className="py-2.5 px-3">Work Order</th>}
+                      <th className="py-2.5 px-3 text-center">Coupons</th>
+                      <th className="py-2.5 px-3 text-center">Output (Pcs)</th>
+                      <th className="py-2.5 px-3 text-right">SAM Earned</th>
+                      <th className="py-2.5 px-3 text-right">Total Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {summary.bundles.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={isAllSummary ? 7 : 6}
+                          className="py-8 text-center text-slate-400 font-medium"
+                        >
+                          No bundles recorded for this period.
+                        </td>
+                      </tr>
+                    ) : (
+                      summary.bundles.map((b, idx) => (
+                        <tr
+                          key={idx}
+                          className="hover:bg-slate-50/70 transition-colors"
+                        >
+                          <td className="py-2.5 px-3">
+                            <span className="font-mono font-bold text-[#4f46e5] bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
+                              {b.bundleNo}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 font-semibold text-slate-700">
+                            {b.cutNo || "—"}
+                          </td>
+                          {isAllSummary && (
+                            <td className="py-2.5 px-3 font-mono text-slate-600">
+                              {b.workOrder}
+                            </td>
+                          )}
+                          <td className="py-2.5 px-3 text-center font-bold text-slate-800">
+                            {b.couponCount.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
+                            {b.totalQty.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
+                            {b.totalSam.toFixed(2)} min
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
+                            Rs. {formatAmount(b.totalAmount)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  {summary.bundles.length > 0 && (
+                    <tfoot>
+                      <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
+                        <td
+                          className="py-2.5 px-3"
+                          colSpan={isAllSummary ? 3 : 2}
+                        >
+                          Total ({summary.bundles.length} Bundles)
                         </td>
                         <td className="py-2.5 px-3 text-center text-slate-900">
                           {summary.totalCoupons.toLocaleString()}
@@ -1604,6 +1926,30 @@ export function EmployeeReportDashboard() {
                           </div>
                         </div>
                       )}
+                    {summary.subject.mode === "section" &&
+                      !summary.subject.all && (
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            <strong>SECTION:</strong> {summary.subject.section}
+                          </div>
+                          <div>
+                            <strong>OPERATIONS IN SECTION:</strong>{" "}
+                            {summary.subject.operationsCount}
+                          </div>
+                        </div>
+                      )}
+                    {summary.subject.mode === "section" &&
+                      summary.subject.all && (
+                        <div className="flex flex-col gap-1">
+                          <div>
+                            <strong>SCOPE:</strong> All Sections
+                          </div>
+                          <div>
+                            <strong>SECTIONS COVERED:</strong>{" "}
+                            {summary.sections.length}
+                          </div>
+                        </div>
+                      )}
                   </td>
                   <td style={{ width: "35%" }}>
                     {summary.subject.mode === "employee" &&
@@ -1688,6 +2034,18 @@ export function EmployeeReportDashboard() {
                           </div>
                         </div>
                       )}
+                    {summary.subject.mode === "section" && (
+                      <div className="flex flex-col gap-1">
+                        <div>
+                          <strong>EMPLOYEES COVERED:</strong>{" "}
+                          {summary.totalEmployees}
+                        </div>
+                        <div>
+                          <strong>WORK ORDERS COVERED:</strong>{" "}
+                          {summary.totalWorkOrders}
+                        </div>
+                      </div>
+                    )}
                   </td>
                   <td style={{ width: "30%" }}>
                     <div className="flex flex-col gap-1">
@@ -1853,6 +2211,106 @@ export function EmployeeReportDashboard() {
                             </td>
                             <td className="text-right font-bold">
                               Rs. {formatAmount(wo.totalAmount)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              }
+
+              if (dimension === "sections") {
+                return (
+                  <div key={dimension}>
+                    <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
+                      Sections Breakdown
+                    </h3>
+                    <table className="print-ops-table">
+                      <thead>
+                        <tr>
+                          <th className="text-center w-10">#</th>
+                          <th>SECTION</th>
+                          <th className="text-center w-20">OPERATIONS</th>
+                          <th className="text-center w-20">COUPONS</th>
+                          <th className="text-center w-24">OUTPUT (PCS)</th>
+                          <th className="text-right w-24">SAM EARNED</th>
+                          <th className="text-right w-28">
+                            TOTAL AMOUNT (RS.)
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {summary.sections.map((s, idx) => (
+                          <tr key={idx}>
+                            <td className="text-center">{idx + 1}</td>
+                            <td className="font-bold">{s.section}</td>
+                            <td className="text-center">
+                              {s.operationsCount}
+                            </td>
+                            <td className="text-center">
+                              {s.couponCount.toLocaleString()}
+                            </td>
+                            <td className="text-center">
+                              {s.totalQty.toLocaleString()}
+                            </td>
+                            <td className="text-right">
+                              {s.totalSam.toFixed(2)} min
+                            </td>
+                            <td className="text-right font-bold">
+                              Rs. {formatAmount(s.totalAmount)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                );
+              }
+
+              if (dimension === "bundles") {
+                return (
+                  <div key={dimension}>
+                    <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
+                      Bundles Breakdown
+                    </h3>
+                    <table className="print-ops-table">
+                      <thead>
+                        <tr>
+                          <th className="text-center w-10">#</th>
+                          <th>BUNDLE #</th>
+                          <th>CUT #</th>
+                          {isAllSummary && <th>WORK ORDER</th>}
+                          <th className="text-center w-20">COUPONS</th>
+                          <th className="text-center w-24">OUTPUT (PCS)</th>
+                          <th className="text-right w-24">SAM EARNED</th>
+                          <th className="text-right w-28">
+                            TOTAL AMOUNT (RS.)
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {summary.bundles.map((b, idx) => (
+                          <tr key={idx}>
+                            <td className="text-center">{idx + 1}</td>
+                            <td className="font-mono font-bold">
+                              {b.bundleNo}
+                            </td>
+                            <td>{b.cutNo || "—"}</td>
+                            {isAllSummary && (
+                              <td className="font-mono">{b.workOrder}</td>
+                            )}
+                            <td className="text-center">
+                              {b.couponCount.toLocaleString()}
+                            </td>
+                            <td className="text-center">
+                              {b.totalQty.toLocaleString()}
+                            </td>
+                            <td className="text-right">
+                              {b.totalSam.toFixed(2)} min
+                            </td>
+                            <td className="text-right font-bold">
+                              Rs. {formatAmount(b.totalAmount)}
                             </td>
                           </tr>
                         ))}
