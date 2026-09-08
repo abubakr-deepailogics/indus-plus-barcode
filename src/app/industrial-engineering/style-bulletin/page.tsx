@@ -1577,7 +1577,6 @@ export default function OpenOrderPage() {
           }
           .print-ops-table {
             width: 100%;
-            table-layout: fixed;
             border-collapse: collapse;
             margin-bottom: 5px;
             border: 1px solid #000;
@@ -1586,7 +1585,7 @@ export default function OpenOrderPage() {
             overflow-wrap: break-word;
           }
           .print-ops-table th {
-            word-break: normal;
+            white-space: nowrap;
           }
           .print-ops-table th, .print-ops-table td {
             border: 1px solid #000;
@@ -1702,20 +1701,20 @@ export default function OpenOrderPage() {
                       S.NO
                     </th>
                     <th style={{ width: "9%" }}>OP Code</th>
-                    <th style={{ width: "20%" }}>Operation Description</th>
+                    <th style={{ width: "22%" }}>Operation Description</th>
                     <th className="text-center" style={{ width: "6%" }}>
                       Skill Level
                     </th>
                     <th className="text-right" style={{ width: "7%" }}>
                       Piece Rate
                     </th>
-                    <th className="text-right" style={{ width: "6%" }}>
+                    <th className="text-right" style={{ width: "5%" }}>
                       SAM
                     </th>
                     <th className="text-center" style={{ width: "7%" }}>
                       Bi Hourly Tgt
                     </th>
-                    <th className="text-center" style={{ width: "7%" }}>
+                    <th className="text-center" style={{ width: "6%" }}>
                       Shift Tgt
                     </th>
                     <th className="text-center" style={{ width: "5%" }}>
