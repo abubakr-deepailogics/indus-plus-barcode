@@ -1577,9 +1577,16 @@ export default function OpenOrderPage() {
           }
           .print-ops-table {
             width: 100%;
+            table-layout: fixed;
             border-collapse: collapse;
             margin-bottom: 5px;
             border: 1px solid #000;
+          }
+          .print-ops-table td {
+            overflow-wrap: break-word;
+          }
+          .print-ops-table th {
+            word-break: normal;
           }
           .print-ops-table th, .print-ops-table td {
             border: 1px solid #000;
@@ -1691,19 +1698,39 @@ export default function OpenOrderPage() {
               <table className="print-ops-table">
                 <thead>
                   <tr>
-                    <th className="text-center w-8">S.NO</th>
-                    <th className="w-16">OP Code</th>
-                    <th>Operation Description</th>
-                    <th className="text-center w-10">Skill Level</th>
-                    <th className="text-right w-14">Piece Rate</th>
-                    <th className="text-right w-12">SAM</th>
-                    <th className="text-center w-14">Bi Hourly Tgt</th>
-                    <th className="text-center w-14">Shift Tgt</th>
-                    <th className="text-center w-12">M/C Y/N</th>
-                    <th>Machine Type/Class</th>
-                    <th className="text-center w-16">#of Operations</th>
-                    <th className="text-center w-10">DL</th>
-                    <th className="text-center w-12">No M/C</th>
+                    <th className="text-center" style={{ width: "5%" }}>
+                      S.NO
+                    </th>
+                    <th style={{ width: "9%" }}>OP Code</th>
+                    <th style={{ width: "20%" }}>Operation Description</th>
+                    <th className="text-center" style={{ width: "6%" }}>
+                      Skill Level
+                    </th>
+                    <th className="text-right" style={{ width: "7%" }}>
+                      Piece Rate
+                    </th>
+                    <th className="text-right" style={{ width: "6%" }}>
+                      SAM
+                    </th>
+                    <th className="text-center" style={{ width: "7%" }}>
+                      Bi Hourly Tgt
+                    </th>
+                    <th className="text-center" style={{ width: "7%" }}>
+                      Shift Tgt
+                    </th>
+                    <th className="text-center" style={{ width: "5%" }}>
+                      M/C Y/N
+                    </th>
+                    <th style={{ width: "10%" }}>Machine Type/Class</th>
+                    <th className="text-center" style={{ width: "9%" }}>
+                      #of Operations
+                    </th>
+                    <th className="text-center" style={{ width: "4%" }}>
+                      DL
+                    </th>
+                    <th className="text-center" style={{ width: "5%" }}>
+                      No M/C
+                    </th>
                   </tr>
                 </thead>
                 <tbody>

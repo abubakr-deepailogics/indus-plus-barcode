@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useCallback, useRef } from "react";
+import { useState, useMemo, useCallback, useRef, Fragment } from "react";
 import { format, formatDistanceToNow, startOfMonth, subDays } from "date-fns";
 import {
   Search,
@@ -395,7 +395,7 @@ export function EmployeeReportDashboard() {
   const showEmployeeColumn =
     summary?.subject.mode !== "employee" || isAllSummary;
 
-  const employeeTableRows = useMemo(() => {
+  const employeeGroupedData = useMemo(() => {
     if (!summary?.employees) return [];
     const coupons = summary.coupons || [];
 
@@ -404,60 +404,106 @@ export function EmployeeReportDashboard() {
         (c) => c.employeeCode === emp.employeeCode,
       );
 
-      const woList = Array.from(
-        new Set(empCoupons.map((c) => c.workOrder).filter(Boolean)),
-      );
-      const anlDisplay =
-        woList.length === 1
-          ? woList[0]
-          : woList.length > 1
-            ? `${woList[0]} (+${woList.length - 1})`
-            : "—";
+      if (empCoupons.length === 0) {
+        return {
+          employeeCode: emp.employeeCode,
+          employeeName: emp.employeeName,
+          items: [
+            {
+              workOrder: "—",
+              date: "—",
+              operation: "—",
+              rate: null as number | null,
+              bundleCount: emp.couponCount || 0,
+              qty: emp.totalQty || 0,
+              totalPay: emp.totalAmount || 0,
+            },
+          ],
+          totalBundles: emp.couponCount || 0,
+          totalQty: emp.totalQty || 0,
+          totalPay: emp.totalAmount || 0,
+        };
+      }
 
-      const dates = empCoupons
-        .map((c) => c.scannedAt)
-        .filter((d): d is string => Boolean(d))
-        .sort()
-        .reverse();
-      const dateDisplay = dates[0]
-        ? format(new Date(dates[0]), "dd-MM-yy")
-        : "—";
+      // Group by workOrder, date (dd-MM-yy), operation, rate
+      const groupMap = new Map<
+        string,
+        {
+          workOrder: string;
+          date: string;
+          operation: string;
+          rate: number | null;
+          bundleCount: number;
+          qty: number;
+          totalPay: number;
+        }
+      >();
 
-      const opList = Array.from(
-        new Set(
-          empCoupons
-            .map((c) => c.operationName || c.operationCode)
-            .filter((op): op is string => Boolean(op)),
-        ),
-      );
-      const opDisplay: string =
-        opList.length === 1
-          ? opList[0]
-          : opList.length > 1
-            ? `${opList[0]} (+${opList.length - 1})`
-            : emp.operationsCount > 0
-              ? `${emp.operationsCount} Operations`
-              : "—";
+      for (const c of empCoupons) {
+        const wo = c.workOrder || "—";
+        const dateStr = c.scannedAt
+          ? format(new Date(c.scannedAt), "dd-MM-yy")
+          : "—";
+        const op = c.operationName || c.operationCode || "—";
+        const rate = c.rate != null ? Number(c.rate) : null;
+        const key = `${wo}__${dateStr}__${op}__${rate}`;
 
-      const avgRate =
-        emp.totalQty > 0
-          ? emp.totalAmount / emp.totalQty
-          : (empCoupons.find((c) => c.rate != null)?.rate ?? 0);
+        const existing = groupMap.get(key);
+        const qty = c.qty || 0;
+        const pay =
+          c.value != null ? Number(c.value) : rate != null ? qty * rate : 0;
+
+        if (!existing) {
+          groupMap.set(key, {
+            workOrder: wo,
+            date: dateStr,
+            operation: op,
+            rate,
+            bundleCount: 1,
+            qty,
+            totalPay: pay,
+          });
+        } else {
+          existing.bundleCount += 1;
+          existing.qty += qty;
+          existing.totalPay += pay;
+        }
+      }
+
+      // Sort items by date then workOrder
+      const items = Array.from(groupMap.values()).sort((a, b) => {
+        const cmpDate = a.date.localeCompare(b.date);
+        if (cmpDate !== 0) return cmpDate;
+        return a.workOrder.localeCompare(b.workOrder);
+      });
+
+      const totalBundles = items.reduce((acc, it) => acc + it.bundleCount, 0);
+      const totalQty = items.reduce((acc, it) => acc + it.qty, 0);
+      const totalPay = items.reduce((acc, it) => acc + it.totalPay, 0);
 
       return {
         employeeCode: emp.employeeCode,
         employeeName: emp.employeeName,
-        designation: emp.designation,
-        workOrder: anlDisplay,
-        date: dateDisplay,
-        operation: opDisplay,
-        rate: avgRate,
-        bundleCount: emp.couponCount,
-        qty: emp.totalQty,
-        totalPay: emp.totalAmount,
+        items,
+        totalBundles,
+        totalQty,
+        totalPay,
       };
     });
   }, [summary?.employees, summary?.coupons]);
+
+  const grandTotalBundles = useMemo(
+    () => employeeGroupedData.reduce((acc, eg) => acc + eg.totalBundles, 0),
+    [employeeGroupedData],
+  );
+  const grandTotalQty = useMemo(
+    () => employeeGroupedData.reduce((acc, eg) => acc + eg.totalQty, 0),
+    [employeeGroupedData],
+  );
+  const grandTotalPay = useMemo(
+    () => employeeGroupedData.reduce((acc, eg) => acc + eg.totalPay, 0),
+    [employeeGroupedData],
+  );
 
   const card2 = summary ? getCard2Config(summary) : null;
 
@@ -560,16 +606,46 @@ export function EmployeeReportDashboard() {
         "Total Pay",
         "Signature",
       ];
-      rows = employeeTableRows.map((emp) => [
-        emp.employeeCode,
-        emp.employeeName,
-        emp.workOrder,
-        emp.date,
-        emp.operation,
-        emp.rate > 0 ? Number(emp.rate.toFixed(2)) : "",
-        emp.bundleCount,
-        emp.qty,
-        Number(emp.totalPay.toFixed(2)),
+      rows = [];
+      for (const eg of employeeGroupedData) {
+        for (let i = 0; i < eg.items.length; i++) {
+          const item = eg.items[i];
+          rows.push([
+            i === 0 ? eg.employeeCode : "",
+            i === 0 ? eg.employeeName : "",
+            item.workOrder,
+            item.date,
+            item.operation,
+            item.rate != null ? Number(item.rate.toFixed(2)) : "",
+            item.bundleCount,
+            item.qty,
+            Number(item.totalPay.toFixed(2)),
+            "",
+          ]);
+        }
+        rows.push([
+          "",
+          "",
+          "",
+          "",
+          "",
+          "Employee wise Total :",
+          eg.totalBundles,
+          eg.totalQty,
+          Number(eg.totalPay.toFixed(2)),
+          "",
+        ]);
+      }
+      rows.push([
+        "",
+        "",
+        "",
+        "",
+        "",
+        "Grand Total :",
+        grandTotalBundles,
+        grandTotalQty,
+        Number(grandTotalPay.toFixed(2)),
         "",
       ]);
     } else {
@@ -630,7 +706,10 @@ export function EmployeeReportDashboard() {
     effectiveTab,
     filteredCoupons,
     showEmployeeColumn,
-    employeeTableRows,
+    employeeGroupedData,
+    grandTotalBundles,
+    grandTotalQty,
+    grandTotalPay,
   ]);
 
   return (
@@ -1617,103 +1696,146 @@ export function EmployeeReportDashboard() {
               </div>
             )}
 
-            {/* Tab: Employees Breakdown Table */}
+            {/* Tab: Employees Breakdown Table (Payment Verification Format matching PDF) */}
             {effectiveTab === "employees" && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
-                      <th className="py-2.5 px-3">EmpCode</th>
-                      <th className="py-2.5 px-3">Employee Name</th>
-                      <th className="py-2.5 px-3">ANL #</th>
-                      <th className="py-2.5 px-3 text-center">Date</th>
-                      <th className="py-2.5 px-3">Operation</th>
-                      <th className="py-2.5 px-3 text-right">Rate</th>
-                      <th className="py-2.5 px-3 text-center">Bundle</th>
-                      <th className="py-2.5 px-3 text-center">Quantity</th>
-                      <th className="py-2.5 px-3 text-right">Total Pay</th>
-                      <th className="py-2.5 px-3 text-center">Signature</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {employeeTableRows.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={10}
-                          className="py-8 text-center text-slate-400 font-medium"
-                        >
-                          No employees recorded for this period.
-                        </td>
+              <div className="flex flex-col border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
+                {/* PDF Subheader Bar */}
+
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          EmpCode
+                        </th>
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          Employee Name
+                        </th>
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          ANL #
+                        </th>
+                        <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                          Date
+                        </th>
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          Operation
+                        </th>
+                        <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                          Rate
+                        </th>
+                        <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                          Bundle
+                        </th>
+                        <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                          Quantity
+                        </th>
+                        <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                          Total Pay
+                        </th>
+                        <th className="py-2.5 px-3 text-center w-24">
+                          Signature
+                        </th>
                       </tr>
-                    ) : (
-                      employeeTableRows.map((emp, idx) => (
-                        <tr
-                          key={idx}
-                          className="hover:bg-slate-50/70 transition-colors"
-                        >
-                          <td className="py-2.5 px-3">
-                            <span className="text-[10px] font-mono text-indigo-600 font-bold">
-                              #{emp.employeeCode}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span className="font-bold text-slate-900">
-                              {emp.employeeName}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 font-mono font-bold text-slate-700">
-                            {emp.workOrder}
-                          </td>
-                          <td className="py-2.5 px-3 text-center text-[11px] text-slate-600 font-medium whitespace-nowrap">
-                            {emp.date}
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span
-                              className="font-semibold text-slate-800 text-[11px]"
-                              title={emp.operation || undefined}
-                            >
-                              {emp.operation}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-600">
-                            {emp.rate > 0 ? `Rs. ${emp.rate.toFixed(2)}` : "—"}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-semibold text-slate-700">
-                            {emp.bundleCount.toLocaleString()}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
-                            {emp.qty.toLocaleString()}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-bold text-emerald-700 font-mono">
-                            Rs. {formatAmount(emp.totalPay)}
-                          </td>
-                          <td className="py-2.5 px-3 text-center">
-                            <div className="border border-dashed border-slate-300 w-16 h-6 mx-auto rounded" />
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {employeeGroupedData.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={10}
+                            className="py-8 text-center text-slate-400 font-medium"
+                          >
+                            No employees recorded for this period.
                           </td>
                         </tr>
-                      ))
+                      ) : (
+                        employeeGroupedData.map((eg) => (
+                          <Fragment key={eg.employeeCode}>
+                            {eg.items.map((item, idx) => (
+                              <tr
+                                key={idx}
+                                className="hover:bg-slate-50/70 transition-colors"
+                              >
+                                <td className="py-2 px-3 font-mono font-bold text-slate-800 text-[11px] border-r border-slate-200 align-top">
+                                  {idx === 0 ? eg.employeeCode : ""}
+                                </td>
+                                <td className="py-2 px-3 font-bold text-slate-900 text-[11px] border-r border-slate-200 align-top">
+                                  {idx === 0 ? eg.employeeName : ""}
+                                </td>
+                                <td className="py-2 px-3 font-mono font-bold text-slate-700 text-[11px] border-r border-slate-200">
+                                  {item.workOrder}
+                                </td>
+                                <td className="py-2 px-3 text-center text-[11px] text-slate-600 font-medium whitespace-nowrap border-r border-slate-200">
+                                  {item.date}
+                                </td>
+                                <td className="py-2 px-3 text-[11px] font-semibold text-slate-800 border-r border-slate-200">
+                                  {item.operation}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
+                                  {item.rate != null
+                                    ? item.rate.toFixed(2).replace(/\.00$/, "")
+                                    : "—"}
+                                </td>
+                                <td className="py-2 px-3 text-center font-semibold text-slate-700 text-[11px] border-r border-slate-200">
+                                  {item.bundleCount}
+                                </td>
+                                <td className="py-2 px-3 text-center font-bold text-slate-800 text-[11px] border-r border-slate-200">
+                                  {item.qty.toLocaleString()}
+                                </td>
+                                <td className="py-2 px-3 text-right font-bold text-slate-900 font-mono text-[11px] border-r border-slate-200">
+                                  {formatAmount(item.totalPay)}
+                                </td>
+                                <td className="py-2 px-3 text-center">
+                                  <div className="border border-slate-300 w-16 h-5 mx-auto rounded-sm" />
+                                </td>
+                              </tr>
+                            ))}
+                            {/* Employee wise Total row */}
+                            <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
+                              <td
+                                colSpan={6}
+                                className="py-2 px-3 text-right border-r border-slate-200"
+                              >
+                                Employee wise Total :
+                              </td>
+                              <td className="py-2 px-3 text-center border-r border-slate-200">
+                                {eg.totalBundles.toLocaleString()}
+                              </td>
+                              <td className="py-2 px-3 text-center border-r border-slate-200">
+                                {eg.totalQty.toLocaleString()}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono border-r border-slate-200 text-emerald-800">
+                                {formatAmount(eg.totalPay)}
+                              </td>
+                              <td className="py-2 px-3"></td>
+                            </tr>
+                          </Fragment>
+                        ))
+                      )}
+                    </tbody>
+                    {employeeGroupedData.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-slate-100 border-t-2 border-slate-400 font-black text-xs text-slate-900">
+                          <td
+                            colSpan={6}
+                            className="py-2.5 px-3 text-right border-r border-slate-300"
+                          >
+                            Grand Total :
+                          </td>
+                          <td className="py-2.5 px-3 text-center border-r border-slate-300">
+                            {grandTotalBundles.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-center border-r border-slate-300 text-[#4f46e5]">
+                            {grandTotalQty.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300 text-emerald-700">
+                            Rs. {formatAmount(grandTotalPay)}
+                          </td>
+                          <td className="py-2.5 px-3"></td>
+                        </tr>
+                      </tfoot>
                     )}
-                  </tbody>
-                  {employeeTableRows.length > 0 && (
-                    <tfoot>
-                      <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
-                        <td className="py-2.5 px-3" colSpan={6}>
-                          Total ({employeeTableRows.length} Employees)
-                        </td>
-                        <td className="py-2.5 px-3 text-center text-slate-900">
-                          {summary.totalCoupons.toLocaleString()}
-                        </td>
-                        <td className="py-2.5 px-3 text-center text-[#4f46e5]">
-                          {summary.totalQty.toLocaleString()}
-                        </td>
-                        <td className="py-2.5 px-3 text-right text-emerald-700 font-black font-mono">
-                          Rs. {formatAmount(summary.totalAmount)}
-                        </td>
-                        <td className="py-2.5 px-3"></td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
+                  </table>
+                </div>
               </div>
             )}
 
@@ -2475,13 +2597,9 @@ export function EmployeeReportDashboard() {
 
                 return (
                   <div key={dimension}>
-                    <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
-                      Payment Verification
-                    </h3>
                     <table className="print-ops-table">
                       <thead>
                         <tr>
-                          <th className="text-center w-8">#</th>
                           <th>EMPCODE</th>
                           <th>EMPLOYEE NAME</th>
                           <th>ANL #</th>
@@ -2491,64 +2609,89 @@ export function EmployeeReportDashboard() {
                           <th className="text-center">BUNDLE</th>
                           <th className="text-center">QUANTITY</th>
                           <th className="text-right">TOTAL PAY</th>
-                          <th className="text-center w-20">SIGNATURE</th>
+                          <th className="text-center w-24">SIGNATURE</th>
                         </tr>
                       </thead>
                       <tbody>
-                        {employeeTableRows.length === 0 ? (
+                        {employeeGroupedData.length === 0 ? (
                           <tr>
-                            <td colSpan={11} className="text-center">
+                            <td colSpan={10} className="text-center">
                               No employees recorded for this period.
                             </td>
                           </tr>
                         ) : (
-                          employeeTableRows.map((emp, idx) => (
-                            <tr key={idx}>
-                              <td className="text-center">{idx + 1}</td>
-                              <td className="font-mono font-bold">
-                                #{emp.employeeCode}
-                              </td>
-                              <td className="font-semibold">
-                                {emp.employeeName}
-                              </td>
-                              <td className="font-mono font-bold">
-                                {emp.workOrder}
-                              </td>
-                              <td className="text-center whitespace-nowrap">
-                                {emp.date}
-                              </td>
-                              <td>{emp.operation}</td>
-                              <td className="text-right font-mono">
-                                {emp.rate > 0
-                                  ? `Rs. ${emp.rate.toFixed(2)}`
-                                  : "—"}
-                              </td>
-                              <td className="text-center">{emp.bundleCount}</td>
-                              <td className="text-center font-bold">
-                                {emp.qty.toLocaleString()}
-                              </td>
-                              <td className="text-right font-bold font-mono">
-                                Rs. {formatAmount(emp.totalPay)}
-                              </td>
-                              <td className="text-center"></td>
-                            </tr>
+                          employeeGroupedData.map((eg) => (
+                            <Fragment key={eg.employeeCode}>
+                              {eg.items.map((item, idx) => (
+                                <tr key={idx}>
+                                  <td className="font-mono font-bold align-top">
+                                    {idx === 0 ? eg.employeeCode : ""}
+                                  </td>
+                                  <td className="font-bold align-top">
+                                    {idx === 0 ? eg.employeeName : ""}
+                                  </td>
+                                  <td className="font-mono font-bold">
+                                    {item.workOrder}
+                                  </td>
+                                  <td className="text-center whitespace-nowrap">
+                                    {item.date}
+                                  </td>
+                                  <td>{item.operation}</td>
+                                  <td className="text-right font-mono">
+                                    {item.rate != null
+                                      ? item.rate
+                                          .toFixed(2)
+                                          .replace(/\.00$/, "")
+                                      : "—"}
+                                  </td>
+                                  <td className="text-center">
+                                    {item.bundleCount}
+                                  </td>
+                                  <td className="text-center font-bold">
+                                    {item.qty.toLocaleString()}
+                                  </td>
+                                  <td className="text-right font-bold font-mono">
+                                    {formatAmount(item.totalPay)}
+                                  </td>
+                                  <td className="text-center"></td>
+                                </tr>
+                              ))}
+                              <tr className="print-totals-row">
+                                <td
+                                  colSpan={6}
+                                  className="text-right font-bold"
+                                >
+                                  Employee wise Total :
+                                </td>
+                                <td className="text-center font-bold">
+                                  {eg.totalBundles.toLocaleString()}
+                                </td>
+                                <td className="text-center font-bold">
+                                  {eg.totalQty.toLocaleString()}
+                                </td>
+                                <td className="text-right font-bold font-mono">
+                                  {formatAmount(eg.totalPay)}
+                                </td>
+                                <td></td>
+                              </tr>
+                            </Fragment>
                           ))
                         )}
                       </tbody>
-                      {employeeTableRows.length > 0 && (
+                      {employeeGroupedData.length > 0 && (
                         <tfoot>
-                          <tr>
-                            <td colSpan={6} className="text-right font-bold">
-                              TOTAL:
+                          <tr className="print-totals-row font-bold">
+                            <td colSpan={6} className="text-right">
+                              Grand Total :
                             </td>
-                            <td className="text-center font-bold">
-                              {summary.totalCoupons.toLocaleString()}
+                            <td className="text-center">
+                              {grandTotalBundles.toLocaleString()}
                             </td>
-                            <td className="text-center font-bold">
-                              {summary.totalQty.toLocaleString()}
+                            <td className="text-center">
+                              {grandTotalQty.toLocaleString()}
                             </td>
-                            <td className="text-right font-bold font-mono">
-                              Rs. {formatAmount(summary.totalAmount)}
+                            <td className="text-right font-mono">
+                              {formatAmount(grandTotalPay)}
                             </td>
                             <td></td>
                           </tr>
