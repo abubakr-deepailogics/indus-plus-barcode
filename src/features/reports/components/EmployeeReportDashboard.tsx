@@ -287,7 +287,10 @@ function getCard2Config(summary: ReportSummary): Card2Config {
           summary.recentEmployeeName,
         ),
       },
-      { label: "Operations in Section", value: String(summary.totalOperations) },
+      {
+        label: "Operations in Section",
+        value: String(summary.totalOperations),
+      },
       { label: "Recent Work Order", value: summary.recentWorkOrder || "—" },
     ],
   };
@@ -391,6 +394,71 @@ export function EmployeeReportDashboard() {
 
   const showEmployeeColumn =
     summary?.subject.mode !== "employee" || isAllSummary;
+
+  const employeeTableRows = useMemo(() => {
+    if (!summary?.employees) return [];
+    const coupons = summary.coupons || [];
+
+    return summary.employees.map((emp) => {
+      const empCoupons = coupons.filter(
+        (c) => c.employeeCode === emp.employeeCode,
+      );
+
+      const woList = Array.from(
+        new Set(empCoupons.map((c) => c.workOrder).filter(Boolean)),
+      );
+      const anlDisplay =
+        woList.length === 1
+          ? woList[0]
+          : woList.length > 1
+            ? `${woList[0]} (+${woList.length - 1})`
+            : "—";
+
+      const dates = empCoupons
+        .map((c) => c.scannedAt)
+        .filter((d): d is string => Boolean(d))
+        .sort()
+        .reverse();
+      const dateDisplay = dates[0]
+        ? format(new Date(dates[0]), "dd-MM-yy")
+        : "—";
+
+      const opList = Array.from(
+        new Set(
+          empCoupons
+            .map((c) => c.operationName || c.operationCode)
+            .filter((op): op is string => Boolean(op)),
+        ),
+      );
+      const opDisplay: string =
+        opList.length === 1
+          ? opList[0]
+          : opList.length > 1
+            ? `${opList[0]} (+${opList.length - 1})`
+            : emp.operationsCount > 0
+              ? `${emp.operationsCount} Operations`
+              : "—";
+
+      const avgRate =
+        emp.totalQty > 0
+          ? emp.totalAmount / emp.totalQty
+          : (empCoupons.find((c) => c.rate != null)?.rate ?? 0);
+
+      return {
+        employeeCode: emp.employeeCode,
+        employeeName: emp.employeeName,
+        designation: emp.designation,
+        workOrder: anlDisplay,
+        date: dateDisplay,
+        operation: opDisplay,
+        rate: avgRate,
+        bundleCount: emp.couponCount,
+        qty: emp.totalQty,
+        totalPay: emp.totalAmount,
+      };
+    });
+  }, [summary?.employees, summary?.coupons]);
+
   const card2 = summary ? getCard2Config(summary) : null;
 
   // Exports whichever breakdown tab is currently open (not the whole
@@ -481,26 +549,28 @@ export function EmployeeReportDashboard() {
       ]);
     } else if (effectiveTab === "employees") {
       headers = [
-        "Employee Code",
+        "EmpCode",
         "Employee Name",
-        "Designation",
-        "Operations",
-        "Work Orders",
-        "Coupons",
-        "Output (Pcs)",
-        "SAM Earned",
-        "Total Amount",
+        "ANL #",
+        "Date",
+        "Operation",
+        "Rate",
+        "Bundle",
+        "Quantity",
+        "Total Pay",
+        "Signature",
       ];
-      rows = summary.employees.map((emp) => [
+      rows = employeeTableRows.map((emp) => [
         emp.employeeCode,
         emp.employeeName,
-        emp.designation,
-        emp.operationsCount,
-        emp.workOrdersCount,
-        emp.couponCount,
-        emp.totalQty,
-        Number(emp.totalSam.toFixed(2)),
-        Number(emp.totalAmount.toFixed(2)),
+        emp.workOrder,
+        emp.date,
+        emp.operation,
+        emp.rate > 0 ? Number(emp.rate.toFixed(2)) : "",
+        emp.bundleCount,
+        emp.qty,
+        Number(emp.totalPay.toFixed(2)),
+        "",
       ]);
     } else {
       headers = [
@@ -555,7 +625,13 @@ export function EmployeeReportDashboard() {
       headers,
       rows,
     };
-  }, [summary, effectiveTab, filteredCoupons, showEmployeeColumn]);
+  }, [
+    summary,
+    effectiveTab,
+    filteredCoupons,
+    showEmployeeColumn,
+    employeeTableRows,
+  ]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -944,9 +1020,7 @@ export function EmployeeReportDashboard() {
                     summary.subject.all && (
                       <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">
                         {summary.sections.length.toLocaleString()}{" "}
-                        {summary.sections.length === 1
-                          ? "Section"
-                          : "Sections"}{" "}
+                        {summary.sections.length === 1 ? "Section" : "Sections"}{" "}
                         in scope
                       </span>
                     )}
@@ -1380,7 +1454,9 @@ export function EmployeeReportDashboard() {
                     <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
                       <th className="py-2.5 px-3">Bundle #</th>
                       <th className="py-2.5 px-3">Cut #</th>
-                      {isAllSummary && <th className="py-2.5 px-3">Work Order</th>}
+                      {isAllSummary && (
+                        <th className="py-2.5 px-3">Work Order</th>
+                      )}
                       <th className="py-2.5 px-3 text-center">Coupons</th>
                       <th className="py-2.5 px-3 text-center">Output (Pcs)</th>
                       <th className="py-2.5 px-3 text-right">SAM Earned</th>
@@ -1547,74 +1623,82 @@ export function EmployeeReportDashboard() {
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
-                      <th className="py-2.5 px-3">Employee</th>
-                      <th className="py-2.5 px-3">Designation</th>
-                      <th className="py-2.5 px-3 text-center">Ops</th>
-                      <th className="py-2.5 px-3 text-center">W/O</th>
-                      <th className="py-2.5 px-3 text-center">Coupons</th>
-                      <th className="py-2.5 px-3 text-center">Output (Pcs)</th>
-                      <th className="py-2.5 px-3 text-right">SAM Earned</th>
-                      <th className="py-2.5 px-3 text-right">Total Amount</th>
+                      <th className="py-2.5 px-3">EmpCode</th>
+                      <th className="py-2.5 px-3">Employee Name</th>
+                      <th className="py-2.5 px-3">ANL #</th>
+                      <th className="py-2.5 px-3 text-center">Date</th>
+                      <th className="py-2.5 px-3">Operation</th>
+                      <th className="py-2.5 px-3 text-right">Rate</th>
+                      <th className="py-2.5 px-3 text-center">Bundle</th>
+                      <th className="py-2.5 px-3 text-center">Quantity</th>
+                      <th className="py-2.5 px-3 text-right">Total Pay</th>
+                      <th className="py-2.5 px-3 text-center">Signature</th>
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
-                    {summary.employees.length === 0 ? (
+                    {employeeTableRows.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={8}
+                          colSpan={10}
                           className="py-8 text-center text-slate-400 font-medium"
                         >
                           No employees recorded for this period.
                         </td>
                       </tr>
                     ) : (
-                      summary.employees.map((emp, idx) => (
+                      employeeTableRows.map((emp, idx) => (
                         <tr
                           key={idx}
                           className="hover:bg-slate-50/70 transition-colors"
                         >
                           <td className="py-2.5 px-3">
-                            <div className="flex flex-col">
-                              <span className="font-bold text-slate-900">
-                                {emp.employeeName}
-                              </span>
-                              <span className="text-[10px] font-mono text-indigo-600 font-bold">
-                                #{emp.employeeCode}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold text-[10px]">
-                              {emp.designation || "—"}
+                            <span className="text-[10px] font-mono text-indigo-600 font-bold">
+                              #{emp.employeeCode}
                             </span>
                           </td>
-                          <td className="py-2.5 px-3 text-center font-semibold text-slate-700">
-                            {emp.operationsCount}
+                          <td className="py-2.5 px-3">
+                            <span className="font-bold text-slate-900">
+                              {emp.employeeName}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 font-mono font-bold text-slate-700">
+                            {emp.workOrder}
+                          </td>
+                          <td className="py-2.5 px-3 text-center text-[11px] text-slate-600 font-medium whitespace-nowrap">
+                            {emp.date}
+                          </td>
+                          <td className="py-2.5 px-3">
+                            <span
+                              className="font-semibold text-slate-800 text-[11px]"
+                              title={emp.operation || undefined}
+                            >
+                              {emp.operation}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-600">
+                            {emp.rate > 0 ? `Rs. ${emp.rate.toFixed(2)}` : "—"}
                           </td>
                           <td className="py-2.5 px-3 text-center font-semibold text-slate-700">
-                            {emp.workOrdersCount}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-bold text-slate-800">
-                            {emp.couponCount.toLocaleString()}
+                            {emp.bundleCount.toLocaleString()}
                           </td>
                           <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
-                            {emp.totalQty.toLocaleString()}
+                            {emp.qty.toLocaleString()}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
-                            {emp.totalSam.toFixed(2)} min
+                          <td className="py-2.5 px-3 text-right font-bold text-emerald-700 font-mono">
+                            Rs. {formatAmount(emp.totalPay)}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
-                            Rs. {formatAmount(emp.totalAmount)}
+                          <td className="py-2.5 px-3 text-center">
+                            <div className="border border-dashed border-slate-300 w-16 h-6 mx-auto rounded" />
                           </td>
                         </tr>
                       ))
                     )}
                   </tbody>
-                  {summary.employees.length > 0 && (
+                  {employeeTableRows.length > 0 && (
                     <tfoot>
                       <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
-                        <td className="py-2.5 px-3" colSpan={4}>
-                          Total ({summary.employees.length} Employees)
+                        <td className="py-2.5 px-3" colSpan={6}>
+                          Total ({employeeTableRows.length} Employees)
                         </td>
                         <td className="py-2.5 px-3 text-center text-slate-900">
                           {summary.totalCoupons.toLocaleString()}
@@ -1622,12 +1706,10 @@ export function EmployeeReportDashboard() {
                         <td className="py-2.5 px-3 text-center text-[#4f46e5]">
                           {summary.totalQty.toLocaleString()}
                         </td>
-                        <td className="py-2.5 px-3 text-right">
-                          {summary.totalSam.toFixed(2)} min
-                        </td>
-                        <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
+                        <td className="py-2.5 px-3 text-right text-emerald-700 font-black font-mono">
                           Rs. {formatAmount(summary.totalAmount)}
                         </td>
+                        <td className="py-2.5 px-3"></td>
                       </tr>
                     </tfoot>
                   )}
@@ -2085,285 +2167,398 @@ export function EmployeeReportDashboard() {
               </tbody>
             </table>
 
-            {(isAllSummary
-              ? ([
-                  OWN_DIMENSION_BY_MODE[mode],
-                  ...BREAKDOWN_DIMENSIONS[mode],
-                ] as BreakdownDimension[])
-              : BREAKDOWN_DIMENSIONS[mode]
-            ).map((dimension) => {
-              const items = summary[dimension];
-              if (items.length === 0) return null;
-
-              if (dimension === "operations") {
-                return (
-                  <div key={dimension}>
-                    <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
-                      Operations Breakdown
-                    </h3>
-                    <table className="print-ops-table">
-                      <thead>
-                        <tr>
-                          <th className="text-center w-10">#</th>
-                          <th>OPERATION CODE</th>
-                          <th>OPERATION NAME</th>
-                          <th>SECTION</th>
-                          <th className="text-right w-16">RATE (RS.)</th>
-                          <th className="text-right w-14">SMV</th>
-                          <th className="text-center w-16">COUPONS</th>
-                          <th className="text-center w-18">OUTPUT (PCS)</th>
-                          <th className="text-right w-20">SAM EARNED</th>
-                          <th className="text-right w-22">TOTAL AMOUNT</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {summary.operations.map((op, idx) => (
-                          <tr key={idx}>
-                            <td className="text-center">{idx + 1}</td>
-                            <td className="font-mono font-bold">
-                              {op.operationCode}
-                            </td>
-                            <td>{op.operationName}</td>
-                            <td>{op.section || "—"}</td>
-                            <td className="text-right font-mono">
-                              {op.rate != null
-                                ? `Rs. ${op.rate.toFixed(2)}`
-                                : "—"}
-                            </td>
-                            <td className="text-right font-mono">
-                              {op.smv != null ? op.smv.toFixed(2) : "—"}
-                            </td>
-                            <td className="text-center font-bold">
-                              {op.couponCount.toLocaleString()}
-                            </td>
-                            <td className="text-center font-bold">
-                              {op.totalQty.toLocaleString()}
-                            </td>
-                            <td className="text-right">
-                              {op.totalSam.toFixed(2)} min
-                            </td>
-                            <td className="text-right font-bold">
-                              Rs. {formatAmount(op.totalAmount)}
-                            </td>
-                          </tr>
-                        ))}
-                        <tr className="print-totals-row">
-                          <td colSpan={6} className="text-right uppercase">
-                            Grand Total
-                          </td>
-                          <td className="text-center">
-                            {summary.totalCoupons.toLocaleString()}
-                          </td>
-                          <td className="text-center">
-                            {summary.totalQty.toLocaleString()}
-                          </td>
-                          <td className="text-right">
-                            {summary.totalSam.toFixed(2)} min
-                          </td>
-                          <td className="text-right">
-                            Rs. {formatAmount(summary.totalAmount)}
-                          </td>
-                        </tr>
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              }
-
-              if (dimension === "workOrders") {
-                return (
-                  <div key={dimension}>
-                    <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
-                      Work Orders Summary
-                    </h3>
-                    <table className="print-ops-table">
-                      <thead>
-                        <tr>
-                          <th className="text-center w-10">#</th>
-                          <th>WORK ORDER #</th>
-                          <th className="text-center w-20">OPERATIONS</th>
-                          <th className="text-center w-20">COUPONS</th>
-                          <th className="text-center w-24">OUTPUT (PCS)</th>
-                          <th className="text-right w-24">SAM EARNED</th>
-                          <th className="text-right w-28">
-                            TOTAL AMOUNT (RS.)
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {summary.workOrders.map((wo, idx) => (
-                          <tr key={idx}>
-                            <td className="text-center">{idx + 1}</td>
-                            <td className="font-mono font-bold">
-                              {wo.workOrder}
-                            </td>
-                            <td className="text-center">
-                              {wo.operationsCount}
-                            </td>
-                            <td className="text-center">
-                              {wo.couponCount.toLocaleString()}
-                            </td>
-                            <td className="text-center">
-                              {wo.totalQty.toLocaleString()}
-                            </td>
-                            <td className="text-right">
-                              {wo.totalSam.toFixed(2)} min
-                            </td>
-                            <td className="text-right font-bold">
-                              Rs. {formatAmount(wo.totalAmount)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              }
-
-              if (dimension === "sections") {
-                return (
-                  <div key={dimension}>
-                    <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
-                      Sections Breakdown
-                    </h3>
-                    <table className="print-ops-table">
-                      <thead>
-                        <tr>
-                          <th className="text-center w-10">#</th>
-                          <th>SECTION</th>
-                          <th className="text-center w-20">OPERATIONS</th>
-                          <th className="text-center w-20">COUPONS</th>
-                          <th className="text-center w-24">OUTPUT (PCS)</th>
-                          <th className="text-right w-24">SAM EARNED</th>
-                          <th className="text-right w-28">
-                            TOTAL AMOUNT (RS.)
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {summary.sections.map((s, idx) => (
-                          <tr key={idx}>
-                            <td className="text-center">{idx + 1}</td>
-                            <td className="font-bold">{s.section}</td>
-                            <td className="text-center">
-                              {s.operationsCount}
-                            </td>
-                            <td className="text-center">
-                              {s.couponCount.toLocaleString()}
-                            </td>
-                            <td className="text-center">
-                              {s.totalQty.toLocaleString()}
-                            </td>
-                            <td className="text-right">
-                              {s.totalSam.toFixed(2)} min
-                            </td>
-                            <td className="text-right font-bold">
-                              Rs. {formatAmount(s.totalAmount)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              }
-
-              if (dimension === "bundles") {
-                return (
-                  <div key={dimension}>
-                    <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
-                      Bundles Breakdown
-                    </h3>
-                    <table className="print-ops-table">
-                      <thead>
-                        <tr>
-                          <th className="text-center w-10">#</th>
-                          <th>BUNDLE #</th>
-                          <th>CUT #</th>
-                          {isAllSummary && <th>WORK ORDER</th>}
-                          <th className="text-center w-20">COUPONS</th>
-                          <th className="text-center w-24">OUTPUT (PCS)</th>
-                          <th className="text-right w-24">SAM EARNED</th>
-                          <th className="text-right w-28">
-                            TOTAL AMOUNT (RS.)
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {summary.bundles.map((b, idx) => (
-                          <tr key={idx}>
-                            <td className="text-center">{idx + 1}</td>
-                            <td className="font-mono font-bold">
-                              {b.bundleNo}
-                            </td>
-                            <td>{b.cutNo || "—"}</td>
-                            {isAllSummary && (
-                              <td className="font-mono">{b.workOrder}</td>
-                            )}
-                            <td className="text-center">
-                              {b.couponCount.toLocaleString()}
-                            </td>
-                            <td className="text-center">
-                              {b.totalQty.toLocaleString()}
-                            </td>
-                            <td className="text-right">
-                              {b.totalSam.toFixed(2)} min
-                            </td>
-                            <td className="text-right font-bold">
-                              Rs. {formatAmount(b.totalAmount)}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                );
-              }
-
-              return (
-                <div key={dimension}>
-                  <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
-                    Employees Summary
-                  </h3>
-                  <table className="print-ops-table">
-                    <thead>
+            {effectiveTab === "coupons" ? (
+              <div>
+                <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
+                  Scanned Coupons Trail
+                </h3>
+                <table className="print-ops-table">
+                  <thead>
+                    <tr>
+                      <th className="text-center w-10">#</th>
+                      <th>COUPON CODE</th>
+                      <th>WORK ORDER</th>
+                      <th className="text-center">CUT #</th>
+                      <th className="text-center">BUNDLE #</th>
+                      <th className="text-center">QTY (PCS)</th>
+                      <th>OPERATION</th>
+                      {showEmployeeColumn && <th>EMPLOYEE</th>}
+                      <th className="text-right">RATE (RS.)</th>
+                      <th className="text-right">VALUE (RS.)</th>
+                      <th className="text-right">SCANNED AT</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredCoupons.length === 0 ? (
                       <tr>
-                        <th className="text-center w-10">#</th>
-                        <th>EMPLOYEE</th>
-                        <th>DESIGNATION</th>
-                        <th className="text-center w-20">COUPONS</th>
-                        <th className="text-center w-24">OUTPUT (PCS)</th>
-                        <th className="text-right w-24">SAM EARNED</th>
-                        <th className="text-right w-28">TOTAL AMOUNT (RS.)</th>
+                        <td
+                          colSpan={showEmployeeColumn ? 10 : 9}
+                          className="text-center"
+                        >
+                          No matching coupons found.
+                        </td>
                       </tr>
-                    </thead>
-                    <tbody>
-                      {summary.employees.map((emp, idx) => (
+                    ) : (
+                      filteredCoupons.map((c, idx) => (
                         <tr key={idx}>
                           <td className="text-center">{idx + 1}</td>
                           <td className="font-mono font-bold">
-                            {emp.employeeName} (#{emp.employeeCode})
+                            #{c.couponCode}
                           </td>
-                          <td>{emp.designation || "—"}</td>
-                          <td className="text-center">
-                            {emp.couponCount.toLocaleString()}
+                          <td className="font-mono">{c.workOrder}</td>
+                          <td className="text-center">{c.cutNo || "—"}</td>
+                          <td className="text-center">{c.bundleNo || "—"}</td>
+                          <td className="text-center font-bold">
+                            {c.qty ?? "—"}
                           </td>
-                          <td className="text-center">
-                            {emp.totalQty.toLocaleString()}
-                          </td>
+                          <td>{c.operationName || c.operationCode || "—"}</td>
+                          {showEmployeeColumn && (
+                            <td>
+                              {formatEmployeeLabel(
+                                c.employeeCode,
+                                c.employeeName,
+                              )}
+                            </td>
+                          )}
                           <td className="text-right">
-                            {emp.totalSam.toFixed(2)} min
+                            {c.rate != null ? `Rs. ${c.rate.toFixed(2)}` : "—"}
                           </td>
                           <td className="text-right font-bold">
-                            Rs. {formatAmount(emp.totalAmount)}
+                            {c.value != null
+                              ? `Rs. ${c.value.toFixed(2)}`
+                              : "—"}
+                          </td>
+                          <td className="text-right">
+                            {c.scannedAt
+                              ? format(
+                                  new Date(c.scannedAt),
+                                  "dd MMM yyyy, hh:mm a",
+                                )
+                              : "—"}
                           </td>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              );
-            })}
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              (() => {
+                const dimension = effectiveTab as BreakdownDimension;
+                const items = summary[dimension];
+                if (!items || items.length === 0) return null;
+
+                if (dimension === "operations") {
+                  return (
+                    <div key={dimension}>
+                      <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
+                        Operations Breakdown
+                      </h3>
+                      <table className="print-ops-table">
+                        <thead>
+                          <tr>
+                            <th className="text-center w-10">#</th>
+                            <th>OPERATION CODE</th>
+                            <th>OPERATION NAME</th>
+                            <th>SECTION</th>
+                            <th className="text-right w-16">RATE (RS.)</th>
+                            <th className="text-right w-14">SMV</th>
+                            <th className="text-center w-16">COUPONS</th>
+                            <th className="text-center w-18">OUTPUT (PCS)</th>
+                            <th className="text-right w-20">SAM EARNED</th>
+                            <th className="text-right w-22">TOTAL AMOUNT</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {summary.operations.map((op, idx) => (
+                            <tr key={idx}>
+                              <td className="text-center">{idx + 1}</td>
+                              <td className="font-mono font-bold">
+                                {op.operationCode}
+                              </td>
+                              <td>{op.operationName}</td>
+                              <td>{op.section || "—"}</td>
+                              <td className="text-right font-mono">
+                                {op.rate != null
+                                  ? `Rs. ${op.rate.toFixed(2)}`
+                                  : "—"}
+                              </td>
+                              <td className="text-right font-mono">
+                                {op.smv != null ? op.smv.toFixed(2) : "—"}
+                              </td>
+                              <td className="text-center font-bold">
+                                {op.couponCount.toLocaleString()}
+                              </td>
+                              <td className="text-center font-bold">
+                                {op.totalQty.toLocaleString()}
+                              </td>
+                              <td className="text-right">
+                                {op.totalSam.toFixed(2)} min
+                              </td>
+                              <td className="text-right font-bold">
+                                Rs. {formatAmount(op.totalAmount)}
+                              </td>
+                            </tr>
+                          ))}
+                          <tr className="print-totals-row">
+                            <td colSpan={6} className="text-right uppercase">
+                              Grand Total
+                            </td>
+                            <td className="text-center">
+                              {summary.totalCoupons.toLocaleString()}
+                            </td>
+                            <td className="text-center">
+                              {summary.totalQty.toLocaleString()}
+                            </td>
+                            <td className="text-right">
+                              {summary.totalSam.toFixed(2)} min
+                            </td>
+                            <td className="text-right">
+                              Rs. {formatAmount(summary.totalAmount)}
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                }
+
+                if (dimension === "workOrders") {
+                  return (
+                    <div key={dimension}>
+                      <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
+                        Work Orders Summary
+                      </h3>
+                      <table className="print-ops-table">
+                        <thead>
+                          <tr>
+                            <th className="text-center w-10">#</th>
+                            <th>WORK ORDER #</th>
+                            <th className="text-center w-20">OPERATIONS</th>
+                            <th className="text-center w-20">COUPONS</th>
+                            <th className="text-center w-24">OUTPUT (PCS)</th>
+                            <th className="text-right w-24">SAM EARNED</th>
+                            <th className="text-right w-28">
+                              TOTAL AMOUNT (RS.)
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {summary.workOrders.map((wo, idx) => (
+                            <tr key={idx}>
+                              <td className="text-center">{idx + 1}</td>
+                              <td className="font-mono font-bold">
+                                {wo.workOrder}
+                              </td>
+                              <td className="text-center">
+                                {wo.operationsCount}
+                              </td>
+                              <td className="text-center">
+                                {wo.couponCount.toLocaleString()}
+                              </td>
+                              <td className="text-center">
+                                {wo.totalQty.toLocaleString()}
+                              </td>
+                              <td className="text-right">
+                                {wo.totalSam.toFixed(2)} min
+                              </td>
+                              <td className="text-right font-bold">
+                                Rs. {formatAmount(wo.totalAmount)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                }
+
+                if (dimension === "sections") {
+                  return (
+                    <div key={dimension}>
+                      <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
+                        Sections Breakdown
+                      </h3>
+                      <table className="print-ops-table">
+                        <thead>
+                          <tr>
+                            <th className="text-center w-10">#</th>
+                            <th>SECTION</th>
+                            <th className="text-center w-20">OPERATIONS</th>
+                            <th className="text-center w-20">COUPONS</th>
+                            <th className="text-center w-24">OUTPUT (PCS)</th>
+                            <th className="text-right w-24">SAM EARNED</th>
+                            <th className="text-right w-28">
+                              TOTAL AMOUNT (RS.)
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {summary.sections.map((s, idx) => (
+                            <tr key={idx}>
+                              <td className="text-center">{idx + 1}</td>
+                              <td className="font-bold">{s.section}</td>
+                              <td className="text-center">
+                                {s.operationsCount}
+                              </td>
+                              <td className="text-center">
+                                {s.couponCount.toLocaleString()}
+                              </td>
+                              <td className="text-center">
+                                {s.totalQty.toLocaleString()}
+                              </td>
+                              <td className="text-right">
+                                {s.totalSam.toFixed(2)} min
+                              </td>
+                              <td className="text-right font-bold">
+                                Rs. {formatAmount(s.totalAmount)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                }
+
+                if (dimension === "bundles") {
+                  return (
+                    <div key={dimension}>
+                      <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
+                        Bundles Breakdown
+                      </h3>
+                      <table className="print-ops-table">
+                        <thead>
+                          <tr>
+                            <th className="text-center w-10">#</th>
+                            <th>BUNDLE #</th>
+                            <th>CUT #</th>
+                            {isAllSummary && <th>WORK ORDER</th>}
+                            <th className="text-center w-20">COUPONS</th>
+                            <th className="text-center w-24">OUTPUT (PCS)</th>
+                            <th className="text-right w-24">SAM EARNED</th>
+                            <th className="text-right w-28">
+                              TOTAL AMOUNT (RS.)
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {summary.bundles.map((b, idx) => (
+                            <tr key={idx}>
+                              <td className="text-center">{idx + 1}</td>
+                              <td className="font-mono font-bold">
+                                {b.bundleNo}
+                              </td>
+                              <td>{b.cutNo || "—"}</td>
+                              {isAllSummary && (
+                                <td className="font-mono">{b.workOrder}</td>
+                              )}
+                              <td className="text-center">
+                                {b.couponCount.toLocaleString()}
+                              </td>
+                              <td className="text-center">
+                                {b.totalQty.toLocaleString()}
+                              </td>
+                              <td className="text-right">
+                                {b.totalSam.toFixed(2)} min
+                              </td>
+                              <td className="text-right font-bold">
+                                Rs. {formatAmount(b.totalAmount)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                }
+
+                return (
+                  <div key={dimension}>
+                    <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
+                      Payment Verification
+                    </h3>
+                    <table className="print-ops-table">
+                      <thead>
+                        <tr>
+                          <th className="text-center w-8">#</th>
+                          <th>EMPCODE</th>
+                          <th>EMPLOYEE NAME</th>
+                          <th>ANL #</th>
+                          <th className="text-center">DATE</th>
+                          <th>OPERATION</th>
+                          <th className="text-right">RATE</th>
+                          <th className="text-center">BUNDLE</th>
+                          <th className="text-center">QUANTITY</th>
+                          <th className="text-right">TOTAL PAY</th>
+                          <th className="text-center w-20">SIGNATURE</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {employeeTableRows.length === 0 ? (
+                          <tr>
+                            <td colSpan={11} className="text-center">
+                              No employees recorded for this period.
+                            </td>
+                          </tr>
+                        ) : (
+                          employeeTableRows.map((emp, idx) => (
+                            <tr key={idx}>
+                              <td className="text-center">{idx + 1}</td>
+                              <td className="font-mono font-bold">
+                                #{emp.employeeCode}
+                              </td>
+                              <td className="font-semibold">
+                                {emp.employeeName}
+                              </td>
+                              <td className="font-mono font-bold">
+                                {emp.workOrder}
+                              </td>
+                              <td className="text-center whitespace-nowrap">
+                                {emp.date}
+                              </td>
+                              <td>{emp.operation}</td>
+                              <td className="text-right font-mono">
+                                {emp.rate > 0
+                                  ? `Rs. ${emp.rate.toFixed(2)}`
+                                  : "—"}
+                              </td>
+                              <td className="text-center">{emp.bundleCount}</td>
+                              <td className="text-center font-bold">
+                                {emp.qty.toLocaleString()}
+                              </td>
+                              <td className="text-right font-bold font-mono">
+                                Rs. {formatAmount(emp.totalPay)}
+                              </td>
+                              <td className="text-center"></td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                      {employeeTableRows.length > 0 && (
+                        <tfoot>
+                          <tr>
+                            <td colSpan={6} className="text-right font-bold">
+                              TOTAL:
+                            </td>
+                            <td className="text-center font-bold">
+                              {summary.totalCoupons.toLocaleString()}
+                            </td>
+                            <td className="text-center font-bold">
+                              {summary.totalQty.toLocaleString()}
+                            </td>
+                            <td className="text-right font-bold font-mono">
+                              Rs. {formatAmount(summary.totalAmount)}
+                            </td>
+                            <td></td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
+                );
+              })()
+            )}
 
             {/* Signature Block */}
             <div className="flex justify-between items-end mt-12 pt-4 text-xs">
