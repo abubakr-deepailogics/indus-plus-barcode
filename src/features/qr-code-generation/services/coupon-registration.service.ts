@@ -127,6 +127,26 @@ export async function countCoupons(pool: sql.ConnectionPool, workOrder: string):
   return result.recordset[0].total;
 }
 
+// Distinct (BundleNo, OpNo) pairs already registered for a work order — lets
+// the UI tell whether a given bundle+operation selection has coupons
+// already, without pulling the (potentially thousands-of-rows) full coupon
+// list just to check existence.
+export async function getGeneratedPairs(
+  pool: sql.ConnectionPool,
+  workOrder: string,
+): Promise<{ bundleNo: string; opNo: string }[]> {
+  const result = await pool
+    .request()
+    .input("workOrder", sql.NVarChar, workOrder)
+    .query(`
+      SELECT DISTINCT BundleNo, OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder
+    `);
+  return result.recordset.map((r: { BundleNo: string; OpNo: string }) => ({
+    bundleNo: r.BundleNo,
+    opNo: r.OpNo,
+  }));
+}
+
 export interface CouponListRow {
   Id: number;
   CouponCode: string;

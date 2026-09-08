@@ -124,6 +124,10 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
 
   const [lastGeneratedSelectionKey, setLastGeneratedSelectionKey] =
     useState<string>("");
+  // Bundle/operation pairs already registered for the current work order —
+  // "BundleNo|OpNo" keys, loaded from the DB so Print can enable for a
+  // selection generated in an earlier session, not just this one.
+  const [generatedPairs, setGeneratedPairs] = useState<Set<string>>(new Set());
   const [includeZeroRateOps, setIncludeZeroRateOps] = useState(false);
 
   const zeroRateOperations = useMemo(
@@ -150,16 +154,23 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
 
   const isSelectionGenerated = useMemo(() => {
     if (!activeStyle.workOrder) return false;
-    const hasBundles = activeStyle.bundles.some((b) => b.sel);
-    const hasOps = activeStyle.operations.some((o) => o.lastOpSection);
-    if (!hasBundles || !hasOps) return false;
-    return currentSelectionKey === lastGeneratedSelectionKey;
+    const selectedBundles = activeStyle.bundles.filter((b) => b.sel);
+    const selectedOps = activeStyle.operations.filter((o) => o.lastOpSection);
+    if (selectedBundles.length === 0 || selectedOps.length === 0) return false;
+    // Fast path: exactly what was just generated this session.
+    if (currentSelectionKey === lastGeneratedSelectionKey) return true;
+    // Otherwise fall back to the DB-backed set — every selected bundle x
+    // operation pair must already have a coupon registered.
+    return selectedBundles.every((b) =>
+      selectedOps.every((o) => generatedPairs.has(`${b.bundleNo}|${o.opNo}`)),
+    );
   }, [
     activeStyle.workOrder,
     currentSelectionKey,
     lastGeneratedSelectionKey,
     activeStyle.bundles,
     activeStyle.operations,
+    generatedPairs,
   ]);
 
   // Dynamic dropdown lists
@@ -294,6 +305,26 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       } catch (e) {
         console.error("Error fetching coupon count:", e);
       }
+
+      // Fetch bundle/operation pairs already generated for this work order,
+      // so Print can enable for a selection generated in an earlier session.
+      let pairs = new Set<string>();
+      try {
+        const pairsRes = await fetch(
+          `/api/qr-code-generation/coupons/pairs?work_order=${encodeURIComponent(wo)}`,
+        );
+        if (pairsRes.ok) {
+          const pairsData = await pairsRes.json();
+          pairs = new Set(
+            (pairsData.pairs || []).map(
+              (p: { bundleNo: string; opNo: string }) => `${p.bundleNo}|${p.opNo}`,
+            ),
+          );
+        }
+      } catch (e) {
+        console.error("Error fetching generated pairs:", e);
+      }
+      setGeneratedPairs(pairs);
 
       // Compute total/subtotal sum of loaded bundle pieces
       const totalPcs = bundles.reduce((acc: number, b: any) => acc + b.pcs, 0);
@@ -528,6 +559,15 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         generatedCoupons: String(finalData!.couponCount),
       }));
       setLastGeneratedSelectionKey(currentSelectionKey);
+      setGeneratedPairs((prev) => {
+        const next = new Set(prev);
+        const selectedBundles = activeStyle.bundles.filter((b) => b.sel);
+        const selectedOps = operationsToSend.filter((op) => op.lastOpSection);
+        for (const b of selectedBundles) {
+          for (const o of selectedOps) next.add(`${b.bundleNo}|${o.opNo}`);
+        }
+        return next;
+      });
     } catch (err: any) {
       setCouponModalError(
         err.message || "An error occurred while generating coupons.",
