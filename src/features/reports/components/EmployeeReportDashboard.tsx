@@ -40,6 +40,7 @@ import type {
   ReportSearchSuggestion,
   ReportSummary,
 } from "../types";
+import { AiChatPanel } from "@/features/ai-insights/components/AiChatPanel";
 
 function formatAmount(value: number): string {
   return value.toLocaleString("en-US", {
@@ -2724,6 +2725,9 @@ export function EmployeeReportDashboard() {
           </div>
         </>
       )}
+
+      {/* AI Chat Panel — floating, self-managed open/close */}
+      <AiChatPanel summary={summary} />
     </div>
   );
 }

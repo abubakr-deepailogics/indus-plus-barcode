@@ -81,7 +81,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     { label: "Coupon Scanning", href: "/industrial-engineering/coupon-scanning", hasDropdown: false },
     { label: "Coupon Tracing", href: "/industrial-engineering/coupon-tracing", hasDropdown: false },
     { label: "Rework Coupon", href: "/industrial-engineering/rework-coupon", hasDropdown: false },
-    { label: "Reports", href: "/industrial-engineering/reports", hasDropdown: false }
+    { label: "Reports", href: "/industrial-engineering/reports", hasDropdown: false },
+    { label: "AI Chat", href: "/industrial-engineering/ai-chat", hasDropdown: false },
   ];
 
   return (
