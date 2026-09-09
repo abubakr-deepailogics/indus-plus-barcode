@@ -60,6 +60,7 @@ export async function GET(request: Request) {
             FROM dbo.QrCode_Coupon WITH (NOLOCK)
             WHERE CouponCode = @barcode
               AND (@wo = '' OR WorkOrder = @wo)
+              AND IsDeleted = 0
           `
           : `
             SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt
@@ -67,6 +68,7 @@ export async function GET(request: Request) {
             WHERE WorkOrder = @wo
               AND (@bundle = '' OR BundleNo = @bundle)
               AND (@op = '' OR OpNo = @op)
+              AND IsDeleted = 0
           `,
       );
 

@@ -28,14 +28,14 @@ import { DEFAULT_MARGINS } from "@/features/qr-code-generation/types";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
 
 interface CouponRow {
-  Id: number;
+  Id: string | null;
   CouponCode: string;
   WorkOrder: string;
   BundleNo: string;
   OpNo: string;
   Section: string | null;
   IsScanned: boolean;
-  CreatedAt: string;
+  InsertedAt: string;
   CutNo?: string | null;
   OpName?: string | null;
   EmployeeCode?: string | null;
@@ -280,7 +280,7 @@ export default function CouponTracingPage() {
           c.IsScanned ? "Scanned" : "Not scanned",
           c.ScanBy || "",
           c.ScannedAt ? format(new Date(c.ScannedAt), "dd/MM/yyyy") : "",
-          format(new Date(c.CreatedAt), "dd/MM/yyyy"),
+          format(new Date(c.InsertedAt), "dd/MM/yyyy"),
         ]),
       );
     } catch (err) {
@@ -542,7 +542,7 @@ export default function CouponTracingPage() {
               ) : (
                 coupons.map((c) => (
                   <tr
-                    key={c.Id}
+                    key={c.CouponCode}
                     className="border-b border-[#f1f5f9] last:border-0 hover:bg-[#f8fafc] transition-colors"
                   >
                     <td className="px-4 py-3 text-[#334155] text-center font-bold text-indigo-600">
@@ -605,7 +605,7 @@ export default function CouponTracingPage() {
                         : "—"}
                     </td>
                     <td className="px-4 py-3 text-[#334155] text-left">
-                      {format(new Date(c.CreatedAt), "dd/MM/yyyy")}
+                      {format(new Date(c.InsertedAt), "dd/MM/yyyy")}
                     </td>
                   </tr>
                 ))

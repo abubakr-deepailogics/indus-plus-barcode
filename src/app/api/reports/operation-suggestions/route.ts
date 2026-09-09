@@ -21,7 +21,7 @@ export async function GET(request: Request) {
     const pitPool = await getPool("pitSystem");
     const opNoResult = await pitPool.request().query(`
       SELECT DISTINCT OpNo FROM dbo.QrCode_Coupon
-      WHERE IsScanned = 1 AND OpNo IS NOT NULL AND OpNo <> ''
+      WHERE IsScanned = 1 AND IsDeleted = 0 AND OpNo IS NOT NULL AND OpNo <> ''
     `);
     const opNos = opNoResult.recordset.map((r) => r.OpNo as string).filter(Boolean);
     if (opNos.length === 0) return Response.json([]);

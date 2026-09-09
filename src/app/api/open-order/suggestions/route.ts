@@ -56,6 +56,7 @@ export async function GET(request: Request) {
         const result = await pool.request().query(`
           SELECT DISTINCT TOP 12 WorkOrder
           FROM dbo.QrCode_Coupon
+          WHERE IsDeleted = 0
           ORDER BY WorkOrder DESC
         `);
         return Response.json(result.recordset.map((r) => r.WorkOrder));
@@ -66,7 +67,7 @@ export async function GET(request: Request) {
         .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
           SELECT DISTINCT TOP 8 WorkOrder
           FROM dbo.QrCode_Coupon
-          WHERE WorkOrder LIKE @q OR CouponCode LIKE @q OR BundleNo LIKE @q
+          WHERE (WorkOrder LIKE @q OR CouponCode LIKE @q OR BundleNo LIKE @q) AND IsDeleted = 0
           ORDER BY WorkOrder
         `);
 

@@ -99,7 +99,7 @@ export async function GET(request: Request) {
       const matched = await pitRequest.query(`
         SELECT DISTINCT TOP 40 WorkOrder
         FROM dbo.QrCode_Coupon
-        WHERE WorkOrder IN (${placeholders.join(", ")})
+        WHERE WorkOrder IN (${placeholders.join(", ")}) AND IsDeleted = 0
         ORDER BY WorkOrder DESC
       `);
 
@@ -121,7 +121,7 @@ export async function GET(request: Request) {
     const result = await request_.query(`
       SELECT DISTINCT TOP 40 WorkOrder AS workOrder
       FROM dbo.QrCode_Coupon
-      ${workOrder ? "WHERE WorkOrder LIKE @workOrder" : ""}
+      WHERE ${workOrder ? "WorkOrder LIKE @workOrder AND " : ""}IsDeleted = 0
       ORDER BY WorkOrder ${workOrder ? "ASC" : "DESC"}
     `);
 

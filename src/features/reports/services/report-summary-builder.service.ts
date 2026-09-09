@@ -2,9 +2,8 @@ import {
   getPool,
   sql,
   WORKERS_VIEW,
-  CUT_DETAIL_VIEW,
-  STYLE_BULLETIN_TABLE,
-  OPERATIONS_CATALOG_TABLE,
+  CUT_DETAIL_SNAPSHOT_TABLE,
+  STYLE_BULLETIN_SNAPSHOT_TABLE,
 } from "@/lib/db";
 import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import type {
@@ -61,11 +60,11 @@ const IN_LIST_CHUNK_SIZE = 2000; // stays well under SQL Server's ~2100 paramete
 async function fetchOperationCodesForSection(
   section: string,
 ): Promise<string[]> {
-  const indusPool = await getPool("indusPlus");
-  const result = await indusPool.request().input("section", sql.NVarChar, section)
+  const pitPool = await getPool("pitSystem");
+  const result = await pitPool.request().input("section", sql.NVarChar, section)
     .query(`
       SELECT DISTINCT [Operation Code] AS Operation_Code
-      FROM ${STYLE_BULLETIN_TABLE}
+      FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
       WHERE Section = @section
     `);
   return result.recordset.map((r) => String(r.Operation_Code));
@@ -115,15 +114,15 @@ async function resolveSubject(
   }
 
   if (mode === "workOrder") {
-    const indusPool = await getPool("indusPlus");
-    const woResult = await indusPool.request().input("wo", sql.NVarChar, value)
+    const pitPool = await getPool("pitSystem");
+    const woResult = await pitPool.request().input("wo", sql.NVarChar, value)
       .query(`
         SELECT TOP 1
           [Work Order #] AS Work_Order,
           [Customer Name] AS Customer_Name,
           [Sale Order No] AS Sale_Order_No,
           [Order Qty After % Add] AS Order_Qty
-        FROM ${CUT_DETAIL_VIEW}
+        FROM ${CUT_DETAIL_SNAPSHOT_TABLE}
         WHERE [Work Order #] = @wo
       `);
     if (woResult.recordset.length === 0) {
@@ -143,17 +142,17 @@ async function resolveSubject(
     };
   }
 
-  // mode === "operation" — Operation Code is a global catalog code (see
-  // OPERATIONS_CATALOG_TABLE in db.ts), and StyleBullettinInt/S_OperationsCatalog
-  // are both on indusPlus, so this is a plain single-server join.
-  const indusPool = await getPool("indusPlus");
-  const opResult = await indusPool.request().input("code", sql.NVarChar, value)
+  // mode === "operation" — read from the pitSystem snapshot (see
+  // STYLE_BULLETIN_SNAPSHOT_TABLE in db.ts). Department/SkillLevel come from
+  // indusPlus's S_OperationsCatalog, which isn't carried into the snapshot,
+  // so they're null here — same as an unmatched LEFT JOIN would have been.
+  const pitPool = await getPool("pitSystem");
+  const opResult = await pitPool.request().input("code", sql.NVarChar, value)
     .query(`
-      SELECT TOP 1 sb.[Operation Code] AS Operation_Code, sb.[Operation Name] AS Operation_Name,
-             op.Department, op.SkillLevel
-      FROM ${STYLE_BULLETIN_TABLE} sb
-      LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op ON sb.[Operation Code] = op.OperationCode
-      WHERE sb.[Operation Code] = @code
+      SELECT TOP 1 [Operation Code] AS Operation_Code, [Operation Name] AS Operation_Name,
+             CAST(NULL AS NVARCHAR(50)) AS Department, CAST(NULL AS NVARCHAR(50)) AS SkillLevel
+      FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
+      WHERE [Operation Code] = @code
     `);
   if (opResult.recordset.length === 0) {
     return { ok: false, status: 404, error: "Operation not found." };
@@ -222,7 +221,7 @@ export async function buildReportSummary(
       })
       .join(", ");
 
-  const couponConditions = ["IsScanned = 1"];
+  const couponConditions = ["IsScanned = 1", "IsDeleted = 0"];
   const couponRequest = pitPool.request();
   if (mode === "section" && !isAll) {
     const codes = (opCodes ?? []).slice(0, IN_LIST_CHUNK_SIZE);
@@ -267,12 +266,12 @@ export async function buildReportSummary(
       SELECT
         (
           SELECT COUNT(*) FROM dbo.QrCode_Coupon
-          WHERE ${scanCountsScope} AND IsScanned = 1 AND ScannedAt IS NOT NULL
+          WHERE ${scanCountsScope} AND IsScanned = 1 AND IsDeleted = 0 AND ScannedAt IS NOT NULL
             AND CAST(ScannedAt AS DATE) = CAST(GETDATE() AS DATE)
         ) AS TodayScans,
         (
           SELECT COUNT(*) FROM dbo.QrCode_Coupon
-          WHERE ${scanCountsScope} AND IsScanned = 1 AND ScannedAt IS NOT NULL
+          WHERE ${scanCountsScope} AND IsScanned = 1 AND IsDeleted = 0 AND ScannedAt IS NOT NULL
             AND ScannedAt >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
         ) AS MonthScans
       `),

@@ -176,6 +176,67 @@ export const SCANNED_AT_FROM_DATE_SQL = `
   )
 `;
 
+// pitSystem-owned snapshots of the two tables above (see
+// db/migrations/012_style_bulletin_snapshot.sql) — captured at coupon-
+// generation time by style-bulletin-snapshot.service.ts, column-for-column
+// identical to the Indus originals plus hidden Id/InsertedAt/InsertedBy.
+// Report generation, coupon-scan enrichment, and report-subject resolution
+// all read these instead of live indusPlus once a work order has been
+// coupon-generated at least once — see coupon-enrichment.service.ts and
+// report-summary-builder.service.ts.
+export const STYLE_BULLETIN_SNAPSHOT_TABLE = "dbo.StyleBullettinInt";
+export const CUT_DETAIL_SNAPSHOT_TABLE = "dbo.SaleOrderPOCutDetailViewV1";
+
+// Same shape as styleBulletinByFilter, but against the pitSystem snapshot
+// table — no S_OperationsCatalog join (that catalog is indusPlus-only and
+// out of scope for the snapshot; SkillLevel/Department are not carried into
+// the snapshot table, so callers reading from here get null for both,
+// same as an unmatched LEFT JOIN would have produced).
+export function styleBulletinSnapshotByFilter(
+  whereSql: string,
+  orderBy = "Operation_Sequence",
+) {
+  return `
+    WITH Filtered AS (
+      SELECT
+        [Sale order No] AS Sale_Order_No,
+        [Customer Name] AS Customer_Name,
+        [Order No] AS Order_No,
+        [Operation Code] AS Operation_Code,
+        [Operation Name] AS Operation_Name,
+        Section,
+        [Operation Sequeance] AS Operation_Sequence,
+        [Machine Type] AS Machine_Type,
+        [Piece Rate] AS Piece_Rate,
+        [Smv/Sam] AS Smv_Sam,
+        [First Operation Section Wise] AS First_Operation_Section_Wise,
+        [Last Operation Section Wise] AS Last_Operation_Section_Wise,
+        CAST(NULL AS NVARCHAR(50)) AS SkillLevel,
+        CAST(NULL AS NVARCHAR(50)) AS Department
+      FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
+      WHERE ${whereSql}
+    )
+    SELECT ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS RowId, *
+    FROM Filtered
+  `;
+}
+
+// Same shape as cutDetailByFilter, but against the pitSystem snapshot table.
+export function cutDetailSnapshotByFilter(
+  whereSql: string,
+  orderBy = "Cut, Bundle_Id",
+) {
+  return `
+    WITH Filtered AS (
+      SELECT ${CUT_DETAIL_COLUMNS_SQL}
+      FROM ${CUT_DETAIL_SNAPSHOT_TABLE}
+      WHERE ${whereSql}
+    )
+    SELECT ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS RowId, *
+    FROM Filtered
+  `;
+}
+
 export const CURRENT_PAY_CYCLE_START_SQL = `
   CASE
     WHEN DAY(GETDATE()) >= 24

@@ -13,7 +13,11 @@ import type { CouponLayout, QrCodeStyleData } from "../types";
 //   coupon that generate-coupons hasn't been run for). The PDF itself is
 //   never persisted — it's streamed back in the same request and handed
 //   to the browser as a local blob: URL.
-export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrder" | "saleOrderNo" | "styleCode" | "bundles" | "operations">) {
+export function useGenerateCouponPdf(
+  activeStyle: Pick<QrCodeStyleData, "workOrder" | "saleOrderNo" | "styleCode" | "bundles" | "operations"> & {
+    generateBy?: string;
+  },
+) {
   const [generatingCoupons, setGeneratingCoupons] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [couponCount, setCouponCount] = useState<number | null>(null);
@@ -51,6 +55,7 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
           workOrder: activeStyle.workOrder,
           bundles: activeStyle.bundles,
           operations: activeStyle.operations,
+          generatedBy: activeStyle.generateBy,
         }),
       });
       // Non-streaming failures (validation errors) still come back as a
@@ -119,6 +124,7 @@ export function useGenerateCouponPdf(activeStyle: Pick<QrCodeStyleData, "workOrd
           layout,
           margins,
           codeType,
+          generatedBy: activeStyle.generateBy,
         }),
       });
       if (!res.ok) {

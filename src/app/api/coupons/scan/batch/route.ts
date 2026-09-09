@@ -77,7 +77,7 @@ export async function POST(request: Request) {
       OUTPUT inserted.CouponCode INTO @Updated
       FROM dbo.QrCode_Coupon c
       INNER JOIN @Codes src ON src.CouponCode = c.CouponCode
-      WHERE c.IsScanned = 0;
+      WHERE c.IsScanned = 0 AND c.IsDeleted = 0;
 
       SELECT c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.IsScanned, c.ScannedAt
       FROM @Updated u
@@ -86,7 +86,7 @@ export async function POST(request: Request) {
       SELECT src.CouponCode,
              CASE WHEN c.CouponCode IS NULL THEN 'not_found' ELSE 'already_scanned' END AS Reason
       FROM @Codes src
-      LEFT JOIN dbo.QrCode_Coupon c ON c.CouponCode = src.CouponCode
+      LEFT JOIN dbo.QrCode_Coupon c ON c.CouponCode = src.CouponCode AND c.IsDeleted = 0
       WHERE src.CouponCode NOT IN (SELECT CouponCode FROM @Updated);
     `);
 

@@ -799,7 +799,7 @@ export default function OpenOrderPage() {
       // No real style code in this data source — leave blank rather than
       // mislabeling the work order as a style code (see QrCodeCard "St").
       styleCode: "",
-      generateBy: "",
+      generateBy: user?.displayName || user?.email?.split("@")[0] || "",
       generateDatetime: "",
       totalWash: "",
       generatedCoupons: "",
@@ -814,7 +814,7 @@ export default function OpenOrderPage() {
       operations,
       bundles,
     };
-  }, [activeSearchQuery, cutDetails, styleBulletins]);
+  }, [activeSearchQuery, cutDetails, styleBulletins, user]);
 
   const {
     handleGenerateCoupons,

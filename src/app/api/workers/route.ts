@@ -50,6 +50,7 @@ export async function GET(request: Request) {
             FROM dbo.QrCode_Coupon
             WHERE EmployeeCode = @code
               AND IsScanned = 1
+              AND IsDeleted = 0
               AND ScannedAt IS NOT NULL
               AND ScannedAt >= ${CURRENT_PAY_CYCLE_START_SQL}
           `),

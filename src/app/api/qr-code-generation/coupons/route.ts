@@ -1,6 +1,8 @@
+import { randomUUID } from "crypto";
 import { getPool } from "@/lib/db";
 import { buildCouponCards } from "@/features/qr-code-generation/services/coupon-pairing.service";
 import { registerCoupons, countCoupons, listCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
+import { snapshotWorkOrderBulletin } from "@/features/order-style-bulletin/services/style-bulletin-snapshot.service";
 import type { BundleDetailRow, OperationsDetailRow } from "@/features/qr-code-generation/types";
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -10,6 +12,7 @@ interface GenerateCouponsRequestBody {
   workOrder: string;
   bundles: BundleDetailRow[];
   operations: OperationsDetailRow[];
+  generatedBy?: string;
 }
 
 // Registers coupon identities in the DB only — no PDF render, no PDF
@@ -25,7 +28,7 @@ interface GenerateCouponsRequestBody {
 // response — the stream only starts once there's actually work to stream.
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<GenerateCouponsRequestBody>;
-  const { workOrder, bundles, operations } = body;
+  const { workOrder, bundles, operations, generatedBy } = body;
 
   if (!workOrder || !Array.isArray(bundles) || !Array.isArray(operations)) {
     return Response.json(
@@ -53,10 +56,34 @@ export async function POST(request: Request) {
       };
       try {
         const pool = await getPool("pitSystem");
-        await registerCoupons(pool, workOrder, cards, (done, total) => {
+        const insertedBy = generatedBy || "system";
+        // One shared id for this entire "Generate Coupons" action — stamped
+        // on every dbo.QrCode_Coupon row it creates AND on every
+        // style-bulletin/cut-detail snapshot row it touches, so all three
+        // tables' rows from this one run can be found later by this one id.
+        const generationId = randomUUID();
+        await registerCoupons(pool, workOrder, cards, insertedBy, generationId, (done, total) => {
           send({ done, total });
         });
         const couponCount = await countCoupons(pool, workOrder);
+
+        // Snapshot this run's operations/bundles into the pitSystem-owned
+        // style-bulletin/cut-detail tables so reports can read them locally
+        // (see style-bulletin-snapshot.service.ts). Best-effort: coupons are
+        // already registered and are the source of truth, so a snapshot
+        // failure must not fail the whole generation run.
+        try {
+          await snapshotWorkOrderBulletin(
+            workOrder,
+            [...new Set(selectedOperations.map((op) => op.opNo))],
+            [...new Set(selectedBundles.map((b) => b.bundleNo))],
+            insertedBy,
+            generationId,
+          );
+        } catch (snapshotErr) {
+          console.error("Style bulletin snapshot error:", snapshotErr);
+        }
+
         send({ done: cards.length, total: cards.length, status: "complete", cardCount: cards.length, couponCount });
       } catch (err: unknown) {
         // Headers are already committed once the stream starts, so an

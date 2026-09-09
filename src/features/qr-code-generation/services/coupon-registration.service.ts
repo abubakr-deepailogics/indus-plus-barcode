@@ -56,16 +56,24 @@ function buildCouponRowsTable(batch: CouponRow[]): sql.Table {
 // per chunk regardless of chunk size, skips codes already registered.
 // requestTimeout raised above the driver's 15s default — @types/mssql
 // doesn't declare pool.request(conf), hence the cast (see pdf/route.ts).
-async function insertCouponBatch(pool: sql.ConnectionPool, workOrder: string, batch: CouponRow[]) {
+async function insertCouponBatch(
+  pool: sql.ConnectionPool,
+  workOrder: string,
+  batch: CouponRow[],
+  insertedBy: string,
+  generationId: string,
+) {
   const request = (pool.request as (conf?: { requestTimeout: number }) => sql.Request)({
     requestTimeout: 60_000,
   });
   await request
     .input("workOrder", sql.NVarChar, workOrder)
+    .input("insertedBy", sql.NVarChar, insertedBy)
+    .input("generationId", sql.UniqueIdentifier, generationId)
     .input("CouponRows", buildCouponRowsTable(batch))
     .query(`
-      INSERT INTO dbo.QrCode_Coupon (CouponCode, WorkOrder, BundleNo, OpNo, Section, CutNo)
-      SELECT src.CouponCode, @workOrder, src.BundleNo, src.OpNo, src.Section, src.CutNo
+      INSERT INTO dbo.QrCode_Coupon (CouponCode, WorkOrder, BundleNo, OpNo, Section, CutNo, InsertedBy, Id)
+      SELECT src.CouponCode, @workOrder, src.BundleNo, src.OpNo, src.Section, src.CutNo, @insertedBy, @generationId
       FROM @CouponRows src
       WHERE NOT EXISTS (
         SELECT 1 FROM dbo.QrCode_Coupon existing WHERE existing.CouponCode = src.CouponCode
@@ -83,6 +91,8 @@ export async function registerCoupons(
   pool: sql.ConnectionPool,
   workOrder: string,
   cards: CouponCard[],
+  insertedBy: string,
+  generationId: string,
   onProgress?: (done: number, total: number) => void,
 ) {
   const rows = cards.map(({ bundle, op }) => ({
@@ -97,7 +107,7 @@ export async function registerCoupons(
   let done = 0;
   for (const batch of chunkEvenly(rows, CHUNK_COUNT)) {
     try {
-      await insertCouponBatch(pool, workOrder, batch);
+      await insertCouponBatch(pool, workOrder, batch, insertedBy, generationId);
     } catch (err: unknown) {
       // 2627/2601 = unique constraint violation — two concurrent requests
       // raced on the same coupon(s) between the NOT EXISTS check and the
@@ -107,7 +117,7 @@ export async function registerCoupons(
       if (num !== 2627 && num !== 2601) throw err;
       for (const row of batch) {
         try {
-          await insertCouponBatch(pool, workOrder, [row]);
+          await insertCouponBatch(pool, workOrder, [row], insertedBy, generationId);
         } catch (rowErr: unknown) {
           const rowNum = (rowErr as { number?: number }).number;
           if (rowNum !== 2627 && rowNum !== 2601) throw rowErr;
@@ -123,8 +133,34 @@ export async function countCoupons(pool: sql.ConnectionPool, workOrder: string):
   const result = await pool
     .request()
     .input("workOrder", sql.NVarChar, workOrder)
-    .query(`SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder`);
+    .query(`SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0`);
   return result.recordset[0].total;
+}
+
+// Soft-deletes coupons by code — dbo.QrCode_Coupon rows must never be hard
+// DELETEd (see db/migrations/013_qrcode_coupon_soft_delete.sql). This is the
+// only place that may ever write IsDeleted/DeletedAt/DeletedBy; no route
+// calls it yet since no delete feature has been built, but any future one
+// must go through this rather than issuing its own DELETE/UPDATE.
+export async function softDeleteCoupons(
+  pool: sql.ConnectionPool,
+  couponCodes: string[],
+  deletedBy: string,
+): Promise<void> {
+  const codes = [...new Set(couponCodes)];
+  if (codes.length === 0) return;
+  for (const batch of chunk(codes, 2000)) {
+    const request = pool.request();
+    const placeholders = batch.map((code, i) => {
+      request.input(`code${i}`, sql.NVarChar, code);
+      return `@code${i}`;
+    });
+    await request.input("deletedBy", sql.NVarChar, deletedBy).query(`
+      UPDATE dbo.QrCode_Coupon
+      SET IsDeleted = 1, DeletedAt = SYSUTCDATETIME(), DeletedBy = @deletedBy
+      WHERE CouponCode IN (${placeholders.join(", ")}) AND IsDeleted = 0
+    `);
+  }
 }
 
 // Distinct (BundleNo, OpNo) pairs already registered for a work order — lets
@@ -139,7 +175,7 @@ export async function getGeneratedPairs(
     .request()
     .input("workOrder", sql.NVarChar, workOrder)
     .query(`
-      SELECT DISTINCT BundleNo, OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder
+      SELECT DISTINCT BundleNo, OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0
     `);
   return result.recordset.map((r: { BundleNo: string; OpNo: string }) => ({
     bundleNo: r.BundleNo,
@@ -148,14 +184,14 @@ export async function getGeneratedPairs(
 }
 
 export interface CouponListRow {
-  Id: number;
+  Id: string | null;
   CouponCode: string;
   WorkOrder: string;
   BundleNo: string;
   OpNo: string;
   Section: string | null;
   IsScanned: boolean;
-  CreatedAt: string;
+  InsertedAt: string;
   CutNo?: string | null;
   OpName?: string | null;
   EmployeeCode?: string | null;
@@ -181,7 +217,7 @@ export interface CouponListFilters {
 // to whichever request object is passed in, so paginated and full-set
 // queries stay in sync.
 function applyCouponFilters(request: sql.Request, workOrder: string, filters: CouponListFilters) {
-  const conditions = ["c.WorkOrder = @workOrder"];
+  const conditions = ["c.WorkOrder = @workOrder", "c.IsDeleted = 0"];
   request.input("workOrder", sql.NVarChar, workOrder);
 
   if (filters.bundleNo) {
@@ -302,12 +338,12 @@ export async function listCoupons(
       .input("pageSize", sql.Int, pageSize)
       .query(`
         SELECT
-          c.Id, c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.Section, c.IsScanned, c.CreatedAt, c.CutNo,
+          c.Id, c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.Section, c.IsScanned, c.InsertedAt, c.CutNo,
           c.EmployeeCode, c.ScanBy,
           c.ScannedAt, c.SystemScannedAt
         FROM dbo.QrCode_Coupon c
         WHERE ${where}
-        ORDER BY c.Id
+        ORDER BY c.CouponCode
         OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
       `),
     countRequest.query(`SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon c WHERE ${where}`),
@@ -332,12 +368,12 @@ export async function listAllCoupons(
   const [result, opNames] = await Promise.all([
     request.query(`
       SELECT
-        c.Id, c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.Section, c.IsScanned, c.CreatedAt, c.CutNo,
+        c.Id, c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.Section, c.IsScanned, c.InsertedAt, c.CutNo,
         c.EmployeeCode, c.ScanBy,
         c.ScannedAt, c.SystemScannedAt
       FROM dbo.QrCode_Coupon c
       WHERE ${where}
-      ORDER BY c.Id
+      ORDER BY c.CouponCode
     `),
     fetchOpNamesByOpNo(workOrder),
   ]);

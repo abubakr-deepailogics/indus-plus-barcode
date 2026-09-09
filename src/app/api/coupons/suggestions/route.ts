@@ -33,6 +33,7 @@ export async function GET(request: Request) {
             FROM dbo.QrCode_Coupon
             WHERE WorkOrder = @wo
               AND BundleNo LIKE @q
+              AND IsDeleted = 0
             ORDER BY BundleNo
           `);
         const list = result.recordset.map((r) => String(r.BundleNo));
@@ -62,7 +63,7 @@ export async function GET(request: Request) {
           (await getPool("pitSystem"))
             .request()
             .input("wo", sql.NVarChar, wo.trim())
-            .query(`SELECT DISTINCT OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @wo`),
+            .query(`SELECT DISTINCT OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @wo AND IsDeleted = 0`),
           (await getPool("indusPlus"))
             .request()
             .input("wo", sql.NVarChar, wo.trim())
@@ -116,7 +117,7 @@ export async function GET(request: Request) {
         .query(`
           SELECT DISTINCT Section
           FROM dbo.QrCode_Coupon
-          WHERE WorkOrder = @wo AND Section IS NOT NULL AND Section <> ''
+          WHERE WorkOrder = @wo AND Section IS NOT NULL AND Section <> '' AND IsDeleted = 0
           ORDER BY Section
         `);
 
@@ -136,6 +137,7 @@ export async function GET(request: Request) {
               AND CutNo IS NOT NULL
               AND CutNo <> ''
               AND CutNo LIKE @q
+              AND IsDeleted = 0
           ) t
           ORDER BY TRY_CAST(CutNo AS INT), CutNo
         `);

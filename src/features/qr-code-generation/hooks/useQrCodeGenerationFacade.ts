@@ -493,6 +493,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
           workOrder: activeStyle.workOrder,
           bundles: activeStyle.bundles,
           operations: operationsToSend,
+          generatedBy: activeStyle.generateBy,
         }),
       });
 

@@ -1,3 +1,4 @@
+import { randomUUID } from "crypto";
 import { getPool } from "@/lib/db";
 import { generateCouponPdf } from "@/features/qr-code-generation/services/pdf-generation.service";
 import { buildCouponCards } from "@/features/qr-code-generation/services/coupon-pairing.service";
@@ -13,6 +14,7 @@ interface GenerateRequestBody {
   layout: CouponLayout;
   margins: { top: number; bottom: number; left: number; right: number };
   codeType: "qr" | "barcode";
+  generatedBy?: string;
 }
 
 // Renders the PDF and streams it straight back in this response — nothing
@@ -21,7 +23,7 @@ interface GenerateRequestBody {
 // rendered bytes themselves are print-and-discard, regenerated on demand.
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<GenerateRequestBody>;
-  const { workOrder, saleOrderNo, styleCode, bundles, operations, layout, margins, codeType } = body;
+  const { workOrder, saleOrderNo, styleCode, bundles, operations, layout, margins, codeType, generatedBy } = body;
 
   // styleCode is only a display label in the PDF header — some sources
   // (e.g. Open Order) have no real style code and legitimately send "".
@@ -60,7 +62,13 @@ export async function POST(request: Request) {
     // generated for this work order/bundle/operation — reprints never
     // add rows. Batched (see coupon-registration.service) so thousands
     // of coupons don't mean thousands of round trips.
-    await registerCoupons(pool, workOrder, buildCouponCards(selectedBundles, selectedOperations));
+    await registerCoupons(
+      pool,
+      workOrder,
+      buildCouponCards(selectedBundles, selectedOperations),
+      generatedBy || "system",
+      randomUUID(),
+    );
 
     // Distinct coupons registered for this work order so far (post-dedup) —
     // the real "coupons generated" count, not this batch's render size.

@@ -1,17 +1,19 @@
 import {
   getPool,
   sql,
-  cutDetailByFilter,
-  styleBulletinByFilter,
+  cutDetailSnapshotByFilter,
+  styleBulletinSnapshotByFilter,
 } from "@/lib/db";
 
 // Bundle/op display data (size, rate, SMV, section name, cut, …) for a
-// scanned coupon lives on indusPlus (cut detail / style bulletin), while
-// QrCode_Coupon itself lives on pitSystem — genuinely different SQL Server
-// instances (see CONNECTION_STRINGS in db.ts), so this can never be a single
-// joined query. This fetches both sides separately, scoped to just the
-// bundle/op numbers actually present in the coupon rows being enriched, and
-// merges them in JS.
+// scanned coupon is read from the pitSystem-owned snapshot tables (see
+// db/migrations/012_style_bulletin_snapshot.sql), not live indusPlus — those
+// snapshots are captured at coupon-generation time
+// (style-bulletin-snapshot.service.ts), so a work order's coupons and its
+// bulletin/cut data now live on the same database. This still fetches both
+// sides (snapshot tables + QrCode_Coupon) as separate queries and merges in
+// JS, purely because they're different SELECTs, not because of a
+// cross-server limitation.
 
 const IN_LIST_CHUNK_SIZE = 2000; // stays well under SQL Server's ~2100 parameter cap
 
@@ -56,7 +58,7 @@ async function fetchCutDetailByBundle(
   const uniqueBundles = [...new Set(bundleNos)];
   if (uniqueBundles.length === 0) return map;
 
-  const pool = await getPool("indusPlus");
+  const pool = await getPool("pitSystem");
   for (const batch of chunk(uniqueBundles, IN_LIST_CHUNK_SIZE)) {
     const request = pool.request().input("wo", sql.NVarChar, workOrder);
     const placeholders = batch.map((b, i) => {
@@ -64,7 +66,7 @@ async function fetchCutDetailByBundle(
       return `@b${i}`;
     });
     const result = await request.query(
-      cutDetailByFilter(
+      cutDetailSnapshotByFilter(
         `[Work Order #] = @wo AND CAST([Bundle Id] AS NVARCHAR(50)) IN (${placeholders.join(", ")})`,
       ),
     );
@@ -88,7 +90,7 @@ async function fetchStyleBulletinByOp(
   const uniqueOps = [...new Set(opNos)];
   if (uniqueOps.length === 0) return map;
 
-  const pool = await getPool("indusPlus");
+  const pool = await getPool("pitSystem");
   for (const batch of chunk(uniqueOps, IN_LIST_CHUNK_SIZE)) {
     const request = pool.request().input("wo", sql.NVarChar, workOrder);
     const placeholders = batch.map((o, i) => {
@@ -96,7 +98,7 @@ async function fetchStyleBulletinByOp(
       return `@o${i}`;
     });
     const result = await request.query(
-      styleBulletinByFilter(
+      styleBulletinSnapshotByFilter(
         `[Order No] = @wo AND [Operation Code] IN (${placeholders.join(", ")})`,
       ),
     );

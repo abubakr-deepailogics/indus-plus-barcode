@@ -26,7 +26,7 @@ export async function POST(request: Request) {
             ScanBy = NULL,
             ScannedAt = NULL,
             SystemScannedAt = NULL
-        WHERE CouponCode = @couponCode
+        WHERE CouponCode = @couponCode AND IsDeleted = 0
       `);
 
     if (result.rowsAffected[0] === 0) {
