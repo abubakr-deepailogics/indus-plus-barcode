@@ -6,6 +6,7 @@ import type {
   QrCodeStyleData,
   PageSetupConfig,
 } from "../types";
+import { DEFAULT_MARGINS } from "../types";
 import { useGenerateCouponPdf } from "./useGenerateCouponPdf";
 import { useAuth } from "@/features/auth/context/auth-context";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
@@ -100,9 +101,11 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     orientation: "Portrait",
     // Margins (cm) for the real A4 sheet this prints on — not
     // auto-centered, since the sheet's printable area is offset, not
-    // simply smaller than the page. Must match DEFAULT_MARGINS in
-    // pdf-generation.service.ts.
-    margins: { left: 0.6, right: 0.65, top: 1.6, bottom: 0.8 },
+    // simply smaller than the page. Sourced from DEFAULT_MARGINS (types.ts)
+    // instead of a hardcoded duplicate — a previous copy here drifted out
+    // of sync with that constant, so a margin fix there silently never
+    // reached this screen's actual PDF generation.
+    margins: DEFAULT_MARGINS,
     gridFormat: "3x10",
     layout: "same-line",
     codeType: "qr",

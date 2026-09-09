@@ -152,6 +152,15 @@ function formatShortDate(date: Date = new Date()): string {
   return `${day}-${month}-${year}`;
 }
 
+// Only Roboto-Regular is embedded (see FONT_PATH) — no bold weight
+// available. Faux-bold by re-stroking the glyphs a hair to the right,
+// which thickens strokes enough to read as bold on a printed label
+// without pulling in a second embedded font just for this.
+function boldText(doc: any, text: string, x: number, y: number, options: any) {
+  doc.text(text, x, y, options);
+  doc.text(text, x + 0.3, y, options);
+}
+
 function drawBarcode(
   doc: any,
   x: number,
@@ -353,13 +362,10 @@ export async function generateCouponPdf({
   const marginRight = margins.right * CM_TO_PT;
   const cellWidth = BOX_WIDTH;
   const cellHeight = BOX_HEIGHT;
-  // QR spans most of the box height (top edge to the op-name strip) — it's
-  // the largest single element on the card and the one thing that must
-  // stay scanner-reliable, so it gets priority over the text rows for
-  // vertical space rather than being capped to match the field grid. Shaved
-  // down slightly (not the full available height) so it doesn't sit flush
-  // against the box edges — square, so scannability doesn't degrade.
-  const qrSize = cellHeight - 3 - 7 - 2;
+
+  // Compact QR code (22pt / ~7.8mm) positioned alongside the field rows
+  // and resting directly above the hairline under Inm.
+  const qrSize = 22;
   // Fixed-size grid is centered in whatever page area the margins leave,
   // rather than stretched to fill it — the box dimensions are a print
   // spec (label sheet), not a function of page size.
@@ -560,37 +566,35 @@ export async function generateCouponPdf({
       const headerH = headerLineH * 2;
       const topH = cellHeight - 3 - opNameH;
 
-      // Shifted left of the box's right edge so the QR has its own margin
-      // instead of sitting flush against the border.
-      const qrX = cardX + cardW - qrSize - 1.5;
-      drawQrCode(doc, qrX, cardY, qrSize, couponCode);
+      // Positioned to the right and resting right above the line below Inm.
+      const qrX = cardX + cardW - qrSize - 2.5;
+      const qrY = cardY + topH - 0.5 - qrSize;
+      drawQrCode(doc, qrX, qrY, qrSize, couponCode);
 
       const textW = qrX - cardX - 3;
-      doc.fontSize(4.5);
-      doc.fillColor("#64748b").text("WO", cardX, cardY, {
+      doc.fontSize(5).fillColor("#000000");
+      boldText(doc, "WO", cardX, cardY, {
         width: 9,
         height: headerLineH,
         lineBreak: false,
       });
-      doc.fillColor("#1e293b").text(workOrderShort, cardX + 9, cardY, {
+      boldText(doc, workOrderShort, cardX + 9, cardY, {
         width: textW - 9,
         height: headerLineH,
         ellipsis: true,
         lineBreak: false,
       });
-      doc.fillColor("#64748b").text("Sec", cardX, cardY + headerLineH, {
+      boldText(doc, "Sec", cardX, cardY + headerLineH, {
         width: 9,
         height: headerLineH,
         lineBreak: false,
       });
-      doc
-        .fillColor("#1e293b")
-        .text(op.section || "-", cardX + 9, cardY + headerLineH, {
-          width: textW - 9,
-          height: headerLineH,
-          ellipsis: true,
-          lineBreak: false,
-        });
+      boldText(doc, op.section || "-", cardX + 9, cardY + headerLineH, {
+        width: textW - 9,
+        height: headerLineH,
+        ellipsis: true,
+        lineBreak: false,
+      });
 
       const gridY = cardY + headerH;
 
@@ -609,7 +613,7 @@ export async function generateCouponPdf({
         ["Rs", String(rsVal)],
         ["Inc", op.inc || "0"],
       ];
-      doc.fontSize(4.5);
+      doc.fontSize(5).fillColor("#000000");
       for (let f = 0; f < fields.length; f++) {
         const [label, value] = fields[f];
         const col = Math.floor(f / 4);
@@ -617,12 +621,12 @@ export async function generateCouponPdf({
         const cx = cardX + col * fieldColW;
         const cy = gridY + row * fieldRowH;
         const labelW = 9;
-        doc.fillColor("#64748b").text(label, cx, cy, {
+        boldText(doc, label, cx, cy, {
           width: labelW,
           height: fieldRowH,
           lineBreak: false,
         });
-        doc.fillColor("#1e293b").text(value, cx + labelW, cy, {
+        boldText(doc, value, cx + labelW, cy, {
           width: fieldColW - labelW,
           height: fieldRowH,
           ellipsis: true,
@@ -639,14 +643,12 @@ export async function generateCouponPdf({
         .strokeColor("#e2e8f0")
         .lineWidth(0.4)
         .stroke();
-      doc
-        .fillColor("#000000")
-        .fontSize(4.8)
-        .text(op.operationName, cardX, opNameY, {
-          width: cardW,
-          height: opNameH - 1,
-          ellipsis: true,
-        });
+      doc.fillColor("#000000").fontSize(5.3);
+      boldText(doc, op.operationName, cardX, opNameY, {
+        width: cardW,
+        height: opNameH - 1,
+        ellipsis: true,
+      });
     }
   }
 
