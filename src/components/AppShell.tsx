@@ -13,7 +13,8 @@ import {
   ScanLine,
   Search as SearchIcon,
   RotateCcw,
-  Users
+  Users,
+  Brain,
 } from "lucide-react";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -81,7 +82,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     { label: "Coupon Scanning", href: "/industrial-engineering/coupon-scanning", hasDropdown: false },
     { label: "Coupon Tracing", href: "/industrial-engineering/coupon-tracing", hasDropdown: false },
     { label: "Rework Coupon", href: "/industrial-engineering/rework-coupon", hasDropdown: false },
-    { label: "Reports", href: "/industrial-engineering/reports", hasDropdown: false }
+    { label: "Reports", href: "/industrial-engineering/reports", hasDropdown: false },
+    { label: "🧠 Workforce AI", href: "/industrial-engineering/workforce-planning", hasDropdown: false },
   ];
 
   return (
@@ -472,39 +474,59 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </Link>
               </div>
 
-              {/* SECTION: ANALYSIS */}
-              <div className="flex flex-col gap-2 pt-4 border-t border-[#f1f5f9]">
-                <h4 className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider mb-2">
-                  Analysis
-                </h4>
-                <Link
-                  href="/industrial-engineering/reports"
-                  onClick={() => setIsIeOpen(false)}
-                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
-                >
-                  <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center">
-                    <Users className="w-4 h-4" />
-                  </span>
-                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
-                    Employee Report
-                  </span>
-                </Link>
-                <Link
-                  href="#"
-                  onClick={() => setIsIeOpen(false)}
-                  className="flex items-center justify-between p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center">
-                      <BarChart3 className="w-4 h-4" />
+                {/* SECTION: ANALYSIS */}
+                <div className="flex flex-col gap-2 pt-4 border-t border-[#f1f5f9]">
+                  <h4 className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider mb-2">
+                    Analysis & AI
+                  </h4>
+                  <Link
+                    href="/industrial-engineering/workforce-planning"
+                    onClick={() => setIsIeOpen(false)}
+                    className="flex items-center justify-between p-1.5 rounded-xl bg-indigo-50/80 border border-indigo-100 shadow-2xs group transition-all"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs">
+                        <Brain className="w-4 h-4" />
+                      </span>
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-indigo-950 leading-snug">
+                          Workforce Planning AI
+                        </span>
+                        <span className="text-[10px] text-indigo-600 font-medium">
+                          Line Balancing & Worker Matching
+                        </span>
+                      </div>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-indigo-500 mr-1" />
+                  </Link>
+                  <Link
+                    href="/industrial-engineering/reports"
+                    onClick={() => setIsIeOpen(false)}
+                    className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                  >
+                    <span className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-500 flex items-center justify-center">
+                      <Users className="w-4 h-4" />
                     </span>
-                    <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors">
-                      Efficiency
+                    <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                      Employee Report
                     </span>
-                  </div>
-                  <ChevronRight className="w-3.5 h-3.5 text-[#94a3b8] mr-1" />
-                </Link>
-              </div>
+                  </Link>
+                  <Link
+                    href="#"
+                    onClick={() => setIsIeOpen(false)}
+                    className="flex items-center justify-between p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <span className="w-8 h-8 rounded-lg bg-blue-50 text-blue-500 flex items-center justify-center">
+                        <BarChart3 className="w-4 h-4" />
+                      </span>
+                      <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors">
+                        Efficiency
+                      </span>
+                    </div>
+                    <ChevronRight className="w-3.5 h-3.5 text-[#94a3b8] mr-1" />
+                  </Link>
+                </div>
 
             </div>
 
