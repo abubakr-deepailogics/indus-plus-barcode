@@ -9,6 +9,7 @@ interface GenerateCouponsModalProps {
   selectedBundlesCount: number;
   selectedOperationsCount: number;
   generatedCount?: number;
+  alreadyExistedCount?: number;
   progress?: { done: number; total: number } | null;
   errorMessage?: string;
   onClose: () => void;
@@ -23,6 +24,7 @@ export function GenerateCouponsModal({
   selectedBundlesCount,
   selectedOperationsCount,
   generatedCount = 0,
+  alreadyExistedCount = 0,
   progress = null,
   errorMessage = "",
   onClose,
@@ -179,11 +181,18 @@ export function GenerateCouponsModal({
             <div className="w-full flex flex-col items-center py-2">
               <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4" />
               <h4 className="text-sm font-extrabold text-slate-800 mb-1">
-                Coupons Generated Successfully!
+                {generatedCount > 0 ? "Coupons Generated Successfully!" : "Nothing New to Generate"}
               </h4>
-              <p className="text-xs text-[#64748b] font-medium mb-5">
-                Total coupons generated: <strong className="text-emerald-600">{generatedCount}</strong>
+              <p className="text-xs text-[#64748b] font-medium mb-1">
+                Newly generated: <strong className="text-emerald-600">{generatedCount}</strong>
               </p>
+              {alreadyExistedCount > 0 && (
+                <p className="text-xs text-[#64748b] font-medium mb-5">
+                  Already existed (skipped, not duplicated):{" "}
+                  <strong className="text-slate-500">{alreadyExistedCount}</strong>
+                </p>
+              )}
+              {alreadyExistedCount === 0 && <div className="mb-5" />}
               <button
                 onClick={onClose}
                 className="w-full bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"

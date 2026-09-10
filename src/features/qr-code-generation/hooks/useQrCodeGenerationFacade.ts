@@ -57,6 +57,7 @@ interface QrCodeGenerationFacade {
   generateModalState: "confirm" | "generating" | "success" | "error";
   couponModalError: string;
   generatedCount: number;
+  alreadyExistedCount: number;
   generateProgress: { done: number; total: number } | null;
   confirmGenerateCoupons: () => Promise<void>;
   isSelectionGenerated: boolean;
@@ -120,6 +121,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   >("confirm");
   const [couponModalError, setCouponModalError] = useState("");
   const [generatedCount, setGeneratedCount] = useState(0);
+  const [alreadyExistedCount, setAlreadyExistedCount] = useState(0);
   const [generateProgress, setGenerateProgress] = useState<{
     done: number;
     total: number;
@@ -518,7 +520,12 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let finalData: { cardCount: number; couponCount: number } | null = null;
+      let finalData: {
+        cardCount: number;
+        insertedCount: number;
+        alreadyExistedCount: number;
+        couponCount: number;
+      } | null = null;
 
       while (true) {
         const { done: streamDone, value } = await reader.read();
@@ -554,7 +561,8 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         throw new Error("Failed to generate coupons.");
       }
 
-      setGeneratedCount(finalData.cardCount);
+      setGeneratedCount(finalData.insertedCount);
+      setAlreadyExistedCount(finalData.alreadyExistedCount);
       setGenerateModalState("success");
 
       // Update coupons count in UI
@@ -624,6 +632,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     generateModalState,
     couponModalError,
     generatedCount,
+    alreadyExistedCount,
     generateProgress,
     confirmGenerateCoupons,
     isSelectionGenerated,

@@ -52,21 +52,31 @@ function buildCouponRowsTable(batch: CouponRow[]): sql.Table {
   return table as unknown as sql.Table;
 }
 
-// INSERT...SELECT WHERE NOT EXISTS against a TVP rowset — one round trip
-// per chunk regardless of chunk size, skips codes already registered.
-// requestTimeout raised above the driver's 15s default — @types/mssql
-// doesn't declare pool.request(conf), hence the cast (see pdf/route.ts).
+// INSERT...SELECT WHERE NOT EXISTS against a TVP rowset for brand-new
+// codes, plus an UPDATE restoring any matching code that's currently
+// soft-deleted (IsDeleted=1) — CouponCode is the table's PK, so a
+// previously-generated-then-deleted coupon can never be re-INSERTed; the
+// only way to bring it back is to un-delete the existing row. A code that
+// still exists and is NOT deleted (i.e. already active) matches neither
+// statement and is left untouched — that's the "already existed" case.
+// One round trip per chunk regardless of chunk size. requestTimeout raised
+// above the driver's 15s default — @types/mssql doesn't declare
+// pool.request(conf), hence the cast (see pdf/route.ts).
+// Returns the number of rows this call actually made available (newly
+// inserted + restored from a soft delete) — codes that were already active
+// don't count toward it, which is what lets the caller report "N newly
+// generated, M already existed" instead of just cards attempted.
 async function insertCouponBatch(
   pool: sql.ConnectionPool,
   workOrder: string,
   batch: CouponRow[],
   insertedBy: string,
   generationId: string,
-) {
+): Promise<number> {
   const request = (pool.request as (conf?: { requestTimeout: number }) => sql.Request)({
     requestTimeout: 60_000,
   });
-  await request
+  const result = await request
     .input("workOrder", sql.NVarChar, workOrder)
     .input("insertedBy", sql.NVarChar, insertedBy)
     .input("generationId", sql.UniqueIdentifier, generationId)
@@ -77,16 +87,42 @@ async function insertCouponBatch(
       FROM @CouponRows src
       WHERE NOT EXISTS (
         SELECT 1 FROM dbo.QrCode_Coupon existing WHERE existing.CouponCode = src.CouponCode
-      )
+      );
+
+      UPDATE c
+      SET c.IsDeleted = 0,
+          c.DeletedAt = NULL,
+          c.DeletedBy = NULL,
+          c.Section = src.Section,
+          c.CutNo = src.CutNo,
+          c.InsertedBy = @insertedBy,
+          c.Id = @generationId,
+          c.IsScanned = 0,
+          c.EmployeeCode = NULL,
+          c.ScanBy = NULL,
+          c.ScannedAt = NULL,
+          c.SystemScannedAt = NULL
+      FROM dbo.QrCode_Coupon c
+      INNER JOIN @CouponRows src ON src.CouponCode = c.CouponCode
+      WHERE c.IsDeleted = 1;
     `);
+  const inserted = result.rowsAffected[0] ?? 0;
+  const restored = result.rowsAffected[1] ?? 0;
+  return inserted + restored;
 }
 
 // Registers every card's coupon identity in dbo.QrCode_Coupon, chunked so
 // thousands of coupons take a handful of round trips instead of one per
-// coupon. Safe to call repeatedly — codes already registered are skipped.
-// onProgress (optional) fires after each chunk with the running count of
-// rows attempted so far (dupes included) — it always reaches `total`
-// regardless of how many rows turned out to be dupes/skipped.
+// coupon. Safe to call repeatedly — a code that's already active is
+// skipped (not duplicated), while a code that was soft-deleted is restored
+// (un-deleted) rather than staying permanently excluded — see
+// insertCouponBatch. onProgress (optional) fires after each chunk with the
+// running count of rows attempted so far (skips included) — it always
+// reaches `total` regardless of how many rows turned out to be skips.
+// Returns the number of rows actually made available this run (inserted +
+// restored), so a re-run against already-active bundles/operations can be
+// reported as "0 new" rather than looking identical to a first-time
+// generation, while a re-run over deleted ones correctly reports them back.
 export async function registerCoupons(
   pool: sql.ConnectionPool,
   workOrder: string,
@@ -94,7 +130,7 @@ export async function registerCoupons(
   insertedBy: string,
   generationId: string,
   onProgress?: (done: number, total: number) => void,
-) {
+): Promise<number> {
   const rows = cards.map(({ bundle, op }) => ({
     couponCode: buildCouponCode(workOrder, bundle.bundleNo, op.opNo),
     bundleNo: bundle.bundleNo,
@@ -105,9 +141,10 @@ export async function registerCoupons(
 
   const total = rows.length;
   let done = 0;
+  let insertedCount = 0;
   for (const batch of chunkEvenly(rows, CHUNK_COUNT)) {
     try {
-      await insertCouponBatch(pool, workOrder, batch, insertedBy, generationId);
+      insertedCount += await insertCouponBatch(pool, workOrder, batch, insertedBy, generationId);
     } catch (err: unknown) {
       // 2627/2601 = unique constraint violation — two concurrent requests
       // raced on the same coupon(s) between the NOT EXISTS check and the
@@ -117,7 +154,7 @@ export async function registerCoupons(
       if (num !== 2627 && num !== 2601) throw err;
       for (const row of batch) {
         try {
-          await insertCouponBatch(pool, workOrder, [row], insertedBy, generationId);
+          insertedCount += await insertCouponBatch(pool, workOrder, [row], insertedBy, generationId);
         } catch (rowErr: unknown) {
           const rowNum = (rowErr as { number?: number }).number;
           if (rowNum !== 2627 && rowNum !== 2601) throw rowErr;
@@ -127,6 +164,7 @@ export async function registerCoupons(
     done += batch.length;
     onProgress?.(done, total);
   }
+  return insertedCount;
 }
 
 export async function countCoupons(pool: sql.ConnectionPool, workOrder: string): Promise<number> {

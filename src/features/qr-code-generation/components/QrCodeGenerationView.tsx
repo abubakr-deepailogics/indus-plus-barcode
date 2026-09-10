@@ -150,6 +150,7 @@ export function QrCodeGenerationView() {
               .length
           }
           generatedCount={facade.generatedCount}
+          alreadyExistedCount={facade.alreadyExistedCount}
           progress={facade.generateProgress}
           errorMessage={facade.couponModalError}
           onClose={() => facade.setShowGenerateModal(false)}

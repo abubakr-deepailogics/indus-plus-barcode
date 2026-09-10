@@ -62,7 +62,7 @@ export async function POST(request: Request) {
         // style-bulletin/cut-detail snapshot row it touches, so all three
         // tables' rows from this one run can be found later by this one id.
         const generationId = randomUUID();
-        await registerCoupons(pool, workOrder, cards, insertedBy, generationId, (done, total) => {
+        const insertedCount = await registerCoupons(pool, workOrder, cards, insertedBy, generationId, (done, total) => {
           send({ done, total });
         });
         const couponCount = await countCoupons(pool, workOrder);
@@ -84,7 +84,15 @@ export async function POST(request: Request) {
           console.error("Style bulletin snapshot error:", snapshotErr);
         }
 
-        send({ done: cards.length, total: cards.length, status: "complete", cardCount: cards.length, couponCount });
+        send({
+          done: cards.length,
+          total: cards.length,
+          status: "complete",
+          cardCount: cards.length,
+          insertedCount,
+          alreadyExistedCount: cards.length - insertedCount,
+          couponCount,
+        });
       } catch (err: unknown) {
         // Headers are already committed once the stream starts, so an
         // error here can't fall back to a JSON error response/status code
