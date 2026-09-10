@@ -103,8 +103,7 @@ export function ParametersPanel({
         {/* Buttons Grid */}
         {(() => {
           const isWorkOrderEntered = activeStyle.workOrder && activeStyle.workOrder.trim() !== "";
-          const isGenerateDisabled =
-            !isWorkOrderEntered || generatingCoupons || isSelectionGenerated;
+          const isGenerateDisabled = !isWorkOrderEntered || generatingCoupons;
           const isPrintDisabled = !isWorkOrderEntered || !isSelectionGenerated;
 
           return (
@@ -113,18 +112,9 @@ export function ParametersPanel({
                 <button
                   onClick={onGenerateCoupons}
                   disabled={isGenerateDisabled}
-                  title={
-                    isSelectionGenerated && isWorkOrderEntered && !generatingCoupons
-                      ? "Every selected bundle/operation already has a coupon generated."
-                      : undefined
-                  }
                   className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none py-1.5 px-2 rounded-xl text-[11px] font-bold transition-all shadow-sm flex items-center justify-center text-center cursor-pointer"
                 >
-                  {generatingCoupons
-                    ? "Generating..."
-                    : isSelectionGenerated && isWorkOrderEntered
-                      ? "Already Generated"
-                      : "Generate Coupons"}
+                  {generatingCoupons ? "Generating..." : "Generate Coupons"}
                 </button>
                 <button
                   onClick={onOpenPageSetupModal}

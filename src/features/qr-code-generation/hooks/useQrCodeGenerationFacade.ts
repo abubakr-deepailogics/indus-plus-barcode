@@ -471,9 +471,19 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     }
 
     setIncludeZeroRateOps(false);
-    setGenerateModalState("confirm");
     setCouponModalError("");
     setShowGenerateModal(true);
+
+    // Nothing new would be created for this exact selection — there's no
+    // "are you sure you want to generate" decision to make, so skip the
+    // confirm step entirely and go straight to the (lightweight, non-
+    // "generating"-feeling) refresh. confirmGenerateCoupons is declared
+    // below but already assigned by the time a click can reach this code.
+    if (isSelectionGenerated) {
+      await confirmGenerateCoupons();
+      return;
+    }
+    setGenerateModalState("confirm");
   };
 
   const confirmGenerateCoupons = async () => {

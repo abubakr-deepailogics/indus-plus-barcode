@@ -1,7 +1,13 @@
 "use client";
 
 import React from "react";
-import { X, Loader2, CheckCircle2, AlertCircle, AlertTriangle } from "lucide-react";
+import {
+  X,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  AlertTriangle,
+} from "lucide-react";
 import type { OperationsDetailRow } from "../types";
 
 interface GenerateCouponsModalProps {
@@ -10,6 +16,8 @@ interface GenerateCouponsModalProps {
   selectedOperationsCount: number;
   generatedCount?: number;
   alreadyExistedCount?: number;
+
+  isRefreshOnly?: boolean;
   progress?: { done: number; total: number } | null;
   errorMessage?: string;
   onClose: () => void;
@@ -25,6 +33,7 @@ export function GenerateCouponsModal({
   selectedOperationsCount,
   generatedCount = 0,
   alreadyExistedCount = 0,
+  isRefreshOnly = false,
   progress = null,
   errorMessage = "",
   onClose,
@@ -59,7 +68,8 @@ export function GenerateCouponsModal({
         <div className="flex items-center justify-between border-b border-[#f1f5f9] pb-3 mb-4">
           <h3 className="text-sm font-extrabold text-[#0f172a]">
             {state === "confirm" && "Confirm Generation"}
-            {state === "generating" && "Generating Coupons"}
+            {state === "generating" &&
+              (isRefreshOnly ? "Refreshing Data" : "Generating Coupons")}
             {state === "success" && "Success"}
             {state === "error" && "Error"}
           </h3>
@@ -78,7 +88,8 @@ export function GenerateCouponsModal({
           {state === "confirm" && (
             <div className="w-full">
               <p className="text-xs text-[#64748b] font-medium mb-4">
-                Are you sure you want to generate barcode coupons with the following selections?
+                Are you sure you want to generate barcode coupons with the
+                following selections?
               </p>
 
               {/* Stats Summary Cards */}
@@ -116,14 +127,17 @@ export function GenerateCouponsModal({
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" />
                     <p className="text-[11px] text-amber-800 font-semibold leading-relaxed">
                       {zeroRateOperations.length} of {selectedOperationsCount}{" "}
-                      selected operations have Piece Rate 0 and won&apos;t be generated.
+                      selected operations have Piece Rate 0 and won&apos;t be
+                      generated.
                     </p>
                   </div>
                   <label className="flex items-center gap-2 mt-2.5 pl-5.5 cursor-pointer">
                     <input
                       type="checkbox"
                       checked={includeZeroRateOps}
-                      onChange={(e) => onIncludeZeroRateOpsChange?.(e.target.checked)}
+                      onChange={(e) =>
+                        onIncludeZeroRateOpsChange?.(e.target.checked)
+                      }
                       className="rounded border-amber-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
                     />
                     <span className="text-[11px] font-bold text-amber-800">
@@ -154,16 +168,22 @@ export function GenerateCouponsModal({
 
           {state === "generating" && (
             <div className="flex flex-col items-center py-4 w-full">
-              <Loader2 className="w-10 h-10 text-[#4f46e5] animate-spin mb-4" />
+              <Loader2
+                className={`${isRefreshOnly ? "w-8 h-8" : "w-10 h-10"} text-[#4f46e5] animate-spin mb-4`}
+              />
               <h4 className="text-sm font-extrabold text-slate-800 mb-1">
-                Generating {totalToGenerate} Coupons...
+                {isRefreshOnly
+                  ? "Refreshing coupon data..."
+                  : `Generating ${totalToGenerate} Coupons...`}
               </h4>
-              {progress && progress.total > 0 && (
+              {!isRefreshOnly && progress && progress.total > 0 && (
                 <div className="w-full mt-3 mb-1">
                   <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
                     <div
                       className="h-full bg-[#4f46e5] transition-all duration-200"
-                      style={{ width: `${Math.min(100, (progress.done / progress.total) * 100)}%` }}
+                      style={{
+                        width: `${Math.min(100, (progress.done / progress.total) * 100)}%`,
+                      }}
                     />
                   </div>
                   <p className="text-[11px] text-[#64748b] font-semibold mt-1.5">
@@ -172,7 +192,9 @@ export function GenerateCouponsModal({
                 </div>
               )}
               <p className="text-[11px] text-[#94a3b8] font-medium mt-2">
-                Registering barcode identities in the database. Please do not close or refresh this page.
+                {isRefreshOnly
+                  ? "No new coupons are being created — just updating their bundle/operation details."
+                  : "Registering barcode identities in the database. Please do not close or refresh this page."}
               </p>
             </div>
           )}
@@ -181,15 +203,20 @@ export function GenerateCouponsModal({
             <div className="w-full flex flex-col items-center py-2">
               <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4" />
               <h4 className="text-sm font-extrabold text-slate-800 mb-1">
-                {generatedCount > 0 ? "Coupons Generated Successfully!" : "Nothing New to Generate"}
+                {generatedCount > 0
+                  ? "Coupons Generated Successfully!"
+                  : "Nothing New to Generate"}
               </h4>
               <p className="text-xs text-[#64748b] font-medium mb-1">
-                Newly generated: <strong className="text-emerald-600">{generatedCount}</strong>
+                Newly generated:{" "}
+                <strong className="text-emerald-600">{generatedCount}</strong>
               </p>
               {alreadyExistedCount > 0 && (
                 <p className="text-xs text-[#64748b] font-medium mb-5">
                   Already existed (skipped, not duplicated):{" "}
-                  <strong className="text-slate-500">{alreadyExistedCount}</strong>
+                  <strong className="text-slate-500">
+                    {alreadyExistedCount}
+                  </strong>
                 </p>
               )}
               {alreadyExistedCount === 0 && <div className="mb-5" />}
@@ -210,7 +237,8 @@ export function GenerateCouponsModal({
               </h4>
               <div className="bg-red-50/50 border border-red-100 rounded-xl p-3 text-left w-full mb-5 max-h-[120px] overflow-y-auto">
                 <p className="text-[11px] text-red-600 font-semibold leading-relaxed">
-                  {errorMessage || "An unexpected error occurred during coupon generation."}
+                  {errorMessage ||
+                    "An unexpected error occurred during coupon generation."}
                 </p>
               </div>
               <div className="flex gap-2 w-full">
