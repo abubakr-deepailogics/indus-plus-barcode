@@ -1,7 +1,15 @@
 "use client";
 
-import React, { useState } from "react";
-import { Eraser, Loader2, CheckCircle2, AlertCircle, X } from "lucide-react";
+import React, { useState, useEffect, useRef } from "react";
+import {
+  Eraser,
+  Trash2,
+  Loader2,
+  CheckCircle2,
+  AlertCircle,
+  X,
+  Search,
+} from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
 
 interface OperationSuggestion {
@@ -27,6 +35,7 @@ interface UnscanOrDeleteCouponModalProps {
 }
 
 type Step = "form" | "processing" | "success" | "error";
+type CouponStatus = "idle" | "checking" | "scanned" | "unscanned" | "not_found";
 
 const FIELD_LABEL =
   "text-[10px] font-bold text-[#64748b] uppercase tracking-wider mb-1.5 block";
@@ -53,9 +62,50 @@ export function UnscanOrDeleteCouponModal({
   const [opNo, setOpNo] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [result, setResult] = useState<UnscanOrDeleteResult | null>(null);
+  const [couponCode, setCouponCode] = useState("");
+  const [status, setStatus] = useState<CouponStatus>("idle");
 
+  const fieldsFilled = !!(bundleNo.trim() && opNo.trim());
   const canSubmit =
-    cutNo.trim() && bundleNo.trim() && opNo.trim() && step === "form";
+    fieldsFilled &&
+    step === "form" &&
+    (status === "scanned" || status === "unscanned");
+
+  const requestIdRef = useRef(0);
+  useEffect(() => {
+    if (step !== "form" || !fieldsFilled) {
+      setStatus("idle");
+      setCouponCode("");
+      return;
+    }
+    const requestId = ++requestIdRef.current;
+    setStatus("checking");
+    const timer = setTimeout(async () => {
+      try {
+        const params = new URLSearchParams({
+          workOrder,
+          cutNo: cutNo.trim(),
+          bundleNo: bundleNo.trim(),
+          opNo: opNo.trim(),
+        });
+        const res = await fetch(`/api/coupons/unscan-or-delete?${params}`);
+        if (requestIdRef.current !== requestId) return;
+        if (!res.ok) {
+          setStatus("not_found");
+          setCouponCode("");
+          return;
+        }
+        const data = await res.json();
+        setCouponCode(data.couponCode);
+        setStatus(data.isScanned ? "scanned" : "unscanned");
+      } catch {
+        if (requestIdRef.current !== requestId) return;
+        setStatus("not_found");
+        setCouponCode("");
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [workOrder, cutNo, bundleNo, opNo, fieldsFilled, step]);
 
   // Suggestions are scoped to this coupon's work order and sourced straight
   // from dbo.QrCode_Coupon (only_generated=true / type=cut), the same
@@ -232,6 +282,37 @@ export function UnscanOrDeleteCouponModal({
                 </div>
               </div>
 
+              {fieldsFilled && (
+                <div className="mt-3 text-left">
+                  {status === "checking" && (
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Checking coupon status...
+                    </div>
+                  )}
+                  {status === "scanned" && (
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-700">
+                      <Search className="w-3 h-3" />
+                      Coupon <span className="font-mono">{couponCode}</span> is
+                      scanned.
+                    </div>
+                  )}
+                  {status === "unscanned" && (
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-red-600">
+                      <Search className="w-3 h-3" />
+                      Coupon <span className="font-mono">{couponCode}</span> is
+                      not scanned.
+                    </div>
+                  )}
+                  {status === "not_found" && (
+                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
+                      <Search className="w-3 h-3" />
+                      No matching coupon found.
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="flex gap-2 w-full mt-5">
                 <button
                   type="button"
@@ -243,9 +324,30 @@ export function UnscanOrDeleteCouponModal({
                 <button
                   type="submit"
                   disabled={!canSubmit}
-                  className="flex-1 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+                  className={`flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer ${
+                    status === "scanned"
+                      ? "bg-amber-600 hover:bg-amber-700"
+                      : status === "unscanned"
+                        ? "bg-red-600 hover:bg-red-700"
+                        : "bg-slate-300"
+                  }`}
                 >
-                  Find Coupon
+                  {status === "scanned" && (
+                    <>
+                      <Eraser className="w-3.5 h-3.5" />
+                      Unscan Coupon
+                    </>
+                  )}
+                  {status === "unscanned" && (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete Coupon
+                    </>
+                  )}
+                  {(status === "idle" ||
+                    status === "checking" ||
+                    status === "not_found") &&
+                    "Find Coupon"}
                 </button>
               </div>
             </form>
