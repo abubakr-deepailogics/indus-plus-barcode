@@ -11,6 +11,7 @@ import {
   Loader2,
   Check,
   X,
+  Eraser,
 } from "lucide-react";
 import { format } from "date-fns";
 import { printPdf } from "@/lib/print";
@@ -23,9 +24,14 @@ import {
 } from "@/components/work-order-search-modal";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
 import { CodeTypeSelectionModal } from "@/features/qr-code-generation/components/CodeTypeSelectionModal";
+import {
+  UnscanOrDeleteCouponModal,
+  type UnscanOrDeleteResult,
+} from "@/features/qr-code-generation/components/UnscanOrDeleteCouponModal";
 import type { PageSetupConfig } from "@/features/qr-code-generation/types";
 import { DEFAULT_MARGINS } from "@/features/qr-code-generation/types";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
+import { useAuth } from "@/features/auth/context/auth-context";
 
 interface CouponRow {
   Id: string | null;
@@ -74,7 +80,9 @@ export default function CouponTracingPage() {
   const [unscanningCode, setUnscanningCode] = useState("");
   const [showPageSetupModal, setShowPageSetupModal] = useState(false);
   const [showCodeTypeModal, setShowCodeTypeModal] = useState(false);
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const { user } = useAuth();
   const [pageSetup, setPageSetup] = useState<PageSetupConfig>({
     size: "Legal",
     source: "Automatically Select",
@@ -225,6 +233,26 @@ export default function CouponTracingPage() {
     } finally {
       setUnscanningCode("");
     }
+  };
+
+  // Looks up a coupon by WO/Cut/Bundle/Op (as printed on the physical
+  // coupon) — used by UnscanOrDeleteCouponModal. The server decides the
+  // action itself: unscans it if it was scanned, otherwise soft-deletes it.
+  const unscanOrDeleteCoupon = async (fields: {
+    workOrder: string;
+    cutNo: string;
+    bundleNo: string;
+    opNo: string;
+  }): Promise<UnscanOrDeleteResult> => {
+    const actedBy = user?.displayName || user?.email?.split("@")[0] || "";
+    const response = await fetch("/api/coupons/unscan-or-delete", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...fields, actedBy }),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to process coupon.");
+    return data;
   };
 
   // Coupons are always server-paginated (200/page cap), so a CSV export
@@ -404,6 +432,14 @@ export default function CouponTracingPage() {
                 onExport={handleExportCsv}
                 disabled={couponTotal === 0}
               />
+              <button
+                onClick={() => setShowDeleteModal(true)}
+                title="Unscan or delete a coupon by Work Order, Cut, Bundle & Operation"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100 transition-all"
+              >
+                <Eraser className="w-3.5 h-3.5" />
+                Unscan / Delete
+              </button>
             </div>
           </div>
 
@@ -663,6 +699,18 @@ export default function CouponTracingPage() {
           setShowPageSetupModal(true);
         }}
       />
+
+      {showDeleteModal && (
+        <UnscanOrDeleteCouponModal
+          workOrder={tracedWorkOrder}
+          submit={unscanOrDeleteCoupon}
+          onClose={() => setShowDeleteModal(false)}
+          onDone={() => {
+            setShowDeleteModal(false);
+            fetchCoupons(tracedWorkOrder, couponPage);
+          }}
+        />
+      )}
 
       <WorkOrderSearchModal
         open={showWorkOrderModal}
