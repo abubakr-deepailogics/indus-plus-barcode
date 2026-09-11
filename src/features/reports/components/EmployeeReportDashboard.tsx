@@ -22,6 +22,7 @@ import {
   Loader2,
   CheckCircle2,
   ShieldAlert,
+  Eye,
   type LucideIcon,
 } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
@@ -35,6 +36,7 @@ import { CsvExportButton } from "@/components/ui/csv-export-button";
 import {
   createWages,
   deleteWages,
+  fetchWages,
   fetchEmployeeSearchSuggestions,
   fetchOperationSearchSuggestions,
   fetchSectionSearchSuggestions,
@@ -46,6 +48,7 @@ import type {
   ReportSearchMode,
   ReportSearchSuggestion,
   ReportSummary,
+  WagesBatch,
 } from "../types";
 
 function formatAmount(value: number): string {
@@ -336,142 +339,16 @@ export function EmployeeReportDashboard() {
     unmount: () => void;
   } | null>(null);
 
-  const [isWageActionLoading, setIsWageActionLoading] = useState(false);
-  const [wageActionNotice, setWageActionNotice] = useState<{
+  // ── Wages panel state ────────────────────────────────────────────────────
+  const [wagesVisible, setWagesVisible] = useState(false);
+  const [wagesBatches, setWagesBatches] = useState<WagesBatch[]>([]);
+  const [wagesLoading, setWagesLoading] = useState(false);
+  const [isCreatingWages, setIsCreatingWages] = useState(false);
+  const [isDeletingWages, setIsDeletingWages] = useState(false);
+  const [wageMsg, setWageMsg] = useState<{
     type: "success" | "error";
     message: string;
   } | null>(null);
-
-  const isWageCalculated = summary?.isWageCalculated === true;
-
-  const handleToggleWages = useCallback(async () => {
-    if (!summary || isWageActionLoading) return;
-    setIsWageActionLoading(true);
-    setWageActionNotice(null);
-
-    try {
-      const fromStr = dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : undefined;
-      const toStr = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : undefined;
-
-      if (isWageCalculated) {
-        const empCode =
-          summary.subject.mode === "employee" && !summary.subject.all
-            ? String(summary.subject.employee.EmployeeID)
-            : undefined;
-
-        const res = await deleteWages({
-          wageId: summary.wageId ?? undefined,
-          employeeCode: empCode,
-          from: fromStr,
-          to: toStr,
-        });
-
-        if (!res.ok) {
-          setWageActionNotice({ type: "error", message: res.error });
-        } else {
-          setWageActionNotice({
-            type: "success",
-            message: res.message || "Wages deleted successfully.",
-          });
-          search();
-        }
-      } else {
-        const empCode =
-          summary.subject.mode === "employee" && !summary.subject.all
-            ? String(summary.subject.employee.EmployeeID)
-            : summary.recentEmployeeCode || "";
-
-        if (!empCode) {
-          setWageActionNotice({
-            type: "error",
-            message: "Please select an employee before creating wages.",
-          });
-          setIsWageActionLoading(false);
-          return;
-        }
-
-        const couponsPayload = (summary.coupons || []).map((c) => ({
-          couponCode: c.couponCode,
-          qty: c.qty,
-          rate: c.rate,
-          amount: c.value,
-        }));
-
-        const res = await createWages({
-          employeeCode: empCode,
-          from: fromStr,
-          to: toStr,
-          coupons: couponsPayload,
-        });
-
-        if (!res.ok) {
-          setWageActionNotice({ type: "error", message: res.error });
-        } else {
-          setWageActionNotice({
-            type: "success",
-            message: `Wages created successfully for ${res.totalCoupons} coupon(s) totaling Rs. ${formatAmount(res.totalAmount)}.`,
-          });
-          search();
-        }
-      }
-    } catch (err: unknown) {
-      setWageActionNotice({
-        type: "error",
-        message: err instanceof Error ? err.message : "Wage operation failed.",
-      });
-    } finally {
-      setIsWageActionLoading(false);
-    }
-  }, [summary, isWageActionLoading, isWageCalculated, dateRange, search]);
-
-  const modeConfig = MODE_CONFIG[mode];
-
-  const handleSelect = useCallback(
-    (suggestion: ReportSearchSuggestion) => {
-      setSearchValue(suggestion.value);
-      search(suggestion.value);
-    },
-    [setSearchValue, search],
-  );
-
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter" && searchValue.trim()) search();
-    },
-    [search, searchValue],
-  );
-
-  // Filtered coupons for itemized audit trail
-  const coupons = summary?.coupons;
-  const filteredCoupons = useMemo(() => {
-    if (!coupons || coupons.length === 0) return [];
-    if (!couponSearch.trim()) return coupons;
-    const q = couponSearch.toLowerCase().trim();
-    return coupons.filter(
-      (c) =>
-        c.couponCode?.toLowerCase().includes(q) ||
-        c.workOrder?.toLowerCase().includes(q) ||
-        c.bundleNo?.toLowerCase().includes(q) ||
-        c.cutNo?.toLowerCase().includes(q) ||
-        c.operationName?.toLowerCase().includes(q) ||
-        c.operationCode?.toLowerCase().includes(q) ||
-        c.section?.toLowerCase().includes(q) ||
-        c.employeeCode?.toLowerCase().includes(q) ||
-        c.employeeName?.toLowerCase().includes(q),
-    );
-  }, [coupons, couponSearch]);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filteredCoupons.length / ITEMS_PER_PAGE),
-  );
-  const paginatedCoupons = useMemo(() => {
-    const start = (couponPage - 1) * ITEMS_PER_PAGE;
-    return filteredCoupons.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredCoupons, couponPage]);
-
-  const showEmployeeColumn =
-    summary?.subject.mode !== "employee" || isAllSummary;
 
   const employeesList = summary?.employees;
   const couponsList = summary?.coupons;
@@ -572,6 +449,163 @@ export function EmployeeReportDashboard() {
       };
     });
   }, [employeesList, couponsList]);
+
+  const handleCreateWages = useCallback(async () => {
+    if (employeeGroupedData.length === 0 || isCreatingWages) return;
+    setIsCreatingWages(true);
+    setWageMsg(null);
+    try {
+      const fromStr = dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : undefined;
+      const toStr = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : undefined;
+
+      // Flatten employeeGroupedData into one WageRow per operation-group item
+      const rows = employeeGroupedData.flatMap((eg) =>
+        eg.items.map((item) => ({
+          employeeCode: eg.employeeCode ?? "",
+          employeeName: eg.employeeName ?? null,
+          workOrder: item.workOrder !== "—" ? item.workOrder : null,
+          workDate: item.date !== "—" ? item.date : null,
+          operation: item.operation !== "—" ? item.operation : null,
+          rate: item.rate,
+          bundleCount: item.bundleCount,
+          qty: item.qty,
+          totalPay: item.totalPay,
+        }))
+      );
+
+      const res = await createWages({ from: fromStr, to: toStr, rows });
+      if (!res.ok) {
+        setWageMsg({ type: "error", message: res.error });
+      } else {
+        setWageMsg({
+          type: "success",
+          message: `Wages created — ${res.totalRows} row(s), Rs. ${formatAmount(res.totalAmount)} total.`,
+        });
+        // Auto-load the wages table to show the new batch and refresh summary state
+        const viewRes = await fetchWages({ wageId: res.wageId });
+        if (viewRes.ok) {
+          setWagesBatches(viewRes.wages);
+          setWagesVisible(true);
+        }
+        search();
+      }
+    } catch (err: unknown) {
+      setWageMsg({
+        type: "error",
+        message: err instanceof Error ? err.message : "Create wages failed.",
+      });
+    } finally {
+      setIsCreatingWages(false);
+    }
+  }, [employeeGroupedData, isCreatingWages, dateRange]);
+
+  const handleViewWages = useCallback(async () => {
+    if (wagesLoading) return;
+    if (wagesVisible && wagesBatches.length > 0) {
+      setWagesVisible(false);
+      return;
+    }
+    setWagesLoading(true);
+    setWageMsg(null);
+    try {
+      const fromStr = dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : undefined;
+      const toStr = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : undefined;
+      const empCode =
+        summary?.subject.mode === "employee" && !summary.subject.all
+          ? String(summary.subject.employee.EmployeeID)
+          : undefined;
+
+      const res = await fetchWages({ employeeCode: empCode, from: fromStr, to: toStr });
+      if (!res.ok) {
+        setWageMsg({ type: "error", message: res.error });
+      } else if (res.wages.length === 0) {
+        setWageMsg({ type: "error", message: "No saved wages found for this scope." });
+      } else {
+        setWagesBatches(res.wages);
+        setWagesVisible(true);
+      }
+    } catch (err: unknown) {
+      setWageMsg({
+        type: "error",
+        message: err instanceof Error ? err.message : "Fetch wages failed.",
+      });
+    } finally {
+      setWagesLoading(false);
+    }
+  }, [wagesLoading, wagesVisible, wagesBatches, dateRange, summary]);
+
+  const handleDeleteWages = useCallback(async (wageId: number) => {
+    if (isDeletingWages) return;
+    setIsDeletingWages(true);
+    setWageMsg(null);
+    try {
+      const res = await deleteWages({ wageId });
+      if (!res.ok) {
+        setWageMsg({ type: "error", message: res.error });
+      } else {
+        setWageMsg({ type: "success", message: res.message });
+        setWagesBatches((prev) => prev.filter((b) => b.WageId !== wageId));
+        // Refresh report summary live so isWageCalculated flags are reset
+        search();
+      }
+    } catch (err: unknown) {
+      setWageMsg({
+        type: "error",
+        message: err instanceof Error ? err.message : "Delete wages failed.",
+      });
+    } finally {
+      setIsDeletingWages(false);
+    }
+  }, [isDeletingWages, search]);
+
+  const modeConfig = MODE_CONFIG[mode];
+
+  const handleSelect = useCallback(
+    (suggestion: ReportSearchSuggestion) => {
+      setSearchValue(suggestion.value);
+      search(suggestion.value);
+    },
+    [setSearchValue, search],
+  );
+
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter" && searchValue.trim()) search();
+    },
+    [search, searchValue],
+  );
+
+  // Filtered coupons for itemized audit trail
+  const coupons = summary?.coupons;
+  const filteredCoupons = useMemo(() => {
+    if (!coupons || coupons.length === 0) return [];
+    if (!couponSearch.trim()) return coupons;
+    const q = couponSearch.toLowerCase().trim();
+    return coupons.filter(
+      (c) =>
+        c.couponCode?.toLowerCase().includes(q) ||
+        c.workOrder?.toLowerCase().includes(q) ||
+        c.bundleNo?.toLowerCase().includes(q) ||
+        c.cutNo?.toLowerCase().includes(q) ||
+        c.operationName?.toLowerCase().includes(q) ||
+        c.operationCode?.toLowerCase().includes(q) ||
+        c.section?.toLowerCase().includes(q) ||
+        c.employeeCode?.toLowerCase().includes(q) ||
+        c.employeeName?.toLowerCase().includes(q),
+    );
+  }, [coupons, couponSearch]);
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredCoupons.length / ITEMS_PER_PAGE),
+  );
+  const paginatedCoupons = useMemo(() => {
+    const start = (couponPage - 1) * ITEMS_PER_PAGE;
+    return filteredCoupons.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredCoupons, couponPage]);
+
+  const showEmployeeColumn =
+    summary?.subject.mode !== "employee" || isAllSummary;
 
   const grandTotalBundles = useMemo(
     () => employeeGroupedData.reduce((acc, eg) => acc + eg.totalBundles, 0),
@@ -795,6 +829,294 @@ export function EmployeeReportDashboard() {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* ── Wages Panel ───────────────────────────────────────────────────── */}
+      <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden no-print">
+        {/* Header bar */}
+        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <Coins className="w-4 h-4 text-[#4f46e5]" />
+            <h2 className="font-bold text-[#4f46e5] text-xs uppercase tracking-wider">
+              Employee Wages
+            </h2>
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            {(() => {
+              const isAlreadyCalculated = summary?.allWagesCalculated === true;
+              return (
+                <button
+                  type="button"
+                  onClick={handleCreateWages}
+                  disabled={isCreatingWages || employeeGroupedData.length === 0 || isAlreadyCalculated}
+                  title={
+                    isAlreadyCalculated
+                      ? "Wages have already been calculated for all coupons in this scope."
+                      : employeeGroupedData.length === 0
+                      ? "Run a report first to load employee data"
+                      : "Save current report employee data as wages"
+                  }
+                  className={`flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm ${
+                    isAlreadyCalculated
+                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed opacity-80"
+                      : "bg-[#4f46e5] text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  }`}
+                >
+                  {isCreatingWages ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : isAlreadyCalculated ? (
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <Coins className="w-3.5 h-3.5" />
+                  )}
+                  {isAlreadyCalculated ? "Wages Calculated" : "Create Wages"}
+                </button>
+              );
+            })()}
+            <button
+              type="button"
+              onClick={handleViewWages}
+              disabled={wagesLoading}
+              className={`flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                wagesVisible
+                  ? "bg-indigo-100 text-[#4f46e5] border border-indigo-200"
+                  : "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200"
+              }`}
+            >
+              {wagesLoading ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Eye className="w-3.5 h-3.5" />
+              )}
+              {wagesVisible ? "Hide Wages" : "View Wages"}
+            </button>
+          </div>
+        </div>
+
+        {/* Feedback message */}
+        {wageMsg && (
+          <div
+            className={`mx-4 mt-3 p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-3 ${
+              wageMsg.type === "success"
+                ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                : "bg-rose-50 border-rose-200 text-rose-900"
+            }`}
+          >
+            <div className="flex items-center gap-2">
+              {wageMsg.type === "success" ? (
+                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+              ) : (
+                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+              )}
+              <span>{wageMsg.message}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setWageMsg(null)}
+              className="text-slate-400 hover:text-slate-600 font-bold text-sm px-1"
+            >
+              ×
+            </button>
+          </div>
+        )}
+
+        {/* Wages table — visible when View Wages is active */}
+        {wagesVisible && wagesBatches.length > 0 && (
+          <div className="flex flex-col gap-5 p-4">
+            {wagesBatches.map((batch) => {
+              // Group rows by employee
+              const empGroups = new Map<
+                string,
+                {
+                  employeeCode: string;
+                  employeeName: string | null | undefined;
+                  items: typeof batch.rows;
+                  totalBundles: number;
+                  totalQty: number;
+                  totalPay: number;
+                }
+              >();
+              for (const row of batch.rows) {
+                const r = row as any;
+                const empCode = String(row.employeeCode || r.EmployeeCode || "");
+                const empName = row.employeeName ?? r.EmployeeName ?? null;
+                const bundleCount = Number(row.bundleCount ?? r.BundleCount) || 0;
+                const qty = Number(row.qty ?? r.Qty) || 0;
+                const totalPay = Number(row.totalPay ?? r.TotalPay) || 0;
+
+                if (!empGroups.has(empCode)) {
+                  empGroups.set(empCode, {
+                    employeeCode: empCode,
+                    employeeName: empName,
+                    items: [],
+                    totalBundles: 0,
+                    totalQty: 0,
+                    totalPay: 0,
+                  });
+                }
+                const g = empGroups.get(empCode)!;
+                g.items.push(row);
+                g.totalBundles += bundleCount;
+                g.totalQty += qty;
+                g.totalPay += totalPay;
+              }
+              const groups = Array.from(empGroups.values());
+              const batchGrandBundles = groups.reduce((s, g) => s + g.totalBundles, 0);
+              const batchGrandQty = groups.reduce((s, g) => s + g.totalQty, 0);
+              const batchGrandPay = groups.reduce((s, g) => s + g.totalPay, 0);
+
+              return (
+                <div
+                  key={batch.WageId}
+                  className="border border-slate-200 rounded-xl overflow-hidden"
+                >
+                  {/* Batch header */}
+                  <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex-wrap gap-2">
+                    <div className="flex items-center gap-3 text-xs text-slate-600 flex-wrap">
+                      <span className="font-bold text-slate-800">
+                        Batch #{batch.WageId}
+                      </span>
+                      {batch.FromDate && (
+                        <span className="text-slate-500">
+                          {batch.FromDate.slice(0, 10)} →{" "}
+                          {batch.ToDate?.slice(0, 10) ?? "—"}
+                        </span>
+                      )}
+                      {batch.CreatedBy && (
+                        <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md font-medium">
+                          {batch.CreatedBy}
+                        </span>
+                      )}
+                      <span className="font-bold text-emerald-700">
+                        Rs. {formatAmount(Number(batch.TotalAmount))}
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteWages(batch.WageId)}
+                      disabled={isDeletingWages}
+                      className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
+                    >
+                      {isDeletingWages ? (
+                        <Loader2 className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <Trash2 className="w-3 h-3" />
+                      )}
+                      Delete
+                    </button>
+                  </div>
+
+                  {/* Same table format as the Employees breakdown tab */}
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
+                          <th className="py-2.5 px-3 border-r border-slate-200">EmpCode</th>
+                          <th className="py-2.5 px-3 border-r border-slate-200">Employee Name</th>
+                          <th className="py-2.5 px-3 border-r border-slate-200">ANL #</th>
+                          <th className="py-2.5 px-3 text-center border-r border-slate-200">Date</th>
+                          <th className="py-2.5 px-3 border-r border-slate-200">Operation</th>
+                          <th className="py-2.5 px-3 text-right border-r border-slate-200">Rate</th>
+                          <th className="py-2.5 px-3 text-center border-r border-slate-200">Bundle</th>
+                          <th className="py-2.5 px-3 text-center border-r border-slate-200">Quantity</th>
+                          <th className="py-2.5 px-3 text-right border-r border-slate-200">Total Pay</th>
+                          <th className="py-2.5 px-3 text-center w-20">Signature</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {groups.map((g) => (
+                          <Fragment key={g.employeeCode}>
+                            {g.items.map((item, rowIdx) => {
+                              const r = item as any;
+                              const wo = item.workOrder || r.WorkOrder || "—";
+                              const wd = item.workDate || r.WorkDate || "—";
+                              const op = item.operation || r.Operation || "—";
+                              const rateVal = item.rate ?? r.Rate;
+                              const bundleVal = Number(item.bundleCount ?? r.BundleCount) || 0;
+                              const qtyVal = Number(item.qty ?? r.Qty) || 0;
+                              const payVal = Number(item.totalPay ?? r.TotalPay) || 0;
+
+                              return (
+                                <tr
+                                  key={rowIdx}
+                                  className="hover:bg-slate-50/60 transition-colors"
+                                >
+                                  <td className="py-2 px-3 border-r border-slate-100 font-mono font-bold text-[#4f46e5] text-[11px]">
+                                    {rowIdx === 0 ? g.employeeCode : ""}
+                                  </td>
+                                  <td className="py-2 px-3 border-r border-slate-100 font-semibold text-slate-800">
+                                    {rowIdx === 0 ? (g.employeeName || "—") : ""}
+                                  </td>
+                                  <td className="py-2 px-3 border-r border-slate-100 font-mono text-slate-700">
+                                    {wo}
+                                  </td>
+                                  <td className="py-2 px-3 border-r border-slate-100 text-center text-slate-600">
+                                    {wd}
+                                  </td>
+                                  <td className="py-2 px-3 border-r border-slate-100 text-slate-700">
+                                    {op}
+                                  </td>
+                                  <td className="py-2 px-3 border-r border-slate-100 text-right font-mono text-slate-700">
+                                    {rateVal != null ? `Rs. ${Number(rateVal).toFixed(2)}` : "—"}
+                                  </td>
+                                  <td className="py-2 px-3 border-r border-slate-100 text-center font-bold text-slate-800">
+                                    {bundleVal}
+                                  </td>
+                                  <td className="py-2 px-3 border-r border-slate-100 text-center font-extrabold text-[#4f46e5]">
+                                    {qtyVal.toLocaleString()}
+                                  </td>
+                                  <td className="py-2 px-3 border-r border-slate-100 text-right font-bold text-emerald-700">
+                                    Rs. {formatAmount(payVal)}
+                                  </td>
+                                  <td className="py-2 px-3 text-center border-slate-100" />
+                                </tr>
+                              );
+                            })}
+                            {/* Employee sub-total */}
+                            <tr className="bg-slate-50/80 border-t border-slate-200 text-[11px] font-bold text-slate-700">
+                              <td className="py-1.5 px-3 border-r border-slate-200" colSpan={5}>
+                                Employee wise Total :
+                              </td>
+                              <td className="py-1.5 px-3 border-r border-slate-200" />
+                              <td className="py-1.5 px-3 border-r border-slate-200 text-center">
+                                {g.totalBundles}
+                              </td>
+                              <td className="py-1.5 px-3 border-r border-slate-200 text-center text-[#4f46e5]">
+                                {g.totalQty.toLocaleString()}
+                              </td>
+                              <td className="py-1.5 px-3 border-r border-slate-200 text-right text-emerald-700">
+                                Rs. {formatAmount(g.totalPay)}
+                              </td>
+                              <td className="py-1.5 px-3" />
+                            </tr>
+                          </Fragment>
+                        ))}
+                      </tbody>
+                      <tfoot>
+                        <tr className="bg-slate-100 border-t-2 border-slate-300 font-black text-slate-800 text-xs">
+                          <td className="py-2.5 px-3 border-r border-slate-200" colSpan={5}>
+                            Grand Total :
+                          </td>
+                          <td className="py-2.5 px-3 border-r border-slate-200" />
+                          <td className="py-2.5 px-3 border-r border-slate-200 text-center">
+                            {batchGrandBundles}
+                          </td>
+                          <td className="py-2.5 px-3 border-r border-slate-200 text-center text-[#4f46e5]">
+                            {batchGrandQty.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 border-r border-slate-200 text-right text-emerald-700">
+                            Rs. {formatAmount(batchGrandPay)}
+                          </td>
+                          <td className="py-2.5 px-3" />
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Search Bar */}
       <div className="bg-white border border-[#e2e8f0] rounded-2xl p-4 shadow-sm no-print">
         <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2 flex-wrap gap-2">
@@ -1188,42 +1510,8 @@ export function EmployeeReportDashboard() {
               </div>
             </div>
 
-            {/* Right: Actions (Print & Wage Toggle) */}
+            {/* Right: Actions */}
             <div className="flex items-center gap-2.5 flex-wrap no-print">
-              {summary && isWageCalculated && (
-                <span className="px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
-                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  <span>Wages Saved</span>
-                </span>
-              )}
-
-              {summary && (
-                <button
-                  type="button"
-                  onClick={handleToggleWages}
-                  disabled={isWageActionLoading || summary.totalCoupons === 0}
-                  className={`py-1.5 px-3.5 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${
-                    isWageCalculated
-                      ? "bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 hover:border-rose-300"
-                      : "bg-[#4f46e5] border border-[#4f46e5] text-white hover:bg-indigo-700 shadow-indigo-600/20"
-                  }`}
-                  title={
-                    isWageCalculated
-                      ? "Delete calculated wages so coupons can be rescanned or modified"
-                      : "Create & save wages for this employee and coupons"
-                  }
-                >
-                  {isWageActionLoading ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : isWageCalculated ? (
-                    <Trash2 className="w-3.5 h-3.5" />
-                  ) : (
-                    <Coins className="w-3.5 h-3.5" />
-                  )}
-                  <span>{isWageCalculated ? "Delete Wages" : "Create Wages"}</span>
-                </button>
-              )}
-
               <button
                 type="button"
                 onClick={() => window.print()}
@@ -1236,33 +1524,6 @@ export function EmployeeReportDashboard() {
               </button>
             </div>
           </div>
-
-          {/* Wage Action Feedback Alert */}
-          {wageActionNotice && (
-            <div
-              className={`p-3.5 rounded-xl border text-xs font-semibold flex items-center justify-between gap-3 shadow-xs no-print ${
-                wageActionNotice.type === "success"
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-900"
-                  : "bg-rose-50 border-rose-200 text-rose-900"
-              }`}
-            >
-              <div className="flex items-center gap-2">
-                {wageActionNotice.type === "success" ? (
-                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                ) : (
-                  <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
-                )}
-                <span>{wageActionNotice.message}</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setWageActionNotice(null)}
-                className="text-slate-400 hover:text-slate-600 font-bold text-sm leading-none px-1"
-              >
-                ×
-              </button>
-            </div>
-          )}
 
           {/* 3-Card Summary Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 no-print">

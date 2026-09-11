@@ -116,7 +116,7 @@ export interface CouponReportItem {
   scannedAt?: string | null;
   employeeCode?: string | null;
   employeeName?: string | null;
-  isWageCalculated?: boolean | null;
+  isWageCalculated?: boolean;
   wageId?: number | null;
 }
 
@@ -133,10 +133,9 @@ export interface ReportSummary {
   lastScannedCoupon?: string | null;
   lastScannedAt?: string | null;
 
-  // Wage status for current report scope
-  isWageCalculated?: boolean;
-  wageId?: number | null;
-  wageCreatedAt?: string | null;
+  // Wage calculation flag
+  allWagesCalculated?: boolean;
+  uncalculatedCouponsCount?: number;
 
   // Coverage counts — whichever of these matches the search mode is always
   // 1 (searching a single employee/work order/operation); the other two are
@@ -190,4 +189,31 @@ export interface ReportSearchSuggestion {
 
 export function getErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
+}
+
+// ── Wages ────────────────────────────────────────────────────────────────────
+// One operation-grouped row — same columns as the Employees breakdown tab.
+export interface WageRow {
+  employeeCode: string;
+  employeeName?: string | null;
+  workOrder?: string | null;
+  workDate?: string | null;
+  operation?: string | null;
+  rate?: number | null;
+  bundleCount: number;
+  qty: number;
+  totalPay: number;
+}
+
+// A wage batch header plus its detail rows, returned by GET /api/wages.
+export interface WagesBatch {
+  WageId: number;
+  FromDate?: string | null;
+  ToDate?: string | null;
+  TotalRows: number;
+  TotalQty: number;
+  TotalAmount: number;
+  CreatedBy?: string | null;
+  CreatedAt: string;
+  rows: WageRow[];
 }

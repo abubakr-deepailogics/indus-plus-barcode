@@ -4,6 +4,8 @@ import type {
   ReportSearchMode,
   ReportSearchSuggestion,
   ReportSummary,
+  WageRow,
+  WagesBatch,
 } from "../types";
 
 // Employee search reuses coupon-scanning's worker lookup (same /api/workers
@@ -101,18 +103,17 @@ export async function fetchSectionSearchSuggestions(
   return sections.map((s) => ({ value: s, label: s }));
 }
 
+// ── Wages ─────────────────────────────────────────────────────────────────────
+
 export async function createWages(params: {
-  employeeCode: string;
   from?: string;
   to?: string;
   createdBy?: string;
-  coupons: Array<{
-    couponCode: string;
-    qty?: number | null;
-    rate?: number | null;
-    amount?: number | null;
-  }>;
-}): Promise<{ ok: true; wageId: number; totalCoupons: number; totalAmount: number } | { ok: false; error: string }> {
+  rows: WageRow[];
+}): Promise<
+  | { ok: true; wageId: number; totalRows: number; totalAmount: number }
+  | { ok: false; error: string }
+> {
   const response = await fetch("/api/wages", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -125,24 +126,36 @@ export async function createWages(params: {
   return {
     ok: true,
     wageId: data.wageId,
-    totalCoupons: data.totalCoupons,
+    totalRows: data.totalRows,
     totalAmount: data.totalAmount,
   };
 }
 
-export async function deleteWages(params: {
+export async function fetchWages(params: {
   wageId?: number;
   employeeCode?: string;
   from?: string;
   to?: string;
-}): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
-  const queryParams = new URLSearchParams();
-  if (params.wageId) queryParams.set("wageId", String(params.wageId));
-  if (params.employeeCode) queryParams.set("employeeCode", params.employeeCode);
-  if (params.from) queryParams.set("from", params.from);
-  if (params.to) queryParams.set("to", params.to);
+}): Promise<{ ok: true; wages: WagesBatch[] } | { ok: false; error: string }> {
+  const qp = new URLSearchParams();
+  if (params.wageId) qp.set("wageId", String(params.wageId));
+  if (params.employeeCode) qp.set("employeeCode", params.employeeCode);
+  if (params.from) qp.set("from", params.from);
+  if (params.to) qp.set("to", params.to);
 
-  const response = await fetch(`/api/wages?${queryParams.toString()}`, {
+  const response = await fetch(`/api/wages?${qp.toString()}`);
+  const data = await response.json();
+  if (!response.ok) {
+    return { ok: false, error: data.error || "Failed to fetch wages." };
+  }
+  return { ok: true, wages: data.wages ?? [] };
+}
+
+export async function deleteWages(params: {
+  wageId: number;
+}): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
+  const qp = new URLSearchParams({ wageId: String(params.wageId) });
+  const response = await fetch(`/api/wages?${qp.toString()}`, {
     method: "DELETE",
   });
   const data = await response.json();
@@ -151,4 +164,3 @@ export async function deleteWages(params: {
   }
   return { ok: true, message: data.message };
 }
-
