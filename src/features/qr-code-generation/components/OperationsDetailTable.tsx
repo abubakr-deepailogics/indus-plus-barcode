@@ -40,8 +40,8 @@ function SortableHeader({
 }: SortableHeaderProps) {
   return (
     <div
-      className={`flex items-center gap-1 group/header w-full min-h-[20px] ${
-        align === "center" ? "justify-center" : "justify-between"
+      className={`flex items-center gap-1 group/header min-h-[20px] ${
+        align === "center" ? "justify-center w-full" : "justify-start"
       }`}
     >
       <span className="text-[10px] font-bold text-[#64748b] uppercase tracking-wider whitespace-normal break-words">
