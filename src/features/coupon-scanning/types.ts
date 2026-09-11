@@ -68,10 +68,11 @@ export function getErrorMessage(err: unknown, fallback: string): string {
 // contain both kinds of failure at once, so each reason gets its own
 // clause (joined with "; ") rather than picking one word to cover both.
 export function describeFailedScans(
-  failed: { code: string; reason: "already_scanned" | "not_found" }[],
+  failed: { code: string; reason: "already_scanned" | "not_found" | "wages_already_calculated" }[],
 ): string {
   const alreadyScanned = failed.filter((f) => f.reason === "already_scanned");
   const notFound = failed.filter((f) => f.reason === "not_found");
+  const wagesCalculated = failed.filter((f) => f.reason === "wages_already_calculated");
   const parts: string[] = [];
   if (alreadyScanned.length > 0) {
     parts.push(
@@ -81,6 +82,11 @@ export function describeFailedScans(
   if (notFound.length > 0) {
     parts.push(
       `${notFound.length} coupon(s) not found: ${notFound.map((f) => f.code).join(", ")}`,
+    );
+  }
+  if (wagesCalculated.length > 0) {
+    parts.push(
+      `${wagesCalculated.length} coupon(s) have wages already calculated (delete wages first): ${wagesCalculated.map((f) => f.code).join(", ")}`,
     );
   }
   return parts.join("; ");

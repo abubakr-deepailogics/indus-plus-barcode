@@ -134,7 +134,7 @@ export async function scanCoupon(params: {
 // found" message, so the UI can tell the user precisely which it was.
 export interface FailedScan {
   code: string;
-  reason: "already_scanned" | "not_found";
+  reason: "already_scanned" | "not_found" | "wages_already_calculated";
 }
 
 // Batch version of scanCoupon — one request for a whole burst of scanner-gun

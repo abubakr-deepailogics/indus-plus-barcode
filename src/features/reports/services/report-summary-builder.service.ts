@@ -36,6 +36,8 @@ interface RawCouponRow {
   OpNo: string;
   EmployeeCode: string;
   ScannedAt: string | null;
+  IsWageCalculated?: boolean | null;
+  WageId?: number | null;
 }
 
 // Which QrCode_Coupon column scopes every query to the searched dimension.
@@ -52,6 +54,14 @@ const COLUMN_BY_MODE: Record<ReportSearchMode, string> = {
 };
 
 const IN_LIST_CHUNK_SIZE = 2000; // stays well under SQL Server's ~2100 parameter cap
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) {
+    out.push(items.slice(i, i + size));
+  }
+  return out;
+}
 
 // Every distinct Operation Code belonging to the given section, from the
 // (global, catalog-level) style bulletin — same source operation mode
@@ -257,7 +267,7 @@ export async function buildReportSummary(
 
   const [couponResult, scanCountsResult] = await Promise.all([
     couponRequest.query(`
-      SELECT CouponCode, WorkOrder, BundleNo, OpNo, EmployeeCode, ScannedAt
+      SELECT CouponCode, WorkOrder, BundleNo, OpNo, EmployeeCode, ScannedAt, IsWageCalculated, WageId
       FROM dbo.QrCode_Coupon
       WHERE ${couponConditions.join(" AND ")}
       ORDER BY ScannedAt DESC
@@ -279,6 +289,43 @@ export async function buildReportSummary(
 
   const rows = couponResult.recordset as RawCouponRow[];
   const enriched = await enrichCouponRows(rows);
+
+  // Fetch saved wage details from dbo.EmployeeWageCoupons for any coupons that have a saved WageId
+  const wageIds = [...new Set(rows.map((r) => r.WageId).filter((id): id is number => id != null))];
+  if (wageIds.length > 0) {
+    const savedWageMap = new Map<string, { Qty: number; Rate: number; Amount: number }>();
+    for (const batch of chunk(wageIds, IN_LIST_CHUNK_SIZE)) {
+      const wageReq = pitPool.request();
+      const placeholders = batch.map((wId, i) => {
+        wageReq.input(`wId${i}`, sql.Int, wId);
+        return `@wId${i}`;
+      });
+      const wageDetailRes = await wageReq.query(`
+        SELECT CouponCode, Qty, Rate, Amount
+        FROM dbo.EmployeeWageCoupons
+        WHERE WageId IN (${placeholders.join(", ")})
+      `);
+      for (const r of wageDetailRes.recordset) {
+        savedWageMap.set(String(r.CouponCode), {
+          Qty: Number(r.Qty) || 0,
+          Rate: Number(r.Rate) || 0,
+          Amount: Number(r.Amount) || 0,
+        });
+      }
+    }
+
+    // Override enriched values with the frozen saved values from dbo.EmployeeWageCoupons
+    for (const row of enriched) {
+      if (row.IsWageCalculated && row.CouponCode) {
+        const saved = savedWageMap.get(row.CouponCode);
+        if (saved) {
+          if (saved.Qty > 0) row.Qty = saved.Qty;
+          if (saved.Rate > 0) row.Rate = saved.Rate;
+          row.Value = saved.Amount;
+        }
+      }
+    }
+  }
 
   // Employee display names for the breakdown + coupon trail — one batch
   // lookup for every distinct EmployeeCode seen, rather than one per row.
@@ -487,6 +534,8 @@ export async function buildReportSummary(
       scannedAt: row.ScannedAt,
       employeeCode: row.EmployeeCode ?? null,
       employeeName: empName,
+      isWageCalculated: row.IsWageCalculated === true,
+      wageId: row.WageId ?? null,
     };
   });
 
@@ -547,6 +596,12 @@ export async function buildReportSummary(
     ? employeeInfoByCode.get(latest.EmployeeCode)
     : undefined;
 
+  const isWageCalculated =
+    enriched.length > 0 &&
+    enriched.every((r) => r.IsWageCalculated === true);
+  const wageId =
+    enriched.find((r) => r.WageId != null)?.WageId ?? null;
+
   const summary: ReportSummary = {
     subject,
     todayScans,
@@ -556,6 +611,9 @@ export async function buildReportSummary(
     totalCoupons: enriched.length,
     lastScannedCoupon: latest?.CouponCode ?? null,
     lastScannedAt: latest?.ScannedAt ?? null,
+
+    isWageCalculated,
+    wageId,
 
     totalWorkOrders,
     totalEmployees,

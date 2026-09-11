@@ -17,6 +17,11 @@ import {
   Users,
   Layers,
   Package,
+  Coins,
+  Trash2,
+  Loader2,
+  CheckCircle2,
+  ShieldAlert,
   type LucideIcon,
 } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
@@ -28,6 +33,8 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
 import {
+  createWages,
+  deleteWages,
   fetchEmployeeSearchSuggestions,
   fetchOperationSearchSuggestions,
   fetchSectionSearchSuggestions,
@@ -346,6 +353,94 @@ export function EmployeeReportDashboard() {
     unmount: () => void;
   } | null>(null);
 
+  const [isWageActionLoading, setIsWageActionLoading] = useState(false);
+  const [wageActionNotice, setWageActionNotice] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
+
+  const isWageCalculated = summary?.isWageCalculated === true;
+
+  const handleToggleWages = useCallback(async () => {
+    if (!summary || isWageActionLoading) return;
+    setIsWageActionLoading(true);
+    setWageActionNotice(null);
+
+    try {
+      const fromStr = dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : undefined;
+      const toStr = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : undefined;
+
+      if (isWageCalculated) {
+        const empCode =
+          summary.subject.mode === "employee" && !summary.subject.all
+            ? String(summary.subject.employee.EmployeeID)
+            : undefined;
+
+        const res = await deleteWages({
+          wageId: summary.wageId ?? undefined,
+          employeeCode: empCode,
+          from: fromStr,
+          to: toStr,
+        });
+
+        if (!res.ok) {
+          setWageActionNotice({ type: "error", message: res.error });
+        } else {
+          setWageActionNotice({
+            type: "success",
+            message: res.message || "Wages deleted successfully.",
+          });
+          search();
+        }
+      } else {
+        const empCode =
+          summary.subject.mode === "employee" && !summary.subject.all
+            ? String(summary.subject.employee.EmployeeID)
+            : summary.recentEmployeeCode || "";
+
+        if (!empCode) {
+          setWageActionNotice({
+            type: "error",
+            message: "Please select an employee before creating wages.",
+          });
+          setIsWageActionLoading(false);
+          return;
+        }
+
+        const couponsPayload = (summary.coupons || []).map((c) => ({
+          couponCode: c.couponCode,
+          qty: c.qty,
+          rate: c.rate,
+          amount: c.value,
+        }));
+
+        const res = await createWages({
+          employeeCode: empCode,
+          from: fromStr,
+          to: toStr,
+          coupons: couponsPayload,
+        });
+
+        if (!res.ok) {
+          setWageActionNotice({ type: "error", message: res.error });
+        } else {
+          setWageActionNotice({
+            type: "success",
+            message: `Wages created successfully for ${res.totalCoupons} coupon(s) totaling Rs. ${formatAmount(res.totalAmount)}.`,
+          });
+          search();
+        }
+      }
+    } catch (err: unknown) {
+      setWageActionNotice({
+        type: "error",
+        message: err instanceof Error ? err.message : "Wage operation failed.",
+      });
+    } finally {
+      setIsWageActionLoading(false);
+    }
+  }, [summary, isWageActionLoading, isWageCalculated, dateRange, search]);
+
   const modeConfig = MODE_CONFIG[mode];
 
   const handleSelect = useCallback(
@@ -395,11 +490,14 @@ export function EmployeeReportDashboard() {
   const showEmployeeColumn =
     summary?.subject.mode !== "employee" || isAllSummary;
 
-  const employeeGroupedData = useMemo(() => {
-    if (!summary?.employees) return [];
-    const coupons = summary.coupons || [];
+  const employeesList = summary?.employees;
+  const couponsList = summary?.coupons;
 
-    return summary.employees.map((emp) => {
+  const employeeGroupedData = useMemo(() => {
+    if (!employeesList) return [];
+    const coupons = couponsList || [];
+
+    return employeesList.map((emp) => {
       const empCoupons = coupons.filter(
         (c) => c.employeeCode === emp.employeeCode,
       );
@@ -490,7 +588,7 @@ export function EmployeeReportDashboard() {
         totalPay,
       };
     });
-  }, [summary?.employees, summary?.coupons]);
+  }, [employeesList, couponsList]);
 
   const grandTotalBundles = useMemo(
     () => employeeGroupedData.reduce((acc, eg) => acc + eg.totalBundles, 0),
@@ -1107,8 +1205,42 @@ export function EmployeeReportDashboard() {
               </div>
             </div>
 
-            {/* Right: Print Button */}
+            {/* Right: Actions (Print & Wage Toggle) */}
             <div className="flex items-center gap-2.5 flex-wrap no-print">
+              {summary && isWageCalculated && (
+                <span className="px-2.5 py-1 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-700 font-bold text-[10px] uppercase tracking-wider flex items-center gap-1.5 shadow-xs">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Wages Saved</span>
+                </span>
+              )}
+
+              {summary && (
+                <button
+                  type="button"
+                  onClick={handleToggleWages}
+                  disabled={isWageActionLoading || summary.totalCoupons === 0}
+                  className={`py-1.5 px-3.5 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed ${
+                    isWageCalculated
+                      ? "bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 hover:border-rose-300"
+                      : "bg-[#4f46e5] border border-[#4f46e5] text-white hover:bg-indigo-700 shadow-indigo-600/20"
+                  }`}
+                  title={
+                    isWageCalculated
+                      ? "Delete calculated wages so coupons can be rescanned or modified"
+                      : "Create & save wages for this employee and coupons"
+                  }
+                >
+                  {isWageActionLoading ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : isWageCalculated ? (
+                    <Trash2 className="w-3.5 h-3.5" />
+                  ) : (
+                    <Coins className="w-3.5 h-3.5" />
+                  )}
+                  <span>{isWageCalculated ? "Delete Wages" : "Create Wages"}</span>
+                </button>
+              )}
+
               <button
                 type="button"
                 onClick={() => window.print()}
@@ -1121,6 +1253,33 @@ export function EmployeeReportDashboard() {
               </button>
             </div>
           </div>
+
+          {/* Wage Action Feedback Alert */}
+          {wageActionNotice && (
+            <div
+              className={`p-3.5 rounded-xl border text-xs font-semibold flex items-center justify-between gap-3 shadow-xs no-print ${
+                wageActionNotice.type === "success"
+                  ? "bg-emerald-50 border-emerald-200 text-emerald-900"
+                  : "bg-rose-50 border-rose-200 text-rose-900"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                {wageActionNotice.type === "success" ? (
+                  <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                ) : (
+                  <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
+                )}
+                <span>{wageActionNotice.message}</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setWageActionNotice(null)}
+                className="text-slate-400 hover:text-slate-600 font-bold text-sm leading-none px-1"
+              >
+                ×
+              </button>
+            </div>
+          )}
 
           {/* 3-Card Summary Grid */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-5 no-print">

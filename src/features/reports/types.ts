@@ -116,6 +116,8 @@ export interface CouponReportItem {
   scannedAt?: string | null;
   employeeCode?: string | null;
   employeeName?: string | null;
+  isWageCalculated?: boolean | null;
+  wageId?: number | null;
 }
 
 export interface ReportSummary {
@@ -130,6 +132,11 @@ export interface ReportSummary {
   totalCoupons: number;
   lastScannedCoupon?: string | null;
   lastScannedAt?: string | null;
+
+  // Wage status for current report scope
+  isWageCalculated?: boolean;
+  wageId?: number | null;
+  wageCreatedAt?: string | null;
 
   // Coverage counts — whichever of these matches the search mode is always
   // 1 (searching a single employee/work order/operation); the other two are

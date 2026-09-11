@@ -14,6 +14,8 @@ interface CouponRow {
   OpNo: string;
   IsScanned: boolean;
   ScannedAt: string | null;
+  IsWageCalculated?: boolean | null;
+  WageId?: number | null;
 }
 
 export async function GET(request: Request) {
@@ -56,14 +58,14 @@ export async function GET(request: Request) {
       .query(
         barcode.trim() !== ""
           ? `
-            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt
+            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, IsWageCalculated, WageId
             FROM dbo.QrCode_Coupon WITH (NOLOCK)
             WHERE CouponCode = @barcode
               AND (@wo = '' OR WorkOrder = @wo)
               AND IsDeleted = 0
           `
           : `
-            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt
+            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, IsWageCalculated, WageId
             FROM dbo.QrCode_Coupon WITH (NOLOCK)
             WHERE WorkOrder = @wo
               AND (@bundle = '' OR BundleNo = @bundle)
@@ -89,6 +91,14 @@ export async function GET(request: Request) {
 
     if (barcode) {
       const match = records[0];
+
+      if (match.IsWageCalculated) {
+        return Response.json(
+          { error: "Wages already calculated for this coupon. Need to delete wages first." },
+          { status: 400 },
+        );
+      }
+
       if (match.IsScanned) {
         return Response.json(
           { error: "This coupon barcode has already been scanned!" },
@@ -129,6 +139,14 @@ export async function GET(request: Request) {
           error:
             "All matching coupons for this selection have already been scanned!",
         },
+        { status: 400 },
+      );
+    }
+
+    const wageCalculatedCount = unscanned.filter((r) => r.IsWageCalculated).length;
+    if (wageCalculatedCount > 0) {
+      return Response.json(
+        { error: "Wages already calculated for matching coupon(s). Need to delete wages first." },
         { status: 400 },
       );
     }

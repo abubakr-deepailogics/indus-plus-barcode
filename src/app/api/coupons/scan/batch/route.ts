@@ -77,14 +77,18 @@ export async function POST(request: Request) {
       OUTPUT inserted.CouponCode INTO @Updated
       FROM dbo.QrCode_Coupon c
       INNER JOIN @Codes src ON src.CouponCode = c.CouponCode
-      WHERE c.IsScanned = 0 AND c.IsDeleted = 0;
+      WHERE c.IsScanned = 0 AND c.IsDeleted = 0 AND (c.IsWageCalculated = 0 OR c.IsWageCalculated IS NULL);
 
       SELECT c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.IsScanned, c.ScannedAt
       FROM @Updated u
       INNER JOIN dbo.QrCode_Coupon c ON c.CouponCode = u.CouponCode;
 
       SELECT src.CouponCode,
-             CASE WHEN c.CouponCode IS NULL THEN 'not_found' ELSE 'already_scanned' END AS Reason
+             CASE
+               WHEN c.CouponCode IS NULL THEN 'not_found'
+               WHEN c.IsWageCalculated = 1 THEN 'wages_already_calculated'
+               ELSE 'already_scanned'
+             END AS Reason
       FROM @Codes src
       LEFT JOIN dbo.QrCode_Coupon c ON c.CouponCode = src.CouponCode AND c.IsDeleted = 0
       WHERE src.CouponCode NOT IN (SELECT CouponCode FROM @Updated);
@@ -96,7 +100,7 @@ export async function POST(request: Request) {
     // array-or-map, hence the cast (same pattern as the sql.Table casts above).
     const recordsets = updateResult.recordsets as unknown as [
       ScannedRecord[],
-      { CouponCode: string; Reason: "already_scanned" | "not_found" }[],
+      { CouponCode: string; Reason: "already_scanned" | "not_found" | "wages_already_calculated" }[],
     ];
     const scannedRows: ScannedRecord[] = recordsets[0] ?? [];
     const reasonRows = recordsets[1] ?? [];

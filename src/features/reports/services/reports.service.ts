@@ -100,3 +100,55 @@ export async function fetchSectionSearchSuggestions(
   const sections: string[] = await response.json();
   return sections.map((s) => ({ value: s, label: s }));
 }
+
+export async function createWages(params: {
+  employeeCode: string;
+  from?: string;
+  to?: string;
+  createdBy?: string;
+  coupons: Array<{
+    couponCode: string;
+    qty?: number | null;
+    rate?: number | null;
+    amount?: number | null;
+  }>;
+}): Promise<{ ok: true; wageId: number; totalCoupons: number; totalAmount: number } | { ok: false; error: string }> {
+  const response = await fetch("/api/wages", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(params),
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    return { ok: false, error: data.error || "Failed to create wages." };
+  }
+  return {
+    ok: true,
+    wageId: data.wageId,
+    totalCoupons: data.totalCoupons,
+    totalAmount: data.totalAmount,
+  };
+}
+
+export async function deleteWages(params: {
+  wageId?: number;
+  employeeCode?: string;
+  from?: string;
+  to?: string;
+}): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
+  const queryParams = new URLSearchParams();
+  if (params.wageId) queryParams.set("wageId", String(params.wageId));
+  if (params.employeeCode) queryParams.set("employeeCode", params.employeeCode);
+  if (params.from) queryParams.set("from", params.from);
+  if (params.to) queryParams.set("to", params.to);
+
+  const response = await fetch(`/api/wages?${queryParams.toString()}`, {
+    method: "DELETE",
+  });
+  const data = await response.json();
+  if (!response.ok) {
+    return { ok: false, error: data.error || "Failed to delete wages." };
+  }
+  return { ok: true, message: data.message };
+}
+
