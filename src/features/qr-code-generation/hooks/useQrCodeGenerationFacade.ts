@@ -268,6 +268,22 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         sdl: op.Sdl_No !== undefined ? String(op.Sdl_No) : "-",
       }));
 
+      const sectionMinSeq = new Map<string, number>();
+      for (const op of operations) {
+        const seqNum = Number(op.seqNo) || 0;
+        const current = sectionMinSeq.get(op.section);
+        if (current === undefined || seqNum < current) {
+          sectionMinSeq.set(op.section, seqNum);
+        }
+      }
+      operations.sort((a: OperationsDetailRow, b: OperationsDetailRow) => {
+        const sectionCompare =
+          (sectionMinSeq.get(a.section) ?? 0) -
+          (sectionMinSeq.get(b.section) ?? 0);
+        if (sectionCompare !== 0) return sectionCompare;
+        return (Number(a.seqNo) || 0) - (Number(b.seqNo) || 0);
+      });
+
       // Map database cuts to BundleDetailRow
       const bundles = fetchedCuts.map((cut: any, index: number) => ({
         id: cut.RowId || index,
@@ -320,7 +336,8 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
           const pairsData = await pairsRes.json();
           pairs = new Set(
             (pairsData.pairs || []).map(
-              (p: { bundleNo: string; opNo: string }) => `${p.bundleNo}|${p.opNo}`,
+              (p: { bundleNo: string; opNo: string }) =>
+                `${p.bundleNo}|${p.opNo}`,
             ),
           );
         }
