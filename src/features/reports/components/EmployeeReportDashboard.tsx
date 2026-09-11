@@ -153,29 +153,18 @@ type BreakdownDimension =
   | "sections"
   | "bundles";
 
-// Every report always carries every breakdown dimension, but whichever one
-// matches the search mode itself is trivial (exactly the subject being
-// searched) — this is the one place that decides which dimensions are
-// actually worth showing per mode, both for the on-screen tabs and for what
-// prints. Sections/bundles only make sense once you're already scoped to a
-// single work order (or "all work orders"), so they're work-order-only.
+// Every report always carries every breakdown dimension. The own-dimension
+// (e.g. "employees" tab in employee mode) is always shown first so the user
+// can see grouped-breakdown data for both specific and All searches.
+// Sections/bundles only make sense once you're already scoped to a single
+// work order (or "all work orders"), so they're work-order-only.
 const BREAKDOWN_DIMENSIONS: Record<ReportSearchMode, BreakdownDimension[]> = {
-  employee: ["operations", "workOrders"],
-  workOrder: ["employees", "operations", "sections", "bundles"],
-  operation: ["employees", "workOrders"],
-  section: ["employees", "workOrders", "operations", "bundles"],
+  employee: ["employees", "operations", "workOrders"],
+  workOrder: ["workOrders", "employees", "operations", "sections", "bundles"],
+  operation: ["operations", "employees", "workOrders"],
+  section: ["sections", "employees", "workOrders", "operations", "bundles"],
 };
 
-// The one dimension BREAKDOWN_DIMENSIONS always excludes for a mode — its
-// own subject. Trivial (one row) for a single-value search, but genuinely
-// useful once the "All" action makes that mode's own breakdown span many
-// rows instead of one.
-const OWN_DIMENSION_BY_MODE: Record<ReportSearchMode, BreakdownDimension> = {
-  employee: "employees",
-  workOrder: "workOrders",
-  operation: "operations",
-  section: "sections",
-};
 
 const TAB_META: Record<
   BreakdownDimension,
@@ -319,19 +308,13 @@ export function EmployeeReportDashboard() {
     isAllMode,
   } = useReportSearch();
 
-  // Whether the current summary came from the "All" action — its own
-  // dimension's breakdown is worth a tab (see OWN_DIMENSION_BY_MODE).
+  // BREAKDOWN_DIMENSIONS now always includes the own-dimension tab first,
+  // so availableTabs is simply BREAKDOWN_DIMENSIONS[mode] + "coupons".
   const isAllSummary = summary?.subject.all === true;
   const availableTabs = useMemo<TabKey[]>(() => {
-    const dims = isAllSummary
-      ? ([
-          OWN_DIMENSION_BY_MODE[mode],
-          ...BREAKDOWN_DIMENSIONS[mode],
-        ] as BreakdownDimension[])
-      : BREAKDOWN_DIMENSIONS[mode];
-    return [...dims, "coupons"];
-  }, [mode, isAllSummary]);
-  const [activeTab, setActiveTab] = useState<TabKey>("operations");
+    return [...BREAKDOWN_DIMENSIONS[mode], "coupons"];
+  }, [mode]);
+  const [activeTab, setActiveTab] = useState<TabKey>("employees");
 
   const [tabsForSummary, setTabsForSummary] = useState<ReportSummary | null>(
     null,
