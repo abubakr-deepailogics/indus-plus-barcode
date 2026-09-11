@@ -199,15 +199,15 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     });
   }, []);
 
-  // Set default generateBy to logged in user name — same deferral reason
+  // Set default generateBy to logged in user email — same deferral reason
   // as above.
   useEffect(() => {
     if (!user) return;
     queueMicrotask(() => {
-      const name = user.displayName || user.email?.split("@")[0] || "";
+      const email = user.email || user.displayName || "";
       setActiveStyle((prev) => ({
         ...prev,
-        generateBy: prev.generateBy || name,
+        generateBy: prev.generateBy || email,
       }));
     });
   }, [user]);

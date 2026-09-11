@@ -82,7 +82,7 @@ export function ParametersPanel({
               type="text"
               value={activeStyle.generateBy}
               readOnly
-              placeholder="Operator Name"
+              placeholder="Operator Email"
               className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
             />
           </div>
