@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Eraser,
+  Trash2,
   Loader2,
   CheckCircle2,
   AlertCircle,
@@ -16,22 +17,27 @@ interface OperationSuggestion {
   Operation_Name: string | null;
 }
 
-export interface UnscanOrDeleteResult {
+interface UnscanOrDeleteResult {
   unscannedCount: number;
   deletedCount: number;
-  totalCount: number;
 }
+
+type CouponFields = {
+  workOrder: string;
+  cutNo: string;
+  bundleNo: string;
+  opNo: string;
+};
 
 interface UnscanOrDeleteCouponModalProps {
   workOrder: string;
   onClose: () => void;
   onDone: () => void;
-  submit: (fields: {
-    workOrder: string;
-    cutNo: string;
-    bundleNo: string;
-    opNo: string;
-  }) => Promise<UnscanOrDeleteResult>;
+  // Unscan and delete are separate requests (separate API routes) now,
+  // rather than one combined "submit" — the modal decides which to call
+  // based on the current match's scanned/unscanned split.
+  submitUnscan: (fields: CouponFields) => Promise<{ unscannedCount: number }>;
+  submitDelete: (fields: CouponFields) => Promise<{ deletedCount: number }>;
 }
 
 type Step = "form" | "confirm" | "processing" | "success" | "error";
@@ -63,7 +69,8 @@ export function UnscanOrDeleteCouponModal({
   workOrder,
   onClose,
   onDone,
-  submit,
+  submitUnscan,
+  submitDelete,
 }: UnscanOrDeleteCouponModalProps) {
   const [step, setStep] = useState<Step>("form");
   const [cutNo, setCutNo] = useState("");
@@ -168,16 +175,34 @@ export function UnscanOrDeleteCouponModal({
   };
 
   const handleConfirm = async () => {
+    if (!matchCounts) return;
     setStep("processing");
     setErrorMessage("");
     try {
-      const res = await submit({
+      const fields = {
         workOrder,
         cutNo: cutNo.trim(),
         bundleNo: bundleNo.trim(),
         opNo: opNo.trim(),
-      });
-      setResult(res);
+      };
+      let unscannedCount = 0;
+      let deletedCount = 0;
+      // Delete first, then unscan: delete only ever touches coupons that
+      // are unscanned *before* this action runs, and unscan only touches
+      // ones that are scanned *before* this action runs — each route
+      // re-matches against current DB state at call time (see
+      // src/app/api/coupons/unscan-or-delete/{delete,unscan}/route.ts), so
+      // running delete first guarantees it can never catch a coupon this
+      // same click is about to unscan.
+      if (matchCounts.unscannedCount > 0) {
+        const res = await submitDelete(fields);
+        deletedCount = res.deletedCount;
+      }
+      if (matchCounts.scannedCount > 0) {
+        const res = await submitUnscan(fields);
+        unscannedCount = res.unscannedCount;
+      }
+      setResult({ unscannedCount, deletedCount });
       setStep("success");
     } catch (err) {
       setErrorMessage(
@@ -186,6 +211,21 @@ export function UnscanOrDeleteCouponModal({
       setStep("error");
     }
   };
+
+  // Drives both the confirm-step wording and its button label/icon — a
+  // homogeneous match (all-scanned or all-unscanned) only mentions/performs
+  // the one applicable action; a mixed match still does both, same as
+  // before, just described accurately instead of behind a generic
+  // "Confirm".
+  const confirmAction: "unscan" | "delete" | "both" | null = matchCounts
+    ? matchCounts.scannedCount > 0 && matchCounts.unscannedCount === 0
+      ? "unscan"
+      : matchCounts.unscannedCount > 0 && matchCounts.scannedCount === 0
+        ? "delete"
+        : matchCounts.scannedCount > 0 && matchCounts.unscannedCount > 0
+          ? "both"
+          : null
+    : null;
 
   const hasFilter = !!(cutNo.trim() || bundleNo.trim() || opNo.trim());
 
@@ -340,28 +380,57 @@ export function UnscanOrDeleteCouponModal({
             </form>
           )}
 
-          {step === "confirm" && matchCounts && (
+          {step === "confirm" && matchCounts && confirmAction && (
             <div className="w-full flex flex-col items-center py-2">
               <AlertCircle className="w-12 h-12 text-amber-500 mb-4" />
               <h4 className="text-sm font-extrabold text-slate-800 mb-1">
                 Confirm this action
               </h4>
               <p className="text-sm text-slate-800 font-medium mb-5 text-left leading-relaxed">
-                This will affect{" "}
-                <strong className="text-slate-700">
-                  {matchCounts.totalCount} coupon
-                  {matchCounts.totalCount === 1 ? "" : "s"}
-                </strong>{" "}
-                on work order <strong className="text-slate-700">{workOrder}</strong>
-                {!hasFilter && " — every coupon on this work order"}:{" "}
-                <strong className="text-amber-700">
-                  {matchCounts.scannedCount} unscanned
-                </strong>{" "}
-                and{" "}
-                <strong className="text-red-600">
-                  {matchCounts.unscannedCount} deleted
-                </strong>
-                . This cannot be undone from this screen.
+                {confirmAction === "unscan" && (
+                  <>
+                    This will{" "}
+                    <strong className="text-amber-700">
+                      unscan {matchCounts.scannedCount} coupon
+                      {matchCounts.scannedCount === 1 ? "" : "s"}
+                    </strong>{" "}
+                    on work order{" "}
+                    <strong className="text-slate-700">{workOrder}</strong>
+                    {!hasFilter && " — every coupon on this work order"}.
+                  </>
+                )}
+                {confirmAction === "delete" && (
+                  <>
+                    This will{" "}
+                    <strong className="text-red-600">
+                      delete {matchCounts.unscannedCount} coupon
+                      {matchCounts.unscannedCount === 1 ? "" : "s"}
+                    </strong>{" "}
+                    on work order{" "}
+                    <strong className="text-slate-700">{workOrder}</strong>
+                    {!hasFilter && " — every coupon on this work order"}. This
+                    cannot be undone from this screen.
+                  </>
+                )}
+                {confirmAction === "both" && (
+                  <>
+                    This will affect{" "}
+                    <strong className="text-slate-700">
+                      {matchCounts.totalCount} coupon
+                      {matchCounts.totalCount === 1 ? "" : "s"}
+                    </strong>{" "}
+                    on work order{" "}
+                    <strong className="text-slate-700">{workOrder}</strong>:{" "}
+                    <strong className="text-amber-700">
+                      {matchCounts.scannedCount} unscanned
+                    </strong>{" "}
+                    and{" "}
+                    <strong className="text-red-600">
+                      {matchCounts.unscannedCount} deleted
+                    </strong>
+                    . This cannot be undone from this screen.
+                  </>
+                )}
               </p>
               <div className="flex gap-2 w-full">
                 <button
@@ -374,9 +443,25 @@ export function UnscanOrDeleteCouponModal({
                 <button
                   type="button"
                   onClick={handleConfirm}
-                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+                  className={`flex-1 flex items-center justify-center gap-1.5 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer ${
+                    confirmAction === "unscan"
+                      ? "bg-amber-600 hover:bg-amber-700"
+                      : "bg-red-600 hover:bg-red-700"
+                  }`}
                 >
-                  Confirm
+                  {confirmAction === "unscan" && (
+                    <>
+                      <Eraser className="w-3.5 h-3.5" />
+                      Unscan Coupon{matchCounts.scannedCount === 1 ? "" : "s"}
+                    </>
+                  )}
+                  {confirmAction === "delete" && (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      Delete Coupon{matchCounts.unscannedCount === 1 ? "" : "s"}
+                    </>
+                  )}
+                  {confirmAction === "both" && "Unscan & Delete"}
                 </button>
               </div>
             </div>
@@ -398,18 +483,28 @@ export function UnscanOrDeleteCouponModal({
             <div className="w-full flex flex-col items-center py-2">
               <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4" />
               <h4 className="text-sm font-extrabold text-slate-800 mb-1">
-                {result.totalCount} Coupon{result.totalCount === 1 ? "" : "s"}{" "}
+                {result.unscannedCount + result.deletedCount} Coupon
+                {result.unscannedCount + result.deletedCount === 1 ? "" : "s"}{" "}
                 Processed
               </h4>
               <p className="text-sm text-slate-800 font-medium mb-5">
-                <strong className="text-slate-700">
-                  {result.unscannedCount}
-                </strong>{" "}
-                unscanned,{" "}
-                <strong className="text-slate-700">
-                  {result.deletedCount}
-                </strong>{" "}
-                deleted.
+                {result.unscannedCount > 0 && (
+                  <>
+                    <strong className="text-slate-700">
+                      {result.unscannedCount}
+                    </strong>{" "}
+                    unscanned
+                    {result.deletedCount > 0 ? ", " : "."}
+                  </>
+                )}
+                {result.deletedCount > 0 && (
+                  <>
+                    <strong className="text-slate-700">
+                      {result.deletedCount}
+                    </strong>{" "}
+                    deleted.
+                  </>
+                )}
               </p>
               <button
                 onClick={onDone}

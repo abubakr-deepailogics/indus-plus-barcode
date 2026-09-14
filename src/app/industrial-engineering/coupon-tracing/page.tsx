@@ -24,10 +24,7 @@ import {
 } from "@/components/work-order-search-modal";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
 import { CodeTypeSelectionModal } from "@/features/qr-code-generation/components/CodeTypeSelectionModal";
-import {
-  UnscanOrDeleteCouponModal,
-  type UnscanOrDeleteResult,
-} from "@/features/qr-code-generation/components/UnscanOrDeleteCouponModal";
+import { UnscanOrDeleteCouponModal } from "@/features/qr-code-generation/components/UnscanOrDeleteCouponModal";
 import type { PageSetupConfig } from "@/features/qr-code-generation/types";
 import { DEFAULT_MARGINS } from "@/features/qr-code-generation/types";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
@@ -235,23 +232,44 @@ export default function CouponTracingPage() {
     }
   };
 
-  // Looks up a coupon by WO/Cut/Bundle/Op (as printed on the physical
-  // coupon) — used by UnscanOrDeleteCouponModal. The server decides the
-  // action itself: unscans it if it was scanned, otherwise soft-deletes it.
-  const unscanOrDeleteCoupon = async (fields: {
+  // Looks up coupons by WO/Cut/Bundle/Op (as printed on the physical
+  // coupon(s), all but WO optional) — used by UnscanOrDeleteCouponModal.
+  // Unscan and delete are separate routes/requests now (see
+  // src/app/api/coupons/unscan-or-delete/{unscan,delete}/route.ts); the
+  // modal decides which to call based on the current match's scanned/
+  // unscanned split, and — when both apply — calls delete first so it only
+  // ever touches coupons that were already unscanned before this action,
+  // never ones this same action just unscanned.
+  const submitUnscanCoupons = async (fields: {
     workOrder: string;
     cutNo: string;
     bundleNo: string;
     opNo: string;
-  }): Promise<UnscanOrDeleteResult> => {
+  }): Promise<{ unscannedCount: number }> => {
+    const response = await fetch("/api/coupons/unscan-or-delete/unscan", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(fields),
+    });
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || "Failed to unscan coupon(s).");
+    return data;
+  };
+
+  const submitDeleteCoupons = async (fields: {
+    workOrder: string;
+    cutNo: string;
+    bundleNo: string;
+    opNo: string;
+  }): Promise<{ deletedCount: number }> => {
     const actedBy = user?.displayName || user?.email?.split("@")[0] || "";
-    const response = await fetch("/api/coupons/unscan-or-delete", {
+    const response = await fetch("/api/coupons/unscan-or-delete/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...fields, actedBy }),
     });
     const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Failed to process coupon.");
+    if (!response.ok) throw new Error(data.error || "Failed to delete coupon(s).");
     return data;
   };
 
@@ -703,7 +721,8 @@ export default function CouponTracingPage() {
       {showDeleteModal && (
         <UnscanOrDeleteCouponModal
           workOrder={tracedWorkOrder}
-          submit={unscanOrDeleteCoupon}
+          submitUnscan={submitUnscanCoupons}
+          submitDelete={submitDeleteCoupons}
           onClose={() => setShowDeleteModal(false)}
           onDone={() => {
             setShowDeleteModal(false);
