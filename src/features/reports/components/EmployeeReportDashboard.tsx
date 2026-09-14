@@ -472,7 +472,7 @@ export function EmployeeReportDashboard() {
     [employeesList, couponsList],
   );
 
-  teWages = useCallback(async () => {
+  const handleCreateWages = useCallback(async () => {
     if (isCreatingWages) return;
     setIsCreatingWages(true);
     setWageMsg(null);

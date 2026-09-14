@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   Eraser,
-  Trash2,
   Loader2,
   CheckCircle2,
   AlertCircle,
@@ -18,8 +17,9 @@ interface OperationSuggestion {
 }
 
 export interface UnscanOrDeleteResult {
-  action: "unscanned" | "deleted";
-  couponCode: string;
+  unscannedCount: number;
+  deletedCount: number;
+  totalCount: number;
 }
 
 interface UnscanOrDeleteCouponModalProps {
@@ -34,22 +34,31 @@ interface UnscanOrDeleteCouponModalProps {
   }) => Promise<UnscanOrDeleteResult>;
 }
 
-type Step = "form" | "processing" | "success" | "error";
-type CouponStatus = "idle" | "checking" | "scanned" | "unscanned" | "not_found";
+type Step = "form" | "confirm" | "processing" | "success" | "error";
+type MatchStatus = "idle" | "checking" | "matched" | "not_found";
+
+interface MatchCounts {
+  totalCount: number;
+  scannedCount: number;
+  unscannedCount: number;
+}
 
 const FIELD_LABEL =
   "text-[10px] font-bold text-[#64748b] uppercase tracking-wider mb-1.5 block";
 const FIELD_INPUT =
   "w-full px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/10 focus:border-amber-400 transition-all";
 
-// Manual lookup-and-act: user keys in the four fields printed on the
-// physical coupon (Work Order, Cut, Bundle, Operation) rather than picking
-// a row from the trace table — meant for a coupon slip in hand that hasn't
-// necessarily been traced/searched on screen first. The outcome isn't
-// chosen by the user: the server (see /api/coupons/unscan-or-delete) checks
-// the coupon's current scan state and unscans it if it was scanned, or
-// soft-deletes it (never a hard DELETE) if it wasn't — so a scanned coupon
-// is never deleted outright, it's always unscanned first.
+// Manual lookup-and-act: user keys in whichever of the fields printed on the
+// physical coupon(s) they have (Cut, Bundle, Operation) — none of the three
+// is required, Work Order (already selected on the page) is the only fixed
+// scope. Whatever subset is filled in narrows the match; leaving all three
+// empty scopes the action to every coupon on the work order, so a match can
+// be many coupons rather than one — the modal always shows the match count
+// and requires an explicit confirm before acting on a set larger than one.
+// The action per coupon isn't chosen by the user: the server (see
+// /api/coupons/unscan-or-delete) unscans whichever matched coupons are
+// currently scanned and soft-deletes the rest (never a hard DELETE) — so a
+// coupon is never deleted while still scanned.
 export function UnscanOrDeleteCouponModal({
   workOrder,
   onClose,
@@ -62,24 +71,16 @@ export function UnscanOrDeleteCouponModal({
   const [opNo, setOpNo] = useState("");
   const [errorMessage, setErrorMessage] = useState("");
   const [result, setResult] = useState<UnscanOrDeleteResult | null>(null);
-  const [couponCode, setCouponCode] = useState("");
-  const [status, setStatus] = useState<CouponStatus>("idle");
+  const [matchStatus, setMatchStatus] = useState<MatchStatus>("idle");
+  const [matchCounts, setMatchCounts] = useState<MatchCounts | null>(null);
 
-  const fieldsFilled = !!(bundleNo.trim() && opNo.trim());
-  const canSubmit =
-    fieldsFilled &&
-    step === "form" &&
-    (status === "scanned" || status === "unscanned");
+  const canReview = step === "form" && matchStatus === "matched";
 
   const requestIdRef = useRef(0);
   useEffect(() => {
-    if (step !== "form" || !fieldsFilled) {
-      setStatus("idle");
-      setCouponCode("");
-      return;
-    }
+    if (step !== "form") return;
     const requestId = ++requestIdRef.current;
-    setStatus("checking");
+    setMatchStatus("checking");
     const timer = setTimeout(async () => {
       try {
         const params = new URLSearchParams({
@@ -91,21 +92,25 @@ export function UnscanOrDeleteCouponModal({
         const res = await fetch(`/api/coupons/unscan-or-delete?${params}`);
         if (requestIdRef.current !== requestId) return;
         if (!res.ok) {
-          setStatus("not_found");
-          setCouponCode("");
+          setMatchStatus("not_found");
+          setMatchCounts(null);
           return;
         }
         const data = await res.json();
-        setCouponCode(data.couponCode);
-        setStatus(data.isScanned ? "scanned" : "unscanned");
+        setMatchCounts({
+          totalCount: data.totalCount,
+          scannedCount: data.scannedCount,
+          unscannedCount: data.unscannedCount,
+        });
+        setMatchStatus("matched");
       } catch {
         if (requestIdRef.current !== requestId) return;
-        setStatus("not_found");
-        setCouponCode("");
+        setMatchStatus("not_found");
+        setMatchCounts(null);
       }
     }, 400);
     return () => clearTimeout(timer);
-  }, [workOrder, cutNo, bundleNo, opNo, fieldsFilled, step]);
+  }, [workOrder, cutNo, bundleNo, opNo, step]);
 
   // Suggestions are scoped to this coupon's work order and sourced straight
   // from dbo.QrCode_Coupon (only_generated=true / type=cut), the same
@@ -156,9 +161,13 @@ export function UnscanOrDeleteCouponModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [step, onClose]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleReview = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!canSubmit) return;
+    if (!canReview) return;
+    setStep("confirm");
+  };
+
+  const handleConfirm = async () => {
     setStep("processing");
     setErrorMessage("");
     try {
@@ -172,11 +181,13 @@ export function UnscanOrDeleteCouponModal({
       setStep("success");
     } catch (err) {
       setErrorMessage(
-        err instanceof Error ? err.message : "Failed to process coupon.",
+        err instanceof Error ? err.message : "Failed to process coupon(s).",
       );
       setStep("error");
     }
   };
+
+  const hasFilter = !!(cutNo.trim() || bundleNo.trim() || opNo.trim());
 
   return (
     <div className="fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
@@ -188,12 +199,12 @@ export function UnscanOrDeleteCouponModal({
             </span>
             <h3 className="text-sm font-extrabold text-[#0f172a]">
               {step === "success"
-                ? result?.action === "unscanned"
-                  ? "Coupon Unscanned"
-                  : "Coupon Deleted"
+                ? "Done"
                 : step === "error"
                   ? "Action Failed"
-                  : "Unscan / Delete Coupon"}
+                  : step === "confirm"
+                    ? "Confirm Action"
+                    : "Unscan / Delete Coupon"}
             </h3>
           </div>
           {step !== "processing" && (
@@ -208,12 +219,15 @@ export function UnscanOrDeleteCouponModal({
 
         <div className="flex flex-col items-center text-center py-1">
           {step === "form" && (
-            <form onSubmit={handleSubmit} className="w-full">
+            <form onSubmit={handleReview} className="w-full">
               <p className="text-xs text-[#64748b] font-medium mb-4 text-left leading-relaxed">
-                Enter the details printed on the coupon to locate it. If
-                it&apos;s already scanned it will be{" "}
-                <strong className="text-slate-700">unscanned</strong>; otherwise
-                it will be <strong className="text-slate-700">deleted</strong>
+                Enter as much of the coupon details as you have — leave any of
+                Cut/Bundle/Operation blank to match more coupons. Leave all
+                three blank to match every coupon on this work order. Matched
+                coupons that are already scanned will be{" "}
+                <strong className="text-slate-700">unscanned</strong>; the
+                rest will be <strong className="text-slate-700">deleted</strong>
+                .
               </p>
 
               <div className="mb-3 text-left">
@@ -235,7 +249,7 @@ export function UnscanOrDeleteCouponModal({
                     fetchSuggestions={fetchCutSuggestions}
                     renderSuggestion={(item) => <span>{item}</span>}
                     getSuggestionValue={(item) => item}
-                    placeholder="e.g. 5"
+                    placeholder="Any"
                     inputClassName={FIELD_INPUT}
                   />
                 </div>
@@ -250,7 +264,7 @@ export function UnscanOrDeleteCouponModal({
                     fetchSuggestions={fetchBundleSuggestions}
                     renderSuggestion={(item) => <span>{item}</span>}
                     getSuggestionValue={(item) => item}
-                    placeholder="e.g. 0001"
+                    placeholder="Any"
                     inputClassName={FIELD_INPUT}
                   />
                 </div>
@@ -276,42 +290,36 @@ export function UnscanOrDeleteCouponModal({
                       </div>
                     )}
                     getSuggestionValue={(op) => op.Operation_Code}
-                    placeholder="e.g. OP1"
+                    placeholder="Any"
                     inputClassName={FIELD_INPUT}
                   />
                 </div>
               </div>
 
-              {fieldsFilled && (
-                <div className="mt-3 text-left">
-                  {status === "checking" && (
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
-                      <Loader2 className="w-3 h-3 animate-spin" />
-                      Checking coupon status...
-                    </div>
-                  )}
-                  {status === "scanned" && (
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-700">
-                      <Search className="w-3 h-3" />
-                      Coupon <span className="font-mono">{couponCode}</span> is
-                      scanned.
-                    </div>
-                  )}
-                  {status === "unscanned" && (
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-red-600">
-                      <Search className="w-3 h-3" />
-                      Coupon <span className="font-mono">{couponCode}</span> is
-                      not scanned.
-                    </div>
-                  )}
-                  {status === "not_found" && (
-                    <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
-                      <Search className="w-3 h-3" />
-                      No matching coupon found.
-                    </div>
-                  )}
-                </div>
-              )}
+              <div className="mt-3 text-left">
+                {matchStatus === "checking" && (
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Checking matching coupons...
+                  </div>
+                )}
+                {matchStatus === "matched" && matchCounts && (
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-700">
+                    <Search className="w-3 h-3" />
+                    {matchCounts.totalCount} coupon
+                    {matchCounts.totalCount === 1 ? "" : "s"} match
+                    {!hasFilter && " (entire work order)"} —{" "}
+                    {matchCounts.scannedCount} scanned,{" "}
+                    {matchCounts.unscannedCount} not scanned.
+                  </div>
+                )}
+                {matchStatus === "not_found" && (
+                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
+                    <Search className="w-3 h-3" />
+                    No matching coupons found.
+                  </div>
+                )}
+              </div>
 
               <div className="flex gap-2 w-full mt-5">
                 <button
@@ -323,45 +331,65 @@ export function UnscanOrDeleteCouponModal({
                 </button>
                 <button
                   type="submit"
-                  disabled={!canSubmit}
-                  className={`flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer ${
-                    status === "scanned"
-                      ? "bg-amber-600 hover:bg-amber-700"
-                      : status === "unscanned"
-                        ? "bg-red-600 hover:bg-red-700"
-                        : "bg-slate-300"
-                  }`}
+                  disabled={!canReview}
+                  className="flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
                 >
-                  {status === "scanned" && (
-                    <>
-                      <Eraser className="w-3.5 h-3.5" />
-                      Unscan Coupon
-                    </>
-                  )}
-                  {status === "unscanned" && (
-                    <>
-                      <Trash2 className="w-3.5 h-3.5" />
-                      Delete Coupon
-                    </>
-                  )}
-                  {(status === "idle" ||
-                    status === "checking" ||
-                    status === "not_found") &&
-                    "Find Coupon"}
+                  Review
                 </button>
               </div>
             </form>
+          )}
+
+          {step === "confirm" && matchCounts && (
+            <div className="w-full flex flex-col items-center py-2">
+              <AlertCircle className="w-12 h-12 text-amber-500 mb-4" />
+              <h4 className="text-sm font-extrabold text-slate-800 mb-1">
+                Confirm this action
+              </h4>
+              <p className="text-xs text-[#64748b] font-medium mb-5 text-left leading-relaxed">
+                This will affect{" "}
+                <strong className="text-slate-700">
+                  {matchCounts.totalCount} coupon
+                  {matchCounts.totalCount === 1 ? "" : "s"}
+                </strong>{" "}
+                on work order <strong className="text-slate-700">{workOrder}</strong>
+                {!hasFilter && " — every coupon on this work order"}:{" "}
+                <strong className="text-amber-700">
+                  {matchCounts.scannedCount} unscanned
+                </strong>{" "}
+                and{" "}
+                <strong className="text-red-600">
+                  {matchCounts.unscannedCount} deleted
+                </strong>
+                . This cannot be undone from this screen.
+              </p>
+              <div className="flex gap-2 w-full">
+                <button
+                  type="button"
+                  onClick={() => setStep("form")}
+                  className="flex-1 bg-white border border-[#e2e8f0] text-[#64748b] px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#f8fafc] transition-colors cursor-pointer"
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirm}
+                  className="flex-1 bg-red-600 hover:bg-red-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+                >
+                  Confirm
+                </button>
+              </div>
+            </div>
           )}
 
           {step === "processing" && (
             <div className="flex flex-col items-center py-4 w-full">
               <Loader2 className="w-10 h-10 text-amber-600 animate-spin mb-4" />
               <h4 className="text-sm font-extrabold text-slate-800 mb-1">
-                Processing Coupon...
+                Processing Coupons...
               </h4>
               <p className="text-[11px] text-[#94a3b8] font-medium mt-2">
-                Looking up the coupon and applying the right action. Please
-                wait.
+                Applying the right action to each matched coupon. Please wait.
               </p>
             </div>
           )}
@@ -370,18 +398,18 @@ export function UnscanOrDeleteCouponModal({
             <div className="w-full flex flex-col items-center py-2">
               <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4" />
               <h4 className="text-sm font-extrabold text-slate-800 mb-1">
-                {result.action === "unscanned"
-                  ? "Coupon Unscanned"
-                  : "Coupon Deleted"}
+                {result.totalCount} Coupon{result.totalCount === 1 ? "" : "s"}{" "}
+                Processed
               </h4>
               <p className="text-xs text-[#64748b] font-medium mb-5">
-                Coupon{" "}
-                <strong className="text-slate-700 font-mono">
-                  {result.couponCode}
+                <strong className="text-slate-700">
+                  {result.unscannedCount}
                 </strong>{" "}
-                {result.action === "unscanned"
-                  ? "was already scanned, so it has been reset to not-scanned."
-                  : "was not scanned, so it has been soft-deleted and removed from the trace list."}
+                unscanned,{" "}
+                <strong className="text-slate-700">
+                  {result.deletedCount}
+                </strong>{" "}
+                deleted.
               </p>
               <button
                 onClick={onDone}
@@ -396,7 +424,7 @@ export function UnscanOrDeleteCouponModal({
             <div className="w-full flex flex-col items-center py-2">
               <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
               <h4 className="text-sm font-extrabold text-slate-800 mb-1">
-                Could Not Process Coupon
+                Could Not Process Coupons
               </h4>
               <div className="bg-red-50/50 border border-red-100 rounded-xl p-3 text-left w-full mb-5 max-h-[120px] overflow-y-auto">
                 <p className="text-[11px] text-red-600 font-semibold leading-relaxed">
