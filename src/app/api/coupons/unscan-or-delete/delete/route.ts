@@ -17,7 +17,17 @@ export const dynamic = "force-dynamic";
 // (softDeleteCoupons only sets IsDeleted/DeletedAt/DeletedBy) — once
 // deleted, a coupon cannot be scanned again.
 //
-
+// Snapshot cascade: a StyleBullettinInt row (keyed by Operation Code) is
+// marked IsDeleted only once NO active coupon remains for that
+// WorkOrder+OpNo (i.e. this delete removed the last coupon still using that
+// operation); a SaleOrderPOCutDetailViewV1 row (keyed by Bundle Id) only
+// once NO active coupon remains for that WorkOrder+BundleNo. Deliberately
+// NOT scoped by the shared generation Id — one "Generate Coupons" run's
+// coupons can span many bundles/operations, so cascading by Id alone would
+// mark rows for OTHER still-active operations/bundles from that same run as
+// deleted too, hiding their report data incorrectly. If more than one
+// coupon still references that operation/bundle, the corresponding
+// snapshot row's IsDeleted stays 0 — nothing else about it changes.
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -48,36 +58,69 @@ export async function POST(request: Request) {
     await logCouponActionHistory(pool, "deleted", unscanned, by);
 
     const unscannedCodes = unscanned.map((m) => m.CouponCode);
+
     await softDeleteCoupons(pool, unscannedCodes, by);
 
-    const generationIds = [
-      ...new Set(unscanned.map((m) => m.Id).filter((id): id is string => !!id)),
-    ];
-    if (generationIds.length > 0) {
-      const bindGenerationIds = (req: sql.Request) =>
-        generationIds
-          .map((id, i) => {
-            req.input(`gen${i}`, sql.UniqueIdentifier, id);
-            return `@gen${i}`;
-          })
-          .join(", ");
-      const styleBulletinRequest = pool.request().input("deletedBy", sql.NVarChar, by);
-      const styleBulletinInClause = bindGenerationIds(styleBulletinRequest);
-      const cutDetailRequest = pool.request().input("deletedBy", sql.NVarChar, by);
-      const cutDetailInClause = bindGenerationIds(cutDetailRequest);
-      await Promise.all([
-        styleBulletinRequest.query(`
-          UPDATE dbo.StyleBullettinInt
-          SET IsDeleted = 1, DeletedAt = SYSUTCDATETIME(), DeletedBy = @deletedBy
-          WHERE Id IN (${styleBulletinInClause}) AND IsDeleted = 0
+    const workOrder = parsed.workOrder;
+    const opNos = [...new Set(unscanned.map((m) => m.OpNo))];
+    const bundleNos = [...new Set(unscanned.map((m) => m.BundleNo))];
+    const cascades: Promise<unknown>[] = [];
+
+    if (opNos.length > 0) {
+      const req = pool
+        .request()
+        .input("deletedBy", sql.NVarChar, by)
+        .input("wo", sql.NVarChar, workOrder);
+      const inClause = opNos
+        .map((op, i) => {
+          req.input(`op${i}`, sql.NVarChar, op);
+          return `@op${i}`;
+        })
+        .join(", ");
+      cascades.push(
+        req.query(`
+          UPDATE sb
+          SET sb.IsDeleted = 1, sb.DeletedAt = SYSUTCDATETIME(), sb.DeletedBy = @deletedBy
+          FROM dbo.StyleBullettinInt sb
+          WHERE sb.[Order No] = @wo
+            AND sb.[Operation Code] IN (${inClause})
+            AND sb.IsDeleted = 0
+            AND NOT EXISTS (
+              SELECT 1 FROM dbo.QrCode_Coupon c
+              WHERE c.WorkOrder = @wo AND c.OpNo = sb.[Operation Code] AND c.IsDeleted = 0
+            )
         `),
-        cutDetailRequest.query(`
-          UPDATE dbo.SaleOrderPOCutDetailViewV1
-          SET IsDeleted = 1, DeletedAt = SYSUTCDATETIME(), DeletedBy = @deletedBy
-          WHERE Id IN (${cutDetailInClause}) AND IsDeleted = 0
-        `),
-      ]);
+      );
     }
+
+    if (bundleNos.length > 0) {
+      const req = pool
+        .request()
+        .input("deletedBy", sql.NVarChar, by)
+        .input("wo", sql.NVarChar, workOrder);
+      const inClause = bundleNos
+        .map((bundle, i) => {
+          req.input(`bundle${i}`, sql.NVarChar, bundle);
+          return `@bundle${i}`;
+        })
+        .join(", ");
+      cascades.push(
+        req.query(`
+          UPDATE cd
+          SET cd.IsDeleted = 1, cd.DeletedAt = SYSUTCDATETIME(), cd.DeletedBy = @deletedBy
+          FROM dbo.SaleOrderPOCutDetailViewV1 cd
+          WHERE cd.[Work Order #] = @wo
+            AND CAST(cd.[Bundle Id] AS NVARCHAR(50)) IN (${inClause})
+            AND cd.IsDeleted = 0
+            AND NOT EXISTS (
+              SELECT 1 FROM dbo.QrCode_Coupon c
+              WHERE c.WorkOrder = @wo AND c.BundleNo = CAST(cd.[Bundle Id] AS NVARCHAR(50)) AND c.IsDeleted = 0
+            )
+        `),
+      );
+    }
+
+    await Promise.all(cascades);
 
     return Response.json({
       success: true,
