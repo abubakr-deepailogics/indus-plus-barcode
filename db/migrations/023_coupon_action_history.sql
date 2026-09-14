@@ -22,7 +22,6 @@ BEGIN
     Action            NVARCHAR(20)    NOT NULL, -- 'unscanned' | 'deleted'
     ActedBy           NVARCHAR(100)   NOT NULL,
     ActedAt           DATETIME2       NOT NULL DEFAULT SYSUTCDATETIME(),
-    Reason            NVARCHAR(500)   NULL,     -- not currently captured by any UI; reserved for a future reason input
     PriorEmployeeCode NVARCHAR(50)    NULL,     -- who had scanned this coupon immediately before this action (NULL if it wasn't scanned)
     PriorScannedAt    DATETIME2       NULL,
     CONSTRAINT CK_QrCode_Coupon_ActionHistory_Action CHECK (Action IN ('unscanned', 'deleted'))

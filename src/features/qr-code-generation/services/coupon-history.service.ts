@@ -4,9 +4,7 @@ import type { MatchedCoupon } from "@/app/api/coupons/unscan-or-delete/shared";
 // Append-only audit log for coupon unscan/delete actions — see
 // db/migrations/023_coupon_action_history.sql. Never updated or deleted
 // after being written; one row per coupon per action, capturing who did it,
-// when, and (for unscan) who had it scanned immediately before. Reason is
-// reserved on the table but nothing writes it yet — no UI captures a reason
-// today.
+// when, and (for unscan) who had it scanned immediately before.
 
 const IN_LIST_CHUNK_SIZE = 2000; // stays well under SQL Server's ~2100 parameter cap
 
