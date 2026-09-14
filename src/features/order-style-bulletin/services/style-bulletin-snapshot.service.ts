@@ -7,12 +7,15 @@ import {
 
 // Captures the current indusPlus style-bulletin/cut-detail rows for exactly
 // the operations/bundles a coupon-generation run touched, into the
-// pitSystem snapshot tables (see db/migrations/012_style_bulletin_snapshot.sql).
-// Called once per successful coupon registration — see
-// src/app/api/qr-code-generation/coupons/route.ts. Safe to call repeatedly
-// for the same work order: MERGE upserts by natural key, refreshing the
-// data columns but keeping the original InsertedAt/InsertedBy from the
-// first capture.
+// pitSystem snapshot tables (see db/migrations/012_style_bulletin_snapshot.sql,
+// 021_style_bulletin_snapshot_append_only.sql). Called once per successful
+// coupon registration — see src/app/api/qr-code-generation/coupons/route.ts.
+// Append-only: every generation run inserts its own fresh rows (stamped with
+// that run's generationId), never updates a prior run's row. Re-running for
+// the same work order/operations/bundles adds another snapshot rather than
+// overwriting the previous one, so InsertedAt always reflects when that
+// row's data was actually captured and old runs' values stay queryable by
+// their own Id.
 
 interface StyleBulletinIndusRow {
   Sale_Order_No: unknown;
@@ -50,19 +53,6 @@ function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
   for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
-}
-
-// A MERGE fails outright ("attempted to UPDATE or DELETE the same row more
-// than once") if its source rowset has two rows with the same target key —
-// Indus's real tables aren't guaranteed to have exactly one row per
-// (Order No, Operation Code) / (Work Order #, Bundle Id), so this collapses
-// the fetched rows to one-per-key (last one wins) before they're ever
-// handed to sql.Table, rather than letting a rare duplicate blow up the
-// whole batch.
-function dedupeByKey<T>(rows: T[], keyOf: (row: T) => string): T[] {
-  const byKey = new Map<string, T>();
-  for (const row of rows) byKey.set(keyOf(row), row);
-  return [...byKey.values()];
 }
 
 async function fetchStyleBulletinRows(
@@ -189,94 +179,56 @@ function buildCutDetailRowsTable(rows: CutDetailIndusRow[], workOrder: string): 
   return table as unknown as sql.Table;
 }
 
-async function mergeStyleBulletinSnapshot(
+async function insertStyleBulletinSnapshot(
   rows: StyleBulletinIndusRow[],
   workOrder: string,
   insertedBy: string,
   generationId: string,
 ) {
   if (rows.length === 0) return;
-  const deduped = dedupeByKey(rows, (r) => r.Operation_Code);
   const pool = await getPool("pitSystem");
   await pool
     .request()
     .input("insertedBy", sql.NVarChar, insertedBy)
     .input("generationId", sql.UniqueIdentifier, generationId)
-    .input("Rows", buildStyleBulletinRowsTable(deduped, workOrder))
+    .input("Rows", buildStyleBulletinRowsTable(rows, workOrder))
     .query(`
-      MERGE INTO dbo.StyleBullettinInt AS target
-      USING @Rows AS source
-      ON target.[Order No] = source.OrderNo AND target.[Operation Code] = source.OperationCode
-      WHEN MATCHED THEN
-        UPDATE SET
-          target.[Sale order No] = source.SaleOrderNo,
-          target.[Customer Name] = source.CustomerName,
-          target.[Operation Name] = source.OperationName,
-          target.Section = source.Section,
-          target.[Operation Sequeance] = source.OperationSequence,
-          target.[Machine Type] = source.MachineType,
-          target.[Piece Rate] = source.PieceRate,
-          target.[Smv/Sam] = source.SmvSam,
-          target.[First Operation Section Wise] = source.FirstOpSectionWise,
-          target.[Last Operation Section Wise] = source.LastOpSectionWise,
-          target.Id = @generationId
-      WHEN NOT MATCHED THEN
-        INSERT (
-          Id, [Sale order No], [Customer Name], [Order No], [Operation Code], [Operation Name],
-          Section, [Operation Sequeance], [Machine Type], [Piece Rate], [Smv/Sam],
-          [First Operation Section Wise], [Last Operation Section Wise], InsertedBy
-        )
-        VALUES (
-          @generationId, source.SaleOrderNo, source.CustomerName, source.OrderNo, source.OperationCode, source.OperationName,
-          source.Section, source.OperationSequence, source.MachineType, source.PieceRate, source.SmvSam,
-          source.FirstOpSectionWise, source.LastOpSectionWise, @insertedBy
-        );
+      INSERT INTO dbo.StyleBullettinInt (
+        Id, [Sale order No], [Customer Name], [Order No], [Operation Code], [Operation Name],
+        Section, [Operation Sequeance], [Machine Type], [Piece Rate], [Smv/Sam],
+        [First Operation Section Wise], [Last Operation Section Wise], InsertedBy
+      )
+      SELECT
+        @generationId, source.SaleOrderNo, source.CustomerName, source.OrderNo, source.OperationCode, source.OperationName,
+        source.Section, source.OperationSequence, source.MachineType, source.PieceRate, source.SmvSam,
+        source.FirstOpSectionWise, source.LastOpSectionWise, @insertedBy
+      FROM @Rows AS source;
     `);
 }
 
-async function mergeCutDetailSnapshot(
+async function insertCutDetailSnapshot(
   rows: CutDetailIndusRow[],
   workOrder: string,
   insertedBy: string,
   generationId: string,
 ) {
   if (rows.length === 0) return;
-  const deduped = dedupeByKey(rows, (r) => String(r.Bundle_Id));
   const pool = await getPool("pitSystem");
   await pool
     .request()
     .input("insertedBy", sql.NVarChar, insertedBy)
     .input("generationId", sql.UniqueIdentifier, generationId)
-    .input("Rows", buildCutDetailRowsTable(deduped, workOrder))
+    .input("Rows", buildCutDetailRowsTable(rows, workOrder))
     .query(`
-      MERGE INTO dbo.SaleOrderPOCutDetailViewV1 AS target
-      USING @Rows AS source
-      ON target.[Work Order #] = source.WorkOrder AND target.[Bundle Id] = source.BundleId
-      WHEN MATCHED THEN
-        UPDATE SET
-          target.[Sale Order No] = source.SaleOrderNo,
-          target.[Customer Name] = source.CustomerName,
-          target.[Order Qty After % Add] = source.OrderQtyAfterAdd,
-          target.Inseam = source.Inseam,
-          target.Size = source.Size,
-          target.Color = source.Color,
-          target.[Fabric Code(Main Body)] = source.FabricCodeMainBody,
-          target.Wash = source.Wash,
-          target.[Cut #] = source.Cut,
-          target.[Bundle Qty] = source.BundleQty,
-          target.Shade = source.Shade,
-          target.Shrinkage = source.Shrinkage,
-          target.Id = @generationId
-      WHEN NOT MATCHED THEN
-        INSERT (
-          Id, [Sale Order No], [Customer Name], [Work Order #], [Order Qty After % Add], Inseam, Size, Color,
-          [Fabric Code(Main Body)], Wash, [Cut #], [Bundle Id], [Bundle Qty], Shade, Shrinkage, InsertedBy
-        )
-        VALUES (
-          @generationId, source.SaleOrderNo, source.CustomerName, source.WorkOrder, source.OrderQtyAfterAdd, source.Inseam,
-          source.Size, source.Color, source.FabricCodeMainBody, source.Wash, source.Cut, source.BundleId,
-          source.BundleQty, source.Shade, source.Shrinkage, @insertedBy
-        );
+      INSERT INTO dbo.SaleOrderPOCutDetailViewV1 (
+        Id, [Sale Order No], [Customer Name], [Work Order #], [Order Qty After % Add], Inseam, Size, Color,
+        [Fabric Code(Main Body)], Wash, [Cut #], [Bundle Id], [Bundle Qty], Shade, Shrinkage, InsertedBy
+      )
+      SELECT
+        @generationId, source.SaleOrderNo, source.CustomerName, source.WorkOrder, source.OrderQtyAfterAdd, source.Inseam,
+        source.Size, source.Color, source.FabricCodeMainBody, source.Wash, source.Cut, source.BundleId,
+        source.BundleQty, source.Shade, source.Shrinkage, @insertedBy
+      FROM @Rows AS source;
     `);
 }
 
@@ -291,13 +243,15 @@ async function mergeCutDetailSnapshot(
 // style-bulletin/cut-detail rows this run touched" under one traceable id
 // across all three tables for a single "Generate Coupons" action.
 //
-// Id on both snapshot tables is a per-GENERATION tracking key, not a
-// per-row one (see db/migrations/016_style_bulletin_snapshot_generation_id.sql):
-// every style-bulletin row and every cut-detail row this call touches —
-// whether newly inserted or an existing row matched by natural key — gets
+// Id on both snapshot tables is a per-GENERATION tracking key (see
+// db/migrations/016_style_bulletin_snapshot_generation_id.sql): every
+// style-bulletin row and every cut-detail row this call inserts gets
 // stamped with the SAME generationId, so every row this one coupon-
-// generation run produced or refreshed can be found later by that one Id,
-// across both tables.
+// generation run produced can be found later by that one Id, across both
+// tables. Append-only (021): a repeat run for the same work order inserts a
+// fresh set of rows rather than updating a prior run's, so InsertedAt always
+// reflects when that row's data was captured and earlier runs' values stay
+// intact and queryable by their own Id.
 export async function snapshotWorkOrderBulletin(
   workOrder: string,
   opNos: string[],
@@ -311,7 +265,7 @@ export async function snapshotWorkOrderBulletin(
     fetchCutDetailRows(workOrder, bundleIds),
   ]);
   await Promise.all([
-    mergeStyleBulletinSnapshot(styleBulletinRows, workOrder, by, generationId),
-    mergeCutDetailSnapshot(cutDetailRows, workOrder, by, generationId),
+    insertStyleBulletinSnapshot(styleBulletinRows, workOrder, by, generationId),
+    insertCutDetailSnapshot(cutDetailRows, workOrder, by, generationId),
   ]);
 }

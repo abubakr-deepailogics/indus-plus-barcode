@@ -134,6 +134,7 @@ async function resolveSubject(
           [Order Qty After % Add] AS Order_Qty
         FROM ${CUT_DETAIL_SNAPSHOT_TABLE}
         WHERE [Work Order #] = @wo
+        ORDER BY InsertedAt DESC
       `);
     if (woResult.recordset.length === 0) {
       return { ok: false, status: 404, error: "Work order not found." };
@@ -163,6 +164,7 @@ async function resolveSubject(
              CAST(NULL AS NVARCHAR(50)) AS Department, CAST(NULL AS NVARCHAR(50)) AS SkillLevel
       FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
       WHERE [Operation Code] = @code
+      ORDER BY InsertedAt DESC
     `);
   if (opResult.recordset.length === 0) {
     return { ok: false, status: 404, error: "Operation not found." };

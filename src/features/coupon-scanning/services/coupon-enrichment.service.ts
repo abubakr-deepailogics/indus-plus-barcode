@@ -70,9 +70,10 @@ async function fetchCutDetailByBundle(
         `[Work Order #] = @wo AND CAST([Bundle Id] AS NVARCHAR(50)) IN (${placeholders.join(", ")})`,
       ),
     );
-    // Old (broken) query picked "TOP 1 ... ORDER BY RowId" per bundle as a
-    // defensive tie-break — Bundle_Id should be unique per work order in
-    // practice, but this keeps the lowest-RowId row if it ever isn't.
+    // RowId is 1 = most recently inserted per (Work Order, Bundle Id) (see
+    // cutDetailSnapshotByFilter) — the snapshot table is append-only, so a
+    // regenerated work order has one row per generation; keeping the lowest
+    // RowId here picks the latest one.
     for (const row of result.recordset as CutDetailRow[]) {
       const key = String(row.Bundle_Id);
       const existing = map.get(key);
@@ -102,6 +103,9 @@ async function fetchStyleBulletinByOp(
         `[Order No] = @wo AND [Operation Code] IN (${placeholders.join(", ")})`,
       ),
     );
+    // RowId is 1 = most recently inserted per (Order No, Operation Code)
+    // (see styleBulletinSnapshotByFilter) — keeping the lowest RowId picks
+    // the latest generation's row.
     for (const row of result.recordset as StyleBulletinRow[]) {
       const existing = map.get(row.Operation_Code);
       if (!existing || row.RowId < existing.RowId)

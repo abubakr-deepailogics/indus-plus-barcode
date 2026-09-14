@@ -192,6 +192,11 @@ export const CUT_DETAIL_SNAPSHOT_TABLE = "dbo.SaleOrderPOCutDetailViewV1";
 // out of scope for the snapshot; SkillLevel/Department are not carried into
 // the snapshot table, so callers reading from here get null for both,
 // same as an unmatched LEFT JOIN would have produced).
+// RowId ranks each key's rows by InsertedAt DESC (latest generation = 1) —
+// the snapshot tables are append-only (021_style_bulletin_snapshot_append_only.sql),
+// so a work order regenerated more than once now has multiple rows per
+// natural key, and callers that dedupe by picking the lowest RowId must land
+// on the most recently captured row, not an arbitrary/oldest one.
 export function styleBulletinSnapshotByFilter(
   whereSql: string,
   orderBy = "Operation_Sequence",
@@ -212,12 +217,14 @@ export function styleBulletinSnapshotByFilter(
         [First Operation Section Wise] AS First_Operation_Section_Wise,
         [Last Operation Section Wise] AS Last_Operation_Section_Wise,
         CAST(NULL AS NVARCHAR(50)) AS SkillLevel,
-        CAST(NULL AS NVARCHAR(50)) AS Department
+        CAST(NULL AS NVARCHAR(50)) AS Department,
+        InsertedAt
       FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
       WHERE ${whereSql}
     )
-    SELECT ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS RowId, *
+    SELECT ROW_NUMBER() OVER (PARTITION BY Order_No, Operation_Code ORDER BY InsertedAt DESC) AS RowId, *
     FROM Filtered
+    ORDER BY ${orderBy}
   `;
 }
 
@@ -228,12 +235,13 @@ export function cutDetailSnapshotByFilter(
 ) {
   return `
     WITH Filtered AS (
-      SELECT ${CUT_DETAIL_COLUMNS_SQL}
+      SELECT ${CUT_DETAIL_COLUMNS_SQL}, InsertedAt
       FROM ${CUT_DETAIL_SNAPSHOT_TABLE}
       WHERE ${whereSql}
     )
-    SELECT ROW_NUMBER() OVER (ORDER BY ${orderBy}) AS RowId, *
+    SELECT ROW_NUMBER() OVER (PARTITION BY Work_Order, Bundle_Id ORDER BY InsertedAt DESC) AS RowId, *
     FROM Filtered
+    ORDER BY ${orderBy}
   `;
 }
 
