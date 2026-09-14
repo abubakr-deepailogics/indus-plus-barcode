@@ -61,17 +61,21 @@ export async function POST(request: Request) {
             return `@gen${i}`;
           })
           .join(", ");
-      const styleBulletinRequest = pool.request();
+      const styleBulletinRequest = pool.request().input("deletedBy", sql.NVarChar, by);
       const styleBulletinInClause = bindGenerationIds(styleBulletinRequest);
-      const cutDetailRequest = pool.request();
+      const cutDetailRequest = pool.request().input("deletedBy", sql.NVarChar, by);
       const cutDetailInClause = bindGenerationIds(cutDetailRequest);
       await Promise.all([
-        styleBulletinRequest.query(
-          `UPDATE dbo.StyleBullettinInt SET IsDeleted = 1 WHERE Id IN (${styleBulletinInClause})`,
-        ),
-        cutDetailRequest.query(
-          `UPDATE dbo.SaleOrderPOCutDetailViewV1 SET IsDeleted = 1 WHERE Id IN (${cutDetailInClause})`,
-        ),
+        styleBulletinRequest.query(`
+          UPDATE dbo.StyleBullettinInt
+          SET IsDeleted = 1, DeletedAt = SYSUTCDATETIME(), DeletedBy = @deletedBy
+          WHERE Id IN (${styleBulletinInClause}) AND IsDeleted = 0
+        `),
+        cutDetailRequest.query(`
+          UPDATE dbo.SaleOrderPOCutDetailViewV1
+          SET IsDeleted = 1, DeletedAt = SYSUTCDATETIME(), DeletedBy = @deletedBy
+          WHERE Id IN (${cutDetailInClause}) AND IsDeleted = 0
+        `),
       ]);
     }
 
