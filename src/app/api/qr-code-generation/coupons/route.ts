@@ -62,26 +62,38 @@ export async function POST(request: Request) {
         // style-bulletin/cut-detail snapshot row it touches, so all three
         // tables' rows from this one run can be found later by this one id.
         const generationId = randomUUID();
-        const insertedCount = await registerCoupons(pool, workOrder, cards, insertedBy, generationId, (done, total) => {
-          send({ done, total });
-        });
+        const { insertedCount, newBundleNos, newOpNos } = await registerCoupons(
+          pool,
+          workOrder,
+          cards,
+          insertedBy,
+          generationId,
+          (done, total) => {
+            send({ done, total });
+          },
+        );
         const couponCount = await countCoupons(pool, workOrder);
 
-        // Snapshot this run's operations/bundles into the pitSystem-owned
-        // style-bulletin/cut-detail tables so reports can read them locally
-        // (see style-bulletin-snapshot.service.ts). Only when this run
-        // actually inserted new coupons — if every card already existed
-        // (insertedCount 0, the "already exists" case), there's nothing new
-        // to snapshot and doing it anyway would just append a duplicate copy
-        // of the same rows on every re-run. Best-effort otherwise: coupons
-        // are already registered and are the source of truth, so a snapshot
-        // failure must not fail the whole generation run.
+        // Snapshot into the pitSystem-owned style-bulletin/cut-detail tables
+        // so reports can read them locally (see
+        // style-bulletin-snapshot.service.ts) — scoped to exactly the
+        // bundles/operations that got a new coupon this run (newBundleNos/
+        // newOpNos from registerCoupons), not the whole selection. A
+        // selection can mix newly-added bundles/operations with ones already
+        // generated in an earlier run (e.g. adding Cut 3 to an
+        // already-generated Cut 1 + one operation); re-snapshotting the
+        // already-generated part on every re-run would append a duplicate
+        // copy of the same rows each time. If nothing in this run was new
+        // (insertedCount 0, the "already exists" case), there's nothing to
+        // snapshot at all. Best-effort: coupons are already registered and
+        // are the source of truth, so a snapshot failure must not fail the
+        // whole generation run.
         if (insertedCount > 0) {
           try {
             await snapshotWorkOrderBulletin(
               workOrder,
-              [...new Set(selectedOperations.map((op) => op.opNo))],
-              [...new Set(selectedBundles.map((b) => b.bundleNo))],
+              newOpNos,
+              newBundleNos,
               insertedBy,
               generationId,
             );
