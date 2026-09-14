@@ -220,7 +220,7 @@ export function styleBulletinSnapshotByFilter(
         CAST(NULL AS NVARCHAR(50)) AS Department,
         InsertedAt
       FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
-      WHERE ${whereSql}
+      WHERE IsDeleted = 0 AND (${whereSql})
     )
     SELECT ROW_NUMBER() OVER (PARTITION BY Order_No, Operation_Code ORDER BY InsertedAt DESC) AS RowId, *
     FROM Filtered
@@ -237,7 +237,7 @@ export function cutDetailSnapshotByFilter(
     WITH Filtered AS (
       SELECT ${CUT_DETAIL_COLUMNS_SQL}, InsertedAt
       FROM ${CUT_DETAIL_SNAPSHOT_TABLE}
-      WHERE ${whereSql}
+      WHERE IsDeleted = 0 AND (${whereSql})
     )
     SELECT ROW_NUMBER() OVER (PARTITION BY Work_Order, Bundle_Id ORDER BY InsertedAt DESC) AS RowId, *
     FROM Filtered

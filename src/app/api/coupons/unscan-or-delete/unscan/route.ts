@@ -1,4 +1,5 @@
 import { getPool, sql } from "@/lib/db";
+import { logCouponActionHistory } from "@/features/qr-code-generation/services/coupon-history.service";
 import { readCouponFilter, findMatchingCoupons } from "../shared";
 
 export const dynamic = "force-dynamic";
@@ -9,7 +10,8 @@ export const dynamic = "force-dynamic";
 // coupons that are CURRENTLY scanned in this same request's fresh match
 // (re-queried here, not trusting an earlier GET /unscan-or-delete snapshot);
 // an already-unscanned match in the same filter is left untouched — use
-// .../delete for those. Never deletes anything.
+// .../delete for those. Never deletes anything. Every coupon this actually
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -17,20 +19,33 @@ export async function POST(request: Request) {
     if ("error" in parsed) {
       return Response.json({ error: parsed.error }, { status: 400 });
     }
+    const { actedBy } = body;
+    if (!actedBy || !String(actedBy).trim()) {
+      return Response.json(
+        { error: "Could not determine current user." },
+        { status: 400 },
+      );
+    }
 
     const pool = await getPool("pitSystem");
     const matches = await findMatchingCoupons(pool, parsed);
-    const scannedCodes = matches
-      .filter((m) => m.IsScanned)
-      .map((m) => m.CouponCode);
+    const scanned = matches.filter((m) => m.IsScanned);
 
-    if (scannedCodes.length === 0) {
+    if (scanned.length === 0) {
       return Response.json(
         { error: "No matching scanned coupons found for the given filters." },
         { status: 404 },
       );
     }
 
+    await logCouponActionHistory(
+      pool,
+      "unscanned",
+      scanned,
+      String(actedBy).trim(),
+    );
+
+    const scannedCodes = scanned.map((m) => m.CouponCode);
     const request2 = pool.request();
     const placeholders = scannedCodes.map((code, i) => {
       request2.input(`code${i}`, sql.NVarChar, code);
@@ -46,7 +61,10 @@ export async function POST(request: Request) {
       WHERE CouponCode IN (${placeholders.join(", ")}) AND IsDeleted = 0
     `);
 
-    return Response.json({ success: true, unscannedCount: scannedCodes.length });
+    return Response.json({
+      success: true,
+      unscannedCount: scannedCodes.length,
+    });
   } catch (err: unknown) {
     console.error("Bulk coupon unscan error:", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";

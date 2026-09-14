@@ -31,10 +31,23 @@ export function readCouponFilter(
   };
 }
 
+export interface MatchedCoupon {
+  CouponCode: string;
+  IsScanned: boolean;
+  WorkOrder: string;
+  BundleNo: string;
+  OpNo: string;
+  CutNo: string | null;
+  Section: string | null;
+  Id: string | null; // per-generation tracking key, shared by every coupon one "Generate Coupons" run produced
+  EmployeeCode: string | null;
+  ScannedAt: string | null;
+}
+
 export async function findMatchingCoupons(
   pool: Awaited<ReturnType<typeof getPool>>,
   filter: CouponFilter,
-) {
+): Promise<MatchedCoupon[]> {
   const request = pool
     .request()
     .input("workOrder", sql.NVarChar, filter.workOrder);
@@ -52,9 +65,9 @@ export async function findMatchingCoupons(
     conditions.push("OpNo = @opNo");
   }
   const result = await request.query(`
-    SELECT CouponCode, IsScanned
+    SELECT CouponCode, IsScanned, WorkOrder, BundleNo, OpNo, CutNo, Section, Id, EmployeeCode, ScannedAt
     FROM dbo.QrCode_Coupon
     WHERE ${conditions.join(" AND ")}
   `);
-  return result.recordset as { CouponCode: string; IsScanned: boolean }[];
+  return result.recordset as MatchedCoupon[];
 }

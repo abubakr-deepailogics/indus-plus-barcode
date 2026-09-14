@@ -75,7 +75,7 @@ async function fetchOperationCodesForSection(
     .query(`
       SELECT DISTINCT [Operation Code] AS Operation_Code
       FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
-      WHERE Section = @section
+      WHERE Section = @section AND IsDeleted = 0
     `);
   return result.recordset.map((r) => String(r.Operation_Code));
 }
@@ -133,7 +133,7 @@ async function resolveSubject(
           [Sale Order No] AS Sale_Order_No,
           [Order Qty After % Add] AS Order_Qty
         FROM ${CUT_DETAIL_SNAPSHOT_TABLE}
-        WHERE [Work Order #] = @wo
+        WHERE [Work Order #] = @wo AND IsDeleted = 0
         ORDER BY InsertedAt DESC
       `);
     if (woResult.recordset.length === 0) {
@@ -163,7 +163,7 @@ async function resolveSubject(
       SELECT TOP 1 [Operation Code] AS Operation_Code, [Operation Name] AS Operation_Name,
              CAST(NULL AS NVARCHAR(50)) AS Department, CAST(NULL AS NVARCHAR(50)) AS SkillLevel
       FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
-      WHERE [Operation Code] = @code
+      WHERE [Operation Code] = @code AND IsDeleted = 0
       ORDER BY InsertedAt DESC
     `);
   if (opResult.recordset.length === 0) {

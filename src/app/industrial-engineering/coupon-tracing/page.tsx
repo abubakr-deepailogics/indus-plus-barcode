@@ -246,10 +246,11 @@ export default function CouponTracingPage() {
     bundleNo: string;
     opNo: string;
   }): Promise<{ unscannedCount: number }> => {
+    const actedBy = user?.displayName || user?.email?.split("@")[0] || "";
     const response = await fetch("/api/coupons/unscan-or-delete/unscan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(fields),
+      body: JSON.stringify({ ...fields, actedBy }),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || "Failed to unscan coupon(s).");

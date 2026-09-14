@@ -1,5 +1,6 @@
-import { getPool } from "@/lib/db";
+import { getPool, sql } from "@/lib/db";
 import { softDeleteCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
+import { logCouponActionHistory } from "@/features/qr-code-generation/services/coupon-history.service";
 import { readCouponFilter, findMatchingCoupons } from "../shared";
 
 export const dynamic = "force-dynamic";
@@ -15,6 +16,8 @@ export const dynamic = "force-dynamic";
 // while it's scanned, and dbo.QrCode_Coupon rows are never hard-DELETEd
 // (softDeleteCoupons only sets IsDeleted/DeletedAt/DeletedBy) — once
 // deleted, a coupon cannot be scanned again.
+//
+
 export async function POST(request: Request) {
   try {
     const body = await request.json();
@@ -24,25 +27,58 @@ export async function POST(request: Request) {
     }
     const { actedBy } = body;
     if (!actedBy || !String(actedBy).trim()) {
-      return Response.json({ error: "Could not determine current user." }, { status: 400 });
+      return Response.json(
+        { error: "Could not determine current user." },
+        { status: 400 },
+      );
     }
 
     const pool = await getPool("pitSystem");
     const matches = await findMatchingCoupons(pool, parsed);
-    const unscannedCodes = matches
-      .filter((m) => !m.IsScanned)
-      .map((m) => m.CouponCode);
+    const unscanned = matches.filter((m) => !m.IsScanned);
 
-    if (unscannedCodes.length === 0) {
+    if (unscanned.length === 0) {
       return Response.json(
         { error: "No matching unscanned coupons found for the given filters." },
         { status: 404 },
       );
     }
 
-    await softDeleteCoupons(pool, unscannedCodes, String(actedBy).trim());
+    const by = String(actedBy).trim();
+    await logCouponActionHistory(pool, "deleted", unscanned, by);
 
-    return Response.json({ success: true, deletedCount: unscannedCodes.length });
+    const unscannedCodes = unscanned.map((m) => m.CouponCode);
+    await softDeleteCoupons(pool, unscannedCodes, by);
+
+    const generationIds = [
+      ...new Set(unscanned.map((m) => m.Id).filter((id): id is string => !!id)),
+    ];
+    if (generationIds.length > 0) {
+      const bindGenerationIds = (req: sql.Request) =>
+        generationIds
+          .map((id, i) => {
+            req.input(`gen${i}`, sql.UniqueIdentifier, id);
+            return `@gen${i}`;
+          })
+          .join(", ");
+      const styleBulletinRequest = pool.request();
+      const styleBulletinInClause = bindGenerationIds(styleBulletinRequest);
+      const cutDetailRequest = pool.request();
+      const cutDetailInClause = bindGenerationIds(cutDetailRequest);
+      await Promise.all([
+        styleBulletinRequest.query(
+          `UPDATE dbo.StyleBullettinInt SET IsDeleted = 1 WHERE Id IN (${styleBulletinInClause})`,
+        ),
+        cutDetailRequest.query(
+          `UPDATE dbo.SaleOrderPOCutDetailViewV1 SET IsDeleted = 1 WHERE Id IN (${cutDetailInClause})`,
+        ),
+      ]);
+    }
+
+    return Response.json({
+      success: true,
+      deletedCount: unscannedCodes.length,
+    });
   } catch (err: unknown) {
     console.error("Bulk coupon delete error:", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
