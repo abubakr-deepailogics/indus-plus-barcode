@@ -220,7 +220,7 @@ export function UnscanOrDeleteCouponModal({
         <div className="flex flex-col items-center text-center py-1">
           {step === "form" && (
             <form onSubmit={handleReview} className="w-full">
-              <p className="text-xs text-[#64748b] font-medium mb-4 text-left leading-relaxed">
+              <p className="text-sm text-slate-800 font-medium mb-4 text-left leading-relaxed">
                 Enter as much of the coupon details as you have — leave any of
                 Cut/Bundle/Operation blank to match more coupons. Leave all
                 three blank to match every coupon on this work order. Matched
@@ -346,7 +346,7 @@ export function UnscanOrDeleteCouponModal({
               <h4 className="text-sm font-extrabold text-slate-800 mb-1">
                 Confirm this action
               </h4>
-              <p className="text-xs text-[#64748b] font-medium mb-5 text-left leading-relaxed">
+              <p className="text-sm text-slate-800 font-medium mb-5 text-left leading-relaxed">
                 This will affect{" "}
                 <strong className="text-slate-700">
                   {matchCounts.totalCount} coupon
@@ -401,7 +401,7 @@ export function UnscanOrDeleteCouponModal({
                 {result.totalCount} Coupon{result.totalCount === 1 ? "" : "s"}{" "}
                 Processed
               </h4>
-              <p className="text-xs text-[#64748b] font-medium mb-5">
+              <p className="text-sm text-slate-800 font-medium mb-5">
                 <strong className="text-slate-700">
                   {result.unscannedCount}
                 </strong>{" "}
