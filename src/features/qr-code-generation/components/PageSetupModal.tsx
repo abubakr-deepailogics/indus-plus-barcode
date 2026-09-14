@@ -231,6 +231,12 @@ export function PageSetupModal({
           </div>
         </div>
 
+        {/* Print Instructions */}
+        <div className="mb-4 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[13px] font-semibold">
+          In the print dialog, select <span className="font-extrabold">Legal</span> paper size and set scale to{" "}
+          <span className="font-extrabold">100%</span>.
+        </div>
+
         {/* Modal Actions */}
         <div className="flex items-center justify-end gap-2 border-t border-gray-100 pt-4">
           <button
