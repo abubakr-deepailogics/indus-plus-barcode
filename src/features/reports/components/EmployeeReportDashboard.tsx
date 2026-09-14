@@ -36,6 +36,7 @@ import { CsvExportButton } from "@/components/ui/csv-export-button";
 import {
   createWages,
   deleteWages,
+  fetchAllReportSummary,
   fetchWages,
   fetchEmployeeSearchSuggestions,
   fetchOperationSearchSuggestions,
@@ -44,12 +45,126 @@ import {
 } from "../services/reports.service";
 import { useReportSearch } from "../hooks/useReportSearch";
 import type {
+  CouponReportItem,
+  EmployeeBreakdownItem,
   ReportDateRange,
   ReportSearchMode,
   ReportSearchSuggestion,
   ReportSummary,
   WagesBatch,
 } from "../types";
+
+interface EmployeeGroupedItem {
+  workOrder: string;
+  date: string;
+  operation: string;
+  rate: number | null;
+  bundleCount: number;
+  qty: number;
+  totalPay: number;
+}
+
+interface EmployeeGrouped {
+  employeeCode: EmployeeBreakdownItem["employeeCode"];
+  employeeName: EmployeeBreakdownItem["employeeName"];
+  items: EmployeeGroupedItem[];
+  totalBundles: number;
+  totalQty: number;
+  totalPay: number;
+}
+
+// Groups an employee/coupon list (from any summary — a specific search or
+// the "all employees" fetch) into per-employee, per-(workOrder, date,
+// operation, rate) rows, used both for the on-screen breakdown and for
+// building wage rows.
+function groupEmployeeData(
+  employeesList: EmployeeBreakdownItem[] | undefined,
+  couponsList: CouponReportItem[] | undefined,
+): EmployeeGrouped[] {
+  if (!employeesList) return [];
+  const coupons = couponsList || [];
+
+  return employeesList.map((emp) => {
+    const empCoupons = coupons.filter(
+      (c) => c.employeeCode === emp.employeeCode,
+    );
+
+    if (empCoupons.length === 0) {
+      return {
+        employeeCode: emp.employeeCode,
+        employeeName: emp.employeeName,
+        items: [
+          {
+            workOrder: "—",
+            date: "—",
+            operation: "—",
+            rate: null as number | null,
+            bundleCount: emp.couponCount || 0,
+            qty: emp.totalQty || 0,
+            totalPay: emp.totalAmount || 0,
+          },
+        ],
+        totalBundles: emp.couponCount || 0,
+        totalQty: emp.totalQty || 0,
+        totalPay: emp.totalAmount || 0,
+      };
+    }
+
+    // Group by workOrder, date (dd-MM-yy), operation, rate
+    const groupMap = new Map<string, EmployeeGroupedItem>();
+
+    for (const c of empCoupons) {
+      const wo = c.workOrder || "—";
+      const dateStr = c.scannedAt
+        ? format(new Date(c.scannedAt), "dd-MM-yy")
+        : "—";
+      const op = c.operationName || c.operationCode || "—";
+      const rate = c.rate != null ? Number(c.rate) : null;
+      const key = `${wo}__${dateStr}__${op}__${rate}`;
+
+      const existing = groupMap.get(key);
+      const qty = c.qty || 0;
+      const pay =
+        c.value != null ? Number(c.value) : rate != null ? qty * rate : 0;
+
+      if (!existing) {
+        groupMap.set(key, {
+          workOrder: wo,
+          date: dateStr,
+          operation: op,
+          rate,
+          bundleCount: 1,
+          qty,
+          totalPay: pay,
+        });
+      } else {
+        existing.bundleCount += 1;
+        existing.qty += qty;
+        existing.totalPay += pay;
+      }
+    }
+
+    // Sort items by date then workOrder
+    const items = Array.from(groupMap.values()).sort((a, b) => {
+      const cmpDate = a.date.localeCompare(b.date);
+      if (cmpDate !== 0) return cmpDate;
+      return a.workOrder.localeCompare(b.workOrder);
+    });
+
+    const totalBundles = items.reduce((acc, it) => acc + it.bundleCount, 0);
+    const totalQty = items.reduce((acc, it) => acc + it.qty, 0);
+    const totalPay = items.reduce((acc, it) => acc + it.totalPay, 0);
+
+    return {
+      employeeCode: emp.employeeCode,
+      employeeName: emp.employeeName,
+      items,
+      totalBundles,
+      totalQty,
+      totalPay,
+    };
+  });
+}
 
 function formatAmount(value: number): string {
   return value.toLocaleString("en-US", {
@@ -167,7 +282,6 @@ const BREAKDOWN_DIMENSIONS: Record<ReportSearchMode, BreakdownDimension[]> = {
   operation: ["operations", "employees", "workOrders"],
   section: ["sections", "employees", "workOrders", "operations", "bundles"],
 };
-
 
 const TAB_META: Record<
   BreakdownDimension,
@@ -353,113 +467,43 @@ export function EmployeeReportDashboard() {
   const employeesList = summary?.employees;
   const couponsList = summary?.coupons;
 
-  const employeeGroupedData = useMemo(() => {
-    if (!employeesList) return [];
-    const coupons = couponsList || [];
+  const employeeGroupedData = useMemo(
+    () => groupEmployeeData(employeesList, couponsList),
+    [employeesList, couponsList],
+  );
 
-    return employeesList.map((emp) => {
-      const empCoupons = coupons.filter(
-        (c) => c.employeeCode === emp.employeeCode,
-      );
-
-      if (empCoupons.length === 0) {
-        return {
-          employeeCode: emp.employeeCode,
-          employeeName: emp.employeeName,
-          items: [
-            {
-              workOrder: "—",
-              date: "—",
-              operation: "—",
-              rate: null as number | null,
-              bundleCount: emp.couponCount || 0,
-              qty: emp.totalQty || 0,
-              totalPay: emp.totalAmount || 0,
-            },
-          ],
-          totalBundles: emp.couponCount || 0,
-          totalQty: emp.totalQty || 0,
-          totalPay: emp.totalAmount || 0,
-        };
-      }
-
-      // Group by workOrder, date (dd-MM-yy), operation, rate
-      const groupMap = new Map<
-        string,
-        {
-          workOrder: string;
-          date: string;
-          operation: string;
-          rate: number | null;
-          bundleCount: number;
-          qty: number;
-          totalPay: number;
-        }
-      >();
-
-      for (const c of empCoupons) {
-        const wo = c.workOrder || "—";
-        const dateStr = c.scannedAt
-          ? format(new Date(c.scannedAt), "dd-MM-yy")
-          : "—";
-        const op = c.operationName || c.operationCode || "—";
-        const rate = c.rate != null ? Number(c.rate) : null;
-        const key = `${wo}__${dateStr}__${op}__${rate}`;
-
-        const existing = groupMap.get(key);
-        const qty = c.qty || 0;
-        const pay =
-          c.value != null ? Number(c.value) : rate != null ? qty * rate : 0;
-
-        if (!existing) {
-          groupMap.set(key, {
-            workOrder: wo,
-            date: dateStr,
-            operation: op,
-            rate,
-            bundleCount: 1,
-            qty,
-            totalPay: pay,
-          });
-        } else {
-          existing.bundleCount += 1;
-          existing.qty += qty;
-          existing.totalPay += pay;
-        }
-      }
-
-      // Sort items by date then workOrder
-      const items = Array.from(groupMap.values()).sort((a, b) => {
-        const cmpDate = a.date.localeCompare(b.date);
-        if (cmpDate !== 0) return cmpDate;
-        return a.workOrder.localeCompare(b.workOrder);
-      });
-
-      const totalBundles = items.reduce((acc, it) => acc + it.bundleCount, 0);
-      const totalQty = items.reduce((acc, it) => acc + it.qty, 0);
-      const totalPay = items.reduce((acc, it) => acc + it.totalPay, 0);
-
-      return {
-        employeeCode: emp.employeeCode,
-        employeeName: emp.employeeName,
-        items,
-        totalBundles,
-        totalQty,
-        totalPay,
-      };
-    });
-  }, [employeesList, couponsList]);
-
-  const handleCreateWages = useCallback(async () => {
-    if (employeeGroupedData.length === 0 || isCreatingWages) return;
+  teWages = useCallback(async () => {
+    if (isCreatingWages) return;
     setIsCreatingWages(true);
     setWageMsg(null);
     try {
-      const fromStr = dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : undefined;
-      const toStr = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : undefined;
+      const fromStr = dateRange.from
+        ? format(dateRange.from, "yyyy-MM-dd")
+        : undefined;
+      const toStr = dateRange.to
+        ? format(dateRange.to, "yyyy-MM-dd")
+        : undefined;
 
-      // Flatten employeeGroupedData into one WageRow per operation-group item
-      const rows = employeeGroupedData.flatMap((eg) =>
+      const allResult = await fetchAllReportSummary("employee", dateRange);
+      if (!allResult.ok) {
+        setWageMsg({ type: "error", message: allResult.error });
+        return;
+      }
+
+      const grouped = groupEmployeeData(
+        allResult.data.employees,
+        allResult.data.coupons,
+      );
+      if (grouped.length === 0) {
+        setWageMsg({
+          type: "error",
+          message: "No employee data found for this date range.",
+        });
+        return;
+      }
+
+      // Flatten grouped employee data into one WageRow per operation-group item
+      const rows = grouped.flatMap((eg) =>
         eg.items.map((item) => ({
           employeeCode: eg.employeeCode ?? "",
           employeeName: eg.employeeName ?? null,
@@ -470,7 +514,7 @@ export function EmployeeReportDashboard() {
           bundleCount: item.bundleCount,
           qty: item.qty,
           totalPay: item.totalPay,
-        }))
+        })),
       );
 
       const res = await createWages({ from: fromStr, to: toStr, rows });
@@ -487,7 +531,7 @@ export function EmployeeReportDashboard() {
           setWagesBatches(viewRes.wages);
           setWagesVisible(true);
         }
-        search();
+        if (summary) search();
       }
     } catch (err: unknown) {
       setWageMsg({
@@ -497,7 +541,7 @@ export function EmployeeReportDashboard() {
     } finally {
       setIsCreatingWages(false);
     }
-  }, [employeeGroupedData, isCreatingWages, dateRange]);
+  }, [isCreatingWages, dateRange, summary, search]);
 
   const handleViewWages = useCallback(async () => {
     if (wagesLoading) return;
@@ -508,18 +552,29 @@ export function EmployeeReportDashboard() {
     setWagesLoading(true);
     setWageMsg(null);
     try {
-      const fromStr = dateRange.from ? format(dateRange.from, "yyyy-MM-dd") : undefined;
-      const toStr = dateRange.to ? format(dateRange.to, "yyyy-MM-dd") : undefined;
+      const fromStr = dateRange.from
+        ? format(dateRange.from, "yyyy-MM-dd")
+        : undefined;
+      const toStr = dateRange.to
+        ? format(dateRange.to, "yyyy-MM-dd")
+        : undefined;
       const empCode =
         summary?.subject.mode === "employee" && !summary.subject.all
           ? String(summary.subject.employee.EmployeeID)
           : undefined;
 
-      const res = await fetchWages({ employeeCode: empCode, from: fromStr, to: toStr });
+      const res = await fetchWages({
+        employeeCode: empCode,
+        from: fromStr,
+        to: toStr,
+      });
       if (!res.ok) {
         setWageMsg({ type: "error", message: res.error });
       } else if (res.wages.length === 0) {
-        setWageMsg({ type: "error", message: "No saved wages found for this scope." });
+        setWageMsg({
+          type: "error",
+          message: "No saved wages found for this scope.",
+        });
       } else {
         setWagesBatches(res.wages);
         setWagesVisible(true);
@@ -534,29 +589,32 @@ export function EmployeeReportDashboard() {
     }
   }, [wagesLoading, wagesVisible, wagesBatches, dateRange, summary]);
 
-  const handleDeleteWages = useCallback(async (wageId: number) => {
-    if (isDeletingWages) return;
-    setIsDeletingWages(true);
-    setWageMsg(null);
-    try {
-      const res = await deleteWages({ wageId });
-      if (!res.ok) {
-        setWageMsg({ type: "error", message: res.error });
-      } else {
-        setWageMsg({ type: "success", message: res.message });
-        setWagesBatches((prev) => prev.filter((b) => b.WageId !== wageId));
-        // Refresh report summary live so isWageCalculated flags are reset
-        search();
+  const handleDeleteWages = useCallback(
+    async (wageId: number) => {
+      if (isDeletingWages) return;
+      setIsDeletingWages(true);
+      setWageMsg(null);
+      try {
+        const res = await deleteWages({ wageId });
+        if (!res.ok) {
+          setWageMsg({ type: "error", message: res.error });
+        } else {
+          setWageMsg({ type: "success", message: res.message });
+          setWagesBatches((prev) => prev.filter((b) => b.WageId !== wageId));
+          // Refresh report summary live so isWageCalculated flags are reset
+          search();
+        }
+      } catch (err: unknown) {
+        setWageMsg({
+          type: "error",
+          message: err instanceof Error ? err.message : "Delete wages failed.",
+        });
+      } finally {
+        setIsDeletingWages(false);
       }
-    } catch (err: unknown) {
-      setWageMsg({
-        type: "error",
-        message: err instanceof Error ? err.message : "Delete wages failed.",
-      });
-    } finally {
-      setIsDeletingWages(false);
-    }
-  }, [isDeletingWages, search]);
+    },
+    [isDeletingWages, search],
+  );
 
   const modeConfig = MODE_CONFIG[mode];
 
@@ -840,37 +898,20 @@ export function EmployeeReportDashboard() {
             </h2>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            {(() => {
-              const isAlreadyCalculated = summary?.allWagesCalculated === true;
-              return (
-                <button
-                  type="button"
-                  onClick={handleCreateWages}
-                  disabled={isCreatingWages || employeeGroupedData.length === 0 || isAlreadyCalculated}
-                  title={
-                    isAlreadyCalculated
-                      ? "Wages have already been calculated for all coupons in this scope."
-                      : employeeGroupedData.length === 0
-                      ? "Run a report first to load employee data"
-                      : "Save current report employee data as wages"
-                  }
-                  className={`flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm ${
-                    isAlreadyCalculated
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200 cursor-not-allowed opacity-80"
-                      : "bg-[#4f46e5] text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-                  }`}
-                >
-                  {isCreatingWages ? (
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                  ) : isAlreadyCalculated ? (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-                  ) : (
-                    <Coins className="w-3.5 h-3.5" />
-                  )}
-                  {isAlreadyCalculated ? "Wages Calculated" : "Create Wages"}
-                </button>
-              );
-            })()}
+            <button
+              type="button"
+              onClick={handleCreateWages}
+              disabled={isCreatingWages}
+              title="Generate wages for all employees in the selected date range"
+              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm bg-[#4f46e5] text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+            >
+              {isCreatingWages ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+              ) : (
+                <Coins className="w-3.5 h-3.5" />
+              )}
+              Create Wages
+            </button>
             <button
               type="button"
               onClick={handleViewWages}
@@ -936,9 +977,12 @@ export function EmployeeReportDashboard() {
               >();
               for (const row of batch.rows) {
                 const r = row as any;
-                const empCode = String(row.employeeCode || r.EmployeeCode || "");
+                const empCode = String(
+                  row.employeeCode || r.EmployeeCode || "",
+                );
                 const empName = row.employeeName ?? r.EmployeeName ?? null;
-                const bundleCount = Number(row.bundleCount ?? r.BundleCount) || 0;
+                const bundleCount =
+                  Number(row.bundleCount ?? r.BundleCount) || 0;
                 const qty = Number(row.qty ?? r.Qty) || 0;
                 const totalPay = Number(row.totalPay ?? r.TotalPay) || 0;
 
@@ -959,7 +1003,10 @@ export function EmployeeReportDashboard() {
                 g.totalPay += totalPay;
               }
               const groups = Array.from(empGroups.values());
-              const batchGrandBundles = groups.reduce((s, g) => s + g.totalBundles, 0);
+              const batchGrandBundles = groups.reduce(
+                (s, g) => s + g.totalBundles,
+                0,
+              );
               const batchGrandQty = groups.reduce((s, g) => s + g.totalQty, 0);
               const batchGrandPay = groups.reduce((s, g) => s + g.totalPay, 0);
 
@@ -1009,16 +1056,36 @@ export function EmployeeReportDashboard() {
                     <table className="w-full text-left text-xs border-collapse">
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
-                          <th className="py-2.5 px-3 border-r border-slate-200">EmpCode</th>
-                          <th className="py-2.5 px-3 border-r border-slate-200">Employee Name</th>
-                          <th className="py-2.5 px-3 border-r border-slate-200">ANL #</th>
-                          <th className="py-2.5 px-3 text-center border-r border-slate-200">Date</th>
-                          <th className="py-2.5 px-3 border-r border-slate-200">Operation</th>
-                          <th className="py-2.5 px-3 text-right border-r border-slate-200">Rate</th>
-                          <th className="py-2.5 px-3 text-center border-r border-slate-200">Bundle</th>
-                          <th className="py-2.5 px-3 text-center border-r border-slate-200">Quantity</th>
-                          <th className="py-2.5 px-3 text-right border-r border-slate-200">Total Pay</th>
-                          <th className="py-2.5 px-3 text-center w-20">Signature</th>
+                          <th className="py-2.5 px-3 border-r border-slate-200">
+                            EmpCode
+                          </th>
+                          <th className="py-2.5 px-3 border-r border-slate-200">
+                            Employee Name
+                          </th>
+                          <th className="py-2.5 px-3 border-r border-slate-200">
+                            ANL #
+                          </th>
+                          <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                            Date
+                          </th>
+                          <th className="py-2.5 px-3 border-r border-slate-200">
+                            Operation
+                          </th>
+                          <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                            Rate
+                          </th>
+                          <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                            Bundle
+                          </th>
+                          <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                            Quantity
+                          </th>
+                          <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                            Total Pay
+                          </th>
+                          <th className="py-2.5 px-3 text-center w-20">
+                            Signature
+                          </th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-200">
@@ -1030,9 +1097,11 @@ export function EmployeeReportDashboard() {
                               const wd = item.workDate || r.WorkDate || "—";
                               const op = item.operation || r.Operation || "—";
                               const rateVal = item.rate ?? r.Rate;
-                              const bundleVal = Number(item.bundleCount ?? r.BundleCount) || 0;
+                              const bundleVal =
+                                Number(item.bundleCount ?? r.BundleCount) || 0;
                               const qtyVal = Number(item.qty ?? r.Qty) || 0;
-                              const payVal = Number(item.totalPay ?? r.TotalPay) || 0;
+                              const payVal =
+                                Number(item.totalPay ?? r.TotalPay) || 0;
 
                               return (
                                 <tr
@@ -1043,7 +1112,7 @@ export function EmployeeReportDashboard() {
                                     {rowIdx === 0 ? g.employeeCode : ""}
                                   </td>
                                   <td className="py-2 px-3 border-r border-slate-100 font-semibold text-slate-800">
-                                    {rowIdx === 0 ? (g.employeeName || "—") : ""}
+                                    {rowIdx === 0 ? g.employeeName || "—" : ""}
                                   </td>
                                   <td className="py-2 px-3 border-r border-slate-100 font-mono text-slate-700">
                                     {wo}
@@ -1055,7 +1124,9 @@ export function EmployeeReportDashboard() {
                                     {op}
                                   </td>
                                   <td className="py-2 px-3 border-r border-slate-100 text-right font-mono text-slate-700">
-                                    {rateVal != null ? `Rs. ${Number(rateVal).toFixed(2)}` : "—"}
+                                    {rateVal != null
+                                      ? `Rs. ${Number(rateVal).toFixed(2)}`
+                                      : "—"}
                                   </td>
                                   <td className="py-2 px-3 border-r border-slate-100 text-center font-bold text-slate-800">
                                     {bundleVal}
@@ -1072,7 +1143,10 @@ export function EmployeeReportDashboard() {
                             })}
                             {/* Employee sub-total */}
                             <tr className="bg-slate-50/80 border-t border-slate-200 text-[11px] font-bold text-slate-700">
-                              <td className="py-1.5 px-3 border-r border-slate-200" colSpan={5}>
+                              <td
+                                className="py-1.5 px-3 border-r border-slate-200"
+                                colSpan={5}
+                              >
                                 Employee wise Total :
                               </td>
                               <td className="py-1.5 px-3 border-r border-slate-200" />
@@ -1092,7 +1166,10 @@ export function EmployeeReportDashboard() {
                       </tbody>
                       <tfoot>
                         <tr className="bg-slate-100 border-t-2 border-slate-300 font-black text-slate-800 text-xs">
-                          <td className="py-2.5 px-3 border-r border-slate-200" colSpan={5}>
+                          <td
+                            className="py-2.5 px-3 border-r border-slate-200"
+                            colSpan={5}
+                          >
                             Grand Total :
                           </td>
                           <td className="py-2.5 px-3 border-r border-slate-200" />
