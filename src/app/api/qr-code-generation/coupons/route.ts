@@ -69,19 +69,25 @@ export async function POST(request: Request) {
 
         // Snapshot this run's operations/bundles into the pitSystem-owned
         // style-bulletin/cut-detail tables so reports can read them locally
-        // (see style-bulletin-snapshot.service.ts). Best-effort: coupons are
-        // already registered and are the source of truth, so a snapshot
+        // (see style-bulletin-snapshot.service.ts). Only when this run
+        // actually inserted new coupons — if every card already existed
+        // (insertedCount 0, the "already exists" case), there's nothing new
+        // to snapshot and doing it anyway would just append a duplicate copy
+        // of the same rows on every re-run. Best-effort otherwise: coupons
+        // are already registered and are the source of truth, so a snapshot
         // failure must not fail the whole generation run.
-        try {
-          await snapshotWorkOrderBulletin(
-            workOrder,
-            [...new Set(selectedOperations.map((op) => op.opNo))],
-            [...new Set(selectedBundles.map((b) => b.bundleNo))],
-            insertedBy,
-            generationId,
-          );
-        } catch (snapshotErr) {
-          console.error("Style bulletin snapshot error:", snapshotErr);
+        if (insertedCount > 0) {
+          try {
+            await snapshotWorkOrderBulletin(
+              workOrder,
+              [...new Set(selectedOperations.map((op) => op.opNo))],
+              [...new Set(selectedBundles.map((b) => b.bundleNo))],
+              insertedBy,
+              generationId,
+            );
+          } catch (snapshotErr) {
+            console.error("Style bulletin snapshot error:", snapshotErr);
+          }
         }
 
         send({
