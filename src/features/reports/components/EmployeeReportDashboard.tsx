@@ -25,6 +25,7 @@ import {
   Eye,
   type LucideIcon,
 } from "lucide-react";
+import Link from "next/link";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import {
   Popover,
@@ -936,6 +937,23 @@ export function EmployeeReportDashboard() {
               )}
               {wagesVisible ? "Hide Wages" : "View Wages"}
             </button>
+            <span className="w-px h-5 bg-slate-200 mx-0.5" />
+            <Link
+              href="/industrial-engineering/reports/order-wise"
+              title="Order Wise Finishing Payment (Audit) — always for the current pay-cycle month (24th → today)"
+              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200"
+            >
+              <ClipboardList className="w-3.5 h-3.5" />
+              Order Wise Report
+            </Link>
+            <Link
+              href="/industrial-engineering/reports/operator-wise"
+              title="Operator Wise Final Payment — always for the current pay-cycle month (24th → today)"
+              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200"
+            >
+              <Users className="w-3.5 h-3.5" />
+              Operation Wise Report
+            </Link>
           </div>
         </div>
 

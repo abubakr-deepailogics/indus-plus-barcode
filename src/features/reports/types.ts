@@ -217,3 +217,51 @@ export interface WagesBatch {
   CreatedAt: string;
   rows: WageRow[];
 }
+
+// ── Finance reports (Order Wise / Operator Wise) ────────────────────────────
+// Mirrors two legacy Azgard-9 finance printouts ("Order Wise Finishing
+// Payment (Audit)" and "Operator Wise Final Payment"). Both are always
+// scoped to the current pay-cycle month (24th → 23rd, see
+// currentPayCycleStart in db.ts) — there is no date-range picker for these,
+// unlike the rest of the Reports page.
+//
+// Several legacy columns have NO source data anywhere in this system at all
+// (no incentive-scheme tables, no per-operation "production line"
+// assignment, no wash-specific quantity attribution) — rather than showing
+// them as 0/"-"/estimated, those columns are simply not part of this
+// report. Only columns backed by a real, non-assumed source number are
+// included below. See finance-report.service.ts for the per-column
+// feasibility notes.
+export interface OrderWiseReportRow {
+  workOrder: string; // ANL# in the legacy printout
+  totalSam: number | null; // per-garment SMV summed across the order's operations (style bulletin, not scan-scoped)
+  totalRate: number | null; // per-garment piece rate summed across the order's operations
+  previousPaid: number; // sum of EmployeeWageRows.TotalPay for this WO from wage batches created before this pay-cycle
+  currentClaim: number; // sum(qty * rate) for this WO's coupons scanned within the current pay-cycle
+  totalClaim: number; // previousPaid + currentClaim
+  minutesProduced: number; // sum(qty * smv) for this WO's coupons scanned within the current pay-cycle
+  qtyProduced: number; // sum(qty) for this WO's coupons scanned within the current pay-cycle
+}
+
+export interface OperatorWiseReportRow {
+  employeeCode: string;
+  employeeName: string;
+  section: string; // HRMS DepartmentName — closest available analogue to the legacy "Section :" grouping (see service for caveats)
+  joiningDate: string | null; // HRMS JoiningDate
+  totalAmt: number; // sum(qty * rate) earned this pay-cycle across every coupon scanned
+}
+
+export interface FinanceReportPeriod {
+  from: string; // yyyy-MM-dd, the 24th of this pay-cycle's start month
+  to: string; // yyyy-MM-dd, today
+}
+
+export interface OrderWiseReportResult {
+  period: FinanceReportPeriod;
+  rows: OrderWiseReportRow[];
+}
+
+export interface OperatorWiseReportResult {
+  period: FinanceReportPeriod;
+  rows: OperatorWiseReportRow[];
+}

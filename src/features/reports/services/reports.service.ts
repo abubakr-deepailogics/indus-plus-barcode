@@ -1,5 +1,7 @@
 import { format } from "date-fns";
 import type {
+  OperatorWiseReportResult,
+  OrderWiseReportResult,
   ReportDateRange,
   ReportSearchMode,
   ReportSearchSuggestion,
@@ -149,6 +151,32 @@ export async function fetchWages(params: {
     return { ok: false, error: data.error || "Failed to fetch wages." };
   }
   return { ok: true, wages: data.wages ?? [] };
+}
+
+// ── Finance reports (Order Wise / Operator Wise) ────────────────────────────
+// Both always scope to the current pay-cycle month server-side — no range
+// param to send, unlike the rest of this file's fetchers.
+
+export async function fetchOrderWiseReport(): Promise<
+  { ok: true; data: OrderWiseReportResult } | { ok: false; error: string }
+> {
+  const response = await fetch("/api/reports/order-wise");
+  const data = await response.json();
+  if (!response.ok) {
+    return { ok: false, error: data.error || "Failed to fetch order-wise report." };
+  }
+  return { ok: true, data };
+}
+
+export async function fetchOperatorWiseReport(): Promise<
+  { ok: true; data: OperatorWiseReportResult } | { ok: false; error: string }
+> {
+  const response = await fetch("/api/reports/operator-wise");
+  const data = await response.json();
+  if (!response.ok) {
+    return { ok: false, error: data.error || "Failed to fetch operator-wise report." };
+  }
+  return { ok: true, data };
 }
 
 export async function deleteWages(params: {

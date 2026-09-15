@@ -252,3 +252,17 @@ export const CURRENT_PAY_CYCLE_START_SQL = `
     ELSE DATEADD(day, 23, DATEADD(month, DATEDIFF(month, 0, GETDATE()) - 1, 0))
   END
 `;
+
+// JS-side mirror of CURRENT_PAY_CYCLE_START_SQL, for server code building a
+// date range in JS rather than filtering with the raw SQL fragment above
+// (e.g. a report scoped "this pay-cycle month" that also needs the range's
+// boundaries in its response). Keep in sync with the SQL version and with
+// EmployeeReportDashboard.tsx's client-side currentPayCycleStart() — same
+// 24th-to-23rd rule in three separate spots because one is a SQL fragment,
+// one runs server-side in JS, and one runs client-side before any request
+// is made; a shared import isn't possible across all three.
+export function currentPayCycleStart(now: Date = new Date()): Date {
+  const day = now.getDate();
+  const cycleMonth = day >= 24 ? now.getMonth() : now.getMonth() - 1;
+  return new Date(now.getFullYear(), cycleMonth, 24);
+}
