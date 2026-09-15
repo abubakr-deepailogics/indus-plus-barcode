@@ -246,7 +246,7 @@ export default function CouponTracingPage() {
     bundleNo: string;
     opNo: string;
   }): Promise<{ unscannedCount: number }> => {
-    const actedBy = user?.displayName || user?.email?.split("@")[0] || "";
+    const actedBy = user?.email || "";
     const response = await fetch("/api/coupons/unscan-or-delete/unscan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -263,7 +263,7 @@ export default function CouponTracingPage() {
     bundleNo: string;
     opNo: string;
   }): Promise<{ deletedCount: number }> => {
-    const actedBy = user?.displayName || user?.email?.split("@")[0] || "";
+    const actedBy = user?.email || "";
     const response = await fetch("/api/coupons/unscan-or-delete/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },

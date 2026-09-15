@@ -187,18 +187,18 @@ export function UnscanOrDeleteCouponModal({
       };
       let unscannedCount = 0;
       let deletedCount = 0;
-      // Delete first, then unscan: delete only ever touches coupons that
-      // are unscanned *before* this action runs, and unscan only touches
-      // ones that are scanned *before* this action runs — each route
-      // re-matches against current DB state at call time (see
-      // src/app/api/coupons/unscan-or-delete/{delete,unscan}/route.ts), so
-      // running delete first guarantees it can never catch a coupon this
-      // same click is about to unscan.
-      if (matchCounts.unscannedCount > 0) {
+      // Mixed matches (some scanned, some not) are never actioned in one
+      // click: only the scanned ones get unscanned here (confirmAction ===
+      // "unscan_then_delete"), and the user has to re-run the action once
+      // those are unscanned to delete the rest. This keeps delete from ever
+      // touching a coupon in the same click that just unscanned it.
+      if (confirmAction === "delete") {
         const res = await submitDelete(fields);
         deletedCount = res.deletedCount;
-      }
-      if (matchCounts.scannedCount > 0) {
+      } else if (
+        confirmAction === "unscan" ||
+        confirmAction === "unscan_then_delete"
+      ) {
         const res = await submitUnscan(fields);
         unscannedCount = res.unscannedCount;
       }
@@ -214,18 +214,20 @@ export function UnscanOrDeleteCouponModal({
 
   // Drives both the confirm-step wording and its button label/icon — a
   // homogeneous match (all-scanned or all-unscanned) only mentions/performs
-  // the one applicable action; a mixed match still does both, same as
-  // before, just described accurately instead of behind a generic
-  // "Confirm".
-  const confirmAction: "unscan" | "delete" | "both" | null = matchCounts
-    ? matchCounts.scannedCount > 0 && matchCounts.unscannedCount === 0
-      ? "unscan"
-      : matchCounts.unscannedCount > 0 && matchCounts.scannedCount === 0
-        ? "delete"
-        : matchCounts.scannedCount > 0 && matchCounts.unscannedCount > 0
-          ? "both"
-          : null
-    : null;
+  // the one applicable action. A mixed match is never actioned in one click:
+  // it only unscans the scanned coupons and tells the user to re-run the
+  // action afterward to delete the remainder — delete never runs against
+  // coupons that were still scanned a moment ago.
+  const confirmAction: "unscan" | "delete" | "unscan_then_delete" | null =
+    matchCounts
+      ? matchCounts.scannedCount > 0 && matchCounts.unscannedCount === 0
+        ? "unscan"
+        : matchCounts.unscannedCount > 0 && matchCounts.scannedCount === 0
+          ? "delete"
+          : matchCounts.scannedCount > 0 && matchCounts.unscannedCount > 0
+            ? "unscan_then_delete"
+            : null
+      : null;
 
   const hasFilter = !!(cutNo.trim() || bundleNo.trim() || opNo.trim());
 
@@ -412,23 +414,35 @@ export function UnscanOrDeleteCouponModal({
                     cannot be undone from this screen.
                   </>
                 )}
-                {confirmAction === "both" && (
+                {confirmAction === "unscan_then_delete" && (
                   <>
-                    This will affect{" "}
                     <strong className="text-slate-700">
                       {matchCounts.totalCount} coupon
-                      {matchCounts.totalCount === 1 ? "" : "s"}
+                      {matchCounts.totalCount === 1 ? "" : "s"} match
+                      {!hasFilter && " (entire work order)"}
                     </strong>{" "}
                     on work order{" "}
-                    <strong className="text-slate-700">{workOrder}</strong>:{" "}
+                    <strong className="text-slate-700">{workOrder}</strong> —{" "}
                     <strong className="text-amber-700">
-                      {matchCounts.scannedCount} unscanned
-                    </strong>{" "}
-                    and{" "}
-                    <strong className="text-red-600">
-                      {matchCounts.unscannedCount} deleted
+                      {matchCounts.scannedCount} scanned
                     </strong>
-                    . This cannot be undone from this screen.
+                    ,{" "}
+                    <strong className="text-red-600">
+                      {matchCounts.unscannedCount} not scanned
+                    </strong>
+                    . Scanned coupons must be unscanned before they can be
+                    deleted, so this will only{" "}
+                    <strong className="text-amber-700">
+                      unscan {matchCounts.scannedCount} coupon
+                      {matchCounts.scannedCount === 1 ? "" : "s"}
+                    </strong>{" "}
+                    for now. Run this action again afterward to delete the
+                    remaining{" "}
+                    <strong className="text-red-600">
+                      {matchCounts.unscannedCount} coupon
+                      {matchCounts.unscannedCount === 1 ? "" : "s"}
+                    </strong>
+                    .
                   </>
                 )}
               </p>
@@ -444,12 +458,13 @@ export function UnscanOrDeleteCouponModal({
                   type="button"
                   onClick={handleConfirm}
                   className={`flex-1 flex items-center justify-center gap-1.5 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer ${
-                    confirmAction === "unscan"
-                      ? "bg-amber-600 hover:bg-amber-700"
-                      : "bg-red-600 hover:bg-red-700"
+                    confirmAction === "delete"
+                      ? "bg-red-600 hover:bg-red-700"
+                      : "bg-amber-600 hover:bg-amber-700"
                   }`}
                 >
-                  {confirmAction === "unscan" && (
+                  {(confirmAction === "unscan" ||
+                    confirmAction === "unscan_then_delete") && (
                     <>
                       <Eraser className="w-3.5 h-3.5" />
                       Unscan Coupon{matchCounts.scannedCount === 1 ? "" : "s"}
@@ -461,7 +476,6 @@ export function UnscanOrDeleteCouponModal({
                       Delete Coupon{matchCounts.unscannedCount === 1 ? "" : "s"}
                     </>
                   )}
-                  {confirmAction === "both" && "Unscan & Delete"}
                 </button>
               </div>
             </div>
