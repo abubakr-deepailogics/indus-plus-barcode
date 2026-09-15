@@ -6,7 +6,13 @@ import type { MatchedCoupon } from "@/app/api/coupons/unscan-or-delete/shared";
 // after being written; one row per coupon per action, capturing who did it,
 // when, and (for unscan) who had it scanned immediately before.
 
-const IN_LIST_CHUNK_SIZE = 2000; // stays well under SQL Server's ~2100 parameter cap
+// Each row here binds 9 separate params (code/wo/bundle/op/cut/section/
+// genId/priorEmp/priorScannedAt) plus the 2 fixed ones (action/actedBy) —
+// unlike a plain single-value IN-list, so the chunk size has to be much
+// smaller than the 2000-ish "1 param per item" chunks used elsewhere (see
+// coupon-registration.service.ts's softDeleteCoupons) to stay under SQL
+// Server's ~2100 parameter cap. 200 rows * 9 + 2 = 1802, safely under it.
+const ROWS_PER_CHUNK = 200;
 
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -21,7 +27,7 @@ export async function logCouponActionHistory(
   actedBy: string,
 ): Promise<void> {
   if (coupons.length === 0) return;
-  for (const batch of chunk(coupons, IN_LIST_CHUNK_SIZE)) {
+  for (const batch of chunk(coupons, ROWS_PER_CHUNK)) {
     const request = pool.request();
     request.input("action", sql.NVarChar(20), action);
     request.input("actedBy", sql.NVarChar(100), actedBy);

@@ -31,6 +31,20 @@ export function readCouponFilter(
   };
 }
 
+// Chunked well under SQL Server's ~2100 parameter cap — a single-value IN
+// list (1 param per item) can afford a much bigger chunk than a multi-column
+// VALUES insert (see coupon-history.service.ts's ROWS_PER_CHUNK for that
+// case). Shared by delete/route.ts (opNos/bundleNos cascade) and
+// unscan/route.ts (CouponCode IN list) — both can plausibly exceed 2100
+// items when a filter matches an entire large work order.
+export const IN_LIST_CHUNK_SIZE = 2000;
+
+export function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
+}
+
 export interface MatchedCoupon {
   CouponCode: string;
   IsScanned: boolean;

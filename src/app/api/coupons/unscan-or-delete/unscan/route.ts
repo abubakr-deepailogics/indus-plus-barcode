@@ -1,6 +1,6 @@
 import { getPool, sql } from "@/lib/db";
 import { logCouponActionHistory } from "@/features/qr-code-generation/services/coupon-history.service";
-import { readCouponFilter, findMatchingCoupons } from "../shared";
+import { readCouponFilter, findMatchingCoupons, chunk, IN_LIST_CHUNK_SIZE } from "../shared";
 
 export const dynamic = "force-dynamic";
 
@@ -46,20 +46,22 @@ export async function POST(request: Request) {
     );
 
     const scannedCodes = scanned.map((m) => m.CouponCode);
-    const request2 = pool.request();
-    const placeholders = scannedCodes.map((code, i) => {
-      request2.input(`code${i}`, sql.NVarChar, code);
-      return `@code${i}`;
-    });
-    await request2.query(`
-      UPDATE dbo.QrCode_Coupon
-      SET IsScanned = 0,
-          EmployeeCode = NULL,
-          ScanBy = NULL,
-          ScannedAt = NULL,
-          SystemScannedAt = NULL
-      WHERE CouponCode IN (${placeholders.join(", ")}) AND IsDeleted = 0
-    `);
+    for (const batch of chunk(scannedCodes, IN_LIST_CHUNK_SIZE)) {
+      const request2 = pool.request();
+      const placeholders = batch.map((code, i) => {
+        request2.input(`code${i}`, sql.NVarChar, code);
+        return `@code${i}`;
+      });
+      await request2.query(`
+        UPDATE dbo.QrCode_Coupon
+        SET IsScanned = 0,
+            EmployeeCode = NULL,
+            ScanBy = NULL,
+            ScannedAt = NULL,
+            SystemScannedAt = NULL
+        WHERE CouponCode IN (${placeholders.join(", ")}) AND IsDeleted = 0
+      `);
+    }
 
     return Response.json({
       success: true,

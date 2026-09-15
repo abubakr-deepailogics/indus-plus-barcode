@@ -1,7 +1,7 @@
 import { getPool, sql } from "@/lib/db";
 import { softDeleteCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
 import { logCouponActionHistory } from "@/features/qr-code-generation/services/coupon-history.service";
-import { readCouponFilter, findMatchingCoupons } from "../shared";
+import { readCouponFilter, findMatchingCoupons, chunk, IN_LIST_CHUNK_SIZE } from "../shared";
 
 export const dynamic = "force-dynamic";
 
@@ -66,12 +66,12 @@ export async function POST(request: Request) {
     const bundleNos = [...new Set(unscanned.map((m) => m.BundleNo))];
     const cascades: Promise<unknown>[] = [];
 
-    if (opNos.length > 0) {
+    for (const batch of chunk(opNos, IN_LIST_CHUNK_SIZE)) {
       const req = pool
         .request()
         .input("deletedBy", sql.NVarChar, by)
         .input("wo", sql.NVarChar, workOrder);
-      const inClause = opNos
+      const inClause = batch
         .map((op, i) => {
           req.input(`op${i}`, sql.NVarChar, op);
           return `@op${i}`;
@@ -93,12 +93,12 @@ export async function POST(request: Request) {
       );
     }
 
-    if (bundleNos.length > 0) {
+    for (const batch of chunk(bundleNos, IN_LIST_CHUNK_SIZE)) {
       const req = pool
         .request()
         .input("deletedBy", sql.NVarChar, by)
         .input("wo", sql.NVarChar, workOrder);
-      const inClause = bundleNos
+      const inClause = batch
         .map((bundle, i) => {
           req.input(`bundle${i}`, sql.NVarChar, bundle);
           return `@bundle${i}`;
