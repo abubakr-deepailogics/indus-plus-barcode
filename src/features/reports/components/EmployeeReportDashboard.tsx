@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef, Fragment } from "react";
-import { format, formatDistanceToNow, startOfMonth, subDays } from "date-fns";
+import { format, formatDistanceToNow, subDays } from "date-fns";
 import {
   Search,
   Ticket,
@@ -208,6 +208,13 @@ function formatEmployeeLabel(
   return code ? `#${code}` : name || "—";
 }
 
+function currentPayCycleStart(): Date {
+  const now = new Date();
+  const day = now.getDate();
+  const cycleMonth = day >= 24 ? now.getMonth() : now.getMonth() - 1;
+  return new Date(now.getFullYear(), cycleMonth, 24);
+}
+
 const PRESETS: { label: string; range: () => ReportDateRange }[] = [
   {
     label: "Last 7 Days",
@@ -219,7 +226,7 @@ const PRESETS: { label: string; range: () => ReportDateRange }[] = [
   },
   {
     label: "This Month",
-    range: () => ({ from: startOfMonth(new Date()), to: new Date() }),
+    range: () => ({ from: currentPayCycleStart(), to: new Date() }),
   },
   { label: "All Time", range: () => ({}) },
 ];
