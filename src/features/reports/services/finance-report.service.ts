@@ -211,14 +211,16 @@ export async function buildOrderWiseReport(
     for (const batch of chunk(sewingOps, IN_LIST_CHUNK_SIZE)) {
       const req = pitPool.request().input("wo", sql.NVarChar, workOrder);
       const inClause = buildInClause(req, "op", batch);
+
       const result = await req.query(`
         WITH Latest AS (
           SELECT
             [Operation Code] AS OpCode,
+            [Operation Sequeance] AS OpSeq,
             [Piece Rate] AS Rate,
             [Smv/Sam] AS Smv,
             ROW_NUMBER() OVER (
-              PARTITION BY [Order No], [Operation Code] ORDER BY InsertedAt DESC
+              PARTITION BY [Order No], [Operation Code], [Operation Sequeance] ORDER BY InsertedAt DESC
             ) AS RowId
           FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
           WHERE IsDeleted = 0 AND [Order No] = @wo AND [Operation Code] IN (${inClause})
