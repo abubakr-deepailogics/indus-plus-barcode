@@ -434,12 +434,18 @@ export function EmployeeReportDashboard() {
   } = useReportSearch();
 
   // BREAKDOWN_DIMENSIONS now always includes the own-dimension tab first,
-  // so availableTabs is simply BREAKDOWN_DIMENSIONS[mode] + "coupons".
+  // so availableTabs is simply BREAKDOWN_DIMENSIONS[mode] + "coupons" — the
+  // "coupons" ("Scanned Coupons Trail") tab is left out of the visible list
+  // per request; effectiveTab below already falls back to availableTabs[0]
+  // for any activeTab not present in this list, so removing it here is
+  // enough to hide it without touching the tab's own render logic.
   const isAllSummary = summary?.subject.all === true;
   const availableTabs = useMemo<TabKey[]>(() => {
-    return [...BREAKDOWN_DIMENSIONS[mode], "coupons"];
+    return [...BREAKDOWN_DIMENSIONS[mode]];
   }, [mode]);
   const [activeTab, setActiveTab] = useState<TabKey>("employees");
+
+  const SHOW_SUMMARY_BANNER = false;
 
   const [tabsForSummary, setTabsForSummary] = useState<ReportSummary | null>(
     null,
@@ -1377,12 +1383,16 @@ export function EmployeeReportDashboard() {
       {/* Loading skeleton — shown while a search/searchAll request is in flight */}
       {isLoading && (
         <div className="flex flex-col gap-6 no-print animate-pulse">
-          <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-24" />
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-            <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-40" />
-            <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-40" />
-            <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-40" />
-          </div>
+          {SHOW_SUMMARY_BANNER && (
+            <>
+              <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-24" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-40" />
+                <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-40" />
+                <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-40" />
+              </div>
+            </>
+          )}
           <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-72" />
         </div>
       )}
@@ -1401,9 +1411,8 @@ export function EmployeeReportDashboard() {
         </div>
       )}
 
-      {!isLoading && summary && card2 && (
+      {SHOW_SUMMARY_BANNER && !isLoading && summary && card2 && (
         <>
-          {/* Subject Header Banner */}
           <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
             {/* Left: Icon/Avatar + Details */}
             <div className="flex items-center gap-3.5">
@@ -1786,7 +1795,11 @@ export function EmployeeReportDashboard() {
               </div>
             </div>
           </div>
+        </>
+      )}
 
+      {!isLoading && summary && card2 && (
+        <>
           {/* Deep-Dive Detailed Breakdown Section */}
           <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden flex flex-col no-print">
             {/* Tab Header Navigation */}
