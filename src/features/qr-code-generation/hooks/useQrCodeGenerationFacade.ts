@@ -135,13 +135,21 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   const [generatedPairs, setGeneratedPairs] = useState<Set<string>>(new Set());
   const [includeZeroRateOps, setIncludeZeroRateOps] = useState(false);
 
-  const zeroRateOperations = useMemo(
-    () =>
-      activeStyle.operations.filter(
-        (op) => op.lastOpSection && isZeroRateOp(op),
-      ),
-    [activeStyle.operations],
-  );
+  // Deduped by opNo (keep first occurrence) — some work orders' style
+  // bulletins genuinely list an Operation Code more than once (see
+  // buildCouponCards' dedupeByKey), and this list's length is subtracted
+  // from a distinct-opNo count in GenerateCouponsModal's "effective
+  // operations" math; leaving duplicates in here would double-subtract a
+  // duplicated zero-rate op and undercount effectiveOperationsCount.
+  const zeroRateOperations = useMemo(() => {
+    const seenOpNos = new Set<string>();
+    return activeStyle.operations.filter((op) => {
+      if (!(op.lastOpSection && isZeroRateOp(op))) return false;
+      if (seenOpNos.has(op.opNo)) return false;
+      seenOpNos.add(op.opNo);
+      return true;
+    });
+  }, [activeStyle.operations]);
 
   const currentSelectionKey = useMemo(() => {
     const selBundles = activeStyle.bundles

@@ -142,12 +142,28 @@ export function QrCodeGenerationView() {
       {facade.showGenerateModal && (
         <GenerateCouponsModal
           state={facade.generateModalState}
+          // Distinct bundleNo/opNo counts, not raw row counts — a
+          // CouponCode is built purely from (workOrder, bundleNo, opNo), so
+          // if the same bundle or operation number appears on more than one
+          // selected row (some work orders' style bulletins genuinely list
+          // an Operation Code twice — see buildCouponCards' dedupeByKey),
+          // the server dedupes before generating and would otherwise
+          // generate fewer coupons than this modal promised. Matching that
+          // same dedup here keeps "Total Coupons" accurate to what actually
+          // gets created.
           selectedBundlesCount={
-            facade.activeStyle.bundles.filter((b) => b.sel).length
+            new Set(
+              facade.activeStyle.bundles
+                .filter((b) => b.sel)
+                .map((b) => b.bundleNo),
+            ).size
           }
           selectedOperationsCount={
-            facade.activeStyle.operations.filter((op) => op.lastOpSection)
-              .length
+            new Set(
+              facade.activeStyle.operations
+                .filter((op) => op.lastOpSection)
+                .map((op) => op.opNo),
+            ).size
           }
           generatedCount={facade.generatedCount}
           alreadyExistedCount={facade.alreadyExistedCount}

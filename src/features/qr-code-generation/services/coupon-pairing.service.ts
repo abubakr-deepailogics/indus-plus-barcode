@@ -21,22 +21,35 @@ export interface CouponCard {
  *   op1: B1-op1, B2-op1, B3-op1
  *   op2: B1-op2, B2-op2, B3-op2
  */
+
+function dedupeByKey<T>(items: T[], keyOf: (item: T) => string): T[] {
+  const seen = new Set<string>();
+  const out: T[] = [];
+  for (const item of items) {
+    const key = keyOf(item);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(item);
+  }
+  return out;
+}
+
 export function buildCouponCards(
   bundles: BundleDetailRow[],
   operations: OperationsDetailRow[],
 ): CouponCard[] {
   if (bundles.length === 0 || operations.length === 0) return [];
 
-  const sortedBundles = bundles
-    .slice()
-    .sort((a, b) => a.cutNo.localeCompare(b.cutNo, undefined, { numeric: true }));
+  const sortedBundles = dedupeByKey(bundles, (b) => b.bundleNo).sort((a, b) =>
+    a.cutNo.localeCompare(b.cutNo, undefined, { numeric: true }),
+  );
 
   // Sorted by seqNo here (not just relied on from the caller) so every
   // caller gets Operation_Sequence order for free, including ones that
   // pass operations in whatever order they happened to fetch/select them.
-  const sortedOperations = operations
-    .slice()
-    .sort((a, b) => (Number(a.seqNo) || 0) - (Number(b.seqNo) || 0));
+  const sortedOperations = dedupeByKey(operations, (o) => o.opNo).sort(
+    (a, b) => (Number(a.seqNo) || 0) - (Number(b.seqNo) || 0),
+  );
 
   return sortedOperations.flatMap((op) =>
     sortedBundles.map((bundle) => ({ bundle, op })),
@@ -81,10 +94,7 @@ export function demo() {
 
   const cards = buildCouponCards(bundles, operations);
   const actual = cards.map((c) => `${c.bundle.bundleNo}:${c.op.operationName}`);
-  const expected = [
-    "B1:OP1", "B2:OP1", "B3:OP1",
-    "B1:OP2", "B2:OP2", "B3:OP2",
-  ];
+  const expected = ["B1:OP1", "B2:OP1", "B3:OP1", "B1:OP2", "B2:OP2", "B3:OP2"];
   console.assert(
     JSON.stringify(actual) === JSON.stringify(expected),
     `buildCouponCards mismatch: got ${JSON.stringify(actual)}`,
