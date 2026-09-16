@@ -82,6 +82,7 @@ export function OperatorWiseReportPage() {
           <div className="flex items-center gap-2">
             <CsvExportButton
               label="Export"
+              className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-white border border-[#e2e8f0] text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               filename={`operator-wise-report-${format(new Date(), "yyyyMMdd-HHmm")}`}
               headers={["Code", "Name", "Section", "D.O.J", "Total Amt. (Rs.)"]}
               rows={data.rows.map((r) => [

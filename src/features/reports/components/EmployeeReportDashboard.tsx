@@ -1864,6 +1864,7 @@ export function EmployeeReportDashboard() {
                   headers={exportData?.headers ?? []}
                   rows={exportData?.rows ?? []}
                   disabled={!exportData}
+                  className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-[#334155] disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5 disabled:cursor-not-allowed"
                 />
                 <button
                   type="button"
