@@ -331,11 +331,29 @@ export default function OpenOrderPage() {
             {row.original.Operation_Code}
           </span>
         ),
-        footer: () => (
-          <span className="font-bold text-slate-800 uppercase text-[10px] tracking-wider">
-            Total
-          </span>
-        ),
+        // Two extra lines under "Total": row count and distinct Operation
+        // Code count, shown separately because they can legitimately
+        // differ — a bulletin can list the same code twice at a different
+        // sequence (a real repeated operation, not always a data-entry
+        // duplicate — see coupon-pairing.service.ts), so Rows can be higher
+        // than Operations.
+        footer: ({ table }) => {
+          const rows = table.getFilteredRowModel().rows;
+          const uniqueOps = new Set(rows.map((row) => row.original.Operation_Code)).size;
+          return (
+            <div className="flex flex-col gap-0.5">
+              <span className="font-bold text-slate-800 uppercase text-[10px] tracking-wider">
+                Total
+              </span>
+              <span className="font-semibold text-slate-500 text-[10px]">
+                Rows: {rows.length}
+              </span>
+              <span className="font-semibold text-slate-500 text-[10px]">
+                Operations: {uniqueOps}
+              </span>
+            </div>
+          );
+        },
         size: 70,
       },
       {

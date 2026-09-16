@@ -121,7 +121,7 @@ export function OrderWiseReportPage() {
           <div className="flex items-center gap-2">
             <ClipboardList className="w-4 h-4 text-[#4f46e5]" />
             <h1 className="font-bold text-[#4f46e5] text-sm uppercase tracking-wider">
-              Order Wise Finishing Payment (Audit)
+              Order Wise Report (Sewing Department)
             </h1>
           </div>
           {data && (

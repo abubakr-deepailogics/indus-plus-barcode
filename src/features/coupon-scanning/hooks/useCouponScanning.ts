@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import { format } from "date-fns";
 import { useAuth } from "@/features/auth/context/auth-context";
 import {
   ScanningRow,
@@ -44,7 +45,7 @@ export function useCouponScanning() {
     setScanBy(user?.email || user?.displayName || "");
   }
 
-  const [dated, setDated] = useState("");
+  const [dated, setDated] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [employeeName, setEmployeeName] = useState("");
   const [section, setSection] = useState("");
   const [shift, setShift] = useState("");
@@ -428,7 +429,7 @@ export function useCouponScanning() {
     setAlreadyMonthlyScanPrice("");
     setLineId("");
     setScanBy(user?.email || user?.displayName || "");
-    setDated("");
+    setDated(format(new Date(), "yyyy-MM-dd"));
     setEmployeeName("");
     setSection("");
     setShift("");
