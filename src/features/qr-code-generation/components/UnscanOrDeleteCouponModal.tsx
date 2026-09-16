@@ -35,9 +35,18 @@ interface UnscanOrDeleteCouponModalProps {
   onDone: () => void;
   // Unscan and delete are separate requests (separate API routes) now,
   // rather than one combined "submit" — the modal decides which to call
-  // based on the current match's scanned/unscanned split.
-  submitUnscan: (fields: CouponFields) => Promise<{ unscannedCount: number }>;
-  submitDelete: (fields: CouponFields) => Promise<{ deletedCount: number }>;
+  // based on the current match's scanned/unscanned split. Both routes
+  // stream newline-delimited progress ({done, total} per processed batch,
+  // same protocol as coupon generation) — onProgress fires per tick so the
+  // "processing" step below can show a live bar instead of a bare spinner.
+  submitUnscan: (
+    fields: CouponFields,
+    onProgress: (done: number, total: number) => void,
+  ) => Promise<{ unscannedCount: number }>;
+  submitDelete: (
+    fields: CouponFields,
+    onProgress: (done: number, total: number) => void,
+  ) => Promise<{ deletedCount: number }>;
 }
 
 type Step = "form" | "confirm" | "processing" | "success" | "error";
@@ -80,6 +89,7 @@ export function UnscanOrDeleteCouponModal({
   const [result, setResult] = useState<UnscanOrDeleteResult | null>(null);
   const [matchStatus, setMatchStatus] = useState<MatchStatus>("idle");
   const [matchCounts, setMatchCounts] = useState<MatchCounts | null>(null);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
 
   const canReview = step === "form" && matchStatus === "matched";
 
@@ -178,6 +188,7 @@ export function UnscanOrDeleteCouponModal({
     if (!matchCounts) return;
     setStep("processing");
     setErrorMessage("");
+    setProgress(null);
     try {
       const fields = {
         workOrder,
@@ -185,6 +196,7 @@ export function UnscanOrDeleteCouponModal({
         bundleNo: bundleNo.trim(),
         opNo: opNo.trim(),
       };
+      const onProgress = (done: number, total: number) => setProgress({ done, total });
       let unscannedCount = 0;
       let deletedCount = 0;
       // Mixed matches (some scanned, some not) are never actioned in one
@@ -193,13 +205,13 @@ export function UnscanOrDeleteCouponModal({
       // those are unscanned to delete the rest. This keeps delete from ever
       // touching a coupon in the same click that just unscanned it.
       if (confirmAction === "delete") {
-        const res = await submitDelete(fields);
+        const res = await submitDelete(fields, onProgress);
         deletedCount = res.deletedCount;
       } else if (
         confirmAction === "unscan" ||
         confirmAction === "unscan_then_delete"
       ) {
-        const res = await submitUnscan(fields);
+        const res = await submitUnscan(fields, onProgress);
         unscannedCount = res.unscannedCount;
       }
       setResult({ unscannedCount, deletedCount });
@@ -485,10 +497,23 @@ export function UnscanOrDeleteCouponModal({
             <div className="flex flex-col items-center py-4 w-full">
               <Loader2 className="w-10 h-10 text-amber-600 animate-spin mb-4" />
               <h4 className="text-sm font-extrabold text-slate-800 mb-1">
-                Processing Coupons...
+                Processing {progress?.total ?? matchCounts?.totalCount ?? 0} Coupons...
               </h4>
+              {progress && progress.total > 0 && (
+                <div className="w-full mt-3 mb-1">
+                  <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
+                    <div
+                      className="h-full bg-amber-600 transition-all duration-200"
+                      style={{ width: `${Math.min(100, (progress.done / progress.total) * 100)}%` }}
+                    />
+                  </div>
+                  <p className="text-[11px] text-[#64748b] font-semibold mt-1.5">
+                    {progress.done} of {progress.total} coupons processed
+                  </p>
+                </div>
+              )}
               <p className="text-[11px] text-[#94a3b8] font-medium mt-2">
-                Applying the right action to each matched coupon. Please wait.
+                Applying the right action to each matched coupon. Please do not close or refresh this page.
               </p>
             </div>
           )}

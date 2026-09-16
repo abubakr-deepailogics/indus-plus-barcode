@@ -1,6 +1,6 @@
 import { getPool, sql } from "@/lib/db";
 import { logCouponActionHistory } from "@/features/qr-code-generation/services/coupon-history.service";
-import { readCouponFilter, findMatchingCoupons, chunk, IN_LIST_CHUNK_SIZE } from "../shared";
+import { readCouponFilter, findMatchingCoupons, chunk } from "../shared";
 
 export const dynamic = "force-dynamic";
 
@@ -10,66 +10,91 @@ export const dynamic = "force-dynamic";
 // coupons that are CURRENTLY scanned in this same request's fresh match
 // (re-queried here, not trusting an earlier GET /unscan-or-delete snapshot);
 // an already-unscanned match in the same filter is left untouched — use
-// .../delete for those. Never deletes anything. Every coupon this actually
+// .../delete for those. Never deletes anything.
+//
+// Streams newline-delimited JSON progress lines over the response body,
+// same protocol as .../delete and POST /api/qr-code-generation/coupons —
+// see delete/route.ts for why (a big batch shouldn't look like one frozen
+// spinner). Validation still happens up front and still returns a plain
+// JSON error response.
+const PROGRESS_CHUNK_SIZE = 200; // matches logCouponActionHistory's own ROWS_PER_CHUNK
 
 export async function POST(request: Request) {
-  try {
-    const body = await request.json();
-    const parsed = readCouponFilter(body);
-    if ("error" in parsed) {
-      return Response.json({ error: parsed.error }, { status: 400 });
-    }
-    const { actedBy } = body;
-    if (!actedBy || !String(actedBy).trim()) {
-      return Response.json(
-        { error: "Could not determine current user." },
-        { status: 400 },
-      );
-    }
-
-    const pool = await getPool("pitSystem");
-    const matches = await findMatchingCoupons(pool, parsed);
-    const scanned = matches.filter((m) => m.IsScanned);
-
-    if (scanned.length === 0) {
-      return Response.json(
-        { error: "No matching scanned coupons found for the given filters." },
-        { status: 404 },
-      );
-    }
-
-    await logCouponActionHistory(
-      pool,
-      "unscanned",
-      scanned,
-      String(actedBy).trim(),
-    );
-
-    const scannedCodes = scanned.map((m) => m.CouponCode);
-    for (const batch of chunk(scannedCodes, IN_LIST_CHUNK_SIZE)) {
-      const request2 = pool.request();
-      const placeholders = batch.map((code, i) => {
-        request2.input(`code${i}`, sql.NVarChar, code);
-        return `@code${i}`;
-      });
-      await request2.query(`
-        UPDATE dbo.QrCode_Coupon
-        SET IsScanned = 0,
-            EmployeeCode = NULL,
-            ScanBy = NULL,
-            ScannedAt = NULL,
-            SystemScannedAt = NULL
-        WHERE CouponCode IN (${placeholders.join(", ")}) AND IsDeleted = 0
-      `);
-    }
-
-    return Response.json({
-      success: true,
-      unscannedCount: scannedCodes.length,
-    });
-  } catch (err: unknown) {
-    console.error("Bulk coupon unscan error:", err);
-    const msg = err instanceof Error ? err.message : "Internal Server Error";
-    return Response.json({ error: msg }, { status: 500 });
+  const body = await request.json();
+  const parsed = readCouponFilter(body);
+  if ("error" in parsed) {
+    return Response.json({ error: parsed.error }, { status: 400 });
   }
+  const { actedBy } = body;
+  if (!actedBy || !String(actedBy).trim()) {
+    return Response.json(
+      { error: "Could not determine current user." },
+      { status: 400 },
+    );
+  }
+
+  const pool = await getPool("pitSystem");
+  const matches = await findMatchingCoupons(pool, parsed);
+  const scanned = matches.filter((m) => m.IsScanned);
+
+  if (scanned.length === 0) {
+    return Response.json(
+      { error: "No matching scanned coupons found for the given filters." },
+      { status: 404 },
+    );
+  }
+
+  const by = String(actedBy).trim();
+  const total = scanned.length;
+  const encoder = new TextEncoder();
+
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const send = (line: Record<string, unknown>) => {
+        controller.enqueue(encoder.encode(JSON.stringify(line) + "\n"));
+      };
+      try {
+        let done = 0;
+        for (const batch of chunk(scanned, PROGRESS_CHUNK_SIZE)) {
+          await logCouponActionHistory(pool, "unscanned", batch, by);
+
+          const req = pool.request();
+          const placeholders = batch.map((m, i) => {
+            req.input(`code${i}`, sql.NVarChar, m.CouponCode);
+            return `@code${i}`;
+          });
+          await req.query(`
+            UPDATE dbo.QrCode_Coupon
+            SET IsScanned = 0,
+                EmployeeCode = NULL,
+                ScanBy = NULL,
+                ScannedAt = NULL,
+                SystemScannedAt = NULL
+            WHERE CouponCode IN (${placeholders.join(", ")}) AND IsDeleted = 0
+          `);
+
+          done += batch.length;
+          send({ done, total });
+        }
+
+        send({
+          done: total,
+          total,
+          status: "complete",
+          success: true,
+          unscannedCount: total,
+        });
+      } catch (err: unknown) {
+        console.error("Bulk coupon unscan error:", err);
+        const message = err instanceof Error ? err.message : "Internal Server Error";
+        send({ status: "error", message });
+      } finally {
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    headers: { "Content-Type": "application/x-ndjson" },
+  });
 }

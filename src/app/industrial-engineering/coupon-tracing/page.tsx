@@ -232,6 +232,48 @@ export default function CouponTracingPage() {
     }
   };
 
+  // Reads one of the unscan/delete routes' newline-delimited JSON progress
+  // stream — same protocol as the coupon-generation route
+  // (useQrCodeGenerationFacade's confirmGenerateCoupons): each line is
+  // either a {done,total} progress tick, a final {status:"complete", ...}
+  // carrying the route's result fields, or a {status:"error"} carrying a
+  // message. onProgress fires per tick so the modal can show a live bar
+  // instead of a single frozen spinner for a large batch.
+  const readCouponActionStream = async (
+    response: Response,
+    onProgress: (done: number, total: number) => void,
+  ): Promise<Record<string, unknown>> => {
+    if (!response.body) throw new Error("No response body.");
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    let finalData: Record<string, unknown> | null = null;
+
+    const handleLine = (line: string) => {
+      if (!line.trim()) return;
+      const parsed = JSON.parse(line);
+      if (parsed.status === "error") {
+        throw new Error(parsed.message || "Failed to process coupon(s).");
+      }
+      if (parsed.status === "complete") finalData = parsed;
+      onProgress(parsed.done, parsed.total);
+    };
+
+    while (true) {
+      const { done: streamDone, value } = await reader.read();
+      if (streamDone) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() ?? "";
+      for (const line of lines) handleLine(line);
+    }
+    buffer += decoder.decode();
+    if (buffer.trim()) handleLine(buffer);
+
+    if (!finalData) throw new Error("Failed to process coupon(s).");
+    return finalData;
+  };
+
   // Looks up coupons by WO/Cut/Bundle/Op (as printed on the physical
   // coupon(s), all but WO optional) — used by UnscanOrDeleteCouponModal.
   // Unscan and delete are separate routes/requests now (see
@@ -240,38 +282,40 @@ export default function CouponTracingPage() {
   // unscanned split, and — when both apply — calls delete first so it only
   // ever touches coupons that were already unscanned before this action,
   // never ones this same action just unscanned.
-  const submitUnscanCoupons = async (fields: {
-    workOrder: string;
-    cutNo: string;
-    bundleNo: string;
-    opNo: string;
-  }): Promise<{ unscannedCount: number }> => {
+  const submitUnscanCoupons = async (
+    fields: { workOrder: string; cutNo: string; bundleNo: string; opNo: string },
+    onProgress: (done: number, total: number) => void,
+  ): Promise<{ unscannedCount: number }> => {
     const actedBy = user?.email || "";
     const response = await fetch("/api/coupons/unscan-or-delete/unscan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...fields, actedBy }),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Failed to unscan coupon(s).");
-    return data;
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to unscan coupon(s).");
+    }
+    const data = await readCouponActionStream(response, onProgress);
+    return { unscannedCount: Number(data.unscannedCount) || 0 };
   };
 
-  const submitDeleteCoupons = async (fields: {
-    workOrder: string;
-    cutNo: string;
-    bundleNo: string;
-    opNo: string;
-  }): Promise<{ deletedCount: number }> => {
+  const submitDeleteCoupons = async (
+    fields: { workOrder: string; cutNo: string; bundleNo: string; opNo: string },
+    onProgress: (done: number, total: number) => void,
+  ): Promise<{ deletedCount: number }> => {
     const actedBy = user?.email || "";
     const response = await fetch("/api/coupons/unscan-or-delete/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ...fields, actedBy }),
     });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || "Failed to delete coupon(s).");
-    return data;
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}));
+      throw new Error(data.error || "Failed to delete coupon(s).");
+    }
+    const data = await readCouponActionStream(response, onProgress);
+    return { deletedCount: Number(data.deletedCount) || 0 };
   };
 
   // Coupons are always server-paginated (200/page cap), so a CSV export
