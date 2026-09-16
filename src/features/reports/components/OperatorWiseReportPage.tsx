@@ -1,33 +1,40 @@
 "use client";
 
-import { Fragment, useEffect, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ArrowLeft, Loader2, Printer, Users } from "lucide-react";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
 import { fetchOperatorWiseReport } from "../services/reports.service";
+import { recentPayCycles } from "../utils/pay-cycle";
 import type { OperatorWiseReportResult } from "../types";
 
 function formatAmount(value: number): string {
-  return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 // Standalone page, same reasoning as OrderWiseReportPage — its own screen
 // with a back arrow and a print button rather than a panel bolted onto the
-// main Reports dashboard. Always scoped to the current pay-cycle month
-// server-side.
+// main Reports dashboard. Defaults to the current pay-cycle month; the
+// picker below lets the user step back to any earlier month instead.
 export function OperatorWiseReportPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<OperatorWiseReportResult | null>(null);
 
+  const cycleOptions = useMemo(() => recentPayCycles(12), []);
+  const [cycleStart, setCycleStart] = useState("");
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
-      const res = await fetchOperatorWiseReport();
+      const res = await fetchOperatorWiseReport(cycleStart || undefined);
       if (cancelled) return;
       if (!res.ok) setError(res.error);
       else setData(res.data);
@@ -36,7 +43,7 @@ export function OperatorWiseReportPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [cycleStart]);
 
   const bySection = new Map<string, OperatorWiseReportResult["rows"]>();
   if (data) {
@@ -49,14 +56,28 @@ export function OperatorWiseReportPage() {
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6 max-w-[1000px] mx-auto w-full">
       <div className="flex items-center justify-between flex-wrap gap-2 no-print">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-xs font-bold text-slate-600 bg-white border border-[#e2e8f0] hover:bg-slate-50 transition-all cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-xs font-bold text-slate-600 bg-white border border-[#e2e8f0] hover:bg-slate-50 transition-all cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </button>
+          <select
+            value={cycleStart}
+            onChange={(e) => setCycleStart(e.target.value)}
+            className="h-9 px-3 rounded-xl text-xs font-bold text-slate-700 bg-white border border-[#e2e8f0] hover:bg-slate-50 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
+            title="Pay-cycle month"
+          >
+            {cycleOptions.map((opt) => (
+              <option key={opt.value} value={opt.isLive ? "" : opt.value}>
+                {opt.isLive ? `${opt.label} (Current)` : opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
         {data && data.rows.length > 0 && (
           <div className="flex items-center gap-2">
             <CsvExportButton
@@ -64,7 +85,11 @@ export function OperatorWiseReportPage() {
               filename={`operator-wise-report-${format(new Date(), "yyyyMMdd-HHmm")}`}
               headers={["Code", "Name", "Section", "D.O.J", "Total Amt. (Rs.)"]}
               rows={data.rows.map((r) => [
-                r.employeeCode, r.employeeName, r.section, r.joiningDate, r.totalAmt,
+                r.employeeCode,
+                r.employeeName,
+                r.section,
+                r.joiningDate,
+                r.totalAmt,
               ])}
             />
             <button
@@ -109,7 +134,7 @@ export function OperatorWiseReportPage() {
 
         {data && !loading && data.rows.length === 0 && (
           <div className="py-16 text-center text-sm font-semibold text-slate-400">
-            No coupons scanned yet this pay-cycle month.
+            No Sewing coupons scanned in this pay-cycle month.
           </div>
         )}
 
@@ -130,12 +155,18 @@ export function OperatorWiseReportPage() {
                   return (
                     <Fragment key={section}>
                       <tr className="bg-indigo-50">
-                        <td colSpan={4} className="py-1.5 px-2 font-bold text-[#4f46e5] text-[10px] uppercase tracking-wider">
+                        <td
+                          colSpan={4}
+                          className="py-1.5 px-2 font-bold text-[#4f46e5] text-[10px] uppercase tracking-wider"
+                        >
                           Section: {section}
                         </td>
                       </tr>
                       {rows.map((r) => (
-                        <tr key={r.employeeCode} className="hover:bg-slate-50/60">
+                        <tr
+                          key={r.employeeCode}
+                          className="hover:bg-slate-50/60"
+                        >
                           <td className="py-1.5 px-2 border-r border-slate-100 font-mono font-bold text-[#4f46e5]">
                             {r.employeeCode}
                           </td>
@@ -151,10 +182,15 @@ export function OperatorWiseReportPage() {
                         </tr>
                       ))}
                       <tr className="bg-slate-50 border-t border-slate-200 font-bold text-slate-700">
-                        <td colSpan={3} className="py-1.5 px-2 text-right border-r border-slate-200">
+                        <td
+                          colSpan={3}
+                          className="py-1.5 px-2 text-right border-r border-slate-200"
+                        >
                           {section} Total :
                         </td>
-                        <td className="py-1.5 px-2 text-right">{formatAmount(sectionTotal)}</td>
+                        <td className="py-1.5 px-2 text-right">
+                          {formatAmount(sectionTotal)}
+                        </td>
                       </tr>
                     </Fragment>
                   );

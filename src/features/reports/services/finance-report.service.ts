@@ -21,11 +21,11 @@ import type {
 
 // Builds the two legacy Azgard-9 finance printouts ("Order Wise Finishing
 // Payment (Audit)" and "Operator Wise Final Payment") — but only the
-// columns backed by a real, non-assumed source number. Both are hard-scoped
-// to the current pay-cycle month (24th of last/this month → today, same
-// rule as CURRENT_PAY_CYCLE_START_SQL) — there is no date picker for these
-// reports, by design, matching how the legacy printouts are always run "for
-// the current period."
+// columns backed by a real, non-assumed source number. Both default to the
+// current pay-cycle month (24th of last/this month → today, same rule as
+// CURRENT_PAY_CYCLE_START_SQL) but accept an optional `cycleStart` (yyyy-MM-dd,
+// always a 24th) to view any earlier month instead — see resolvePeriod. A
+// past cycle's "to" is that cycle's own 23rd (it's closed), not today.
 
 const IN_LIST_CHUNK_SIZE = 2000; // stays well under SQL Server's ~2100 parameter cap
 
@@ -49,13 +49,44 @@ function buildInClause(
     .join(", ");
 }
 
-function currentPeriod(): {
+function previousPayCycleStart(currentStart: Date): Date {
+  const dayBefore = new Date(currentStart);
+  dayBefore.setDate(dayBefore.getDate() - 1);
+  return currentPayCycleStart(dayBefore);
+}
+
+function isSameDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}
+
+function resolvePeriod(cycleStartParam?: string): {
   period: FinanceReportPeriod;
   fromDate: Date;
   toDate: Date;
 } {
-  const fromDate = currentPayCycleStart();
-  const toDate = new Date();
+  const actualCurrentStart = currentPayCycleStart();
+  let fromDate = actualCurrentStart;
+  if (cycleStartParam) {
+    const parsed = new Date(`${cycleStartParam}T00:00:00`);
+    if (!isNaN(parsed.getTime())) fromDate = parsed;
+  }
+
+  const isLiveCycle = isSameDay(fromDate, actualCurrentStart);
+  const toDate = isLiveCycle
+    ? new Date()
+    : new Date(
+        new Date(
+          fromDate.getFullYear(),
+          fromDate.getMonth() + 1,
+          24,
+        ).getTime() -
+          24 * 60 * 60 * 1000,
+      );
+
   return {
     period: {
       from: format(fromDate, "yyyy-MM-dd"),
@@ -64,12 +95,6 @@ function currentPeriod(): {
     fromDate,
     toDate,
   };
-}
-
-function previousPayCycleStart(currentStart: Date): Date {
-  const dayBefore = new Date(currentStart);
-  dayBefore.setDate(dayBefore.getDate() - 1);
-  return currentPayCycleStart(dayBefore);
 }
 
 interface RawScanRow {
@@ -81,14 +106,16 @@ interface RawScanRow {
   ScannedAt: string;
 }
 
-async function fetchScansSince(fromDate: Date) {
+async function fetchScansInRange(fromDate: Date, toDate: Date) {
   const pool = await getPool("pitSystem");
   const result = await pool
     .request()
-    .input("from", sql.Date, format(fromDate, "yyyy-MM-dd")).query(`
+    .input("from", sql.Date, format(fromDate, "yyyy-MM-dd"))
+    .input("to", sql.Date, format(toDate, "yyyy-MM-dd")).query(`
       SELECT CouponCode, WorkOrder, BundleNo, OpNo, EmployeeCode, ScannedAt
       FROM dbo.QrCode_Coupon
-      WHERE IsScanned = 1 AND IsDeleted = 0 AND ScannedAt IS NOT NULL AND ScannedAt >= @from
+      WHERE IsScanned = 1 AND IsDeleted = 0 AND ScannedAt IS NOT NULL
+        AND ScannedAt >= @from AND ScannedAt < DATEADD(day, 1, @to)
     `);
   const rows = result.recordset as RawScanRow[];
   return enrichCouponRows(rows);
@@ -125,11 +152,17 @@ async function fetchSewingOpCodesByWorkOrder(
 
 // ── Order Wise Finishing Payment (Audit) ────────────────────────────────────
 
-export async function buildOrderWiseReport(): Promise<OrderWiseReportResult> {
-  const { period, fromDate: currentStart } = currentPeriod();
+export async function buildOrderWiseReport(
+  cycleStartParam?: string,
+): Promise<OrderWiseReportResult> {
+  const {
+    period,
+    fromDate: currentStart,
+    toDate,
+  } = resolvePeriod(cycleStartParam);
   const previousStart = previousPayCycleStart(currentStart);
 
-  const allScans = await fetchScansSince(previousStart);
+  const allScans = await fetchScansInRange(previousStart, toDate);
 
   const scannedWorkOrders = [...new Set(allScans.map((r) => r.WorkOrder))];
   const sewingOpsByWo = await fetchSewingOpCodesByWorkOrder(scannedWorkOrders);
@@ -261,9 +294,11 @@ export async function buildOrderWiseReport(): Promise<OrderWiseReportResult> {
 
 // ── Operator Wise Final Payment ─────────────────────────────────────────────
 
-export async function buildOperatorWiseReport(): Promise<OperatorWiseReportResult> {
-  const { period, fromDate } = currentPeriod();
-  const allScans = await fetchScansSince(fromDate);
+export async function buildOperatorWiseReport(
+  cycleStartParam?: string,
+): Promise<OperatorWiseReportResult> {
+  const { period, fromDate, toDate } = resolvePeriod(cycleStartParam);
+  const allScans = await fetchScansInRange(fromDate, toDate);
 
   const scannedWorkOrders = [...new Set(allScans.map((r) => r.WorkOrder))];
   const sewingOpsByWo = await fetchSewingOpCodesByWorkOrder(scannedWorkOrders);

@@ -2,12 +2,15 @@ import { buildOrderWiseReport } from "@/features/reports/services/finance-report
 
 export const dynamic = "force-dynamic";
 
-// Always scoped to the current pay-cycle month (24th → today) — see
-// finance-report.service.ts. No query params; unlike the rest of the
-// Reports page, this printout is never date-filtered by the caller.
-export async function GET() {
+// Defaults to the current pay-cycle month (24th → today) — see
+// finance-report.service.ts. ?cycleStart=yyyy-MM-dd (a 24th) selects any
+// earlier pay-cycle month instead, for the report page's month picker.
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const cycleStart = searchParams.get("cycleStart") || undefined;
+
   try {
-    const data = await buildOrderWiseReport();
+    const data = await buildOrderWiseReport(cycleStart);
     return Response.json(data);
   } catch (err: unknown) {
     console.error("Order-wise report error:", err);

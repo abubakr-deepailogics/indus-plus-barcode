@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ArrowLeft, ClipboardList, Loader2, Printer } from "lucide-react";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
 import { fetchOrderWiseReport } from "../services/reports.service";
+import { recentPayCycles } from "../utils/pay-cycle";
 import type { OrderWiseReportResult } from "../types";
 
 function formatAmount(value: number): string {
@@ -18,20 +19,23 @@ function formatAmount(value: number): string {
 // Standalone page (not a panel on the main Reports dashboard) — a
 // finance-style printout reads better as its own page with just a back
 // arrow and a print button, the same way the legacy paper report stood on
-// its own. Always scoped to the current pay-cycle month server-side; no
-// filters here.
+// its own. Defaults to the current pay-cycle month; the picker below lets
+// the user step back to any earlier month instead.
 export function OrderWiseReportPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<OrderWiseReportResult | null>(null);
 
+  const cycleOptions = useMemo(() => recentPayCycles(12), []);
+  const [cycleStart, setCycleStart] = useState("");
+
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
-      const res = await fetchOrderWiseReport();
+      const res = await fetchOrderWiseReport(cycleStart || undefined);
       if (cancelled) return;
       if (!res.ok) setError(res.error);
       else setData(res.data);
@@ -40,19 +44,33 @@ export function OrderWiseReportPage() {
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [cycleStart]);
 
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6 max-w-[1400px] mx-auto w-full">
       <div className="flex items-center justify-between flex-wrap gap-2 no-print">
-        <button
-          type="button"
-          onClick={() => router.back()}
-          className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-xs font-bold text-slate-600 bg-white border border-[#e2e8f0] hover:bg-slate-50 transition-all cursor-pointer"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Back
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => router.back()}
+            className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-xs font-bold text-slate-600 bg-white border border-[#e2e8f0] hover:bg-slate-50 transition-all cursor-pointer"
+          >
+            <ArrowLeft className="w-4 h-4" />
+            Back
+          </button>
+          <select
+            value={cycleStart}
+            onChange={(e) => setCycleStart(e.target.value)}
+            className="h-9 px-3 rounded-xl text-xs font-bold text-slate-700 bg-white border border-[#e2e8f0] hover:bg-slate-50 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
+            title="Pay-cycle month"
+          >
+            {cycleOptions.map((opt) => (
+              <option key={opt.value} value={opt.isLive ? "" : opt.value}>
+                {opt.isLive ? `${opt.label} (Current)` : opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
         {data && data.rows.length > 0 && (
           <div className="flex items-center gap-2">
             <CsvExportButton
@@ -127,7 +145,7 @@ export function OrderWiseReportPage() {
 
         {data && !loading && data.rows.length === 0 && (
           <div className="py-16 text-center text-sm font-semibold text-slate-400">
-            No coupons scanned yet this pay-cycle month.
+            No Sewing coupons scanned in this pay-cycle month.
           </div>
         )}
 

@@ -154,13 +154,15 @@ export async function fetchWages(params: {
 }
 
 // ── Finance reports (Order Wise / Operator Wise) ────────────────────────────
-// Both always scope to the current pay-cycle month server-side — no range
-// param to send, unlike the rest of this file's fetchers.
+// Both default to the current pay-cycle month server-side — pass
+// `cycleStart` (yyyy-MM-dd, a 24th — see the report pages' month picker) to
+// view an earlier month instead.
 
-export async function fetchOrderWiseReport(): Promise<
-  { ok: true; data: OrderWiseReportResult } | { ok: false; error: string }
-> {
-  const response = await fetch("/api/reports/order-wise");
+export async function fetchOrderWiseReport(
+  cycleStart?: string,
+): Promise<{ ok: true; data: OrderWiseReportResult } | { ok: false; error: string }> {
+  const qp = cycleStart ? `?cycleStart=${encodeURIComponent(cycleStart)}` : "";
+  const response = await fetch(`/api/reports/order-wise${qp}`);
   const data = await response.json();
   if (!response.ok) {
     return { ok: false, error: data.error || "Failed to fetch order-wise report." };
@@ -168,10 +170,11 @@ export async function fetchOrderWiseReport(): Promise<
   return { ok: true, data };
 }
 
-export async function fetchOperatorWiseReport(): Promise<
-  { ok: true; data: OperatorWiseReportResult } | { ok: false; error: string }
-> {
-  const response = await fetch("/api/reports/operator-wise");
+export async function fetchOperatorWiseReport(
+  cycleStart?: string,
+): Promise<{ ok: true; data: OperatorWiseReportResult } | { ok: false; error: string }> {
+  const qp = cycleStart ? `?cycleStart=${encodeURIComponent(cycleStart)}` : "";
+  const response = await fetch(`/api/reports/operator-wise${qp}`);
   const data = await response.json();
   if (!response.ok) {
     return { ok: false, error: data.error || "Failed to fetch operator-wise report." };
