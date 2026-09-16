@@ -9,7 +9,10 @@ import { fetchOrderWiseReport } from "../services/reports.service";
 import type { OrderWiseReportResult } from "../types";
 
 function formatAmount(value: number): string {
-  return value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 }
 
 // Standalone page (not a panel on the main Reports dashboard) — a
@@ -56,14 +59,30 @@ export function OrderWiseReportPage() {
               label="Export"
               filename={`order-wise-report-${format(new Date(), "yyyyMMdd-HHmm")}`}
               headers={[
-                "ANL# (W/O)", "Total SAM", "Total Rate", "Wash Qty", "Plan (Rs.)",
-                "Previous Paid (Rs.)", "Current Claim (Rs.)", "Total Claim (Rs.)", "Balance (Rs.)",
-                "Minutes Produced", "Qty Produced",
+                "ANL# (W/O)",
+                "Total SAM",
+                "Total Rate",
+                "Wash Qty",
+                "Plan (Rs.)",
+                "Previous Paid (Rs.)",
+                "Current Claim (Rs.)",
+                "Total Claim (Rs.)",
+                "Balance (Rs.)",
+                "Minutes Produced",
+                "Qty Produced",
               ]}
               rows={data.rows.map((r) => [
-                r.workOrder, r.totalSam, r.totalRate, r.washQty, r.plan,
-                r.previousPaid, r.currentClaim, r.totalClaim, r.balance,
-                r.minutesProduced, r.qtyProduced,
+                r.workOrder,
+                r.totalSam,
+                r.totalRate,
+                r.washQty,
+                r.plan,
+                r.previousPaid,
+                r.currentClaim,
+                r.totalClaim,
+                r.balance,
+                r.minutesProduced,
+                r.qtyProduced,
               ])}
             />
             <button
@@ -118,15 +137,33 @@ export function OrderWiseReportPage() {
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[9.5px] uppercase tracking-wider">
                   <th className="py-2 px-2 border-r border-slate-200">ANL#</th>
-                  <th className="py-2 px-2 text-right border-r border-slate-200">Total SAM</th>
-                  <th className="py-2 px-2 text-right border-r border-slate-200">Total Rate</th>
-                  <th className="py-2 px-2 text-right border-r border-slate-200">Wash Qty</th>
-                  <th className="py-2 px-2 text-right border-r border-slate-200">Plan (Rs.)</th>
-                  <th className="py-2 px-2 text-right border-r border-slate-200">Prev. Paid</th>
-                  <th className="py-2 px-2 text-right border-r border-slate-200">Curr. Claim</th>
-                  <th className="py-2 px-2 text-right border-r border-slate-200">Total Claim</th>
-                  <th className="py-2 px-2 text-right border-r border-slate-200">Balance</th>
-                  <th className="py-2 px-2 text-right border-r border-slate-200">Min. Produced</th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">
+                    Total SAM
+                  </th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">
+                    Total Rate
+                  </th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">
+                    Qty
+                  </th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">
+                    Plan (Rs.)
+                  </th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">
+                    Prev. Paid
+                  </th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">
+                    Curr. Claim
+                  </th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">
+                    Total Claim
+                  </th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">
+                    Balance
+                  </th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">
+                    Min. Produced
+                  </th>
                   <th className="py-2 px-2 text-right">Qty Produced</th>
                 </tr>
               </thead>

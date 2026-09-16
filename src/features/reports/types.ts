@@ -242,7 +242,7 @@ export interface OrderWiseReportRow {
   previousPaid: number; // sum(qty * rate) for this WO's Sewing coupons scanned during LAST pay-cycle
   currentClaim: number; // sum(qty * rate) for this WO's Sewing coupons scanned during THIS pay-cycle
   totalClaim: number; // previousPaid + currentClaim
-  balance: number | null; // totalClaim - plan (null when plan is null, i.e. no order quantity on record)
+  balance: number | null; // plan - totalClaim (null when plan is null, i.e. no order quantity on record)
   minutesProduced: number; // totalSam (order-level) * qtyProduced — NOT sum(qty * smv) per scan
   qtyProduced: number; // sum(qty) for this WO's Sewing coupons scanned during THIS pay-cycle
 }

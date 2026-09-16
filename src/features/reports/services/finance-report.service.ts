@@ -249,7 +249,7 @@ export async function buildOrderWiseReport(): Promise<OrderWiseReportResult> {
         previousPaid: scan.previousPaid,
         currentClaim: scan.currentClaim,
         totalClaim,
-        balance: plan != null ? totalClaim - plan : null,
+        balance: plan != null ? plan - totalClaim : null,
         minutesProduced: totalSam != null ? totalSam * scan.qtyProduced : 0,
         qtyProduced: scan.qtyProduced,
       };
