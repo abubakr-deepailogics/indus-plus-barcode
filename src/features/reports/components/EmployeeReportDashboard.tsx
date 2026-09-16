@@ -1865,6 +1865,16 @@ export function EmployeeReportDashboard() {
                   rows={exportData?.rows ?? []}
                   disabled={!exportData}
                 />
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  disabled={!summary}
+                  className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-[#334155] disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                  title="Print Report"
+                >
+                  <Printer className="w-3.5 h-3.5 text-[#4f46e5]" />
+                  <span>Print</span>
+                </button>
               </div>
             </div>
 
