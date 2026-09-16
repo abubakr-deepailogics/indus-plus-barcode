@@ -56,13 +56,13 @@ export function OrderWiseReportPage() {
               label="Export"
               filename={`order-wise-report-${format(new Date(), "yyyyMMdd-HHmm")}`}
               headers={[
-                "ANL# (W/O)", "Total SAM", "Total Rate",
-                "Previous Paid (Rs.)", "Current Claim (Rs.)", "Total Claim (Rs.)",
+                "ANL# (W/O)", "Total SAM", "Total Rate", "Wash Qty", "Plan (Rs.)",
+                "Previous Paid (Rs.)", "Current Claim (Rs.)", "Total Claim (Rs.)", "Balance (Rs.)",
                 "Minutes Produced", "Qty Produced",
               ]}
               rows={data.rows.map((r) => [
-                r.workOrder, r.totalSam, r.totalRate,
-                r.previousPaid, r.currentClaim, r.totalClaim,
+                r.workOrder, r.totalSam, r.totalRate, r.washQty, r.plan,
+                r.previousPaid, r.currentClaim, r.totalClaim, r.balance,
                 r.minutesProduced, r.qtyProduced,
               ])}
             />
@@ -120,9 +120,12 @@ export function OrderWiseReportPage() {
                   <th className="py-2 px-2 border-r border-slate-200">ANL#</th>
                   <th className="py-2 px-2 text-right border-r border-slate-200">Total SAM</th>
                   <th className="py-2 px-2 text-right border-r border-slate-200">Total Rate</th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">Wash Qty</th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">Plan (Rs.)</th>
                   <th className="py-2 px-2 text-right border-r border-slate-200">Prev. Paid</th>
                   <th className="py-2 px-2 text-right border-r border-slate-200">Curr. Claim</th>
                   <th className="py-2 px-2 text-right border-r border-slate-200">Total Claim</th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">Balance</th>
                   <th className="py-2 px-2 text-right border-r border-slate-200">Min. Produced</th>
                   <th className="py-2 px-2 text-right">Qty Produced</th>
                 </tr>
@@ -140,6 +143,12 @@ export function OrderWiseReportPage() {
                       {r.totalRate != null ? r.totalRate.toFixed(3) : "—"}
                     </td>
                     <td className="py-1.5 px-2 text-right border-r border-slate-100">
+                      {r.washQty != null ? r.washQty.toLocaleString() : "—"}
+                    </td>
+                    <td className="py-1.5 px-2 text-right border-r border-slate-100">
+                      {r.plan != null ? formatAmount(r.plan) : "—"}
+                    </td>
+                    <td className="py-1.5 px-2 text-right border-r border-slate-100">
                       {formatAmount(r.previousPaid)}
                     </td>
                     <td className="py-1.5 px-2 text-right border-r border-slate-100 font-semibold text-emerald-700">
@@ -147,6 +156,9 @@ export function OrderWiseReportPage() {
                     </td>
                     <td className="py-1.5 px-2 text-right border-r border-slate-100 font-bold">
                       {formatAmount(r.totalClaim)}
+                    </td>
+                    <td className="py-1.5 px-2 text-right border-r border-slate-100">
+                      {r.balance != null ? formatAmount(r.balance) : "—"}
                     </td>
                     <td className="py-1.5 px-2 text-right border-r border-slate-100">
                       {r.minutesProduced.toFixed(0)}

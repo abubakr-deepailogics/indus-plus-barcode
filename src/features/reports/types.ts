@@ -225,30 +225,36 @@ export interface WagesBatch {
 // currentPayCycleStart in db.ts) — there is no date-range picker for these,
 // unlike the rest of the Reports page.
 //
-// Several legacy columns have NO source data anywhere in this system at all
-// (no incentive-scheme tables, no per-operation "production line"
-// assignment, no wash-specific quantity attribution) — rather than showing
-// them as 0/"-"/estimated, those columns are simply not part of this
-// report. Only columns backed by a real, non-assumed source number are
-// included below. See finance-report.service.ts for the per-column
-// feasibility notes.
+// Order Wise is currently scoped to the Sewing department only (a
+// deliberate first pass — see DEPARTMENT_FILTER in
+// finance-report.service.ts). Incentive-scheme amounts and production-line
+// assignment have NO source data anywhere in this system — rather than
+// showing them as 0/estimated, those columns are simply not part of this
+// report. Previous Paid / Current Claim are both scan-derived (not from the
+// wage ledger) — see finance-report.service.ts for the exact per-column
+// formulas.
 export interface OrderWiseReportRow {
   workOrder: string; // ANL# in the legacy printout
-  totalSam: number | null; // per-garment SMV summed across the order's operations (style bulletin, not scan-scoped)
-  totalRate: number | null; // per-garment piece rate summed across the order's operations
-  previousPaid: number; // sum of EmployeeWageRows.TotalPay for this WO from wage batches created before this pay-cycle
-  currentClaim: number; // sum(qty * rate) for this WO's coupons scanned within the current pay-cycle
+  totalSam: number | null; // per-garment SMV summed across the order's Sewing operations (style bulletin, not scan-scoped)
+  totalRate: number | null; // per-garment piece rate summed across the order's Sewing operations
+  washQty: number | null; // the order's overall cut quantity (cut-detail snapshot) — legacy column name, NOT department-scoped
+  plan: number | null; // totalRate * washQty — total price to finish the whole order
+  previousPaid: number; // sum(qty * rate) for this WO's Sewing coupons scanned during LAST pay-cycle
+  currentClaim: number; // sum(qty * rate) for this WO's Sewing coupons scanned during THIS pay-cycle
   totalClaim: number; // previousPaid + currentClaim
-  minutesProduced: number; // sum(qty * smv) for this WO's coupons scanned within the current pay-cycle
-  qtyProduced: number; // sum(qty) for this WO's coupons scanned within the current pay-cycle
+  balance: number | null; // totalClaim - plan (null when plan is null, i.e. no order quantity on record)
+  minutesProduced: number; // totalSam (order-level) * qtyProduced — NOT sum(qty * smv) per scan
+  qtyProduced: number; // sum(qty) for this WO's Sewing coupons scanned during THIS pay-cycle
 }
 
+// Also currently scoped to the Sewing department only — same first-pass
+// reasoning as OrderWiseReportRow above.
 export interface OperatorWiseReportRow {
   employeeCode: string;
   employeeName: string;
   section: string; // HRMS DepartmentName — closest available analogue to the legacy "Section :" grouping (see service for caveats)
   joiningDate: string | null; // HRMS JoiningDate
-  totalAmt: number; // sum(qty * rate) earned this pay-cycle across every coupon scanned
+  totalAmt: number; // sum(qty * rate) earned this pay-cycle across every Sewing-operation coupon scanned
 }
 
 export interface FinanceReportPeriod {

@@ -5,7 +5,11 @@ import {
   currentPayCycleStart,
   WORKERS_VIEW,
   STYLE_BULLETIN_SNAPSHOT_TABLE,
+  CUT_DETAIL_SNAPSHOT_TABLE,
+  STYLE_BULLETIN_TABLE,
+  OPERATIONS_CATALOG_TABLE,
 } from "@/lib/db";
+import { classifyDepartment } from "@/lib/department-classification";
 import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import type {
   FinanceReportPeriod,
@@ -22,37 +26,13 @@ import type {
 // rule as CURRENT_PAY_CYCLE_START_SQL) — there is no date picker for these
 // reports, by design, matching how the legacy printouts are always run "for
 // the current period."
-//
-// Columns the legacy printouts have that this system has NO source data
-// for at all (incentive-scheme amounts, production-line assignment,
-// wash-specific quantity, a stored "planned value" per order) are left out
-// entirely rather than shown as 0/estimated — there's nothing to compute
-// them from, and this app never had that engine.
-//
-// What's included, and where it's from:
-// - Total SAM / Total Rate (Order Wise): summed straight from the style
-//   bulletin snapshot's per-operation Smv/Sam and Piece Rate for that work
-//   order — genuine source data, not scan-derived.
-// - Previous Paid (Order Wise): summed from dbo.EmployeeWageRows for wage
-//   batches created before this pay-cycle started — a real historical
-//   ledger figure.
-// - Current Claim / Minutes Produced / Qty Produced (Order Wise) and Total
-//   Amt. (Operator Wise): summed directly from this pay-cycle's scanned
-//   coupons (qty, rate, smv) — the same aggregation
-//   report-summary-builder.service.ts already does for the main Reports
-//   dashboard.
-// - Joining Date (Operator Wise): HRMS's S_EmpDataPITSView genuinely
-//   carries a JoiningDate column.
-// - Section (Operator Wise): HRMS DepartmentName — the closest available
-//   analogue to the legacy "Section :" grouping (the legacy buckets like
-//   "FINISHING-A" don't exist anywhere in this app's data, so this isn't
-//   claimed to match exactly).
 
 const IN_LIST_CHUNK_SIZE = 2000; // stays well under SQL Server's ~2100 parameter cap
 
 function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  for (let i = 0; i < items.length; i += size)
+    out.push(items.slice(i, i + size));
   return out;
 }
 
@@ -69,7 +49,11 @@ function buildInClause(
     .join(", ");
 }
 
-function currentPeriod(): { period: FinanceReportPeriod; fromDate: Date; toDate: Date } {
+function currentPeriod(): {
+  period: FinanceReportPeriod;
+  fromDate: Date;
+  toDate: Date;
+} {
   const fromDate = currentPayCycleStart();
   const toDate = new Date();
   return {
@@ -82,23 +66,27 @@ function currentPeriod(): { period: FinanceReportPeriod; fromDate: Date; toDate:
   };
 }
 
+function previousPayCycleStart(currentStart: Date): Date {
+  const dayBefore = new Date(currentStart);
+  dayBefore.setDate(dayBefore.getDate() - 1);
+  return currentPayCycleStart(dayBefore);
+}
+
 interface RawScanRow {
   CouponCode: string;
   WorkOrder: string;
   BundleNo: string;
   OpNo: string;
   EmployeeCode: string;
+  ScannedAt: string;
 }
 
-// This pay-cycle's scanned coupons, enriched with Qty/Rate/Smv/Value — the
-// same shape report-summary-builder.service.ts builds for the main
-// dashboard, reused here rather than re-implemented.
-async function fetchCurrentCycleScans(fromDate: Date) {
+async function fetchScansSince(fromDate: Date) {
   const pool = await getPool("pitSystem");
   const result = await pool
     .request()
     .input("from", sql.Date, format(fromDate, "yyyy-MM-dd")).query(`
-      SELECT CouponCode, WorkOrder, BundleNo, OpNo, EmployeeCode
+      SELECT CouponCode, WorkOrder, BundleNo, OpNo, EmployeeCode, ScannedAt
       FROM dbo.QrCode_Coupon
       WHERE IsScanned = 1 AND IsDeleted = 0 AND ScannedAt IS NOT NULL AND ScannedAt >= @from
     `);
@@ -106,34 +94,71 @@ async function fetchCurrentCycleScans(fromDate: Date) {
   return enrichCouponRows(rows);
 }
 
+const DEPARTMENT_FILTER = "sewing" as const;
+
+async function fetchSewingOpCodesByWorkOrder(
+  workOrders: string[],
+): Promise<Map<string, Set<string>>> {
+  const map = new Map<string, Set<string>>();
+  const pool = await getPool("indusPlus");
+  for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
+    const req = pool.request();
+    const inClause = buildInClause(req, "wo", batch);
+    const result = await req.query(`
+      SELECT DISTINCT sb.[Order No] AS WorkOrder, sb.[Operation Code] AS OpNo, op.Department
+      FROM ${STYLE_BULLETIN_TABLE} sb
+      LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op ON sb.[Operation Code] = op.OperationCode
+      WHERE sb.[Order No] IN (${inClause})
+    `);
+    for (const row of result.recordset as {
+      WorkOrder: string;
+      OpNo: string;
+      Department: string | null;
+    }[]) {
+      if (classifyDepartment(row) !== DEPARTMENT_FILTER) continue;
+      if (!map.has(row.WorkOrder)) map.set(row.WorkOrder, new Set());
+      map.get(row.WorkOrder)!.add(row.OpNo);
+    }
+  }
+  return map;
+}
+
 // ── Order Wise Finishing Payment (Audit) ────────────────────────────────────
 
 export async function buildOrderWiseReport(): Promise<OrderWiseReportResult> {
-  const { period, fromDate } = currentPeriod();
-  const scans = await fetchCurrentCycleScans(fromDate);
+  const { period, fromDate: currentStart } = currentPeriod();
+  const previousStart = previousPayCycleStart(currentStart);
+
+  const allScans = await fetchScansSince(previousStart);
+
+  const scannedWorkOrders = [...new Set(allScans.map((r) => r.WorkOrder))];
+  const sewingOpsByWo = await fetchSewingOpCodesByWorkOrder(scannedWorkOrders);
+  const scans = allScans.filter((row) =>
+    sewingOpsByWo.get(row.WorkOrder)?.has(row.OpNo),
+  );
 
   const byWorkOrder = new Map<
     string,
-    { currentClaim: number; minutesProduced: number; qtyProduced: number }
+    { previousPaid: number; currentClaim: number; qtyProduced: number }
   >();
   for (const row of scans) {
     const qty = Number(row.Qty) || 0;
     const rate = Number(row.Rate) || 0;
-    const smv = Number(row.Smv) || 0;
-    const existing = byWorkOrder.get(row.WorkOrder);
     const value = qty * rate;
-    const minutes = qty * smv;
-    if (!existing) {
-      byWorkOrder.set(row.WorkOrder, {
-        currentClaim: value,
-        minutesProduced: minutes,
-        qtyProduced: qty,
-      });
-    } else {
+    const isCurrentCycle = new Date(row.ScannedAt) >= currentStart;
+
+    const existing = byWorkOrder.get(row.WorkOrder) ?? {
+      previousPaid: 0,
+      currentClaim: 0,
+      qtyProduced: 0,
+    };
+    if (isCurrentCycle) {
       existing.currentClaim += value;
-      existing.minutesProduced += minutes;
       existing.qtyProduced += qty;
+    } else {
+      existing.previousPaid += value;
     }
+    byWorkOrder.set(row.WorkOrder, existing);
   }
 
   const workOrders = [...byWorkOrder.keys()];
@@ -141,57 +166,67 @@ export async function buildOrderWiseReport(): Promise<OrderWiseReportResult> {
     return { period, rows: [] };
   }
 
-  const pool = await getPool("pitSystem");
+  const pitPool = await getPool("pitSystem");
 
-  // Order-level Total SAM / Total Rate: latest snapshot row per (WorkOrder,
-  // OperationCode), summed — a garment's full SMV/rate cost across every
-  // operation in its bulletin, independent of how much has been scanned.
-  const bulletinTotals = new Map<string, { totalSam: number; totalRate: number }>();
-  for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
-    const req = pool.request();
-    const inClause = buildInClause(req, "wo", batch);
-    const result = await req.query(`
-      WITH Latest AS (
-        SELECT
-          [Order No] AS WorkOrder,
-          [Operation Code] AS OpCode,
-          [Piece Rate] AS Rate,
-          [Smv/Sam] AS Smv,
-          ROW_NUMBER() OVER (
-            PARTITION BY [Order No], [Operation Code] ORDER BY InsertedAt DESC
-          ) AS RowId
-        FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
-        WHERE IsDeleted = 0 AND [Order No] IN (${inClause})
-      )
-      SELECT WorkOrder, SUM(ISNULL(Rate, 0)) AS TotalRate, SUM(ISNULL(Smv, 0)) AS TotalSam
-      FROM Latest
-      WHERE RowId = 1
-      GROUP BY WorkOrder
-    `);
-    for (const row of result.recordset as { WorkOrder: string; TotalRate: number; TotalSam: number }[]) {
-      bulletinTotals.set(row.WorkOrder, {
-        totalSam: Number(row.TotalSam) || 0,
-        totalRate: Number(row.TotalRate) || 0,
-      });
+  const bulletinTotals = new Map<
+    string,
+    { totalSam: number; totalRate: number }
+  >();
+  for (const workOrder of workOrders) {
+    const sewingOps = [...(sewingOpsByWo.get(workOrder) ?? [])];
+    if (sewingOps.length === 0) continue;
+    for (const batch of chunk(sewingOps, IN_LIST_CHUNK_SIZE)) {
+      const req = pitPool.request().input("wo", sql.NVarChar, workOrder);
+      const inClause = buildInClause(req, "op", batch);
+      const result = await req.query(`
+        WITH Latest AS (
+          SELECT
+            [Operation Code] AS OpCode,
+            [Piece Rate] AS Rate,
+            [Smv/Sam] AS Smv,
+            ROW_NUMBER() OVER (
+              PARTITION BY [Order No], [Operation Code] ORDER BY InsertedAt DESC
+            ) AS RowId
+          FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
+          WHERE IsDeleted = 0 AND [Order No] = @wo AND [Operation Code] IN (${inClause})
+        )
+        SELECT SUM(ISNULL(Rate, 0)) AS TotalRate, SUM(ISNULL(Smv, 0)) AS TotalSam
+        FROM Latest
+        WHERE RowId = 1
+      `);
+      const row = result.recordset[0] as
+        | { TotalRate: number; TotalSam: number }
+        | undefined;
+      const existing = bulletinTotals.get(workOrder) ?? {
+        totalSam: 0,
+        totalRate: 0,
+      };
+      existing.totalSam += Number(row?.TotalSam) || 0;
+      existing.totalRate += Number(row?.TotalRate) || 0;
+      bulletinTotals.set(workOrder, existing);
     }
   }
 
-  // Previous Paid — every wage batch already created for this work order
-  // *before* the current pay-cycle started. Real historical ledger data,
-  // not derived from scans.
-  const previousPaidByWo = new Map<string, number>();
+  // Wash Qty (legacy column name) = the order's overall cut quantity — a
+  // per-order constant repeated on every cut-detail row (MAX() per work
+  // order rather than picking one arbitrary row), not scoped to a
+  // department. Also the multiplicand for Plan (Total Rate × Wash Qty).
+  const washQtyByWo = new Map<string, number>();
   for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
-    const req = pool.request().input("cycleStart", sql.Date, format(fromDate, "yyyy-MM-dd"));
+    const req = pitPool.request();
     const inClause = buildInClause(req, "wo", batch);
     const result = await req.query(`
-      SELECT r.WorkOrder, SUM(r.TotalPay) AS PreviousPaid
-      FROM dbo.EmployeeWageRows r
-      INNER JOIN dbo.EmployeeWages w ON w.WageId = r.WageId
-      WHERE r.WorkOrder IN (${inClause}) AND w.CreatedAt < @cycleStart
-      GROUP BY r.WorkOrder
+      SELECT [Work Order #] AS WorkOrder, MAX([Order Qty After % Add]) AS OrderQty
+      FROM ${CUT_DETAIL_SNAPSHOT_TABLE}
+      WHERE IsDeleted = 0 AND [Work Order #] IN (${inClause})
+      GROUP BY [Work Order #]
     `);
-    for (const row of result.recordset as { WorkOrder: string; PreviousPaid: number }[]) {
-      previousPaidByWo.set(row.WorkOrder, Number(row.PreviousPaid) || 0);
+    for (const row of result.recordset as {
+      WorkOrder: string;
+      OrderQty: number | null;
+    }[]) {
+      if (row.OrderQty != null)
+        washQtyByWo.set(row.WorkOrder, Number(row.OrderQty));
     }
   }
 
@@ -199,16 +234,23 @@ export async function buildOrderWiseReport(): Promise<OrderWiseReportResult> {
     .map((workOrder) => {
       const scan = byWorkOrder.get(workOrder)!;
       const bulletin = bulletinTotals.get(workOrder);
-      const previousPaid = previousPaidByWo.get(workOrder) ?? 0;
-      const currentClaim = scan.currentClaim;
+      const washQty = washQtyByWo.get(workOrder) ?? null;
+      const totalSam = bulletin?.totalSam ?? null;
+      const totalRate = bulletin?.totalRate ?? null;
+      const plan =
+        totalRate != null && washQty != null ? totalRate * washQty : null;
+      const totalClaim = scan.previousPaid + scan.currentClaim;
       return {
         workOrder,
-        totalSam: bulletin?.totalSam ?? null,
-        totalRate: bulletin?.totalRate ?? null,
-        previousPaid,
-        currentClaim,
-        totalClaim: previousPaid + currentClaim,
-        minutesProduced: scan.minutesProduced,
+        totalSam,
+        totalRate,
+        washQty,
+        plan,
+        previousPaid: scan.previousPaid,
+        currentClaim: scan.currentClaim,
+        totalClaim,
+        balance: plan != null ? totalClaim - plan : null,
+        minutesProduced: totalSam != null ? totalSam * scan.qtyProduced : 0,
         qtyProduced: scan.qtyProduced,
       };
     })
@@ -221,7 +263,13 @@ export async function buildOrderWiseReport(): Promise<OrderWiseReportResult> {
 
 export async function buildOperatorWiseReport(): Promise<OperatorWiseReportResult> {
   const { period, fromDate } = currentPeriod();
-  const scans = await fetchCurrentCycleScans(fromDate);
+  const allScans = await fetchScansSince(fromDate);
+
+  const scannedWorkOrders = [...new Set(allScans.map((r) => r.WorkOrder))];
+  const sewingOpsByWo = await fetchSewingOpCodesByWorkOrder(scannedWorkOrders);
+  const scans = allScans.filter((row) =>
+    sewingOpsByWo.get(row.WorkOrder)?.has(row.OpNo),
+  );
 
   const totalAmtByEmployee = new Map<string, number>();
   for (const row of scans) {
