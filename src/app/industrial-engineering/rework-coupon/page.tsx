@@ -1,19 +1,20 @@
 "use client";
 
-import React, { useState, useMemo, useEffect, useRef } from "react";
-import { Barcode, ChevronDown } from "lucide-react";
-import type { QrCodeStyleData, PageSetupConfig } from "@/features/qr-code-generation/types";
-import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
+import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { Barcode, Loader2, Trash2, AlertTriangle } from "lucide-react";
+import { useAuth } from "@/features/auth/context/auth-context";
+import type {
+  QrCodeStyleData,
+  BundleDetailRow,
+  OperationsDetailRow,
+} from "@/features/qr-code-generation/types";
+import { OperationsDetailTable } from "@/features/qr-code-generation/components/OperationsDetailTable";
 import { useGenerateCouponPdf } from "@/features/qr-code-generation/hooks/useGenerateCouponPdf";
-import { CsvExportButton } from "@/components/ui/csv-export-button";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+  WorkOrderSearchModal,
+  type WorkOrderSearchRow,
+} from "@/components/work-order-search-modal";
+import { useWorkOrderParam } from "@/lib/use-work-order-param";
 
 interface CutDetailRow {
   RowId: number;
@@ -41,416 +42,359 @@ interface StyleBulletinRow {
   Last_Operation_Section_Wise?: number;
 }
 
+// A fully manual Cutting Detail row for this page — unlike Coupon
+// Generation's BundleDetailRow, nothing here is looked up from real cut
+// data (no Char/Bundle #/Sel — a rework entry has no real bundle to point
+// at). Every cell is typed in directly, click-and-type, like a
+// spreadsheet — see the ReworkBundleTable render below.
+interface ReworkBundleRow {
+  id: number;
+  cutNo: string;
+  inseam: string;
+  size: string;
+  pcs: string;
+}
+
+const cellInputClassName =
+  "w-full h-full px-2 py-2 text-center bg-transparent text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:bg-white rounded-lg";
+
 export default function ReworkCouponPage() {
+  const { user } = useAuth();
+
   // Modal states
   const [isOpenLookup, setIsOpenLookup] = useState(false);
-  const [showPageSetupModal, setShowPageSetupModal] = useState(false);
-
-  // Search dialog fields
-  const [searchWorkOrder, setSearchWorkOrder] = useState("");
-  const [searchCut, setSearchCut] = useState("");
-  const [searchBundleId, setSearchBundleId] = useState("");
-  const [searchOperationCode, setSearchOperationCode] = useState("");
 
   // Persisted loaded state fields
-  const [workOrder, setWorkOrder] = useState("");
-  const [cut, setCut] = useState("");
-  const [bundleId, setBundleId] = useState("");
-  const [operationCode, setOperationCode] = useState("");
+  const [workOrder, setWorkOrderState] = useState("");
 
-  // Loaded data fields
+  // Loaded data fields (real, read-only — used for Order Qty, customer
+  // name, Sale Order No, and the Operations Detail table)
   const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
   const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState("");
-  const [hasSearched, setHasSearched] = useState(false);
 
-  // Suggestion autocomplete inside dialog
-  const [suggestions, setSuggestions] = useState<string[]>([]);
-  const [suggestionsLoading, setSuggestionsLoading] = useState(false);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const suggestionsRef = useRef<HTMLDivElement>(null);
-
-  // ERP Form input states (user editable after bundle loading)
-  const [styleVal, setStyleVal] = useState("");
-  const [styleDescVal, setStyleDescVal] = useState("");
-  const [styleCategoryVal, setStyleCategoryVal] = useState("");
-  const [reworkQty, setReworkQty] = useState<number | "">("");
-  const [remarksVal, setRemarksVal] = useState("");
-
-  // Dropdown options fetched based on the selected work order
-  const [lookupCutOptions, setLookupCutOptions] = useState<number[]>([]);
-  const [lookupBundleOptions, setLookupBundleOptions] = useState<{ cut: number; id: number }[]>([]);
-  const [lookupOperationOptions, setLookupOperationOptions] = useState<{ code: string; name: string }[]>([]);
-  const [isFetchingOptions, setIsFetchingOptions] = useState(false);
-
-  // Search dropdown suggestion visibility states
-  const [showCutSuggestions, setShowCutSuggestions] = useState(false);
-  const [showBundleSuggestions, setShowBundleSuggestions] = useState(false);
-  const [showOpSuggestions, setShowOpSuggestions] = useState(false);
-  const [operationSearchQuery, setOperationSearchQuery] = useState("");
-
-  // Refs for click outside to close suggestions
-  const cutRef = useRef<HTMLDivElement>(null);
-  const bundleRef = useRef<HTMLDivElement>(null);
-  const opRef = useRef<HTMLDivElement>(null);
-
-  const [pageSetup, setPageSetup] = useState<PageSetupConfig>({
-    size: "Legal",
-    source: "Automatically Select",
-    orientation: "Portrait",
-    margins: { left: 0.166, right: 0.166, top: 0.53, bottom: 0.166 },
-    gridFormat: "3x10",
-    layout: "same-line",
+  // Cutting Detail — fully manual, see ReworkBundleRow above. Always shows
+  // at least one row; focusing the last row spawns a fresh blank row below
+  // it (see handleRowFocus/handleRowBlur), so the user never has to click
+  // a separate "Add Row" button.
+  const nextRowId = useRef(1);
+  const makeBlankRow = (): ReworkBundleRow => ({
+    id: nextRowId.current++,
+    cutNo: "",
+    inseam: "",
+    size: "",
+    pcs: "",
   });
+  const [bundles, setBundles] = useState<ReworkBundleRow[]>(() => [makeBlankRow()]);
 
-  // Suggestion fetching debounced
-  useEffect(() => {
-    if (searchWorkOrder.trim().length < 2) {
-      setSuggestions([]);
-      setSuggestionsLoading(false);
-      return;
-    }
-    setSuggestionsLoading(true);
-    const fetchSuggestions = async () => {
-      try {
-        const res = await fetch(
-          `/api/open-order/suggestions?query=${encodeURIComponent(searchWorkOrder)}`
-        );
-        setSuggestions(res.ok ? (await res.json()) || [] : []);
-      } catch (err) {
-        console.error("Suggestions fetch error:", err);
-        setSuggestions([]);
-      } finally {
-        setSuggestionsLoading(false);
-      }
-    };
-    const delayDebounce = setTimeout(fetchSuggestions, 350);
-    return () => clearTimeout(delayDebounce);
-  }, [searchWorkOrder]);
+  // Operations Detail — real data loaded from the style bulletin, same
+  // shape/component as Coupon Generation (checkbox selection only, nothing
+  // manual here).
+  const [operations, setOperations] = useState<OperationsDetailRow[]>([]);
 
-  // Click outside suggestions lists to close
-  useEffect(() => {
-    const handleOutsideClick = (e: MouseEvent) => {
-      if (suggestionsRef.current && !suggestionsRef.current.contains(e.target as Node)) {
-        setShowSuggestions(false);
-      }
-      if (cutRef.current && !cutRef.current.contains(e.target as Node)) {
-        setShowCutSuggestions(false);
-      }
-      if (bundleRef.current && !bundleRef.current.contains(e.target as Node)) {
-        setShowBundleSuggestions(false);
-      }
-      if (opRef.current && !opRef.current.contains(e.target as Node)) {
-        setShowOpSuggestions(false);
-      }
-    };
-    document.addEventListener("mousedown", handleOutsideClick);
-    return () => document.removeEventListener("mousedown", handleOutsideClick);
-  }, []);
+  const [isSaving, setIsSaving] = useState(false);
+  const [validationError, setValidationError] = useState<string | null>(null);
+  const [reworkQty, setReworkQty] = useState<number | "">("");
 
-  // Helper to fetch Cuts, Bundle IDs, and Operations for a selected work order
-  const fetchWorkOrderOptions = async (wo: string) => {
-    if (!wo.trim()) {
-      setLookupCutOptions([]);
-      setLookupBundleOptions([]);
-      setLookupOperationOptions([]);
-      return;
-    }
-    setIsFetchingOptions(true);
-    try {
-      const res = await fetch(`/api/open-order?work_order=${encodeURIComponent(wo.trim())}`);
-      if (res.ok) {
-        const data = await res.json();
-        
-        // Extract unique Cut numbers
-        const cuts = Array.from(
-          new Set((data.cutDetails || []).map((row: any) => row.Cut).filter((c: any) => c !== undefined && c !== null))
-        ) as number[];
-        cuts.sort((a, b) => a - b);
-        setLookupCutOptions(cuts);
+  // Shared Work Order search: seeds this page's search from the
+  // global/URL Work Order (set by Cut Report, Style Bulletin, Coupon
+  // Generation or Coupon Tracing) on mount, and propagates a search
+  // committed here to those other pages — same sync pattern used
+  // everywhere else in Industrial Engineering.
+  const { setWorkOrder: setGlobalWorkOrder } = useWorkOrderParam(
+    useCallback((wo: string) => {
+      loadWorkOrder(wo);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []),
+  );
 
-        // Extract Bundle IDs mapped to their Cut number
-        const bundles = (data.cutDetails || []).map((row: any) => ({
-          cut: row.Cut,
-          id: row.Bundle_Id,
-        })).filter((b: any) => b.cut !== undefined && b.id !== undefined) as { cut: number; id: number }[];
-        bundles.sort((a, b) => a.id - b.id);
-        setLookupBundleOptions(bundles);
+  const fetchWorkOrderRows = useCallback(
+    async (filters: {
+      workOrder: string;
+      customer: string;
+      saleOrderNo: string;
+    }): Promise<WorkOrderSearchRow[]> => {
+      const params = new URLSearchParams();
+      if (filters.workOrder) params.set("work_order", filters.workOrder);
+      if (filters.customer) params.set("customer", filters.customer);
+      if (filters.saleOrderNo) params.set("sale_order_no", filters.saleOrderNo);
+      const res = await fetch(`/api/open-order/work-orders?${params.toString()}`);
+      return res.ok ? res.json() : [];
+    },
+    [],
+  );
 
-        // Extract Operations
-        const ops = (data.styleBulletins || []).map((row: any) => ({
-          code: (row.Operation_Code ?? "").trim(),
-          name: (row.Operation_Name ?? "").trim(),
-        })).filter((o: any) => o.code) as { code: string; name: string }[];
-        
-        // Deduplicate operations by code
-        const uniqueOpsMap = new Map<string, string>();
-        ops.forEach(o => uniqueOpsMap.set(o.code, o.name));
-        const uniqueOps = Array.from(uniqueOpsMap.entries()).map(([code, name]) => ({ code, name }));
-        setLookupOperationOptions(uniqueOps);
-        // Clear previous selections if they aren't valid for the new work order
-        setSearchCut("");
-        setSearchBundleId("");
-        setSearchOperationCode("");
-        setOperationSearchQuery("");
-      }
-    } catch (err) {
-      console.error("Error fetching work order options:", err);
-    } finally {
-      setIsFetchingOptions(false);
-    }
-  };
-
-  // Trigger options fetch on searchWorkOrder debounce
-  useEffect(() => {
-    if (searchWorkOrder.trim().length >= 4) {
-      const timer = setTimeout(() => {
-        fetchWorkOrderOptions(searchWorkOrder);
-      }, 500);
-      return () => clearTimeout(timer);
-    } else {
-      setLookupCutOptions([]);
-      setLookupBundleOptions([]);
-      setLookupOperationOptions([]);
-    }
-  }, [searchWorkOrder]);
-
-  // Fetch options immediately when Dialog is opened (if a Work Order is already typed)
-  useEffect(() => {
-    if (isOpenLookup && searchWorkOrder.trim()) {
-      fetchWorkOrderOptions(searchWorkOrder);
-    }
-  }, [isOpenLookup]);
-
-  // Filter bundle options list by selected cut #
-  const filteredBundleOptions = useMemo(() => {
-    if (!searchCut) return [];
-    return lookupBundleOptions.filter((b) => String(b.cut) === String(searchCut));
-  }, [lookupBundleOptions, searchCut]);
-
-  // Search filtered cuts
-  const filteredCutOptions = useMemo(() => {
-    if (!searchCut.trim()) return lookupCutOptions;
-    return lookupCutOptions.filter((c) => String(c).includes(searchCut.trim()));
-  }, [lookupCutOptions, searchCut]);
-
-  // Search filtered bundles
-  const filteredBundleSuggestions = useMemo(() => {
-    if (!searchBundleId.trim()) return filteredBundleOptions;
-    return filteredBundleOptions.filter((b) => String(b.id).includes(searchBundleId.trim()));
-  }, [filteredBundleOptions, searchBundleId]);
-
-  // Search filtered operations
-  const filteredOpSuggestions = useMemo(() => {
-    if (!operationSearchQuery.trim()) return lookupOperationOptions;
-    const q = operationSearchQuery.toLowerCase();
-    return lookupOperationOptions.filter(
-      (op) => op.code.toLowerCase().includes(q) || op.name.toLowerCase().includes(q)
-    );
-  }, [lookupOperationOptions, operationSearchQuery]);
-
-  // Handle autocomplete suggestion select click
-  const handleSelectSuggestion = (suggestion: string) => {
-    setSearchWorkOrder(suggestion);
-    setShowSuggestions(false);
-    fetchWorkOrderOptions(suggestion);
-  };
-
-  const handleSearchSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!searchWorkOrder || !searchCut || !searchBundleId || isLoading) return;
-
+  async function loadWorkOrder(wo: string) {
+    if (!wo.trim() || isLoading) return;
     setIsLoading(true);
     setErrorMsg("");
-    setHasSearched(true);
     try {
-      const params = new URLSearchParams({
-        work_order: searchWorkOrder.trim(),
-        cut: searchCut.trim(),
-        bundle_id: searchBundleId.trim(),
-      });
-      const response = await fetch(`/api/coupons/rework?${params}`);
+      const response = await fetch(
+        `/api/open-order?work_order=${encodeURIComponent(wo.trim())}&t=${Date.now()}`,
+      );
       if (!response.ok) {
         const errData = await response.json();
-        throw new Error(errData?.error || "Failed to fetch bundle data.");
+        throw new Error(errData?.error || "Failed to fetch work order data.");
       }
       const data = await response.json();
-      
-      const loadedCuts = data.cutDetails || [];
-      const loadedBulletins = data.styleBulletins || [];
+
+      const loadedCuts: CutDetailRow[] = data.cutDetails || [];
+      const loadedBulletins: StyleBulletinRow[] = data.styleBulletins || [];
 
       if (loadedCuts.length === 0) {
-        throw new Error("No bundle found matching the entered criteria.");
+        throw new Error("No cut/bundle data found for this work order.");
       }
 
-      // Populate persisted load parameters
-      setWorkOrder(searchWorkOrder.trim());
-      setCut(searchCut.trim());
-      setBundleId(searchBundleId.trim());
-      setOperationCode(searchOperationCode.trim());
-
+      setWorkOrderState(wo.trim());
       setCutDetails(loadedCuts);
       setStyleBulletins(loadedBulletins);
 
-      // Pre-fill editable input states
-      const firstCut = loadedCuts[0];
-      setReworkQty(firstCut?.Bundle_Qty ?? "");
-      setStyleVal("");
-      setStyleDescVal("");
-      setStyleCategoryVal("");
-      setRemarksVal("");
-      setIsOpenLookup(false); // Close dialog on success
+      setOperations(
+        loadedBulletins
+          .slice()
+          .sort(
+            (a, b) => (a.Operation_Sequence ?? 0) - (b.Operation_Sequence ?? 0),
+          )
+          .map((row) => ({
+            id: row.RowId,
+            section: row.Section ?? "",
+            seqNo: String(row.Operation_Sequence ?? ""),
+            opNo: row.Operation_Code ?? "",
+            operationName: row.Operation_Name ?? "",
+            smv: String(row.Smv_Sam ?? ""),
+            rate: String(row.Piece_Rate ?? ""),
+            skills: "",
+            lastOpSection: false,
+          })),
+      );
+
+      // Cutting Detail is fully manual — reset to a single blank row for
+      // the newly loaded work order rather than carrying over rows from a
+      // previous one.
+      setBundles([makeBlankRow()]);
+      setReworkQty("");
+      setValidationError(null);
+      setIsOpenLookup(false);
+      setGlobalWorkOrder(wo.trim());
     } catch (err: unknown) {
       console.error("Rework coupon fetch error:", err);
-      setErrorMsg(err instanceof Error ? err.message : "An unexpected error occurred.");
+      setErrorMsg(
+        err instanceof Error ? err.message : "An unexpected error occurred.",
+      );
     } finally {
       setIsLoading(false);
     }
-  };
-
-  const handleClear = () => {
-    setCutDetails([]);
-    setStyleBulletins([]);
-    setWorkOrder("");
-    setCut("");
-    setBundleId("");
-    setOperationCode("");
-    setStyleVal("");
-    setStyleDescVal("");
-    setStyleCategoryVal("");
-    setReworkQty("");
-    setRemarksVal("");
-    setHasSearched(false);
-    setErrorMsg("");
-    setOperationSearchQuery("");
-  };
-
-  // Calculations for totals
-  // Filter style bulletins based on operation code (case-insensitive, trimmed)
-  const filteredStyleBulletins = useMemo(() => {
-    if (!operationCode.trim()) return styleBulletins;
-    return styleBulletins.filter(
-      (row) => (row.Operation_Code ?? "").trim().toUpperCase() === operationCode.trim().toUpperCase()
-    );
-  }, [styleBulletins, operationCode]);
+  }
 
   const totalSam = useMemo(() => {
-    return filteredStyleBulletins.reduce((acc, curr) => acc + (curr.Smv_Sam ?? 0), 0);
-  }, [filteredStyleBulletins]);
-
-  const totalRate = useMemo(() => {
-    return filteredStyleBulletins.reduce((acc, curr) => acc + (curr.Piece_Rate ?? 0), 0);
-  }, [filteredStyleBulletins]);
-
-  const totalPcs = useMemo(() => {
-    return cutDetails.reduce((acc, curr) => acc + (curr.Bundle_Qty ?? 0), 0);
-  }, [cutDetails]);
+    return styleBulletins.reduce((acc, curr) => acc + (curr.Smv_Sam ?? 0), 0);
+  }, [styleBulletins]);
 
   const customerName = cutDetails[0]?.Customer_Name || "";
-  const cutQty = cutDetails[0]?.Bundle_Qty;
 
-  const samCsvRows = useMemo(
-    () =>
-      filteredStyleBulletins.map((row) => [
-        row.Operation_Sequence ?? "",
-        row.Operation_Code ?? "",
-        row.Operation_Name ?? "",
-        row.Smv_Sam?.toFixed(2) ?? "",
-        row.Smv_Sam?.toFixed(2) ?? "",
-        row.Piece_Rate?.toFixed(4) ?? "",
-        row.Piece_Rate?.toFixed(4) ?? "",
-        reworkQty,
-        1,
-      ]),
-    [filteredStyleBulletins, reworkQty],
-  );
-
-  const bundleCsvRows = useMemo(
-    () =>
-      cutDetails.map((row) => [
-        row.Sale_Order_No ?? "",
-        row.Cut ?? "",
-        row.Color ?? "",
-        row.Bundle_Id ?? "",
-        row.Shade || "A",
-        row.Shrinkage || "0%",
-        row.Size ?? "",
-        row.Inseam ?? "",
-        row.Bundle_Qty ?? "",
-      ]),
+  // Order Qty — sum of Bundle_Qty across every cut loaded for this work
+  // order (real ERP data), replacing the old per-bundle "Cut Qty" field.
+  const orderQty = useMemo(
+    () => cutDetails.reduce((acc, c) => acc + (c.Bundle_Qty ?? 0), 0),
     [cutDetails],
   );
 
-  // Build printing config
+  // Cutting Detail row mutation — click a cell, type into it, same idea as
+  // a spreadsheet. No Sel checkbox: every row the user adds counts.
+  const removeBundleRow = (id: number) => {
+    setBundles((prev) => (prev.length <= 1 ? prev : prev.filter((b) => b.id !== id)));
+  };
+
+  // Typing into the last row's cell spawns a fresh blank row right below
+  // it, once that row actually has something in it — driven by content
+  // changing, not by focus/blur timing, so it can't fire on a click that
+  // never typed anything or land on the wrong row after a re-render.
+  const updateBundleCell = (
+    id: number,
+    field: keyof Omit<ReworkBundleRow, "id">,
+    value: string,
+  ) => {
+    setBundles((prev) => {
+      const idx = prev.findIndex((b) => b.id === id);
+      if (idx === -1) return prev;
+      const updatedRow = { ...prev[idx], [field]: value };
+      const next = prev.slice();
+      next[idx] = updatedRow;
+      const isLastRow = idx === prev.length - 1;
+      const hasContent =
+        updatedRow.cutNo.trim() ||
+        updatedRow.inseam.trim() ||
+        updatedRow.size.trim() ||
+        updatedRow.pcs.trim();
+      if (isLastRow && hasContent) {
+        next.push(makeBlankRow());
+      }
+      return next;
+    });
+  };
+
+  const handleOperationChange = (id: number, field: string, value: boolean) => {
+    setOperations((prev) => prev.map((o) => (o.id === id ? { ...o, [field]: value } : o)));
+  };
+  const handleAllOperationsSelChange = (checked: boolean) => {
+    setOperations((prev) => prev.map((o) => ({ ...o, lastOpSection: checked })));
+  };
+
+  // Total Pcs across every Cutting Detail row — checked live against
+  // Re-Work Qty (see the effect below).
+  const pcsTotal = useMemo(
+    () => bundles.reduce((acc, b) => acc + (Number(b.pcs) || 0), 0),
+    [bundles],
+  );
+
+  // Fires the moment the Pcs total crosses above Re-Work Qty (edge
+  // triggered — not on every keystroke while it stays over, only when it
+  // newly goes over), same "live validation modal" the user asked for.
+  const wasExceedingRef = useRef(false);
+  useEffect(() => {
+    const limit = reworkQty === "" ? 0 : Number(reworkQty);
+    const exceeding = limit > 0 && pcsTotal > limit;
+    if (exceeding && !wasExceedingRef.current) {
+      setValidationError(
+        `Total Pcs (${pcsTotal}) exceeds Re-Work Qty (${limit}). Reduce Pcs or increase Re-Work Qty.`,
+      );
+    }
+    wasExceedingRef.current = exceeding;
+  }, [pcsTotal, reworkQty]);
+
+  const reworkQtyBelowOrder =
+    orderQty > 0 && reworkQty !== "" && Number(reworkQty) < orderQty;
+
+  // Cutting Detail mapped into the shape Coupon Generation's shared
+  // pipeline expects (BundleDetailRow) — bundleNo is synthetic here (no
+  // real bundle exists for a rework entry) but still has to be unique per
+  // row since CouponCode = workOrder + bundleNo + opNo.
+  const mappedBundles: BundleDetailRow[] = useMemo(
+    () =>
+      bundles.map((b) => ({
+        id: b.id,
+        cutNo: b.cutNo.trim(),
+        char: "",
+        line: "1",
+        bundleNo: `RW${b.id}`,
+        inseam: b.inseam,
+        size: b.size,
+        pcs: Number(b.pcs) || 0,
+        sel: true,
+        code: "",
+      })),
+    [bundles],
+  );
+
   const activeStyle: QrCodeStyleData | null = useMemo(() => {
-    if (cutDetails.length === 0) return null;
-
-    const qtyToUse = reworkQty !== "" ? reworkQty : (cutDetails[0].Bundle_Qty ?? 0);
-
-    const bundles = cutDetails.map((row) => ({
-      id: row.RowId,
-      cutNo: String(row.Cut ?? cut),
-      line: "1",
-      bundleNo: String(row.Bundle_Id ?? bundleId),
-      inseam: String(row.Inseam ?? ""),
-      size: String(row.Size ?? ""),
-      pcs: Number(qtyToUse),
-      sel: true,
-      code: row.Color ?? "",
-    }));
-
-    const allOperations = styleBulletins
-      .slice()
-      .sort((a, b) => (a.Operation_Sequence ?? 0) - (b.Operation_Sequence ?? 0))
-      .map((row) => ({
-        id: row.RowId,
-        section: row.Section ?? "",
-        seqNo: String(row.Operation_Sequence ?? ""),
-        opNo: row.Operation_Code ?? "",
-        operationName: row.Operation_Name ?? "",
-        smv: String(row.Smv_Sam ?? ""),
-        rate: String(row.Piece_Rate ?? ""),
-        skills: "",
-        lastOpSection: row.Last_Operation_Section_Wise === 1,
-      }));
-
-    // Filter operations if a code was specified during lookup (trimmed, case-insensitive)
-    const operations = operationCode.trim()
-      ? allOperations.filter((op) => op.opNo.trim().toUpperCase() === operationCode.trim().toUpperCase())
-      : allOperations;
-
-    if (operations.length === 0) return null;
-
+    if (mappedBundles.length === 0 || operations.length === 0) return null;
     return {
-      workOrder: cutDetails[0].Work_Order ?? workOrder,
-      saleOrderNo: cutDetails[0].Sale_Order_No ?? "",
-      customer: cutDetails[0].Customer_Name ?? "",
+      workOrder,
+      saleOrderNo: cutDetails[0]?.Sale_Order_No ?? "",
+      customer: cutDetails[0]?.Customer_Name ?? "",
       styleCode: "",
-      generateBy: "",
+      generateBy: user?.email ?? "",
       generateDatetime: "",
       totalWash: "",
       generatedCoupons: "",
       balance: "",
       generatedBundle: "",
-      notes: remarksVal,
-      remarks: remarksVal,
-      reworkQtyMain: String(qtyToUse),
-      reworkQtyBundle: String(qtyToUse),
-      subTotal: "",
-      total: "",
+      notes: "",
+      remarks: "",
+      reworkQtyMain: String(reworkQty ?? ""),
+      reworkQtyBundle: String(reworkQty ?? ""),
+      subTotal: String(pcsTotal),
+      total: String(pcsTotal),
       operations,
-      bundles,
+      bundles: mappedBundles,
     };
-  }, [cutDetails, styleBulletins, operationCode, cut, bundleId, workOrder, styleVal, remarksVal, reworkQty, customerName]);
+  }, [mappedBundles, operations, cutDetails, workOrder, reworkQty, pcsTotal, user]);
 
-  const { handleGenerateCoupons, generatingCoupons, handleDownloadPdf: downloadPdf, generatingPdf, couponCount } = useGenerateCouponPdf(
-    activeStyle ?? { workOrder: "", saleOrderNo: "", styleCode: "", bundles: [], operations: [] },
+  const { handleGenerateCoupons, generatingCoupons } = useGenerateCouponPdf(
+    activeStyle ?? {
+      workOrder: "",
+      saleOrderNo: "",
+      styleCode: "",
+      bundles: [],
+      operations: [],
+    },
   );
-  const handleGeneratePdf = async () => {
-    await downloadPdf(pageSetup.layout);
-    setShowPageSetupModal(false);
+
+  // Generate Coupon(s) now does both jobs the old separate Save button and
+  // Generate button used to: persists the Cutting Detail + Operations
+  // Detail tables into dbo.ReworkCouponEntry (pitSystem, an audit record),
+  // then registers real coupons via the same pipeline Coupon Generation
+  // uses — so these coupons show up, get scanned, and get
+  // unscanned/deleted alongside every other coupon for this work order,
+  // not as a separate rework-only set.
+  const handleGenerateAndSave = async () => {
+    if (isSaving || generatingCoupons) return;
+    if (!workOrder) {
+      setValidationError("Search and select a Work Order first.");
+      return;
+    }
+    if (bundles.length === 0) {
+      setValidationError("Add at least one Cutting Detail row.");
+      return;
+    }
+    if (bundles.some((b) => !b.cutNo.trim())) {
+      setValidationError("Enter a Cut # for every Cutting Detail row.");
+      return;
+    }
+    if (bundles.some((b) => !b.pcs || Number(b.pcs) <= 0)) {
+      setValidationError("Enter Pcs (greater than 0) for every Cutting Detail row.");
+      return;
+    }
+    const selectedOperations = operations.filter((op) => op.lastOpSection);
+    if (selectedOperations.length === 0) {
+      setValidationError("Select at least one operation under Operations Detail.");
+      return;
+    }
+    if (orderQty > 0 && (reworkQty === "" || Number(reworkQty) < orderQty)) {
+      setValidationError(`Re-Work Qty cannot be less than Order Qty (${orderQty}).`);
+      return;
+    }
+    if (reworkQty !== "" && pcsTotal > Number(reworkQty)) {
+      setValidationError(
+        `Total Pcs (${pcsTotal}) exceeds Re-Work Qty (${reworkQty}). Reduce Pcs or increase Re-Work Qty.`,
+      );
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      const saveResponse = await fetch("/api/coupons/rework/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workOrder,
+          saleOrderNo: cutDetails[0]?.Sale_Order_No ?? "",
+          customerName,
+          reworkQty: reworkQty === "" ? null : reworkQty,
+          remarks: "",
+          insertedBy: user?.email || "",
+          bundles: mappedBundles,
+          operations,
+        }),
+      });
+      const saveData = await saveResponse.json();
+      if (!saveResponse.ok) {
+        throw new Error(saveData.error || "Failed to save rework entry.");
+      }
+    } catch (err: unknown) {
+      setValidationError(
+        err instanceof Error ? err.message : "Failed to save rework entry.",
+      );
+      setIsSaving(false);
+      return;
+    }
+    setIsSaving(false);
+
+    await handleGenerateCoupons();
   };
+
+  const isBusy = isSaving || generatingCoupons;
 
   return (
     <>
@@ -466,76 +410,44 @@ export default function ReworkCouponPage() {
 
         {/* 1. Barcode / Style Information */}
         <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-xs">
-          <h2 className="text-sm font-bold text-[#4f46e5] mb-4">Barcode / Style Information</h2>
-          <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-4 gap-4 items-end">
-            {/* Row 1 */}
-            <div className="flex flex-col gap-1.5 md:col-span-2">
-              <span className="text-[11px] font-bold text-slate-500">ANL # & Customer</span>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  readOnly
-                  value={workOrder ? `${workOrder}${customerName ? " - " + customerName : ""}` : ""}
-                  placeholder="Select from Lookup..."
-                  onClick={() => setIsOpenLookup(true)}
-                  className="flex-grow px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none cursor-pointer"
-                />
-                <button
-                  type="button"
-                  onClick={() => setIsOpenLookup(true)}
-                  className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-[#e2e8f0] text-slate-700 font-bold transition-all shadow-xs flex items-center justify-center cursor-pointer"
-                >
-                  ...
-                </button>
-              </div>
-            </div>
-
+          <h2 className="text-sm font-bold text-[#4f46e5] mb-4">
+            Style Information
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-bold text-slate-500">Cut Qty</span>
+              <span className="text-[11px] font-bold text-slate-500">
+                W/O # & Customer
+              </span>
               <input
                 type="text"
                 readOnly
-                value={cutQty !== undefined ? cutQty : ""}
+                value={
+                  workOrder
+                    ? `${workOrder}${customerName ? " - " + customerName : ""}`
+                    : ""
+                }
+                placeholder="Select from Lookup..."
+                onClick={() => setIsOpenLookup(true)}
+                className="px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none cursor-pointer"
+              />
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <span className="text-[11px] font-bold text-slate-500">
+                Order Qty
+              </span>
+              <input
+                type="text"
+                readOnly
+                value={orderQty || ""}
                 className="px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
               />
             </div>
 
-            <div className="flex flex-col gap-1.5 row-span-3 h-full items-center justify-center border-t md:border-t-0 md:border-l border-slate-100 pl-0 md:pl-4 pt-4 md:pt-0">
-              <span className="text-[11px] font-bold text-slate-600 mb-2">Re-Work Qty</span>
-              <input
-                type="number"
-                value={reworkQty}
-                onChange={(e) => setReworkQty(e.target.value !== "" ? Number(e.target.value) : "")}
-                placeholder="e.g. 10"
-                className="w-24 text-center px-3 py-4 rounded-xl border border-[#e2e8f0] bg-white text-base font-extrabold text-indigo-600 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-              />
-            </div>
-
-            {/* Row 2 */}
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-bold text-slate-500">Style</span>
-              <input
-                type="text"
-                value={styleVal}
-                onChange={(e) => setStyleVal(e.target.value)}
-                placeholder="e.g. Jeans Style"
-                className="px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-bold text-slate-500">Style Category</span>
-              <input
-                type="text"
-                value={styleCategoryVal}
-                onChange={(e) => setStyleCategoryVal(e.target.value)}
-                placeholder="e.g. Bottoms"
-                className="px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-              />
-            </div>
-
-            <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-bold text-slate-500">Total SAM</span>
+              <span className="text-[11px] font-bold text-slate-500">
+                Total SAM
+              </span>
               <input
                 type="text"
                 readOnly
@@ -544,453 +456,224 @@ export default function ReworkCouponPage() {
               />
             </div>
 
-            {/* Row 3 */}
-            <div className="flex flex-col gap-1.5 md:col-span-3">
-              <span className="text-[11px] font-bold text-slate-500">Style Description</span>
+            <div className="flex flex-col gap-1.5 items-center justify-center border-t md:border-t-0 md:border-l border-slate-100 pl-0 md:pl-4 pt-4 md:pt-0">
+              <span className="text-[11px] font-bold text-slate-600 mb-2">
+                Re-Work Qty
+              </span>
               <input
-                type="text"
-                value={styleDescVal}
-                onChange={(e) => setStyleDescVal(e.target.value)}
-                placeholder="Enter style description..."
-                className="px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+                type="number"
+                value={reworkQty}
+                onChange={(e) =>
+                  setReworkQty(
+                    e.target.value !== "" ? Number(e.target.value) : "",
+                  )
+                }
+                placeholder="e.g. 10"
+                className={`w-24 text-center px-3 py-4 rounded-xl border bg-white text-base font-extrabold text-indigo-600 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 transition-all ${
+                  reworkQtyBelowOrder
+                    ? "border-red-300 focus:border-red-400"
+                    : "border-[#e2e8f0] focus:border-[#4f46e5]"
+                }`}
               />
+              {reworkQtyBelowOrder && (
+                <span className="text-[10px] text-red-500 font-semibold text-center mt-1">
+                  Can&apos;t be less than Order Qty ({orderQty})
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={handleGenerateAndSave}
+                disabled={!activeStyle || isBusy}
+                className="mt-3 w-full flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md cursor-pointer text-xs"
+              >
+                {isBusy ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <Barcode className="w-3.5 h-3.5" />
+                )}
+                <span>
+                  {isSaving
+                    ? "Saving…"
+                    : generatingCoupons
+                      ? "Generating…"
+                      : "Generate Coupon(s)"}
+                </span>
+              </button>
             </div>
           </div>
+          {errorMsg && (
+            <p className="mt-3 text-[11px] text-red-500 font-semibold">
+              {errorMsg}
+            </p>
+          )}
         </div>
 
-        {/* Dynamic side-by-side grids */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-stretch">
-          {/* SAM Details Panel */}
-          <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-xs flex flex-col h-full lg:col-span-7">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-bold text-[#4f46e5]">SAM Details</h2>
-              <CsvExportButton
-                filename={`rework-sam-${workOrder}-cut${cut}-bundle${bundleId}`}
-                headers={["Seq #", "Op #", "Op Name", "SAM (Op)", "SAM (Ord)", "Rate (Op)", "Rate (Ord)", "Qty", "No. of B"]}
-                rows={samCsvRows}
-              />
+        {/* Cutting Detail / Operations Detail. Operations Detail reuses
+        Coupon Generation's shared component (real data, checkbox select
+        only). Cutting Detail is this page's own click-to-edit cell table
+        — every row here is manually added, nothing looked up. */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          <div className="lg:col-span-6 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
+            <div className="flex items-center justify-between border-b border-[#f1f5f9] pb-2">
+              <h3 className="text-sm font-extrabold text-[#4f46e5]">
+                Cutting Detail
+              </h3>
+              <span className="text-[10px] text-slate-400 font-semibold">
+                Start typing in the last row to add another below it
+              </span>
             </div>
-            <div className="overflow-x-auto flex-grow">
-              <table className="w-full text-left border-collapse border border-slate-200 text-[11px] text-[#334155] table-layout:fixed">
+
+            <div className="overflow-auto max-h-[420px] border border-[#f1f5f9] rounded-xl">
+              <table className="w-full text-left border-collapse min-w-[400px]">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    <th rowSpan={2} className="p-2 border-r border-slate-200 font-bold text-center w-12">Seq #</th>
-                    <th rowSpan={2} className="p-2 border-r border-slate-200 font-bold text-center w-16">Op #</th>
-                    <th rowSpan={2} className="p-2 border-r border-slate-200 font-bold w-40">Op Name</th>
-                    <th colSpan={2} className="p-1 border-r border-slate-200 font-bold text-center">SAM</th>
-                    <th colSpan={2} className="p-1 border-r border-slate-200 font-bold text-center">Rate</th>
-                    <th rowSpan={2} className="p-2 border-r border-slate-200 font-bold text-center w-14">Qty</th>
-                    <th rowSpan={2} className="p-2 font-bold text-center w-14">No. of B</th>
-                  </tr>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="p-1 border-r border-slate-200 font-semibold text-center w-12">Op</th>
-                    <th className="p-1 border-r border-slate-200 font-semibold text-center w-12">Ord</th>
-                    <th className="p-1 border-r border-slate-200 font-semibold text-center w-12">Op</th>
-                    <th className="p-1 border-r border-slate-200 font-semibold text-center w-12">Ord</th>
+                  <tr className="border-b border-[#e2e8f0]">
+                    <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+                      Cut #
+                    </th>
+                    <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+                      Inseam
+                    </th>
+                    <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+                      Size #
+                    </th>
+                    <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+                      Pcs
+                    </th>
+                    <th className="py-2 w-8 sticky top-0 z-10 bg-white" />
                   </tr>
                 </thead>
-                <tbody>
-                  {filteredStyleBulletins.length > 0 ? (
-                    filteredStyleBulletins.map((row) => (
-                      <tr key={row.RowId} className="border-b border-slate-200 hover:bg-slate-50/50">
-                        <td className="p-2 border-r border-slate-200 text-center font-bold text-slate-700">{row.Operation_Sequence}</td>
-                        <td className="p-2 border-r border-slate-200 text-center font-mono text-purple-600 font-semibold">{row.Operation_Code}</td>
-                        <td className="p-2 border-r border-slate-200 font-medium truncate max-w-[160px]" title={row.Operation_Name}>{row.Operation_Name}</td>
-                        <td className="p-2 border-r border-slate-200 text-right font-semibold text-purple-600">{row.Smv_Sam?.toFixed(2)}</td>
-                        <td className="p-2 border-r border-slate-200 text-right text-slate-500">{row.Smv_Sam?.toFixed(2)}</td>
-                        <td className="p-2 border-r border-slate-200 text-right font-semibold text-slate-700">{row.Piece_Rate?.toFixed(4)}</td>
-                        <td className="p-2 border-r border-slate-200 text-right text-slate-500">{row.Piece_Rate?.toFixed(4)}</td>
-                        <td className="p-2 border-r border-slate-200 text-center font-bold text-indigo-600">{reworkQty}</td>
-                        <td className="p-2 text-center text-slate-500">1</td>
+                <tbody className="divide-y divide-[#f1f5f9]">
+                  {bundles.map((b) => (
+                      <tr
+                        key={b.id}
+                        className="hover:bg-[#f8fafc] transition-colors text-[11px]"
+                      >
+                        <td className="p-0.5">
+                          <input
+                            type="text"
+                            value={b.cutNo}
+                            onChange={(e) =>
+                              updateBundleCell(b.id, "cutNo", e.target.value)
+                            }
+                            placeholder="Cut #"
+                            className={cellInputClassName}
+                          />
+                        </td>
+                        <td className="p-0.5">
+                          <input
+                            type="text"
+                            value={b.inseam}
+                            onChange={(e) =>
+                              updateBundleCell(b.id, "inseam", e.target.value)
+                            }
+                            placeholder="Inseam"
+                            className={cellInputClassName}
+                          />
+                        </td>
+                        <td className="p-0.5">
+                          <input
+                            type="text"
+                            value={b.size}
+                            onChange={(e) =>
+                              updateBundleCell(b.id, "size", e.target.value)
+                            }
+                            placeholder="Size"
+                            className={cellInputClassName}
+                          />
+                        </td>
+                        <td className="p-0.5">
+                          <input
+                            type="number"
+                            value={b.pcs}
+                            onChange={(e) =>
+                              updateBundleCell(b.id, "pcs", e.target.value)
+                            }
+                            placeholder="Pcs"
+                            className={cellInputClassName}
+                          />
+                        </td>
+                        <td className="p-0.5 text-center">
+                          <button
+                            type="button"
+                            onClick={() => removeBundleRow(b.id)}
+                            className="text-slate-300 hover:text-red-500 cursor-pointer p-1"
+                            aria-label="Remove row"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </td>
                       </tr>
-                    ))
-                  ) : (
-                    Array.from({ length: 5 }).map((_, i) => (
-                      <tr key={i} className="border-b border-slate-200 h-8">
-                        <td className="p-2 border-r border-slate-200 text-center text-slate-300 font-bold">{i + 1}</td>
-                        <td className="p-2 border-r border-slate-200"></td>
-                        <td className="p-2 border-r border-slate-200"></td>
-                        <td className="p-2 border-r border-slate-200"></td>
-                        <td className="p-2 border-r border-slate-200"></td>
-                        <td className="p-2 border-r border-slate-200"></td>
-                        <td className="p-2 border-r border-slate-200"></td>
-                        <td className="p-2 border-r border-slate-200"></td>
-                        <td className="p-2"></td>
-                      </tr>
-                    ))
-                  )}
-                  <tr className="bg-indigo-50/50 font-bold border-t border-slate-300">
-                    <td colSpan={3} className="p-2 border-r border-slate-200 text-right font-bold text-indigo-700">
-                      Total --------&gt;
-                    </td>
-                    <td className="p-2 border-r border-slate-200 text-right text-indigo-700">{totalSam.toFixed(2)}</td>
-                    <td className="p-2 border-r border-slate-200 text-right text-slate-600">{totalSam.toFixed(2)}</td>
-                    <td className="p-2 border-r border-slate-200 text-right text-indigo-700">{totalRate.toFixed(4)}</td>
-                    <td className="p-2 border-r border-slate-200 text-right text-slate-600">{totalRate.toFixed(4)}</td>
-                    <td colSpan={2} className="p-2"></td>
-                  </tr>
+                  ))}
                 </tbody>
               </table>
             </div>
 
-            <div className="mt-4 flex gap-3 items-center">
-              <span className="text-[11px] font-bold text-slate-500 whitespace-nowrap">Remarks</span>
-              <input
-                type="text"
-                value={remarksVal}
-                onChange={(e) => setRemarksVal(e.target.value)}
-                placeholder="Enter remarks..."
-                className="flex-grow px-3 py-2 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-              />
+            <div className="flex items-center gap-3 mt-2 pt-4 border-t border-[#f1f5f9] justify-end">
+              <span className="font-bold text-[#64748b]">Total Pcs</span>
+              <span
+                className={`w-24 text-right px-3 py-2 border rounded-xl text-xs font-bold ${
+                  reworkQty !== "" && pcsTotal > Number(reworkQty)
+                    ? "border-red-300 bg-red-50 text-red-600"
+                    : "border-[#e2e8f0] bg-[#f8fafc] text-slate-700"
+                }`}
+              >
+                {pcsTotal}
+              </span>
             </div>
           </div>
 
-          {/* Bundle / Barcode Details Panel */}
-          <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-xs flex flex-col h-full lg:col-span-5">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-sm font-bold text-[#4f46e5]">Bundle / Barcode Details</h2>
-              <CsvExportButton
-                filename={`rework-bundle-${workOrder}-cut${cut}-bundle${bundleId}`}
-                headers={["ANL #", "Cut #", "Char", "Bndl #", "Shade", "Shrinkage", "Size #", "Inseam", "Pcs"]}
-                rows={bundleCsvRows}
-              />
-            </div>
-            <div className="overflow-x-auto flex-grow max-h-[300px] overflow-auto">
-              <table className="w-full text-left border-collapse border border-slate-200 text-[11px] text-[#334155] table-layout:fixed">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200">
-                    <th className="p-2 border-r border-slate-200 font-bold text-center w-28">ANL #</th>
-                    <th className="p-2 border-r border-slate-200 font-bold text-center w-12">Cut #</th>
-                    <th className="p-2 border-r border-slate-200 font-bold text-center w-16">Char</th>
-                    <th className="p-2 border-r border-slate-200 font-bold text-center w-14">Bndl #</th>
-                    <th className="p-2 border-r border-slate-200 font-bold text-center w-12">Shade</th>
-                    <th className="p-2 border-r border-slate-200 font-bold text-center w-16">Shrinkage</th>
-                    <th className="p-2 border-r border-slate-200 font-bold text-center w-12">Size #</th>
-                    <th className="p-2 border-r border-slate-200 font-bold text-center w-12">Inseam</th>
-                    <th className="p-2 font-bold text-center w-12">Pcs</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {cutDetails.length > 0 ? (
-                    cutDetails.map((row) => (
-                      <tr key={row.RowId} className="border-b border-slate-200 hover:bg-slate-50/50">
-                        <td className="p-2 border-r border-slate-200 text-center font-medium">{row.Sale_Order_No}</td>
-                        <td className="p-2 border-r border-slate-200 text-center">{row.Cut}</td>
-                        <td className="p-2 border-r border-slate-200 text-center font-semibold text-slate-700">{row.Color}</td>
-                        <td className="p-2 border-r border-slate-200 text-center font-mono">{row.Bundle_Id}</td>
-                        <td className="p-2 border-r border-slate-200 text-center font-bold text-indigo-600">{row.Shade || "A"}</td>
-                        <td className="p-2 border-r border-slate-200 text-center font-mono">{row.Shrinkage || "0%"}</td>
-                        <td className="p-2 border-r border-slate-200 text-center font-bold">{row.Size}</td>
-                        <td className="p-2 border-r border-slate-200 text-center">{row.Inseam}</td>
-                        <td className="p-2 text-right font-bold text-indigo-600">{row.Bundle_Qty}</td>
-                      </tr>
-                    ))
-                  ) : (
-                    Array.from({ length: 5 }).map((_, i) => (
-                      <tr key={i} className="border-b border-slate-200 h-8">
-                        <td className="p-2 border-r border-slate-200"></td>
-                        <td className="p-2 border-r border-slate-200"></td>
-                        <td className="p-2 border-r border-slate-200"></td>
-                        <td className="p-2 border-r border-slate-200"></td>
-                        <td className="p-2 border-r border-slate-200"></td>
-                        <td className="p-2 border-r border-slate-200"></td>
-                        <td className="p-2 border-r border-slate-200"></td>
-                        <td className="p-2 border-r border-slate-200"></td>
-                        <td className="p-2"></td>
-                      </tr>
-                    ))
-                  )}
-                  <tr className="bg-indigo-50/50 font-bold border-t border-slate-300">
-                    <td colSpan={8} className="p-2 border-r border-slate-200 text-right font-bold text-indigo-700">
-                      Total --------&gt;
-                    </td>
-                    <td className="p-2 text-right text-indigo-700 font-extrabold">{totalPcs}</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-
-        {/* Centered Actions Toolbar */}
-        <div className="flex items-center justify-center gap-4 border-t border-slate-100 pt-6 mt-2">
-          <button
-            type="button"
-            onClick={handleClear}
-            className="flex items-center justify-center gap-2 text-red-500 hover:text-red-700 hover:bg-red-50 border border-red-200 px-5 py-2.5 rounded-xl font-bold transition-all shadow-xs cursor-pointer text-xs"
-          >
-            <span className="w-3.5 h-3.5 flex items-center justify-center">🗑️</span>
-            <span>Delete Barcode</span>
-          </button>
-
-          {activeStyle && (
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={handleGenerateCoupons}
-                disabled={generatingCoupons}
-                className="flex items-center justify-center gap-2 bg-white border border-[#4f46e5] text-[#4f46e5] hover:bg-[#eef2ff] px-5 py-2.5 rounded-xl font-bold transition-all shadow-xs cursor-pointer text-xs disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                <Barcode className="w-3.5 h-3.5" />
-                <span>{generatingCoupons ? "Generating…" : `Generate Coupon${activeStyle.operations.length > 1 ? "s" : ""}`}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setShowPageSetupModal(true)}
-                className="flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-5 py-2.5 rounded-xl font-bold transition-all shadow-md cursor-pointer text-xs"
-              >
-                <Barcode className="w-3.5 h-3.5" />
-                <span>Download PDF</span>
-              </button>
-            </div>
+          {operations.length > 0 && (
+            <OperationsDetailTable
+              operations={operations}
+              onOperationChange={handleOperationChange}
+              onAllOperationsSelChange={handleAllOperationsSelChange}
+            />
           )}
         </div>
       </div>
 
-      {/* Rework Bundle Lookup Dialog */}
-      <Dialog open={isOpenLookup} onOpenChange={setIsOpenLookup}>
-        <DialogContent className="sm:max-w-md bg-white border border-[#e2e8f0] rounded-2xl p-6 shadow-2xl z-50">
-          <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-800">Rework Bundle Lookup</DialogTitle>
-            <DialogDescription className="text-xs text-slate-500 mt-1">
-              Search for a work order, cut number, and bundle ID to retrieve manufacturing details.
-            </DialogDescription>
-          </DialogHeader>
+      {/* Same shared Work Order search modal as Cut Report / Style
+      Bulletin / Coupon Generation / Coupon Tracing */}
+      <WorkOrderSearchModal
+        open={isOpenLookup}
+        onClose={() => setIsOpenLookup(false)}
+        onSelect={(row) => loadWorkOrder(row.workOrder)}
+        fetchRows={fetchWorkOrderRows}
+      />
 
-          <form onSubmit={handleSearchSubmit} className="flex flex-col gap-4 mt-2">
-            {/* Work Order Input with suggestions */}
-            <div className="relative flex flex-col gap-1.5" ref={suggestionsRef}>
-              <span className="text-[11px] font-bold text-slate-600">Work Order *</span>
-              <input
-                type="text"
-                required
-                value={searchWorkOrder}
-                onChange={(e) => {
-                  setSearchWorkOrder(e.target.value);
-                  setShowSuggestions(true);
-                }}
-                onFocus={() => setShowSuggestions(true)}
-                placeholder="e.g. W/O-003355"
-                className="px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-              />
-              {showSuggestions && searchWorkOrder.trim().length >= 2 && !suggestionsLoading && (
-                <div className="absolute left-0 right-0 top-[100%] mt-1 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
-                  {suggestions.length === 0 ? (
-                    <div className="px-4 py-3 text-xs font-semibold text-slate-400 text-center">
-                      No results found
-                    </div>
-                  ) : (
-                    suggestions.map((suggestion) => (
-                      <button
-                        key={suggestion}
-                        type="button"
-                        onClick={() => handleSelectSuggestion(suggestion)}
-                        className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 font-semibold border-b border-[#f1f5f9] last:border-0 transition-colors cursor-pointer"
-                      >
-                        {suggestion}
-                      </button>
-                    ))
-                  )}
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4">
-              <div className="relative flex flex-col gap-1.5" ref={cutRef}>
-                <span className="text-[11px] font-bold text-slate-600">Cut # *</span>
-                {lookupCutOptions.length > 0 ? (
-                  <div className="relative">
-                    <input
-                      type="text"
-                      required
-                      value={searchCut}
-                      onChange={(e) => {
-                        setSearchCut(e.target.value);
-                        setSearchBundleId(""); // Clear bundle ID on cut change
-                        setShowCutSuggestions(true);
-                      }}
-                      onFocus={() => setShowCutSuggestions(true)}
-                      placeholder="Select Cut"
-                      className="w-full px-3 py-2 pr-8 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all h-9 cursor-pointer"
-                    />
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-                    {showCutSuggestions && filteredCutOptions.length > 0 && (
-                      <div className="absolute left-0 right-0 top-[100%] mt-1 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
-                        {filteredCutOptions.map((c) => (
-                          <button
-                            key={c}
-                            type="button"
-                            onClick={() => {
-                              setSearchCut(String(c));
-                              setSearchBundleId("");
-                              setShowCutSuggestions(false);
-                            }}
-                            className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 font-semibold border-b border-[#f1f5f9] last:border-0 transition-colors cursor-pointer"
-                          >
-                            {c}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    required
-                    value={searchCut}
-                    onChange={(e) => setSearchCut(e.target.value)}
-                    placeholder="e.g. 1"
-                    disabled={isFetchingOptions}
-                    className="px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-                  />
-                )}
+      {/* Validation error modal — covers both the Order Qty and the Total
+      Pcs vs Re-Work Qty checks. */}
+      {validationError && (
+        <div
+          className="fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onMouseDown={() => setValidationError(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] max-w-sm w-full p-6 animate-scale-up"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3 mb-4">
+              <div className="shrink-0 w-9 h-9 rounded-full bg-red-50 flex items-center justify-center">
+                <AlertTriangle className="w-4.5 h-4.5 text-red-500" />
               </div>
-
-              <div className="relative flex flex-col gap-1.5" ref={bundleRef}>
-                <span className="text-[11px] font-bold text-slate-600">Bundle ID *</span>
-                {lookupCutOptions.length > 0 ? (
-                  <div className="relative">
-                    <input
-                      type="text"
-                      required
-                      disabled={!searchCut}
-                      value={searchBundleId}
-                      onChange={(e) => {
-                        setSearchBundleId(e.target.value);
-                        setShowBundleSuggestions(true);
-                      }}
-                      onFocus={() => setShowBundleSuggestions(true)}
-                      placeholder={searchCut ? "Select Bundle" : "Select Cut first"}
-                      className="w-full px-3 py-2 pr-8 rounded-xl border border-[#e2e8f0] bg-white disabled:bg-slate-50 disabled:cursor-not-allowed text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all h-9 cursor-pointer"
-                    />
-                    <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-                    {showBundleSuggestions && filteredBundleSuggestions.length > 0 && (
-                      <div className="absolute left-0 right-0 top-[100%] mt-1 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
-                        {filteredBundleSuggestions.map((b) => (
-                          <button
-                            key={b.id}
-                            type="button"
-                            onClick={() => {
-                              setSearchBundleId(String(b.id));
-                              setShowBundleSuggestions(false);
-                            }}
-                            className="w-full text-left px-4 py-2 text-xs text-slate-700 hover:bg-slate-50 font-semibold border-b border-[#f1f5f9] last:border-0 transition-colors cursor-pointer"
-                          >
-                            {b.id}
-                          </button>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <input
-                    type="text"
-                    required
-                    value={searchBundleId}
-                    onChange={(e) => setSearchBundleId(e.target.value)}
-                    placeholder="e.g. 1"
-                    disabled={isFetchingOptions}
-                    className="px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-                  />
-                )}
+              <div>
+                <h3 className="text-sm font-extrabold text-[#0f172a] mb-1">
+                  Can&apos;t continue
+                </h3>
+                <p className="text-xs text-slate-600 font-medium">
+                  {validationError}
+                </p>
               </div>
             </div>
-
-            <div className="relative flex flex-col gap-1.5" ref={opRef}>
-              <span className="text-[11px] font-bold text-slate-600">
-                Operation <span className="text-slate-400 font-medium">(optional)</span>
-              </span>
-              {lookupOperationOptions.length > 0 ? (
-                <div className="relative">
-                  <input
-                    type="text"
-                    value={operationSearchQuery}
-                    onChange={(e) => {
-                      setOperationSearchQuery(e.target.value);
-                      setSearchOperationCode(e.target.value);
-                      setShowOpSuggestions(true);
-                    }}
-                    onFocus={() => setShowOpSuggestions(true)}
-                    placeholder="All Operations (search code or name)"
-                    className="w-full px-3 py-2 pr-8 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all h-9 cursor-pointer"
-                  />
-                  <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
-                  {showOpSuggestions && (
-                    <div className="absolute left-0 right-0 top-[100%] mt-1 bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 max-h-48 overflow-y-auto">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setSearchOperationCode("");
-                          setOperationSearchQuery("");
-                          setShowOpSuggestions(false);
-                        }}
-                        className="w-full text-left px-4 py-2.5 text-xs text-slate-500 hover:bg-slate-50 italic font-semibold border-b border-[#f1f5f9] transition-colors cursor-pointer"
-                      >
-                        All Operations (Clear Filter)
-                      </button>
-                      {filteredOpSuggestions.map((op) => (
-                        <button
-                          key={op.code}
-                          type="button"
-                          onClick={() => {
-                            setSearchOperationCode(op.code);
-                            setOperationSearchQuery(`${op.code} - ${op.name}`);
-                            setShowOpSuggestions(false);
-                          }}
-                          className="w-full text-left px-4 py-2.5 text-xs text-slate-700 hover:bg-slate-50 font-semibold border-b border-[#f1f5f9] last:border-0 transition-colors cursor-pointer"
-                        >
-                          <span className="text-purple-600 font-mono font-bold mr-2">{op.code}</span>
-                          <span className="text-slate-600 font-medium">{op.name}</span>
-                        </button>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ) : (
-                <input
-                  type="text"
-                  value={searchOperationCode}
-                  onChange={(e) => setSearchOperationCode(e.target.value)}
-                  placeholder="e.g. 32523 (leave empty for all)"
-                  disabled={isFetchingOptions}
-                  className="px-3 py-2 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-                />
-              )}
-            </div>
-
-            {errorMsg && (
-              <p className="text-[11px] text-red-500 font-semibold">{errorMsg}</p>
-            )}
-
-            <DialogFooter className="mt-4 flex gap-2 justify-end">
-              <button
-                type="button"
-                onClick={() => setIsOpenLookup(false)}
-                className="px-4 py-2 rounded-xl border border-[#e2e8f0] hover:bg-slate-50 text-slate-600 font-bold transition-all text-xs cursor-pointer"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isLoading || !searchWorkOrder || !searchCut || !searchBundleId}
-                className="px-5 py-2 rounded-xl bg-[#4f46e5] hover:bg-[#4338ca] disabled:opacity-50 text-white font-bold transition-all text-xs flex items-center justify-center gap-1.5 cursor-pointer"
-              >
-                {isLoading ? "Loading..." : "Search & Load"}
-              </button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-
-      {/* Page Setup modal */}
-      {showPageSetupModal && activeStyle && (
-        <PageSetupModal
-          pageSetup={pageSetup}
-          onPageSetupChange={setPageSetup}
-          onClose={() => setShowPageSetupModal(false)}
-          onGeneratePdf={handleGeneratePdf}
-          generatingPdf={generatingPdf}
-        />
+            <button
+              type="button"
+              onClick={() => setValidationError(null)}
+              className="w-full bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2.5 rounded-xl font-bold transition-all text-xs cursor-pointer"
+            >
+              OK
+            </button>
+          </div>
+        </div>
       )}
     </>
   );
