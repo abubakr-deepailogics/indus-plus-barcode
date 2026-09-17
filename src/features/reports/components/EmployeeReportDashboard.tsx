@@ -958,7 +958,7 @@ export function EmployeeReportDashboard() {
               className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200"
             >
               <Users className="w-3.5 h-3.5" />
-              Operation Wise Report
+              Operator Wise Report
             </Link>
           </div>
         </div>
