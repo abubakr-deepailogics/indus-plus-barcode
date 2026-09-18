@@ -233,8 +233,9 @@ export function PageSetupModal({
 
         {/* Print Instructions */}
         <div className="mb-4 px-3 py-2 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[13px] font-semibold">
-          In the print dialog, select <span className="font-extrabold">Legal</span> paper size and set scale to{" "}
-          <span className="font-extrabold">100%</span>.
+          In the print dialog, select{" "}
+          <span className="font-extrabold">Legal</span> paper size and set scale
+          to <span className="font-extrabold">100%</span>.
         </div>
 
         {/* Modal Actions */}
@@ -250,7 +251,7 @@ export function PageSetupModal({
             disabled={generatingPdf}
             className="bg-white border border-[#4f46e5] text-[#4f46e5] px-5 py-2.5 rounded-xl font-bold hover:bg-[#eef2ff] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            {generatingPdf ? "Printing…" : "Print Coupons"}
+            {generatingPdf ? "Printing…" : "Print"}
           </button>
         </div>
       </div>

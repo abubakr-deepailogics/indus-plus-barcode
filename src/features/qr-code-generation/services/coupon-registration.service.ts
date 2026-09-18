@@ -284,12 +284,14 @@ export interface CouponListRow {
 }
 
 export interface CouponListFilters {
-  bundleNo?: string;
+  fromBundle?: string;
+  toBundle?: string;
   opNo?: string;
   section?: string;
   isScanned?: boolean;
   fromCut?: string;
   toCut?: string;
+  employeeCode?: string;
 }
 
 // Shared WHERE-clause builder for coupon lookups — bundleNo/opNo match by
@@ -302,9 +304,13 @@ function applyCouponFilters(request: sql.Request, workOrder: string, filters: Co
   const conditions = ["c.WorkOrder = @workOrder", "c.IsDeleted = 0"];
   request.input("workOrder", sql.NVarChar, workOrder);
 
-  if (filters.bundleNo) {
-    conditions.push("c.BundleNo LIKE @bundleNo");
-    request.input("bundleNo", sql.NVarChar, `%${filters.bundleNo}%`);
+  if (filters.fromBundle) {
+    conditions.push("TRY_CAST(c.BundleNo AS INT) >= TRY_CAST(@fromBundle AS INT)");
+    request.input("fromBundle", sql.NVarChar, filters.fromBundle);
+  }
+  if (filters.toBundle) {
+    conditions.push("TRY_CAST(c.BundleNo AS INT) <= TRY_CAST(@toBundle AS INT)");
+    request.input("toBundle", sql.NVarChar, filters.toBundle);
   }
   if (filters.opNo) {
     conditions.push("c.OpNo LIKE @opNo");
@@ -325,6 +331,10 @@ function applyCouponFilters(request: sql.Request, workOrder: string, filters: Co
   if (filters.toCut) {
     conditions.push("TRY_CAST(c.CutNo AS INT) <= TRY_CAST(@toCut AS INT)");
     request.input("toCut", sql.NVarChar, filters.toCut);
+  }
+  if (filters.employeeCode) {
+    conditions.push("c.EmployeeCode = @employeeCode");
+    request.input("employeeCode", sql.NVarChar, filters.employeeCode);
   }
   return conditions.join(" AND ");
 }

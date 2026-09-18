@@ -7,12 +7,15 @@ import { getPool, sql } from "@/lib/db";
 
 export interface CouponFilter {
   workOrder: string;
-  bundleNo: string;
+  fromBundle: string;
+  toBundle: string;
   opNo: string;
   section: string;
   isScanned?: boolean;
   fromCut: string;
   toCut: string;
+  employeeCode: string;
+  couponCodes?: string[];
 }
 
 export function readCouponFilter(
@@ -23,9 +26,13 @@ export function readCouponFilter(
     return { error: "Missing required field: workOrder." };
   }
   const scannedValue = String(source.isScanned ?? "").trim();
+  const couponCodes = Array.isArray(source.couponCodes)
+    ? source.couponCodes.map((c) => String(c).trim()).filter(Boolean)
+    : undefined;
   return {
     workOrder,
-    bundleNo: String(source.bundleNo ?? "").trim(),
+    fromBundle: String(source.fromBundle ?? "").trim(),
+    toBundle: String(source.toBundle ?? "").trim(),
     opNo: String(source.opNo ?? "").trim(),
     section: String(source.section ?? "").trim(),
     isScanned:
@@ -38,6 +45,9 @@ export function readCouponFilter(
             : undefined,
     fromCut: String(source.fromCut ?? "").trim(),
     toCut: String(source.toCut ?? "").trim(),
+    employeeCode: String(source.employeeCode ?? "").trim(),
+    couponCodes:
+      couponCodes && couponCodes.length > 0 ? couponCodes : undefined,
   };
 }
 
@@ -51,7 +61,8 @@ export const IN_LIST_CHUNK_SIZE = 2000;
 
 export function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  for (let i = 0; i < items.length; i += size)
+    out.push(items.slice(i, i + size));
   return out;
 }
 
@@ -68,17 +79,47 @@ export interface MatchedCoupon {
   ScannedAt: string | null;
 }
 
+const MATCH_COLUMNS =
+  "CouponCode, IsScanned, WorkOrder, BundleNo, OpNo, CutNo, Section, Id, EmployeeCode, ScannedAt";
+
 export async function findMatchingCoupons(
   pool: Awaited<ReturnType<typeof getPool>>,
   filter: CouponFilter,
 ): Promise<MatchedCoupon[]> {
+  if (filter.couponCodes && filter.couponCodes.length > 0) {
+    const rows: MatchedCoupon[] = [];
+    for (const batch of chunk(filter.couponCodes, IN_LIST_CHUNK_SIZE)) {
+      const request = pool
+        .request()
+        .input("workOrder", sql.NVarChar, filter.workOrder);
+      const placeholders = batch.map((code, i) => {
+        request.input(`code${i}`, sql.NVarChar, code);
+        return `@code${i}`;
+      });
+      const result = await request.query(`
+        SELECT ${MATCH_COLUMNS}
+        FROM dbo.QrCode_Coupon
+        WHERE WorkOrder = @workOrder AND IsDeleted = 0
+          AND CouponCode IN (${placeholders.join(", ")})
+      `);
+      rows.push(...(result.recordset as MatchedCoupon[]));
+    }
+    return rows;
+  }
+
   const request = pool
     .request()
     .input("workOrder", sql.NVarChar, filter.workOrder);
   const conditions = ["WorkOrder = @workOrder", "IsDeleted = 0"];
-  if (filter.bundleNo) {
-    request.input("bundleNo", sql.NVarChar, `%${filter.bundleNo}%`);
-    conditions.push("BundleNo LIKE @bundleNo");
+  if (filter.fromBundle) {
+    request.input("fromBundle", sql.NVarChar, filter.fromBundle);
+    conditions.push(
+      "TRY_CAST(BundleNo AS INT) >= TRY_CAST(@fromBundle AS INT)",
+    );
+  }
+  if (filter.toBundle) {
+    request.input("toBundle", sql.NVarChar, filter.toBundle);
+    conditions.push("TRY_CAST(BundleNo AS INT) <= TRY_CAST(@toBundle AS INT)");
   }
   if (filter.opNo) {
     request.input("opNo", sql.NVarChar, `%${filter.opNo}%`);
@@ -100,8 +141,12 @@ export async function findMatchingCoupons(
     request.input("toCut", sql.NVarChar, filter.toCut);
     conditions.push("TRY_CAST(CutNo AS INT) <= TRY_CAST(@toCut AS INT)");
   }
+  if (filter.employeeCode) {
+    request.input("employeeCode", sql.NVarChar, filter.employeeCode);
+    conditions.push("EmployeeCode = @employeeCode");
+  }
   const result = await request.query(`
-    SELECT CouponCode, IsScanned, WorkOrder, BundleNo, OpNo, CutNo, Section, Id, EmployeeCode, ScannedAt
+    SELECT ${MATCH_COLUMNS}
     FROM dbo.QrCode_Coupon
     WHERE ${conditions.join(" AND ")}
   `);

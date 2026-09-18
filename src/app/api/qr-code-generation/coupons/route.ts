@@ -140,13 +140,15 @@ export async function GET(request: Request) {
     MAX_PAGE_SIZE,
     Math.max(1, Number(searchParams.get("page_size")) || DEFAULT_PAGE_SIZE),
   );
-  const bundleNo = searchParams.get("bundle_no") || undefined;
+  const fromBundle = searchParams.get("from_bundle") || undefined;
+  const toBundle = searchParams.get("to_bundle") || undefined;
   const opNo = searchParams.get("op_no") || undefined;
   const section = searchParams.get("section") || undefined;
   const scannedParam = searchParams.get("is_scanned");
   const isScanned = scannedParam === null ? undefined : scannedParam === "true";
   const fromCut = searchParams.get("from_cut") || undefined;
   const toCut = searchParams.get("to_cut") || undefined;
+  const employeeCode = searchParams.get("employee_code") || undefined;
 
   if (!workOrder) {
     return Response.json({ error: "work_order is required." }, { status: 400 });
@@ -155,12 +157,14 @@ export async function GET(request: Request) {
   try {
     const pool = await getPool("pitSystem");
     const { rows, total } = await listCoupons(pool, workOrder, page, pageSize, {
-      bundleNo,
+      fromBundle,
+      toBundle,
       opNo,
       section,
       isScanned,
       fromCut,
       toCut,
+      employeeCode,
     });
     return Response.json({ coupons: rows, total, page, pageSize });
   } catch (err: unknown) {

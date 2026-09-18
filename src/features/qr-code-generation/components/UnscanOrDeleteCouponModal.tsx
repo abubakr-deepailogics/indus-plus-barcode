@@ -12,12 +12,16 @@ import {
 
 export type CouponActionFilters = {
   workOrder: string;
-  bundleNo: string;
+  fromBundle: string;
+  toBundle: string;
   opNo: string;
   section: string;
   isScanned: "" | "true" | "false";
   fromCut: string;
   toCut: string;
+  employeeCode: string;
+  employeeName: string;
+  couponCodes: string[];
 };
 
 interface UnscanOrDeleteResult {
@@ -49,8 +53,18 @@ type Step = "checking" | "confirm" | "processing" | "success" | "error";
 
 function filterEntries(filters: CouponActionFilters) {
   const entries: { label: string; value: string }[] = [];
-  if (filters.bundleNo.trim()) {
-    entries.push({ label: "Bundle", value: filters.bundleNo.trim() });
+  if (filters.couponCodes.length > 0) {
+    entries.push({
+      label: "Selected",
+      value: `${filters.couponCodes.length} coupon${filters.couponCodes.length === 1 ? "" : "s"}`,
+    });
+    return entries;
+  }
+  if (filters.fromBundle.trim() || filters.toBundle.trim()) {
+    entries.push({
+      label: "Bundle",
+      value: `${filters.fromBundle.trim() || "Start"} - ${filters.toBundle.trim() || "End"}`,
+    });
   }
   if (filters.opNo.trim()) {
     entries.push({ label: "Operation", value: filters.opNo.trim() });
@@ -61,11 +75,18 @@ function filterEntries(filters: CouponActionFilters) {
       value: `${filters.fromCut.trim() || "Start"} - ${filters.toCut.trim() || "End"}`,
     });
   }
-  if (filters.section) entries.push({ label: "Section", value: filters.section });
+  if (filters.section)
+    entries.push({ label: "Section", value: filters.section });
   if (filters.isScanned) {
     entries.push({
       label: "Status",
       value: filters.isScanned === "true" ? "Scanned" : "Not scanned",
+    });
+  }
+  if (filters.employeeCode.trim()) {
+    entries.push({
+      label: "Operator",
+      value: filters.employeeName.trim() || filters.employeeCode.trim(),
     });
   }
   return entries;
@@ -81,9 +102,10 @@ export function UnscanOrDeleteCouponModal({
   const [step, setStep] = useState<Step>("checking");
   const [matchCounts, setMatchCounts] = useState<MatchCounts | null>(null);
   const [errorMessage, setErrorMessage] = useState("");
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(
-    null,
-  );
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
   const [result, setResult] = useState<UnscanOrDeleteResult | null>(null);
 
   const entries = useMemo(() => filterEntries(filters), [filters]);
@@ -107,13 +129,18 @@ export function UnscanOrDeleteCouponModal({
       try {
         const params = new URLSearchParams({
           workOrder: filters.workOrder,
-          bundleNo: filters.bundleNo.trim(),
+          fromBundle: filters.fromBundle.trim(),
+          toBundle: filters.toBundle.trim(),
           opNo: filters.opNo.trim(),
           section: filters.section,
           isScanned: filters.isScanned,
           fromCut: filters.fromCut.trim(),
           toCut: filters.toCut.trim(),
+          employeeCode: filters.employeeCode.trim(),
         });
+        if (filters.couponCodes.length > 0) {
+          params.set("couponCodes", filters.couponCodes.join(","));
+        }
         const res = await fetch(`/api/coupons/unscan-or-delete?${params}`);
         const data = await res.json().catch(() => ({}));
         if (cancelled) return;
@@ -129,7 +156,9 @@ export function UnscanOrDeleteCouponModal({
       } catch (err) {
         if (cancelled) return;
         setErrorMessage(
-          err instanceof Error ? err.message : "Failed to check matching coupons.",
+          err instanceof Error
+            ? err.message
+            : "Failed to check matching coupons.",
         );
         setStep("error");
       }
@@ -157,7 +186,8 @@ export function UnscanOrDeleteCouponModal({
     setProgress(null);
     setErrorMessage("");
     try {
-      const onProgress = (done: number, total: number) => setProgress({ done, total });
+      const onProgress = (done: number, total: number) =>
+        setProgress({ done, total });
       let unscannedCount = 0;
       let deletedCount = 0;
       if (confirmAction === "delete") {
@@ -323,7 +353,8 @@ export function UnscanOrDeleteCouponModal({
             <div className="flex flex-col items-center py-4 w-full">
               <Loader2 className="w-10 h-10 text-amber-600 animate-spin mb-4" />
               <h4 className="text-sm font-extrabold text-slate-800 mb-1">
-                Processing {progress?.total ?? matchCounts?.totalCount ?? 0} Coupons...
+                Processing {progress?.total ?? matchCounts?.totalCount ?? 0}{" "}
+                Coupons...
               </h4>
               {progress && progress.total > 0 && (
                 <div className="w-full mt-3 mb-1">
@@ -348,7 +379,9 @@ export function UnscanOrDeleteCouponModal({
               <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4" />
               <h4 className="text-sm font-extrabold text-slate-800 mb-1">
                 {result.unscannedCount + result.deletedCount} Coupon
-                {result.unscannedCount + result.deletedCount === 1 ? "" : "s"}{" "}
+                {result.unscannedCount + result.deletedCount === 1
+                  ? ""
+                  : "s"}{" "}
                 Processed
               </h4>
               <p className="text-sm text-slate-800 font-medium mb-5">
