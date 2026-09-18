@@ -1,19 +1,18 @@
 import { getPool, sql } from "@/lib/db";
 
 // Shared by the three routes in this folder (GET status check, POST
-// .../unscan, POST .../delete): a user keys in whichever of Cut / Bundle /
-// Operation they have printed on the coupon(s) in hand — none of the three
-// is required. Only Work Order is always required (it's already selected on
-// the page this modal is opened from). Whatever subset of Cut/Bundle/Op is
-// filled in narrows the match; leaving all three empty scopes the action to
-// every coupon on the work order. The match is therefore a set, not a
-// single row.
+// .../unscan, POST .../delete). These filters intentionally mirror Coupon
+// Tracing's table filters so the bulk action works against exactly the same
+// visible set the user narrowed down on the page.
 
 export interface CouponFilter {
   workOrder: string;
-  cutNo: string;
   bundleNo: string;
   opNo: string;
+  section: string;
+  isScanned?: boolean;
+  fromCut: string;
+  toCut: string;
 }
 
 export function readCouponFilter(
@@ -23,11 +22,22 @@ export function readCouponFilter(
   if (!workOrder) {
     return { error: "Missing required field: workOrder." };
   }
+  const scannedValue = String(source.isScanned ?? "").trim();
   return {
     workOrder,
-    cutNo: String(source.cutNo ?? "").trim(),
     bundleNo: String(source.bundleNo ?? "").trim(),
     opNo: String(source.opNo ?? "").trim(),
+    section: String(source.section ?? "").trim(),
+    isScanned:
+      scannedValue === ""
+        ? undefined
+        : scannedValue === "true"
+          ? true
+          : scannedValue === "false"
+            ? false
+            : undefined,
+    fromCut: String(source.fromCut ?? "").trim(),
+    toCut: String(source.toCut ?? "").trim(),
   };
 }
 
@@ -66,17 +76,29 @@ export async function findMatchingCoupons(
     .request()
     .input("workOrder", sql.NVarChar, filter.workOrder);
   const conditions = ["WorkOrder = @workOrder", "IsDeleted = 0"];
-  if (filter.cutNo) {
-    request.input("cutNo", sql.NVarChar, filter.cutNo);
-    conditions.push("CutNo = @cutNo");
-  }
   if (filter.bundleNo) {
-    request.input("bundleNo", sql.NVarChar, filter.bundleNo);
-    conditions.push("BundleNo = @bundleNo");
+    request.input("bundleNo", sql.NVarChar, `%${filter.bundleNo}%`);
+    conditions.push("BundleNo LIKE @bundleNo");
   }
   if (filter.opNo) {
-    request.input("opNo", sql.NVarChar, filter.opNo);
-    conditions.push("OpNo = @opNo");
+    request.input("opNo", sql.NVarChar, `%${filter.opNo}%`);
+    conditions.push("OpNo LIKE @opNo");
+  }
+  if (filter.section) {
+    request.input("section", sql.NVarChar, filter.section);
+    conditions.push("Section = @section");
+  }
+  if (filter.isScanned !== undefined) {
+    request.input("isScanned", sql.Bit, filter.isScanned);
+    conditions.push("IsScanned = @isScanned");
+  }
+  if (filter.fromCut) {
+    request.input("fromCut", sql.NVarChar, filter.fromCut);
+    conditions.push("TRY_CAST(CutNo AS INT) >= TRY_CAST(@fromCut AS INT)");
+  }
+  if (filter.toCut) {
+    request.input("toCut", sql.NVarChar, filter.toCut);
+    conditions.push("TRY_CAST(CutNo AS INT) <= TRY_CAST(@toCut AS INT)");
   }
   const result = await request.query(`
     SELECT CouponCode, IsScanned, WorkOrder, BundleNo, OpNo, CutNo, Section, Id, EmployeeCode, ScannedAt

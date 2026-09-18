@@ -12,6 +12,7 @@ import {
   Check,
   X,
   Eraser,
+  SlidersHorizontal,
 } from "lucide-react";
 import { format } from "date-fns";
 import { printPdf } from "@/lib/print";
@@ -24,7 +25,10 @@ import {
 } from "@/components/work-order-search-modal";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
 import { CodeTypeSelectionModal } from "@/features/qr-code-generation/components/CodeTypeSelectionModal";
-import { UnscanOrDeleteCouponModal } from "@/features/qr-code-generation/components/UnscanOrDeleteCouponModal";
+import {
+  UnscanOrDeleteCouponModal,
+  type CouponActionFilters,
+} from "@/features/qr-code-generation/components/UnscanOrDeleteCouponModal";
 import type { PageSetupConfig } from "@/features/qr-code-generation/types";
 import { DEFAULT_MARGINS } from "@/features/qr-code-generation/types";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
@@ -46,6 +50,11 @@ interface CouponRow {
   ScanBy?: string | null;
   ScannedAt?: string | null;
   SystemScannedAt?: string | null;
+}
+
+interface OperationSuggestion {
+  Operation_Code: string;
+  Operation_Name: string | null;
 }
 
 const COUPON_PAGE_SIZE = 50;
@@ -78,6 +87,7 @@ export default function CouponTracingPage() {
   const [showPageSetupModal, setShowPageSetupModal] = useState(false);
   const [showCodeTypeModal, setShowCodeTypeModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const { user } = useAuth();
   const [pageSetup, setPageSetup] = useState<PageSetupConfig>({
@@ -117,7 +127,9 @@ export default function CouponTracingPage() {
     return [];
   };
 
-  const fetchOpSuggestions = async (query: string) => {
+  const fetchOpSuggestions = async (
+    query: string,
+  ): Promise<OperationSuggestion[]> => {
     if (!tracedWorkOrder) return [];
     try {
       const response = await fetch(
@@ -269,8 +281,8 @@ export default function CouponTracingPage() {
     return finalData;
   };
 
-  // Looks up coupons by WO/Cut/Bundle/Op (as printed on the physical
-  // coupon(s), all but WO optional) — used by UnscanOrDeleteCouponModal.
+  // Looks up coupons by the active tracing filters and lets the modal run
+  // the matching unscan/delete action without asking for a second review.
   // Unscan and delete are separate routes/requests now (see
   // src/app/api/coupons/unscan-or-delete/{unscan,delete}/route.ts); the
   // modal decides which to call based on the current match's scanned/
@@ -278,7 +290,7 @@ export default function CouponTracingPage() {
   // ever touches coupons that were already unscanned before this action,
   // never ones this same action just unscanned.
   const submitUnscanCoupons = async (
-    fields: { workOrder: string; cutNo: string; bundleNo: string; opNo: string },
+    fields: CouponActionFilters,
     onProgress: (done: number, total: number) => void,
   ): Promise<{ unscannedCount: number }> => {
     const actedBy = user?.email || "";
@@ -296,7 +308,7 @@ export default function CouponTracingPage() {
   };
 
   const submitDeleteCoupons = async (
-    fields: { workOrder: string; cutNo: string; bundleNo: string; opNo: string },
+    fields: CouponActionFilters,
     onProgress: (done: number, total: number) => void,
   ): Promise<{ deletedCount: number }> => {
     const actedBy = user?.email || "";
@@ -389,6 +401,46 @@ export default function CouponTracingPage() {
     1,
     Math.ceil(couponTotal / COUPON_PAGE_SIZE),
   );
+
+  const activeFilterCount = [
+    bundleFilter.trim(),
+    opFilter.trim(),
+    sectionFilter,
+    scannedFilter,
+    fromCutFilter.trim(),
+    toCutFilter.trim(),
+  ].filter(Boolean).length;
+
+  const couponActionFilters: CouponActionFilters = useMemo(
+    () => ({
+      workOrder: tracedWorkOrder,
+      bundleNo: bundleFilter,
+      opNo: opFilter,
+      section: sectionFilter,
+      isScanned: scannedFilter,
+      fromCut: fromCutFilter,
+      toCut: toCutFilter,
+    }),
+    [
+      tracedWorkOrder,
+      bundleFilter,
+      opFilter,
+      sectionFilter,
+      scannedFilter,
+      fromCutFilter,
+      toCutFilter,
+    ],
+  );
+
+  const clearCouponFilters = () => {
+    setBundleFilter("");
+    setOpFilter("");
+    setSectionFilter("");
+    setScannedFilter("");
+    setFromCutFilter("");
+    setToCutFilter("");
+  };
+
   const goToCouponPage = (page: number) => {
     setCouponPage(page);
     fetchCoupons(tracedWorkOrder, page);
@@ -491,8 +543,26 @@ export default function CouponTracingPage() {
                 disabled={couponTotal === 0}
               />
               <button
+                type="button"
+                onClick={() => setShowFilters(true)}
+                title="Show coupon filters"
+                className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs border transition-all ${
+                  activeFilterCount > 0
+                    ? "bg-indigo-50 text-[#4f46e5] border-indigo-100 hover:bg-indigo-100"
+                    : "bg-white text-slate-700 border-[#e2e8f0] hover:bg-slate-50"
+                }`}
+              >
+                <SlidersHorizontal className="w-3.5 h-3.5" />
+                Filter
+                {activeFilterCount > 0 && (
+                  <span className="ml-0.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-[#4f46e5] px-1 text-[9px] font-black text-white">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+              <button
                 onClick={() => setShowDeleteModal(true)}
-                title="Unscan or delete a coupon by Work Order, Cut, Bundle & Operation"
+                title="Unscan or delete coupons matching the active filters"
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100 transition-all"
               >
                 <Eraser className="w-3.5 h-3.5" />
@@ -500,81 +570,6 @@ export default function CouponTracingPage() {
               </button>
             </div>
           </div>
-
-          {/* Filters — each change re-queries page 1 from the server. */}
-          <div className="flex flex-wrap items-center gap-2 px-5 py-3 border-b border-[#e2e8f0] bg-white">
-            <Autocomplete<string>
-              value={bundleFilter}
-              onChange={setBundleFilter}
-              onSelect={setBundleFilter}
-              fetchSuggestions={fetchBundleSuggestions}
-              renderSuggestion={(item) => <span>{item}</span>}
-              getSuggestionValue={(item) => item}
-              placeholder="Filter by Bundle No"
-              className="w-40"
-              inputClassName="w-full px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-            />
-            <Autocomplete<any>
-              value={opFilter}
-              onChange={setOpFilter}
-              onSelect={(op) => setOpFilter(op.Operation_Code)}
-              fetchSuggestions={fetchOpSuggestions}
-              renderSuggestion={(op) => (
-                <div className="flex flex-col">
-                  <span className="text-[#4f46e5] font-bold text-[10px]">
-                    {op.Operation_Code}
-                  </span>
-                  <span className="text-[10px] text-slate-500 truncate">
-                    {op.Operation_Name}
-                  </span>
-                </div>
-              )}
-              getSuggestionValue={(op) => op.Operation_Code}
-              placeholder="Filter by Op No"
-              className="w-40"
-              inputClassName="w-full px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-            />
-            <input
-              type="text"
-              placeholder="From Cut"
-              value={fromCutFilter}
-              onChange={(e) => setFromCutFilter(e.target.value)}
-              className="w-24 px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-            />
-            <input
-              type="text"
-              placeholder="To Cut"
-              value={toCutFilter}
-              onChange={(e) => setToCutFilter(e.target.value)}
-              className="w-24 px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-            />
-            <select
-              value={sectionFilter}
-              onChange={(e) => setSectionFilter(e.target.value)}
-              className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-            >
-              <option value="">All Sections</option>
-              {sectionOptions.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <select
-              value={scannedFilter}
-              onChange={(e) =>
-                setScannedFilter(e.target.value as typeof scannedFilter)
-              }
-              className="px-3 py-2 rounded-lg border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 focus:bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
-            >
-              {SCANNED_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </div>
-
           <table className="w-full text-left border-collapse">
             <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
               <tr>
@@ -734,6 +729,186 @@ export default function CouponTracingPage() {
         </div>
       )}
 
+      {showFilters && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f172a]/45 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-2xl animate-scale-up">
+            <div className="flex items-start justify-between gap-4 border-b border-[#e2e8f0] bg-[#f8fafc] px-5 py-4">
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-[#4f46e5]">
+                  <SlidersHorizontal className="h-5 w-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-[#0f172a]">
+                    Coupon Filters
+                  </h3>
+                  <p className="mt-1 text-[11px] font-semibold text-slate-500">
+                    These filters also control Print, Export, and Unscan /
+                    Delete.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowFilters(false)}
+                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e2e8f0] bg-white text-slate-500 transition-all hover:bg-slate-50 hover:text-slate-800"
+                aria-label="Close filters"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+
+            <div className="max-h-[70vh] overflow-y-auto px-5 py-5">
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/70 px-4 py-3">
+                <div>
+                  <div className="text-[10px] font-black uppercase tracking-wider text-[#4f46e5]">
+                    Active Scope
+                  </div>
+                  <div className="mt-0.5 text-[11px] font-semibold text-slate-600">
+                    {activeFilterCount === 0
+                      ? "All coupons for the traced work order"
+                      : `${activeFilterCount} filter${
+                          activeFilterCount === 1 ? "" : "s"
+                        } applied`}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={clearCouponFilters}
+                  disabled={activeFilterCount === 0}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-100 bg-white px-3 py-1.5 text-[10px] font-black uppercase tracking-wider text-[#4f46e5] transition-all hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <X className="h-3 w-3" />
+                  Clear
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <label className="space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                    Bundle No
+                  </span>
+                  <Autocomplete<string>
+                    value={bundleFilter}
+                    onChange={setBundleFilter}
+                    onSelect={setBundleFilter}
+                    fetchSuggestions={fetchBundleSuggestions}
+                    renderSuggestion={(item) => <span>{item}</span>}
+                    getSuggestionValue={(item) => item}
+                    placeholder="Filter by Bundle No"
+                    inputClassName="w-full px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all shadow-sm"
+                  />
+                </label>
+
+                <label className="space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                    Operation No
+                  </span>
+                  <Autocomplete<OperationSuggestion>
+                    value={opFilter}
+                    onChange={setOpFilter}
+                    onSelect={(op) => setOpFilter(op.Operation_Code)}
+                    fetchSuggestions={fetchOpSuggestions}
+                    renderSuggestion={(op) => (
+                      <div className="flex flex-col">
+                        <span className="text-[#4f46e5] font-bold text-[10px]">
+                          {op.Operation_Code}
+                        </span>
+                        <span className="text-[10px] text-slate-500 truncate">
+                          {op.Operation_Name}
+                        </span>
+                      </div>
+                    )}
+                    getSuggestionValue={(op) => op.Operation_Code}
+                    placeholder="Filter by Op No"
+                    inputClassName="w-full px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all shadow-sm"
+                  />
+                </label>
+
+                <label className="space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                    From Cut
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="From Cut"
+                    value={fromCutFilter}
+                    onChange={(e) => setFromCutFilter(e.target.value)}
+                    className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all placeholder-slate-400 focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
+                  />
+                </label>
+
+                <label className="space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                    To Cut
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="To Cut"
+                    value={toCutFilter}
+                    onChange={(e) => setToCutFilter(e.target.value)}
+                    className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all placeholder-slate-400 focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
+                  />
+                </label>
+
+                <label className="space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                    Section
+                  </span>
+                  <select
+                    value={sectionFilter}
+                    onChange={(e) => setSectionFilter(e.target.value)}
+                    className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
+                  >
+                    <option value="">All Sections</option>
+                    {sectionOptions.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <label className="space-y-1.5">
+                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                    Status
+                  </span>
+                  <select
+                    value={scannedFilter}
+                    onChange={(e) =>
+                      setScannedFilter(e.target.value as typeof scannedFilter)
+                    }
+                    className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
+                  >
+                    {SCANNED_OPTIONS.map((opt) => (
+                      <option key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            </div>
+
+            <div className="flex flex-col-reverse gap-2 border-t border-[#e2e8f0] bg-white px-5 py-4 sm:flex-row sm:justify-end">
+              <button
+                type="button"
+                onClick={() => setShowFilters(false)}
+                className="rounded-xl border border-[#e2e8f0] bg-white px-4 py-2 text-xs font-bold text-slate-600 transition-all hover:bg-slate-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowFilters(false)}
+                className="rounded-xl bg-[#4f46e5] px-4 py-2 text-xs font-black text-white shadow-sm transition-all hover:bg-[#4338ca]"
+              >
+                Apply Filters
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {showPageSetupModal && (
         <PageSetupModal
           pageSetup={pageSetup}
@@ -760,7 +935,7 @@ export default function CouponTracingPage() {
 
       {showDeleteModal && (
         <UnscanOrDeleteCouponModal
-          workOrder={tracedWorkOrder}
+          filters={couponActionFilters}
           submitUnscan={submitUnscanCoupons}
           submitDelete={submitDeleteCoupons}
           onClose={() => setShowDeleteModal(false)}

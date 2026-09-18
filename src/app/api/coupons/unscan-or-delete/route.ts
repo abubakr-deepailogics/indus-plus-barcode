@@ -13,9 +13,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const parsed = readCouponFilter({
       workOrder: searchParams.get("workOrder"),
-      cutNo: searchParams.get("cutNo"),
       bundleNo: searchParams.get("bundleNo"),
       opNo: searchParams.get("opNo"),
+      section: searchParams.get("section"),
+      isScanned: searchParams.get("isScanned"),
+      fromCut: searchParams.get("fromCut"),
+      toCut: searchParams.get("toCut"),
     });
     if ("error" in parsed) {
       return Response.json({ error: parsed.error }, { status: 400 });
