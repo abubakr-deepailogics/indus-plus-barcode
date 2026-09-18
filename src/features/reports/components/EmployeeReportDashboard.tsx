@@ -810,31 +810,7 @@ export function EmployeeReportDashboard() {
             "",
           ]);
         }
-        rows.push([
-          "",
-          "",
-          "",
-          "",
-          "",
-          "Employee wise Total :",
-          eg.totalBundles,
-          eg.totalQty,
-          Number(eg.totalPay.toFixed(2)),
-          "",
-        ]);
       }
-      rows.push([
-        "",
-        "",
-        "",
-        "",
-        "",
-        "Grand Total :",
-        grandTotalBundles,
-        grandTotalQty,
-        Number(grandTotalPay.toFixed(2)),
-        "",
-      ]);
     } else {
       headers = [
         "Coupon Code",
@@ -894,9 +870,6 @@ export function EmployeeReportDashboard() {
     filteredCoupons,
     showEmployeeColumn,
     employeeGroupedData,
-    grandTotalBundles,
-    grandTotalQty,
-    grandTotalPay,
   ]);
 
   return (
