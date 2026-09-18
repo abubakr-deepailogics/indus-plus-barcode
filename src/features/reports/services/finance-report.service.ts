@@ -150,6 +150,36 @@ async function fetchSewingOpCodesByWorkOrder(
   return map;
 }
 
+async function fetchOperationCommissionsByWorkOrderOp(
+  workOrders: string[],
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (workOrders.length === 0) return map;
+
+  const pool = await getPool("indusPlus");
+  for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
+    const req = pool.request();
+    const inClause = buildInClause(req, "wo", batch);
+    const result = await req.query(`
+      SELECT
+        [Order No] AS WorkOrder,
+        [Operation Code] AS OpNo,
+        MAX(COALESCE(TRY_CAST([UD_Commission] AS DECIMAL(18, 4)), 0)) AS OpInc
+      FROM ${STYLE_BULLETIN_TABLE}
+      WHERE [Order No] IN (${inClause})
+      GROUP BY [Order No], [Operation Code]
+    `);
+    for (const row of result.recordset as {
+      WorkOrder: string;
+      OpNo: string;
+      OpInc: number | null;
+    }[]) {
+      map.set(`${row.WorkOrder}|${row.OpNo}`, Number(row.OpInc) || 0);
+    }
+  }
+  return map;
+}
+
 // ── Order Wise Finishing Payment (Audit) ────────────────────────────────────
 
 export async function buildOrderWiseReport(
@@ -169,22 +199,34 @@ export async function buildOrderWiseReport(
   const scans = allScans.filter((row) =>
     sewingOpsByWo.get(row.WorkOrder)?.has(row.OpNo),
   );
+  const operationCommissions =
+    await fetchOperationCommissionsByWorkOrderOp(scannedWorkOrders);
 
   const byWorkOrder = new Map<
     string,
-    { previousPaid: number; currentClaim: number; qtyProduced: number }
+    {
+      previousPaid: number;
+      currentClaim: number;
+      qtyProduced: number;
+      opInc: number;
+    }
   >();
   for (const row of scans) {
     const qty = Number(row.Qty) || 0;
     const rate = Number(row.Rate) || 0;
     const value = qty * rate;
+    const opInc =
+      qty *
+      (operationCommissions.get(`${row.WorkOrder}|${row.OpNo}`) ?? 0);
     const isCurrentCycle = new Date(row.ScannedAt) >= currentStart;
 
     const existing = byWorkOrder.get(row.WorkOrder) ?? {
       previousPaid: 0,
       currentClaim: 0,
       qtyProduced: 0,
+      opInc: 0,
     };
+    existing.opInc += opInc;
     if (isCurrentCycle) {
       existing.currentClaim += value;
       existing.qtyProduced += qty;
@@ -275,6 +317,7 @@ export async function buildOrderWiseReport(
       const plan =
         totalRate != null && washQty != null ? totalRate * washQty : null;
       const totalClaim = scan.previousPaid + scan.currentClaim;
+      const total = totalClaim + scan.opInc;
       return {
         workOrder,
         totalSam,
@@ -285,6 +328,8 @@ export async function buildOrderWiseReport(
         currentClaim: scan.currentClaim,
         totalClaim,
         balance: plan != null ? plan - totalClaim : null,
+        opInc: scan.opInc,
+        total,
         minutesProduced: totalSam != null ? totalSam * scan.qtyProduced : 0,
         qtyProduced: scan.qtyProduced,
       };
@@ -307,19 +352,26 @@ export async function buildOperatorWiseReport(
   const scans = allScans.filter((row) =>
     sewingOpsByWo.get(row.WorkOrder)?.has(row.OpNo),
   );
+  const operationCommissions =
+    await fetchOperationCommissionsByWorkOrderOp(scannedWorkOrders);
 
-  const totalAmtByEmployee = new Map<string, number>();
+  const pieceRateByEmployee = new Map<string, number>();
+  const opIncByEmployee = new Map<string, number>();
   for (const row of scans) {
     if (!row.EmployeeCode) continue;
-    const qty = Number(row.Qty) || 0;
     const rate = Number(row.Rate) || 0;
-    totalAmtByEmployee.set(
+    const opInc = operationCommissions.get(`${row.WorkOrder}|${row.OpNo}`) ?? 0;
+    pieceRateByEmployee.set(
       row.EmployeeCode,
-      (totalAmtByEmployee.get(row.EmployeeCode) ?? 0) + qty * rate,
+      (pieceRateByEmployee.get(row.EmployeeCode) ?? 0) + rate,
+    );
+    opIncByEmployee.set(
+      row.EmployeeCode,
+      (opIncByEmployee.get(row.EmployeeCode) ?? 0) + opInc,
     );
   }
 
-  const employeeCodes = [...totalAmtByEmployee.keys()];
+  const employeeCodes = [...pieceRateByEmployee.keys()];
   if (employeeCodes.length === 0) {
     return { period, rows: [] };
   }
@@ -354,12 +406,16 @@ export async function buildOperatorWiseReport(
   const rows: OperatorWiseReportRow[] = employeeCodes
     .map((employeeCode) => {
       const info = employeeInfo.get(employeeCode);
+      const pieceRateTotal = pieceRateByEmployee.get(employeeCode) ?? 0;
+      const opInc = opIncByEmployee.get(employeeCode) ?? 0;
       return {
         employeeCode,
         employeeName: info?.name ?? employeeCode,
         section: info?.section ?? "Unassigned",
         joiningDate: info?.joiningDate ?? null,
-        totalAmt: totalAmtByEmployee.get(employeeCode) ?? 0,
+        pieceRateTotal,
+        opInc,
+        total: pieceRateTotal + opInc,
       };
     })
     .sort((a, b) => {

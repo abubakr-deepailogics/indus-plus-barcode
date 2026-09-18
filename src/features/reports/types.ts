@@ -227,12 +227,11 @@ export interface WagesBatch {
 //
 // Order Wise is currently scoped to the Sewing department only (a
 // deliberate first pass — see DEPARTMENT_FILTER in
-// finance-report.service.ts). Incentive-scheme amounts and production-line
-// assignment have NO source data anywhere in this system — rather than
-// showing them as 0/estimated, those columns are simply not part of this
-// report. Previous Paid / Current Claim are both scan-derived (not from the
-// wage ledger) — see finance-report.service.ts for the exact per-column
-// formulas.
+// finance-report.service.ts). Op Inc is sourced from Indus Plus
+// StyleBullettinInt.[UD_Commission]. Production-line assignment still has
+// no source data here. Previous Paid / Current Claim are both scan-derived
+// (not from the wage ledger) — see finance-report.service.ts for the exact
+// per-column formulas.
 export interface OrderWiseReportRow {
   workOrder: string; // ANL# in the legacy printout
   totalSam: number | null; // per-garment SMV summed across the order's Sewing operations (style bulletin, not scan-scoped)
@@ -243,6 +242,8 @@ export interface OrderWiseReportRow {
   currentClaim: number; // sum(qty * rate) for this WO's Sewing coupons scanned during THIS pay-cycle
   totalClaim: number; // previousPaid + currentClaim
   balance: number | null; // plan - totalClaim (null when plan is null, i.e. no order quantity on record)
+  opInc: number; // sum(qty * UD_Commission) for the report's scanned Sewing coupons
+  total: number; // totalClaim + opInc
   minutesProduced: number; // totalSam (order-level) * qtyProduced — NOT sum(qty * smv) per scan
   qtyProduced: number; // sum(qty) for this WO's Sewing coupons scanned during THIS pay-cycle
 }
@@ -254,7 +255,9 @@ export interface OperatorWiseReportRow {
   employeeName: string;
   section: string; // HRMS DepartmentName — closest available analogue to the legacy "Section :" grouping (see service for caveats)
   joiningDate: string | null; // HRMS JoiningDate
-  totalAmt: number; // sum(qty * rate) earned this pay-cycle across every Sewing-operation coupon scanned
+  pieceRateTotal: number; // sum of piece rates across every Sewing-operation coupon scanned
+  opInc: number; // sum of UD_Commission across every Sewing-operation coupon scanned
+  total: number; // pieceRateTotal + opInc
 }
 
 export interface FinanceReportPeriod {

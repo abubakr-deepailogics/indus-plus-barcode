@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { format } from "date-fns";
 import { ArrowLeft, Loader2, Printer, Users } from "lucide-react";
@@ -45,14 +45,6 @@ export function OperatorWiseReportPage() {
     };
   }, [cycleStart]);
 
-  const bySection = new Map<string, OperatorWiseReportResult["rows"]>();
-  if (data) {
-    for (const row of data.rows) {
-      if (!bySection.has(row.section)) bySection.set(row.section, []);
-      bySection.get(row.section)!.push(row);
-    }
-  }
-
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6 max-w-[1000px] mx-auto w-full">
       <div className="flex items-center justify-between flex-wrap gap-2 no-print">
@@ -84,13 +76,23 @@ export function OperatorWiseReportPage() {
               label="Export"
               className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-white border border-[#e2e8f0] text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               filename={`operator-wise-report-${format(new Date(), "yyyyMMdd-HHmm")}`}
-              headers={["Code", "Name", "Section", "D.O.J", "Total Amt. (Rs.)"]}
+              headers={[
+                "Code",
+                "Name",
+                "D.O.J",
+                "Section",
+                "Piece Rate",
+                "Op Inc",
+                "Total",
+              ]}
               rows={data.rows.map((r) => [
                 r.employeeCode,
                 r.employeeName,
-                r.section,
                 r.joiningDate,
-                r.totalAmt,
+                r.section,
+                r.pieceRateTotal,
+                r.opInc,
+                r.total,
               ])}
             />
             <button
@@ -147,55 +149,44 @@ export function OperatorWiseReportPage() {
                   <th className="py-2 px-2 border-r border-slate-200">Code</th>
                   <th className="py-2 px-2 border-r border-slate-200">Name</th>
                   <th className="py-2 px-2 border-r border-slate-200">D.O.J</th>
-                  <th className="py-2 px-2 text-right">Total Amt.</th>
+                  <th className="py-2 px-2 border-r border-slate-200">
+                    Section
+                  </th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">
+                    Piece Rate
+                  </th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">
+                    Op Inc
+                  </th>
+                  <th className="py-2 px-2 text-right">Total</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {[...bySection.entries()].map(([section, rows]) => {
-                  const sectionTotal = rows.reduce((s, r) => s + r.totalAmt, 0);
-                  return (
-                    <Fragment key={section}>
-                      <tr className="bg-indigo-50">
-                        <td
-                          colSpan={4}
-                          className="py-1.5 px-2 font-bold text-[#4f46e5] text-[10px] uppercase tracking-wider"
-                        >
-                          Section: {section}
-                        </td>
-                      </tr>
-                      {rows.map((r) => (
-                        <tr
-                          key={r.employeeCode}
-                          className="hover:bg-slate-50/60"
-                        >
-                          <td className="py-1.5 px-2 border-r border-slate-100 font-mono font-bold text-[#4f46e5]">
-                            {r.employeeCode}
-                          </td>
-                          <td className="py-1.5 px-2 border-r border-slate-100 font-semibold text-slate-800">
-                            {r.employeeName}
-                          </td>
-                          <td className="py-1.5 px-2 border-r border-slate-100 text-slate-600">
-                            {r.joiningDate ? r.joiningDate.slice(0, 10) : "—"}
-                          </td>
-                          <td className="py-1.5 px-2 text-right font-bold text-slate-800">
-                            {formatAmount(r.totalAmt)}
-                          </td>
-                        </tr>
-                      ))}
-                      <tr className="bg-slate-50 border-t border-slate-200 font-bold text-slate-700">
-                        <td
-                          colSpan={3}
-                          className="py-1.5 px-2 text-right border-r border-slate-200"
-                        >
-                          {section} Total :
-                        </td>
-                        <td className="py-1.5 px-2 text-right">
-                          {formatAmount(sectionTotal)}
-                        </td>
-                      </tr>
-                    </Fragment>
-                  );
-                })}
+                {data.rows.map((r) => (
+                  <tr key={r.employeeCode} className="hover:bg-slate-50/60">
+                    <td className="py-1.5 px-2 border-r border-slate-100 font-mono font-bold text-[#4f46e5]">
+                      {r.employeeCode}
+                    </td>
+                    <td className="py-1.5 px-2 border-r border-slate-100 font-semibold text-slate-800">
+                      {r.employeeName}
+                    </td>
+                    <td className="py-1.5 px-2 border-r border-slate-100 text-slate-600">
+                      {r.joiningDate ? r.joiningDate.slice(0, 10) : "—"}
+                    </td>
+                    <td className="py-1.5 px-2 border-r border-slate-100 font-semibold text-slate-700">
+                      {r.section}
+                    </td>
+                    <td className="py-1.5 px-2 text-right border-r border-slate-100 font-bold text-slate-800">
+                      {formatAmount(r.pieceRateTotal)}
+                    </td>
+                    <td className="py-1.5 px-2 text-right border-r border-slate-100 font-bold text-slate-800">
+                      {formatAmount(r.opInc)}
+                    </td>
+                    <td className="py-1.5 px-2 text-right font-bold text-emerald-700">
+                      {formatAmount(r.total)}
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
