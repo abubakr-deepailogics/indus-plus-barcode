@@ -205,11 +205,6 @@ export default function CouponTracingPage() {
   };
 
   const handleUnscanCoupon = async (couponCode: string) => {
-    if (
-      !window.confirm(`Are you sure you want to unscan coupon: ${couponCode}?`)
-    ) {
-      return;
-    }
     setUnscanningCode(couponCode);
     try {
       const response = await fetch("/api/coupons/unscan", {
