@@ -787,11 +787,10 @@ export function EmployeeReportDashboard() {
       ];
       rows = [];
       for (const eg of employeeGroupedData) {
-        for (let i = 0; i < eg.items.length; i++) {
-          const item = eg.items[i];
+        for (const item of eg.items) {
           rows.push([
-            i === 0 ? eg.employeeCode : "",
-            i === 0 ? eg.employeeName : "",
+            eg.employeeCode,
+            eg.employeeName,
             item.workOrder,
             item.date,
             item.operation,
