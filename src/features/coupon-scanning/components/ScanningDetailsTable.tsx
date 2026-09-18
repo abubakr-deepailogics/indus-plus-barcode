@@ -39,7 +39,8 @@ export function ScanningDetailsTable(props: Facade) {
   // of the Dated field mid-keystroke; committing the hand-off only where
   // Dated is actually *done* (not just momentarily valid) avoids that.
   const isEmployeeCodeFilled = !!employeeCode.trim();
-  const isReadyToScan = isEmployeeCodeFilled && !!dated && isEmployeePresent === true;
+  const isReadyToScan =
+    isEmployeeCodeFilled && !!dated && isEmployeePresent === true;
   const scannerDisabled = isScanning || !isReadyToScan;
 
   const handleInputBlur = (e: FocusEvent<HTMLInputElement>) => {
@@ -115,7 +116,9 @@ export function ScanningDetailsTable(props: Facade) {
           <button
             type="button"
             onClick={() => window.print()}
-            disabled={rows.filter((row) => row.barCode && row.scanned).length === 0}
+            disabled={
+              rows.filter((row) => row.barCode && row.scanned).length === 0
+            }
             className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-slate-700 disabled:opacity-50 py-1 px-2.5 rounded-lg font-bold transition-all shadow-sm cursor-pointer text-[10px] flex items-center justify-center gap-1.5"
           >
             <Printer className="w-3 h-3 text-[#4f46e5]" />
@@ -123,7 +126,21 @@ export function ScanningDetailsTable(props: Facade) {
           </button>
           <CsvExportButton
             filename={`scanning-details-${employeeCode || "employee"}-${dated || "date"}`}
-            headers={["Coupon Code", "W/O #", "Cut #", "Bundle #", "Qty", "Inseam", "Size #", "Section Name", "Operation Name", "Skill #", "SMV", "Rate", "Value"]}
+            headers={[
+              "Coupon Code",
+              "W/O",
+              "Cut #",
+              "Bundle #",
+              "Qty",
+              "Inseam",
+              "Size #",
+              "Section Name",
+              "Operation Name",
+              "Skill #",
+              "SMV",
+              "Rate",
+              "Value",
+            ]}
             rows={csvRows}
             className="bg-white border border-[#e2e8f0] hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 text-slate-700 disabled:opacity-50 py-1 px-2.5 rounded-lg font-bold transition-all shadow-sm cursor-pointer text-[10px] flex items-center justify-center gap-1.5 disabled:cursor-not-allowed"
           />
@@ -172,7 +189,10 @@ export function ScanningDetailsTable(props: Facade) {
           <thead>
             {/* Category label row */}
             <tr className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
-              <th colSpan={12} className="py-1 px-3 border-r border-slate-200"></th>
+              <th
+                colSpan={12}
+                className="py-1 px-3 border-r border-slate-200"
+              ></th>
               <th
                 colSpan={3}
                 className="py-0.5 px-3 text-center text-[9px] uppercase tracking-wider bg-slate-200/60 text-slate-800 border-b border-slate-300"
@@ -192,7 +212,7 @@ export function ScanningDetailsTable(props: Facade) {
                 Coupon Code
               </th>
               <th className="py-1 px-2 border-r border-slate-200 w-[100px]">
-                W/0 #
+                W/O
               </th>
               <th className="py-1 px-2 border-r border-slate-200 w-[100px]">
                 Cut #
@@ -294,7 +314,9 @@ export function ScanningDetailsTable(props: Facade) {
                     <td className="py-1 px-2 border-r border-slate-200 text-center">
                       <button
                         onClick={() => handleRemoveRow(row.index)}
-                        title={row.scanned ? "Unscan & remove row" : "Remove row"}
+                        title={
+                          row.scanned ? "Unscan & remove row" : "Remove row"
+                        }
                         className="text-[#ef4444] hover:text-[#dc2626] font-bold text-[10px] px-1.5 py-0.5 rounded bg-red-50 hover:bg-red-100 border border-red-100 transition-all cursor-pointer"
                       >
                         ✕
@@ -368,8 +390,6 @@ export function ScanningDetailsTable(props: Facade) {
           </tbody>
         </table>
       </div>
-
-
 
       {/* Footer Summary Container */}
       <div className="flex flex-wrap items-center justify-start sm:justify-end gap-x-6 gap-y-2 bg-slate-50 border border-slate-200/60 rounded-xl px-4 py-2 mt-2">

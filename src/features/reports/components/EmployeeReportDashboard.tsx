@@ -784,7 +784,7 @@ export function EmployeeReportDashboard() {
       headers = [
         "EmpCode",
         "Employee Name",
-        "ANL #",
+        "W/O",
         "Date",
         "Operation",
         "Rate",
@@ -1094,7 +1094,7 @@ export function EmployeeReportDashboard() {
                             Employee Name
                           </th>
                           <th className="py-2.5 px-3 border-r border-slate-200">
-                            ANL #
+                            W/O
                           </th>
                           <th className="py-2.5 px-3 text-center border-r border-slate-200">
                             Date
@@ -2241,7 +2241,7 @@ export function EmployeeReportDashboard() {
                           Employee Name
                         </th>
                         <th className="py-2.5 px-3 border-r border-slate-200">
-                          ANL #
+                          W/O
                         </th>
                         <th className="py-2.5 px-3 text-center border-r border-slate-200">
                           Date
@@ -3131,7 +3131,7 @@ export function EmployeeReportDashboard() {
                         <tr>
                           <th>EMPCODE</th>
                           <th>EMPLOYEE NAME</th>
-                          <th>ANL #</th>
+                          <th>W/O</th>
                           <th className="text-center">DATE</th>
                           <th>OPERATION</th>
                           <th className="text-right">RATE</th>

@@ -78,7 +78,7 @@ export function OrderWiseReportPage() {
               className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-white border border-[#e2e8f0] text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
               filename={`order-wise-report-${format(new Date(), "yyyyMMdd-HHmm")}`}
               headers={[
-                "ANL# (W/O)",
+                "W/O",
                 "Total SAM",
                 "Total Rate",
                 "Wash Qty",
@@ -155,7 +155,7 @@ export function OrderWiseReportPage() {
             <table className="w-full text-left text-[11px] border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[9.5px] uppercase tracking-wider">
-                  <th className="py-2 px-2 border-r border-slate-200">ANL#</th>
+                  <th className="py-2 px-2 border-r border-slate-200">W/O</th>
                   <th className="py-2 px-2 text-right border-r border-slate-200">
                     Total SAM
                   </th>
