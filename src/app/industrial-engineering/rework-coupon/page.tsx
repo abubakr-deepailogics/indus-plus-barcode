@@ -99,6 +99,7 @@ export default function ReworkCouponPage() {
   const [isSaving, setIsSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [reworkQty, setReworkQty] = useState<number | "">("");
+  const [hasCouponsGenerated, setHasCouponsGenerated] = useState<boolean>(true);
 
   // Shared Work Order search: seeds this page's search from the
   // global/URL Work Order (set by Cut Report, Style Bulletin, Coupon
@@ -129,12 +130,15 @@ export default function ReworkCouponPage() {
   );
 
   async function loadWorkOrder(wo: string) {
-    if (!wo.trim() || isLoading) return;
+    const trimmedWo = wo.trim();
+    if (!trimmedWo || isLoading) return;
     setIsLoading(true);
     setErrorMsg("");
+    setWorkOrderState(trimmedWo);
+    setGlobalWorkOrder(trimmedWo);
     try {
       const response = await fetch(
-        `/api/open-order?work_order=${encodeURIComponent(wo.trim())}&t=${Date.now()}`,
+        `/api/open-order?work_order=${encodeURIComponent(trimmedWo)}&t=${Date.now()}`,
       );
       if (!response.ok) {
         const errData = await response.json();
@@ -149,23 +153,6 @@ export default function ReworkCouponPage() {
         throw new Error("No operations found in style bulletin for this work order.");
       }
 
-      // Verify that production coupons were previously generated for this work order.
-      // Rework coupons cannot be created if coupons were never generated for this work order.
-      const countRes = await fetch(
-        `/api/qr-code-generation/pdf?work_order=${encodeURIComponent(wo.trim())}`,
-      );
-      if (countRes.ok) {
-        const countData = await countRes.json();
-        const origCount =
-          countData.originalCouponCount ?? countData.couponCount ?? 0;
-        if (origCount === 0) {
-          throw new Error(
-            "Coupons have not been generated for this Work Order yet. Rework coupons can only be created for work orders with generated coupons.",
-          );
-        }
-      }
-
-      setWorkOrderState(wo.trim());
       setCutDetails(loadedCuts);
       setStyleBulletins(loadedBulletins);
 
@@ -188,6 +175,27 @@ export default function ReworkCouponPage() {
           })),
       );
 
+      // Verify that production coupons were previously generated for this work order.
+      // Rework coupons cannot be created if coupons were never generated for this work order.
+      const countRes = await fetch(
+        `/api/qr-code-generation/pdf?work_order=${encodeURIComponent(trimmedWo)}`,
+      );
+      if (countRes.ok) {
+        const countData = await countRes.json();
+        const origCount =
+          countData.originalCouponCount ?? countData.couponCount ?? 0;
+        if (origCount === 0) {
+          setHasCouponsGenerated(false);
+          setErrorMsg(
+            "Coupons have not been generated for this Work Order yet. Rework coupons can only be created for work orders with generated coupons.",
+          );
+        } else {
+          setHasCouponsGenerated(true);
+        }
+      } else {
+        setHasCouponsGenerated(true);
+      }
+
       // Cutting Detail is fully manual — reset to a single blank row for
       // the newly loaded work order rather than carrying over rows from a
       // previous one.
@@ -196,10 +204,8 @@ export default function ReworkCouponPage() {
       setReworkQty("");
       setValidationError(null);
       setIsOpenLookup(false);
-      setGlobalWorkOrder(wo.trim());
     } catch (err: unknown) {
       console.error("Rework coupon fetch error:", err);
-      setWorkOrderState("");
       setCutDetails([]);
       setStyleBulletins([]);
       setOperations([]);
@@ -374,6 +380,12 @@ export default function ReworkCouponPage() {
     if (isSaving || generatingPdf) return false;
     if (!workOrder) {
       setValidationError("Search and select a Work Order first.");
+      return false;
+    }
+    if (!hasCouponsGenerated) {
+      setValidationError(
+        "Coupons have not been generated for this Work Order yet. Rework coupons can only be created for work orders with generated coupons.",
+      );
       return false;
     }
     if (validBundles.length === 0) {
@@ -554,7 +566,7 @@ export default function ReworkCouponPage() {
                 <button
                   type="button"
                   onClick={handleGenerateAndSave}
-                  disabled={!activeStyle || isBusy}
+                  disabled={!activeStyle || isBusy || !hasCouponsGenerated}
                   className="w-full flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md cursor-pointer text-xs"
                 >
                   {isSaving ? (
@@ -567,7 +579,7 @@ export default function ReworkCouponPage() {
                 <button
                   type="button"
                   onClick={handlePrintClick}
-                  disabled={!activeStyle || isBusy}
+                  disabled={!activeStyle || isBusy || !hasCouponsGenerated}
                   className="w-full flex items-center justify-center gap-2 bg-white border border-[#4f46e5] text-[#4f46e5] hover:bg-indigo-50/80 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 rounded-xl font-bold transition-all text-xs cursor-pointer"
                 >
                   {generatingPdf ? (
