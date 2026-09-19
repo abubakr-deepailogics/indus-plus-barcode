@@ -94,6 +94,27 @@ export async function POST(request: Request) {
       reworkQty != null && reworkQty !== "" ? Number(reworkQty) : null;
     const batchId = randomUUID();
 
+    // 0. Verify that original production coupons were generated for this work order.
+    // Rework coupons cannot be created if coupons were never generated for this work order.
+    const origCouponsCheck = await pool
+      .request()
+      .input("wo", sql.NVarChar, workOrder)
+      .query(`
+        SELECT TOP 1 1 AS hasCoupons
+        FROM dbo.QrCode_Coupon
+        WHERE WorkOrder = @wo AND IsDeleted = 0 AND BundleNo NOT LIKE 'RW%'
+      `);
+
+    if (origCouponsCheck.recordset.length === 0) {
+      return Response.json(
+        {
+          error:
+            "Coupons have not been generated for this Work Order yet. Rework coupons can only be created for work orders with generated coupons.",
+        },
+        { status: 400 },
+      );
+    }
+
     // 1. Assign sequential unique rework bundle numbers following the same
     // convention as ERP bundles: RW + raw work-order digits (leading zeros
     // preserved) + 3-digit sequence. e.g. W/O-002653 → RW002653001, RW002653002.

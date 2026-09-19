@@ -149,6 +149,22 @@ export default function ReworkCouponPage() {
         throw new Error("No operations found in style bulletin for this work order.");
       }
 
+      // Verify that production coupons were previously generated for this work order.
+      // Rework coupons cannot be created if coupons were never generated for this work order.
+      const countRes = await fetch(
+        `/api/qr-code-generation/pdf?work_order=${encodeURIComponent(wo.trim())}`,
+      );
+      if (countRes.ok) {
+        const countData = await countRes.json();
+        const origCount =
+          countData.originalCouponCount ?? countData.couponCount ?? 0;
+        if (origCount === 0) {
+          throw new Error(
+            "Coupons have not been generated for this Work Order yet. Rework coupons can only be created for work orders with generated coupons.",
+          );
+        }
+      }
+
       setWorkOrderState(wo.trim());
       setCutDetails(loadedCuts);
       setStyleBulletins(loadedBulletins);
@@ -183,6 +199,12 @@ export default function ReworkCouponPage() {
       setGlobalWorkOrder(wo.trim());
     } catch (err: unknown) {
       console.error("Rework coupon fetch error:", err);
+      setWorkOrderState("");
+      setCutDetails([]);
+      setStyleBulletins([]);
+      setOperations([]);
+      setBundles([makeBlankRow()]);
+      setSavedBundles(null);
       setErrorMsg(
         err instanceof Error ? err.message : "An unexpected error occurred.",
       );

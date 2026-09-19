@@ -1,5 +1,5 @@
 import { randomUUID } from "crypto";
-import { getPool } from "@/lib/db";
+import { getPool, sql } from "@/lib/db";
 import { generateCouponPdf } from "@/features/qr-code-generation/services/pdf-generation.service";
 import { buildCouponCards } from "@/features/qr-code-generation/services/coupon-pairing.service";
 import { registerCoupons, countCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
@@ -105,7 +105,14 @@ export async function GET(request: Request) {
   try {
     const pool = await getPool("pitSystem");
     const couponCount = await countCoupons(pool, workOrder);
-    return Response.json({ couponCount });
+    const origRes = await pool
+      .request()
+      .input("workOrder", sql.NVarChar, workOrder)
+      .query(
+        "SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0 AND BundleNo NOT LIKE 'RW%'",
+      );
+    const originalCouponCount = origRes.recordset[0]?.total ?? 0;
+    return Response.json({ couponCount, originalCouponCount });
   } catch (err: unknown) {
     console.error("Coupon count lookup error:", err);
     const message = err instanceof Error ? err.message : "Internal Server Error";
