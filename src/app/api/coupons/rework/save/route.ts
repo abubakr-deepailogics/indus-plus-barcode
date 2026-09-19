@@ -94,20 +94,26 @@ export async function POST(request: Request) {
       reworkQty != null && reworkQty !== "" ? Number(reworkQty) : null;
     const batchId = randomUUID();
 
-    // 1. Assign sequential unique rework bundle numbers (e.g. RW001, RW002)
-    // so rework runs never collide with regular coupons or previous rework batches.
+    // 1. Assign sequential unique rework bundle numbers following the same
+    // convention as ERP bundles: RW + raw work-order digits (leading zeros
+    // preserved) + 3-digit sequence. e.g. W/O-002653 → RW002653001, RW002653002.
+    // Globally unique across work orders; trimBundleNo strips "RW002653" so the
+    // barcode and card only show the short "RW001" form.
+    const workOrderRawDigits = workOrder.replace(/\D/g, ""); // "002653" for "W/O-002653"
+    const rwPrefix = `RW${workOrderRawDigits}`; // "RW002653"
     const maxRes = await pool
       .request()
       .input("wo", sql.NVarChar, workOrder)
+      .input("prefix", sql.NVarChar, rwPrefix)
       .query(`
-        SELECT MAX(TRY_CAST(SUBSTRING(BundleNo, 3, 20) AS INT)) AS maxNum
+        SELECT MAX(TRY_CAST(SUBSTRING(BundleNo, LEN(@prefix) + 1, 20) AS INT)) AS maxNum
         FROM dbo.QrCode_Coupon
-        WHERE WorkOrder = @wo AND BundleNo LIKE 'RW%'
+        WHERE WorkOrder = @wo AND BundleNo LIKE @prefix + '%'
       `);
     let nextSeq = (Number(maxRes.recordset[0]?.maxNum) || 0) + 1;
 
     const assignedBundles: BundleDetailRow[] = selectedBundles.map((b) => {
-      const bundleNo = `RW${String(nextSeq++).padStart(3, "0")}`;
+      const bundleNo = `${rwPrefix}${String(nextSeq++).padStart(3, "0")}`;
       return {
         ...b,
         bundleNo,
