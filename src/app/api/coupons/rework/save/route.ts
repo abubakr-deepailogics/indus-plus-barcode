@@ -1,36 +1,17 @@
 import { randomUUID } from "crypto";
 import { getPool, sql } from "@/lib/db";
+import { buildCouponCards } from "@/features/qr-code-generation/services/coupon-pairing.service";
+import {
+  registerCoupons,
+  countCoupons,
+} from "@/features/qr-code-generation/services/coupon-registration.service";
+import { snapshotWorkOrderBulletin } from "@/features/order-style-bulletin/services/style-bulletin-snapshot.service";
+import type {
+  BundleDetailRow,
+  OperationsDetailRow,
+} from "@/features/qr-code-generation/types";
 
 export const dynamic = "force-dynamic";
-
-// Saves the Rework Coupon page's Cutting Detail + Operations Detail tables
-// into dbo.ReworkCouponEntry (pitSystem) — one row per SELECTED bundle ×
-// SELECTED operation combo, same cross-product shape coupon generation
-// uses for cards, but this table is a plain record of what was entered, not
-// a coupon-identity table (no CouponCode, nothing here is ever scanned).
-// CutNo is never looked up — every selected bundle must have one typed in
-// by the user before this succeeds (see BundleDetailTable's onCutNoChange).
-interface BundleInput {
-  id: number;
-  cutNo: string;
-  char?: string;
-  bundleNo: string;
-  inseam: string;
-  size: string;
-  pcs: number;
-  sel: boolean;
-}
-
-interface OperationInput {
-  id: number;
-  section: string;
-  seqNo: string;
-  opNo: string;
-  operationName: string;
-  smv: string;
-  rate: string;
-  lastOpSection: boolean;
-}
 
 interface SaveRequestBody {
   workOrder: string;
@@ -39,14 +20,10 @@ interface SaveRequestBody {
   reworkQty?: number | string;
   remarks?: string;
   insertedBy?: string;
-  bundles: BundleInput[];
-  operations: OperationInput[];
+  bundles: BundleDetailRow[];
+  operations: OperationsDetailRow[];
 }
 
-// Chunked well under SQL Server's ~2100 parameter cap — each row here binds
-// 13 params, so a chunk of 150 rows is 1950 params, same reasoning as
-// coupon-history.service.ts's ROWS_PER_CHUNK for a similar multi-column
-// VALUES insert.
 const ROWS_PER_CHUNK = 150;
 
 function chunk<T>(items: T[], size: number): T[][] {
@@ -58,7 +35,16 @@ function chunk<T>(items: T[], size: number): T[][] {
 export async function POST(request: Request) {
   try {
     const body = (await request.json()) as Partial<SaveRequestBody>;
-    const { workOrder, saleOrderNo, customerName, reworkQty, remarks, insertedBy, bundles, operations } = body;
+    const {
+      workOrder,
+      saleOrderNo,
+      customerName,
+      reworkQty,
+      remarks,
+      insertedBy,
+      bundles,
+      operations,
+    } = body;
 
     if (!workOrder || !Array.isArray(bundles) || !Array.isArray(operations)) {
       return Response.json(
@@ -70,37 +56,70 @@ export async function POST(request: Request) {
     const selectedBundles = bundles.filter((b) => b.sel);
     const selectedOperations = operations.filter((op) => op.lastOpSection);
     if (selectedBundles.length === 0) {
-      return Response.json({ error: "Select at least one bundle." }, { status: 400 });
+      return Response.json(
+        { error: "Add at least one Cutting Detail row." },
+        { status: 400 },
+      );
     }
     if (selectedOperations.length === 0) {
-      return Response.json({ error: "Select at least one operation." }, { status: 400 });
+      return Response.json(
+        { error: "Select at least one operation under Operations Detail." },
+        { status: 400 },
+      );
     }
 
-    // Cut # is manually entered on this page (never looked up) — every
-    // selected bundle needs one before saving, otherwise a later report
-    // reading this table would have no way to tell which cut a row
-    // belongs to.
     const missingCut = selectedBundles.filter((b) => !b.cutNo?.trim());
     if (missingCut.length > 0) {
       return Response.json(
         {
-          error: `Enter a Cut # for every selected bundle before saving (missing on ${missingCut.length} row${missingCut.length === 1 ? "" : "s"}).`,
+          error: `Enter a Cut # for every row (missing on ${missingCut.length} row${missingCut.length === 1 ? "" : "s"}).`,
         },
         { status: 400 },
       );
     }
 
-    const by = insertedBy?.trim() || "system";
-    const reworkQtyNum = reworkQty != null && reworkQty !== "" ? Number(reworkQty) : null;
-    const batchId = randomUUID();
-
-    const rows = selectedOperations.flatMap((op) =>
-      selectedBundles.map((bundle) => ({ bundle, op })),
-    );
+    const missingPcs = selectedBundles.filter((b) => !b.pcs || Number(b.pcs) <= 0);
+    if (missingPcs.length > 0) {
+      return Response.json(
+        {
+          error: `Enter Pcs greater than 0 for every row (invalid on ${missingPcs.length} row${missingPcs.length === 1 ? "" : "s"}).`,
+        },
+        { status: 400 },
+      );
+    }
 
     const pool = await getPool("pitSystem");
-    let inserted = 0;
-    for (const batch of chunk(rows, ROWS_PER_CHUNK)) {
+    const by = insertedBy?.trim() || "system";
+    const reworkQtyNum =
+      reworkQty != null && reworkQty !== "" ? Number(reworkQty) : null;
+    const batchId = randomUUID();
+
+    // 1. Assign sequential unique rework bundle numbers (e.g. RW001, RW002)
+    // so rework runs never collide with regular coupons or previous rework batches.
+    const maxRes = await pool
+      .request()
+      .input("wo", sql.NVarChar, workOrder)
+      .query(`
+        SELECT MAX(TRY_CAST(SUBSTRING(BundleNo, 3, 20) AS INT)) AS maxNum
+        FROM dbo.QrCode_Coupon
+        WHERE WorkOrder = @wo AND BundleNo LIKE 'RW%'
+      `);
+    let nextSeq = (Number(maxRes.recordset[0]?.maxNum) || 0) + 1;
+
+    const assignedBundles: BundleDetailRow[] = selectedBundles.map((b) => {
+      const bundleNo = `RW${String(nextSeq++).padStart(3, "0")}`;
+      return {
+        ...b,
+        bundleNo,
+        cutNo: b.cutNo.trim(),
+        char: b.char || "",
+        pcs: Number(b.pcs) || 0,
+      };
+    });
+
+    // 2. Insert ONLY the manual cut rows into dbo.ReworkCouponEntry.
+    // Operation details are NOT duplicated here — they are already in the style bulletin.
+    for (const batch of chunk(assignedBundles, ROWS_PER_CHUNK)) {
       const req = pool.request();
       req.input("batchId", sql.UniqueIdentifier, batchId);
       req.input("workOrder", sql.NVarChar, workOrder);
@@ -110,35 +129,63 @@ export async function POST(request: Request) {
       req.input("remarks", sql.NVarChar, remarks ?? null);
       req.input("insertedBy", sql.NVarChar, by);
 
-      const values = batch.map(({ bundle, op }, i) => {
-        req.input(`cutNo${i}`, sql.NVarChar, bundle.cutNo.trim());
+      const values = batch.map((bundle, i) => {
+        req.input(`cutNo${i}`, sql.NVarChar, bundle.cutNo);
         req.input(`char${i}`, sql.NVarChar, bundle.char ?? null);
         req.input(`bundleNo${i}`, sql.NVarChar, bundle.bundleNo);
-        req.input(`inseam${i}`, sql.NVarChar, bundle.inseam ?? null);
-        req.input(`size${i}`, sql.NVarChar, bundle.size ?? null);
-        req.input(`pcs${i}`, sql.Int, bundle.pcs ?? null);
-        req.input(`section${i}`, sql.NVarChar, op.section ?? null);
-        req.input(`seqNo${i}`, sql.NVarChar, op.seqNo ?? null);
-        req.input(`opNo${i}`, sql.NVarChar, op.opNo);
-        req.input(`opName${i}`, sql.NVarChar, op.operationName ?? null);
-        req.input(`smv${i}`, sql.Float, op.smv ? Number(op.smv) : null);
-        req.input(`rate${i}`, sql.Float, op.rate ? Number(op.rate) : null);
-        return `(@batchId, @workOrder, @saleOrderNo, @customerName, @cutNo${i}, @char${i}, @bundleNo${i}, @inseam${i}, @size${i}, @pcs${i}, @section${i}, @seqNo${i}, @opNo${i}, @opName${i}, @smv${i}, @rate${i}, @reworkQty, @remarks, @insertedBy)`;
+        req.input(`inseam${i}`, sql.NVarChar, bundle.inseam ? String(bundle.inseam) : null);
+        req.input(`size${i}`, sql.NVarChar, bundle.size ? String(bundle.size) : null);
+        req.input(`pcs${i}`, sql.Int, bundle.pcs);
+        return `(@batchId, @workOrder, @saleOrderNo, @customerName, @cutNo${i}, @char${i}, @bundleNo${i}, @inseam${i}, @size${i}, @pcs${i}, @reworkQty, @remarks, @insertedBy)`;
       });
 
       await req.query(`
         INSERT INTO dbo.ReworkCouponEntry
           (Id, WorkOrder, SaleOrderNo, CustomerName, CutNo, [Char], BundleNo, Inseam, Size, Pcs,
-           Section, SeqNo, OpNo, OperationName, Smv, Rate, ReworkQty, Remarks, InsertedBy)
+           ReworkQty, Remarks, InsertedBy)
         VALUES ${values.join(", ")}
       `);
-      inserted += batch.length;
     }
 
-    return Response.json({ success: true, batchId, insertedCount: inserted });
+    // 3. Build cards and register coupons in dbo.QrCode_Coupon with the shared batchId
+    const cards = buildCouponCards(assignedBundles, selectedOperations);
+    const { insertedCount } = await registerCoupons(
+      pool,
+      workOrder,
+      cards,
+      by,
+      batchId,
+    );
+
+    // 4. Snapshot operations to pitSystem dbo.StyleBullettinInt with the shared batchId
+    try {
+      await snapshotWorkOrderBulletin(
+        workOrder,
+        selectedOperations.map((o) => o.opNo),
+        assignedBundles.map((b) => b.bundleNo),
+        by,
+        batchId,
+      );
+    } catch (snapshotErr) {
+      console.warn("Rework operation snapshot warning:", snapshotErr);
+    }
+
+    // 5. Query updated total coupon count
+    const couponCount = await countCoupons(pool, workOrder);
+
+    return Response.json({
+      success: true,
+      batchId,
+      insertedCutCount: assignedBundles.length,
+      cardCount: cards.length,
+      insertedCount,
+      couponCount,
+      bundles: assignedBundles,
+    });
   } catch (err: unknown) {
     console.error("Rework coupon save error:", err);
     const message = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
 }
+

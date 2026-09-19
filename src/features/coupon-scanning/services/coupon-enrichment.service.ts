@@ -80,6 +80,40 @@ async function fetchCutDetailByBundle(
       if (!existing || row.RowId < existing.RowId) map.set(key, row);
     }
   }
+
+  // Rework coupons have manual cut details stored in dbo.ReworkCouponEntry
+  // (not in the standard ERP cut snapshot table). For any bundle numbers
+  // that were not resolved above, look them up from ReworkCouponEntry so
+  // that scanning, reports, and tracing resolve the correct Cut #, Inseam,
+  // Size, and Bundle_Qty (Pcs).
+  const missingBundles = uniqueBundles.filter((b) => !map.has(b));
+  if (missingBundles.length > 0) {
+    for (const batch of chunk(missingBundles, IN_LIST_CHUNK_SIZE)) {
+      const req = pool.request().input("wo", sql.NVarChar, workOrder);
+      const placeholders = batch.map((b, i) => {
+        req.input(`rb${i}`, sql.NVarChar, b);
+        return `@rb${i}`;
+      });
+      const result = await req.query(`
+        SELECT
+          RowId,
+          BundleNo AS Bundle_Id,
+          Inseam,
+          Size,
+          CutNo AS Cut,
+          NULL AS Shade,
+          Pcs AS Bundle_Qty
+        FROM dbo.ReworkCouponEntry
+        WHERE WorkOrder = @wo AND BundleNo IN (${placeholders.join(", ")})
+        ORDER BY RowId DESC
+      `);
+      for (const row of result.recordset as CutDetailRow[]) {
+        const key = String(row.Bundle_Id);
+        if (!map.has(key)) map.set(key, row);
+      }
+    }
+  }
+
   return map;
 }
 

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { Barcode, Loader2, Trash2, AlertTriangle } from "lucide-react";
+import { Barcode, Loader2, Trash2, AlertTriangle, Printer } from "lucide-react";
 import { useAuth } from "@/features/auth/context/auth-context";
 import type {
   QrCodeStyleData,
@@ -33,6 +33,8 @@ interface CutDetailRow {
 
 interface StyleBulletinRow {
   RowId: number;
+  Customer_Name?: string;
+  Sale_Order_No?: string;
   Operation_Code?: string;
   Operation_Name?: string;
   Section?: string;
@@ -92,6 +94,7 @@ export default function ReworkCouponPage() {
   // shape/component as Coupon Generation (checkbox selection only, nothing
   // manual here).
   const [operations, setOperations] = useState<OperationsDetailRow[]>([]);
+  const [savedBundles, setSavedBundles] = useState<BundleDetailRow[] | null>(null);
 
   const [isSaving, setIsSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -142,8 +145,8 @@ export default function ReworkCouponPage() {
       const loadedCuts: CutDetailRow[] = data.cutDetails || [];
       const loadedBulletins: StyleBulletinRow[] = data.styleBulletins || [];
 
-      if (loadedCuts.length === 0) {
-        throw new Error("No cut/bundle data found for this work order.");
+      if (loadedBulletins.length === 0) {
+        throw new Error("No operations found in style bulletin for this work order.");
       }
 
       setWorkOrderState(wo.trim());
@@ -173,6 +176,7 @@ export default function ReworkCouponPage() {
       // the newly loaded work order rather than carrying over rows from a
       // previous one.
       setBundles([makeBlankRow()]);
+      setSavedBundles(null);
       setReworkQty("");
       setValidationError(null);
       setIsOpenLookup(false);
@@ -191,7 +195,10 @@ export default function ReworkCouponPage() {
     return styleBulletins.reduce((acc, curr) => acc + (curr.Smv_Sam ?? 0), 0);
   }, [styleBulletins]);
 
-  const customerName = cutDetails[0]?.Customer_Name || "";
+  const customerName =
+    cutDetails[0]?.Customer_Name || styleBulletins[0]?.Customer_Name || "";
+  const saleOrderNo =
+    cutDetails[0]?.Sale_Order_No || styleBulletins[0]?.Sale_Order_No || "";
 
   // Order Qty — sum of Bundle_Qty across every cut loaded for this work
   // order (real ERP data), replacing the old per-bundle "Cut Qty" field.
@@ -203,7 +210,11 @@ export default function ReworkCouponPage() {
   // Cutting Detail row mutation — click a cell, type into it, same idea as
   // a spreadsheet. No Sel checkbox: every row the user adds counts.
   const removeBundleRow = (id: number) => {
-    setBundles((prev) => (prev.length <= 1 ? prev : prev.filter((b) => b.id !== id)));
+    setSavedBundles(null);
+    setBundles((prev) => {
+      if (prev.length <= 1) return [makeBlankRow()];
+      return prev.filter((b) => b.id !== id);
+    });
   };
 
   // Typing into the last row's cell spawns a fresh blank row right below
@@ -215,6 +226,7 @@ export default function ReworkCouponPage() {
     field: keyof Omit<ReworkBundleRow, "id">,
     value: string,
   ) => {
+    setSavedBundles(null);
     setBundles((prev) => {
       const idx = prev.findIndex((b) => b.id === id);
       if (idx === -1) return prev;
@@ -263,36 +275,41 @@ export default function ReworkCouponPage() {
     wasExceedingRef.current = exceeding;
   }, [pcsTotal, reworkQty]);
 
-  const reworkQtyBelowOrder =
-    orderQty > 0 && reworkQty !== "" && Number(reworkQty) < orderQty;
+  const reworkQtyExceedsOrder =
+    orderQty > 0 && reworkQty !== "" && Number(reworkQty) > orderQty;
 
   // Cutting Detail mapped into the shape Coupon Generation's shared
-  // pipeline expects (BundleDetailRow) — bundleNo is synthetic here (no
-  // real bundle exists for a rework entry) but still has to be unique per
-  // row since CouponCode = workOrder + bundleNo + opNo.
-  const mappedBundles: BundleDetailRow[] = useMemo(
-    () =>
-      bundles.map((b) => ({
-        id: b.id,
-        cutNo: b.cutNo.trim(),
-        char: "",
-        line: "1",
-        bundleNo: `RW${b.id}`,
-        inseam: b.inseam,
-        size: b.size,
-        pcs: Number(b.pcs) || 0,
-        sel: true,
-        code: "",
-      })),
+  // pipeline expects (BundleDetailRow). If coupons were already saved/generated
+  // for this session, use the sequentially assigned bundle numbers (e.g. RW001).
+  const validBundles = useMemo(
+    () => bundles.filter((b) => b.cutNo.trim() || b.pcs),
     [bundles],
   );
+
+  const mappedBundles: BundleDetailRow[] = useMemo(() => {
+    if (savedBundles && savedBundles.length === validBundles.length) {
+      return savedBundles;
+    }
+    return validBundles.map((b) => ({
+      id: b.id,
+      cutNo: b.cutNo.trim(),
+      char: "",
+      line: "1",
+      bundleNo: `RW${b.id}`,
+      inseam: b.inseam,
+      size: b.size,
+      pcs: Number(b.pcs) || 0,
+      sel: true,
+      code: "",
+    }));
+  }, [validBundles, savedBundles]);
 
   const activeStyle: QrCodeStyleData | null = useMemo(() => {
     if (mappedBundles.length === 0 || operations.length === 0) return null;
     return {
       workOrder,
-      saleOrderNo: cutDetails[0]?.Sale_Order_No ?? "",
-      customer: cutDetails[0]?.Customer_Name ?? "",
+      saleOrderNo,
+      customer: customerName,
       styleCode: "",
       generateBy: user?.email ?? "",
       generateDatetime: "",
@@ -309,9 +326,13 @@ export default function ReworkCouponPage() {
       operations,
       bundles: mappedBundles,
     };
-  }, [mappedBundles, operations, cutDetails, workOrder, reworkQty, pcsTotal, user]);
+  }, [mappedBundles, operations, saleOrderNo, customerName, workOrder, reworkQty, pcsTotal, user]);
 
-  const { handleGenerateCoupons, generatingCoupons } = useGenerateCouponPdf(
+  const {
+    handleDownloadPdf,
+    generatingPdf,
+    couponCount,
+  } = useGenerateCouponPdf(
     activeStyle ?? {
       workOrder: "",
       saleOrderNo: "",
@@ -321,45 +342,56 @@ export default function ReworkCouponPage() {
     },
   );
 
-  // Generate Coupon(s) now does both jobs the old separate Save button and
-  // Generate button used to: persists the Cutting Detail + Operations
-  // Detail tables into dbo.ReworkCouponEntry (pitSystem, an audit record),
-  // then registers real coupons via the same pipeline Coupon Generation
-  // uses — so these coupons show up, get scanned, and get
-  // unscanned/deleted alongside every other coupon for this work order,
-  // not as a separate rework-only set.
-  const handleGenerateAndSave = async () => {
-    if (isSaving || generatingCoupons) return;
+  // Generate Coupon(s):
+  // 1. Saves manual cut details into dbo.ReworkCouponEntry (pitSystem).
+  // 2. Assigns sequential unique rework bundle numbers (RW001, RW002...).
+  // 3. Registers coupon identities in dbo.QrCode_Coupon (shared batchId).
+  // 4. Snapshots operations into dbo.StyleBullettinInt (shared batchId).
+  // These coupons immediately appear in Coupon Tracing, scanning, and reports.
+  const handleGenerateAndSave = async (): Promise<boolean> => {
+    if (isSaving || generatingPdf) return false;
     if (!workOrder) {
       setValidationError("Search and select a Work Order first.");
-      return;
+      return false;
     }
-    if (bundles.length === 0) {
+    if (validBundles.length === 0) {
       setValidationError("Add at least one Cutting Detail row.");
-      return;
+      return false;
     }
-    if (bundles.some((b) => !b.cutNo.trim())) {
+    if (validBundles.some((b) => !b.cutNo.trim())) {
       setValidationError("Enter a Cut # for every Cutting Detail row.");
-      return;
+      return false;
     }
-    if (bundles.some((b) => !b.pcs || Number(b.pcs) <= 0)) {
-      setValidationError("Enter Pcs (greater than 0) for every Cutting Detail row.");
-      return;
+    if (
+      validBundles.some(
+        (b) => !b.pcs || !Number.isInteger(Number(b.pcs)) || Number(b.pcs) <= 0,
+      )
+    ) {
+      setValidationError(
+        "Enter valid whole integer Pcs (greater than 0) for every Cutting Detail row.",
+      );
+      return false;
     }
     const selectedOperations = operations.filter((op) => op.lastOpSection);
     if (selectedOperations.length === 0) {
       setValidationError("Select at least one operation under Operations Detail.");
-      return;
+      return false;
     }
-    if (orderQty > 0 && (reworkQty === "" || Number(reworkQty) < orderQty)) {
-      setValidationError(`Re-Work Qty cannot be less than Order Qty (${orderQty}).`);
-      return;
+    if (reworkQty === "") {
+      setValidationError("Please enter a Re-Work Qty.");
+      return false;
     }
-    if (reworkQty !== "" && pcsTotal > Number(reworkQty)) {
+    if (orderQty > 0 && Number(reworkQty) > orderQty) {
+      setValidationError(
+        `Re-Work Qty (${reworkQty}) cannot exceed Order Qty (${orderQty}).`,
+      );
+      return false;
+    }
+    if (pcsTotal > Number(reworkQty)) {
       setValidationError(
         `Total Pcs (${pcsTotal}) exceeds Re-Work Qty (${reworkQty}). Reduce Pcs or increase Re-Work Qty.`,
       );
-      return;
+      return false;
     }
 
     setIsSaving(true);
@@ -369,9 +401,9 @@ export default function ReworkCouponPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workOrder,
-          saleOrderNo: cutDetails[0]?.Sale_Order_No ?? "",
+          saleOrderNo,
           customerName,
-          reworkQty: reworkQty === "" ? null : reworkQty,
+          reworkQty: Number(reworkQty),
           remarks: "",
           insertedBy: user?.email || "",
           bundles: mappedBundles,
@@ -382,19 +414,35 @@ export default function ReworkCouponPage() {
       if (!saveResponse.ok) {
         throw new Error(saveData.error || "Failed to save rework entry.");
       }
+
+      if (Array.isArray(saveData.bundles)) {
+        setSavedBundles(saveData.bundles);
+      }
+
+      alert(
+        `Rework coupons generated successfully! (${saveData.couponCount} total coupons now on record for this work order). You can now print or download the PDF.`,
+      );
+      return true;
     } catch (err: unknown) {
       setValidationError(
         err instanceof Error ? err.message : "Failed to save rework entry.",
       );
+      return false;
+    } finally {
       setIsSaving(false);
-      return;
     }
-    setIsSaving(false);
-
-    await handleGenerateCoupons();
   };
 
-  const isBusy = isSaving || generatingCoupons;
+  const handlePrintClick = async () => {
+    if (isSaving || generatingPdf) return;
+    if (!savedBundles) {
+      const ok = await handleGenerateAndSave();
+      if (!ok) return;
+    }
+    await handleDownloadPdf();
+  };
+
+  const isBusy = isSaving || generatingPdf;
 
   return (
     <>
@@ -457,7 +505,7 @@ export default function ReworkCouponPage() {
             </div>
 
             <div className="flex flex-col gap-1.5 items-center justify-center border-t md:border-t-0 md:border-l border-slate-100 pl-0 md:pl-4 pt-4 md:pt-0">
-              <span className="text-[11px] font-bold text-slate-600 mb-2">
+              <span className="text-[11px] font-bold text-slate-600 mb-1">
                 Re-Work Qty
               </span>
               <input
@@ -469,36 +517,52 @@ export default function ReworkCouponPage() {
                   )
                 }
                 placeholder="e.g. 10"
-                className={`w-24 text-center px-3 py-4 rounded-xl border bg-white text-base font-extrabold text-indigo-600 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 transition-all ${
-                  reworkQtyBelowOrder
+                className={`w-24 text-center px-3 py-3 rounded-xl border bg-white text-base font-extrabold text-indigo-600 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 transition-all ${
+                  reworkQtyExceedsOrder
                     ? "border-red-300 focus:border-red-400"
                     : "border-[#e2e8f0] focus:border-[#4f46e5]"
                 }`}
               />
-              {reworkQtyBelowOrder && (
-                <span className="text-[10px] text-red-500 font-semibold text-center mt-1">
-                  Can&apos;t be less than Order Qty ({orderQty})
+              {reworkQtyExceedsOrder && (
+                <span className="text-[10px] text-red-500 font-semibold text-center mt-0.5">
+                  Cannot exceed Order Qty ({orderQty})
                 </span>
               )}
-              <button
-                type="button"
-                onClick={handleGenerateAndSave}
-                disabled={!activeStyle || isBusy}
-                className="mt-3 w-full flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md cursor-pointer text-xs"
-              >
-                {isBusy ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Barcode className="w-3.5 h-3.5" />
+              <div className="mt-3 w-full flex flex-col gap-2">
+                <button
+                  type="button"
+                  onClick={handleGenerateAndSave}
+                  disabled={!activeStyle || isBusy}
+                  className="w-full flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md cursor-pointer text-xs"
+                >
+                  {isSaving ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Barcode className="w-3.5 h-3.5" />
+                  )}
+                  <span>{isSaving ? "Generating…" : "Generate Coupon(s)"}</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={handlePrintClick}
+                  disabled={!activeStyle || isBusy}
+                  className="w-full flex items-center justify-center gap-2 bg-white border border-[#4f46e5] text-[#4f46e5] hover:bg-indigo-50/80 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 rounded-xl font-bold transition-all text-xs cursor-pointer"
+                >
+                  {generatingPdf ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Printer className="w-3.5 h-3.5" />
+                  )}
+                  <span>
+                    {generatingPdf ? "Rendering PDF…" : "Print / Download PDF"}
+                  </span>
+                </button>
+                {couponCount != null && (
+                  <span className="text-[10px] font-semibold text-slate-400 text-center">
+                    {couponCount} total coupons on record
+                  </span>
                 )}
-                <span>
-                  {isSaving
-                    ? "Saving…"
-                    : generatingCoupons
-                      ? "Generating…"
-                      : "Generate Coupon(s)"}
-                </span>
-              </button>
+              </div>
             </div>
           </div>
           {errorMsg && (
