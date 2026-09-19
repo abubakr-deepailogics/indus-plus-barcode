@@ -217,7 +217,7 @@ export function OrderWiseReportPage() {
                       {r.balance != null ? formatAmount(r.balance) : "—"}
                     </td>
                     <td className="py-1.5 px-2 text-right border-r border-slate-100">
-                      {r.minutesProduced.toFixed(0)}
+                      {r.minutesProduced.toFixed(2)}
                     </td>
                     <td className="py-1.5 px-2 text-right">
                       {r.qtyProduced.toLocaleString()}

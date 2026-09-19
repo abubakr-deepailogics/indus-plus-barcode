@@ -172,7 +172,12 @@ export async function buildOrderWiseReport(
 
   const byWorkOrder = new Map<
     string,
-    { previousPaid: number; currentClaim: number; qtyProduced: number }
+    {
+      previousPaid: number;
+      currentClaim: number;
+      qtyProduced: number;
+      minutesProduced: number;
+    }
   >();
   // A bundle keeps the same Qty (its cut quantity) no matter which operation
   // scans it, so summing Qty per scan double-counts the same physical
@@ -181,10 +186,16 @@ export async function buildOrderWiseReport(
   // instead counts each bundle's qty once per work order per cycle,
   // regardless of how many of its operations got scanned — currentClaim
   // (the payment amount) still sums every scan, since pay is per operation.
+  // minutesProduced sums qty * that scan's own SMV across every scan
+  // (deliberately NOT deduped by bundle like qtyProduced) — a bundle
+  // scanned at 3 different operations genuinely consumed 3 operations'
+  // worth of minutes, unlike qty which is the same physical pieces each
+  // time.
   const countedBundlesByWo = new Map<string, Set<string>>();
   for (const row of scans) {
     const qty = Number(row.Qty) || 0;
     const rate = Number(row.Rate) || 0;
+    const smv = Number(row.Smv) || 0;
     const value = qty * rate;
     const isCurrentCycle = new Date(row.ScannedAt) >= currentStart;
 
@@ -192,9 +203,11 @@ export async function buildOrderWiseReport(
       previousPaid: 0,
       currentClaim: 0,
       qtyProduced: 0,
+      minutesProduced: 0,
     };
     if (isCurrentCycle) {
       existing.currentClaim += value;
+      existing.minutesProduced += qty * smv;
       const countedBundles =
         countedBundlesByWo.get(row.WorkOrder) ?? new Set<string>();
       if (!countedBundles.has(row.BundleNo)) {
@@ -299,7 +312,7 @@ export async function buildOrderWiseReport(
         currentClaim: scan.currentClaim,
         totalClaim,
         balance: plan != null ? plan - totalClaim : null,
-        minutesProduced: totalSam != null ? totalSam * scan.qtyProduced : 0,
+        minutesProduced: scan.minutesProduced,
         qtyProduced: scan.qtyProduced,
       };
     })

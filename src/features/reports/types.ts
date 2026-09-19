@@ -243,7 +243,7 @@ export interface OrderWiseReportRow {
   currentClaim: number; // sum(qty * rate) for this WO's Sewing coupons scanned during THIS pay-cycle
   totalClaim: number; // previousPaid + currentClaim
   balance: number | null; // plan - totalClaim (null when plan is null, i.e. no order quantity on record)
-  minutesProduced: number; // totalSam (order-level) * qtyProduced — NOT sum(qty * smv) per scan
+  minutesProduced: number; // sum(qty * that scan's own SMV) across every Sewing coupon scanned THIS pay-cycle — unlike qtyProduced, NOT deduped by bundle: a bundle scanned at 3 operations genuinely consumed 3 operations' worth of minutes
   qtyProduced: number; // sum(qty), once per distinct bundle scanned (at any Sewing operation) for this WO during THIS pay-cycle — a bundle scanned at multiple operations doesn't add its qty more than once
 }
 
