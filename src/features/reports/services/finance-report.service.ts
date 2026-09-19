@@ -125,14 +125,19 @@ const DEPARTMENT_FILTER = "sewing" as const;
 
 async function fetchSewingOpCodesByWorkOrder(
   workOrders: string[],
-): Promise<Map<string, Set<string>>> {
-  const map = new Map<string, Set<string>>();
+): Promise<{
+  sewingOpsByWo: Map<string, Set<string>>;
+  lastOpsByWo: Map<string, Set<string>>;
+}> {
+  const sewingOpsByWo = new Map<string, Set<string>>();
+  const lastOpsByWo = new Map<string, Set<string>>();
   const pool = await getPool("indusPlus");
   for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
     const req = pool.request();
     const inClause = buildInClause(req, "wo", batch);
     const result = await req.query(`
-      SELECT DISTINCT sb.[Order No] AS WorkOrder, sb.[Operation Code] AS OpNo, op.Department
+      SELECT DISTINCT sb.[Order No] AS WorkOrder, sb.[Operation Code] AS OpNo, op.Department,
+        sb.[Last Operation Section Wise] AS LastOpSectionWise
       FROM ${STYLE_BULLETIN_TABLE} sb
       LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op ON sb.[Operation Code] = op.OperationCode
       WHERE sb.[Order No] IN (${inClause})
@@ -141,13 +146,18 @@ async function fetchSewingOpCodesByWorkOrder(
       WorkOrder: string;
       OpNo: string;
       Department: string | null;
+      LastOpSectionWise: number | null;
     }[]) {
       if (classifyDepartment(row) !== DEPARTMENT_FILTER) continue;
-      if (!map.has(row.WorkOrder)) map.set(row.WorkOrder, new Set());
-      map.get(row.WorkOrder)!.add(row.OpNo);
+      if (!sewingOpsByWo.has(row.WorkOrder)) sewingOpsByWo.set(row.WorkOrder, new Set());
+      sewingOpsByWo.get(row.WorkOrder)!.add(row.OpNo);
+      if (Number(row.LastOpSectionWise) === 1) {
+        if (!lastOpsByWo.has(row.WorkOrder)) lastOpsByWo.set(row.WorkOrder, new Set());
+        lastOpsByWo.get(row.WorkOrder)!.add(row.OpNo);
+      }
     }
   }
-  return map;
+  return { sewingOpsByWo, lastOpsByWo };
 }
 
 // ── Order Wise Finishing Payment (Audit) ────────────────────────────────────
@@ -165,7 +175,8 @@ export async function buildOrderWiseReport(
   const allScans = await fetchScansInRange(previousStart, toDate);
 
   const scannedWorkOrders = [...new Set(allScans.map((r) => r.WorkOrder))];
-  const sewingOpsByWo = await fetchSewingOpCodesByWorkOrder(scannedWorkOrders);
+  const { sewingOpsByWo, lastOpsByWo } =
+    await fetchSewingOpCodesByWorkOrder(scannedWorkOrders);
   const scans = allScans.filter((row) =>
     sewingOpsByWo.get(row.WorkOrder)?.has(row.OpNo),
   );
@@ -179,6 +190,12 @@ export async function buildOrderWiseReport(
     const rate = Number(row.Rate) || 0;
     const value = qty * rate;
     const isCurrentCycle = new Date(row.ScannedAt) >= currentStart;
+    // Qty produced counts completed garments, not every operation touch —
+    // only the work order's last-operation-per-section scans represent a
+    // finished unit; counting every sewing operation's scan here would
+    // multiply the same garment's qty once per operation it passed through
+    // (e.g. 482 cut pieces through ~30 operations reporting as ~14,500).
+    const isLastOp = lastOpsByWo.get(row.WorkOrder)?.has(row.OpNo) ?? false;
 
     const existing = byWorkOrder.get(row.WorkOrder) ?? {
       previousPaid: 0,
@@ -187,7 +204,7 @@ export async function buildOrderWiseReport(
     };
     if (isCurrentCycle) {
       existing.currentClaim += value;
-      existing.qtyProduced += qty;
+      if (isLastOp) existing.qtyProduced += qty;
     } else {
       existing.previousPaid += value;
     }
@@ -303,7 +320,7 @@ export async function buildOperatorWiseReport(
   const allScans = await fetchScansInRange(fromDate, toDate);
 
   const scannedWorkOrders = [...new Set(allScans.map((r) => r.WorkOrder))];
-  const sewingOpsByWo = await fetchSewingOpCodesByWorkOrder(scannedWorkOrders);
+  const { sewingOpsByWo } = await fetchSewingOpCodesByWorkOrder(scannedWorkOrders);
   const scans = allScans.filter((row) =>
     sewingOpsByWo.get(row.WorkOrder)?.has(row.OpNo),
   );
