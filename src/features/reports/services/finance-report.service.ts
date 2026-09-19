@@ -228,45 +228,37 @@ export async function buildOrderWiseReport(
 
   const pitPool = await getPool("pitSystem");
 
-  const sectionsByWo = new Map<string, Set<string>>();
-  for (const row of allScans) {
-    const section =
-      typeof row.SectionName === "string" && row.SectionName
-        ? row.SectionName
-        : null;
-    if (!section) continue;
-    if (!sectionsByWo.has(row.WorkOrder))
-      sectionsByWo.set(row.WorkOrder, new Set());
-    sectionsByWo.get(row.WorkOrder)!.add(section);
-  }
-
+  // Total SAM + Total Rate: sum of ALL sewing operations for the work order
+  // from the IndusPlus live style bulletin — no section restriction.
+  // Department is resolved via S_OperationsCatalog (same source as
+  // fetchSewingOpCodesByWorkOrder) — never inferred from the Section column.
   const totalSamByWo = new Map<string, { sam: number; rate: number }>();
   const indusPool = await getPool("indusPlus");
   for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
-    // Sections are handled per-WO because each WO can have a different set.
-    for (const workOrder of batch) {
-      const sections = [...(sectionsByWo.get(workOrder) ?? [])];
-      if (sections.length === 0) continue;
-      const req = indusPool.request().input("wo", sql.NVarChar, workOrder);
-      const sectionInClause = buildInClause(req, "sec", sections);
-      const result = await req.query(`
-        SELECT
-          SUM(TRY_CAST(sb.[Smv/Sam] AS FLOAT))   AS TotalSam,
-          SUM(TRY_CAST(sb.[Piece Rate] AS FLOAT)) AS TotalRate
-        FROM ${STYLE_BULLETIN_TABLE} sb
-        LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op ON sb.[Operation Code] = op.OperationCode
-        WHERE sb.[Order No] = @wo
-          AND sb.Section IN (${sectionInClause})
-          AND LOWER(ISNULL(op.Department, '')) = 'sewing'
-      `);
-      const row = result.recordset[0] as
-        | { TotalSam: number | null; TotalRate: number | null }
-        | undefined;
-      const sam = Number(row?.TotalSam) || 0;
-      const rate = Number(row?.TotalRate) || 0;
-      if (sam > 0 || rate > 0) totalSamByWo.set(workOrder, { sam, rate });
+    const req = indusPool.request();
+    const inClause = buildInClause(req, "wo", batch);
+    const result = await req.query(`
+      SELECT
+        sb.[Order No]                               AS WorkOrder,
+        SUM(TRY_CAST(sb.[Smv/Sam] AS FLOAT))        AS TotalSam,
+        SUM(TRY_CAST(sb.[Piece Rate] AS FLOAT))     AS TotalRate
+      FROM ${STYLE_BULLETIN_TABLE} sb
+      LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op ON sb.[Operation Code] = op.OperationCode
+      WHERE sb.[Order No] IN (${inClause})
+        AND LOWER(ISNULL(op.Department, '')) = 'sewing'
+      GROUP BY sb.[Order No]
+    `);
+    for (const row of result.recordset as {
+      WorkOrder: string;
+      TotalSam: number | null;
+      TotalRate: number | null;
+    }[]) {
+      const sam = Number(row.TotalSam) || 0;
+      const rate = Number(row.TotalRate) || 0;
+      if (sam > 0 || rate > 0) totalSamByWo.set(row.WorkOrder, { sam, rate });
     }
   }
+
 
   // Wash Qty (legacy column name) = the order's overall cut quantity — a
   // per-order constant repeated on every cut-detail row (MAX() per work
