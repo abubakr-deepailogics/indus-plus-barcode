@@ -235,16 +235,16 @@ export interface WagesBatch {
 // formulas.
 export interface OrderWiseReportRow {
   workOrder: string; // ANL# in the legacy printout
-  totalSam: number | null; // per-garment SMV summed across the order's Sewing operations (style bulletin, not scan-scoped)
-  totalRate: number | null; // per-garment piece rate summed across the order's Sewing operations
+  totalSam: number | null; // total Sewing SAM across ALL sections for this work order from the IndusPlus live style bulletin
+  totalRate: number | null; // total Sewing piece-rate across ALL sections for this work order from the IndusPlus live style bulletin; Plan = totalRate × washQty
   washQty: number | null; // the order's overall cut quantity (cut-detail snapshot) — legacy column name, NOT department-scoped
   plan: number | null; // totalRate * washQty — total price to finish the whole order
   previousPaid: number; // sum(qty * rate) for this WO's Sewing coupons scanned during LAST pay-cycle
   currentClaim: number; // sum(qty * rate) for this WO's Sewing coupons scanned during THIS pay-cycle
   totalClaim: number; // previousPaid + currentClaim
   balance: number | null; // plan - totalClaim (null when plan is null, i.e. no order quantity on record)
-  minutesProduced: number; // totalSam (order-level) * qtyProduced — NOT sum(qty * smv) per scan
-  qtyProduced: number; // sum(qty) for this WO's Sewing coupons scanned during THIS pay-cycle
+  minutesProduced: number; // sum(qty * that scan's own SMV) across every Sewing coupon scanned THIS pay-cycle — unlike qtyProduced, NOT deduped by bundle: a bundle scanned at 3 operations genuinely consumed 3 operations' worth of minutes
+  qtyProduced: number; // sum(qty), once per distinct bundle scanned (at any Sewing operation) for this WO during THIS pay-cycle — a bundle scanned at multiple operations doesn't add its qty more than once
 }
 
 // Also currently scoped to the Sewing department only — same first-pass

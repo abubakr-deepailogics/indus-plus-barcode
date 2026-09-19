@@ -172,11 +172,30 @@ export async function buildOrderWiseReport(
 
   const byWorkOrder = new Map<
     string,
-    { previousPaid: number; currentClaim: number; qtyProduced: number }
+    {
+      previousPaid: number;
+      currentClaim: number;
+      qtyProduced: number;
+      minutesProduced: number;
+    }
   >();
+  // A bundle keeps the same Qty (its cut quantity) no matter which operation
+  // scans it, so summing Qty per scan double-counts the same physical
+  // pieces once per operation they pass through this cycle (e.g. one bundle
+  // scanned at 2 different operations would add its qty twice). qtyProduced
+  // instead counts each bundle's qty once per work order per cycle,
+  // regardless of how many of its operations got scanned — currentClaim
+  // (the payment amount) still sums every scan, since pay is per operation.
+  // minutesProduced sums qty * that scan's own SMV across every scan
+  // (deliberately NOT deduped by bundle like qtyProduced) — a bundle
+  // scanned at 3 different operations genuinely consumed 3 operations'
+  // worth of minutes, unlike qty which is the same physical pieces each
+  // time.
+  const countedBundlesByWo = new Map<string, Set<string>>();
   for (const row of scans) {
     const qty = Number(row.Qty) || 0;
     const rate = Number(row.Rate) || 0;
+    const smv = Number(row.Smv) || 0;
     const value = qty * rate;
     const isCurrentCycle = new Date(row.ScannedAt) >= currentStart;
 
@@ -184,10 +203,18 @@ export async function buildOrderWiseReport(
       previousPaid: 0,
       currentClaim: 0,
       qtyProduced: 0,
+      minutesProduced: 0,
     };
     if (isCurrentCycle) {
       existing.currentClaim += value;
-      existing.qtyProduced += qty;
+      existing.minutesProduced += qty * smv;
+      const countedBundles =
+        countedBundlesByWo.get(row.WorkOrder) ?? new Set<string>();
+      if (!countedBundles.has(row.BundleNo)) {
+        countedBundles.add(row.BundleNo);
+        countedBundlesByWo.set(row.WorkOrder, countedBundles);
+        existing.qtyProduced += qty;
+      }
     } else {
       existing.previousPaid += value;
     }
@@ -201,46 +228,37 @@ export async function buildOrderWiseReport(
 
   const pitPool = await getPool("pitSystem");
 
-  const bulletinTotals = new Map<
-    string,
-    { totalSam: number; totalRate: number }
-  >();
-  for (const workOrder of workOrders) {
-    const sewingOps = [...(sewingOpsByWo.get(workOrder) ?? [])];
-    if (sewingOps.length === 0) continue;
-    for (const batch of chunk(sewingOps, IN_LIST_CHUNK_SIZE)) {
-      const req = pitPool.request().input("wo", sql.NVarChar, workOrder);
-      const inClause = buildInClause(req, "op", batch);
-
-      const result = await req.query(`
-        WITH Latest AS (
-          SELECT
-            [Operation Code] AS OpCode,
-            [Operation Sequeance] AS OpSeq,
-            [Piece Rate] AS Rate,
-            [Smv/Sam] AS Smv,
-            ROW_NUMBER() OVER (
-              PARTITION BY [Order No], [Operation Code], [Operation Sequeance] ORDER BY InsertedAt DESC
-            ) AS RowId
-          FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
-          WHERE IsDeleted = 0 AND [Order No] = @wo AND [Operation Code] IN (${inClause})
-        )
-        SELECT SUM(ISNULL(Rate, 0)) AS TotalRate, SUM(ISNULL(Smv, 0)) AS TotalSam
-        FROM Latest
-        WHERE RowId = 1
-      `);
-      const row = result.recordset[0] as
-        | { TotalRate: number; TotalSam: number }
-        | undefined;
-      const existing = bulletinTotals.get(workOrder) ?? {
-        totalSam: 0,
-        totalRate: 0,
-      };
-      existing.totalSam += Number(row?.TotalSam) || 0;
-      existing.totalRate += Number(row?.TotalRate) || 0;
-      bulletinTotals.set(workOrder, existing);
+  // Total SAM + Total Rate: sum of ALL sewing operations for the work order
+  // from the IndusPlus live style bulletin — no section restriction.
+  // Department is resolved via S_OperationsCatalog (same source as
+  // fetchSewingOpCodesByWorkOrder) — never inferred from the Section column.
+  const totalSamByWo = new Map<string, { sam: number; rate: number }>();
+  const indusPool = await getPool("indusPlus");
+  for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
+    const req = indusPool.request();
+    const inClause = buildInClause(req, "wo", batch);
+    const result = await req.query(`
+      SELECT
+        sb.[Order No]                               AS WorkOrder,
+        SUM(TRY_CAST(sb.[Smv/Sam] AS FLOAT))        AS TotalSam,
+        SUM(TRY_CAST(sb.[Piece Rate] AS FLOAT))     AS TotalRate
+      FROM ${STYLE_BULLETIN_TABLE} sb
+      LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op ON sb.[Operation Code] = op.OperationCode
+      WHERE sb.[Order No] IN (${inClause})
+        AND LOWER(ISNULL(op.Department, '')) = 'sewing'
+      GROUP BY sb.[Order No]
+    `);
+    for (const row of result.recordset as {
+      WorkOrder: string;
+      TotalSam: number | null;
+      TotalRate: number | null;
+    }[]) {
+      const sam = Number(row.TotalSam) || 0;
+      const rate = Number(row.TotalRate) || 0;
+      if (sam > 0 || rate > 0) totalSamByWo.set(row.WorkOrder, { sam, rate });
     }
   }
+
 
   // Wash Qty (legacy column name) = the order's overall cut quantity — a
   // per-order constant repeated on every cut-detail row (MAX() per work
@@ -268,10 +286,10 @@ export async function buildOrderWiseReport(
   const rows: OrderWiseReportRow[] = workOrders
     .map((workOrder) => {
       const scan = byWorkOrder.get(workOrder)!;
-      const bulletin = bulletinTotals.get(workOrder);
+      const bulletin = totalSamByWo.get(workOrder);
       const washQty = washQtyByWo.get(workOrder) ?? null;
-      const totalSam = bulletin?.totalSam ?? null;
-      const totalRate = bulletin?.totalRate ?? null;
+      const totalSam = bulletin?.sam ?? null;
+      const totalRate = bulletin?.rate ?? null;
       const plan =
         totalRate != null && washQty != null ? totalRate * washQty : null;
       const totalClaim = scan.previousPaid + scan.currentClaim;
@@ -285,7 +303,7 @@ export async function buildOrderWiseReport(
         currentClaim: scan.currentClaim,
         totalClaim,
         balance: plan != null ? plan - totalClaim : null,
-        minutesProduced: totalSam != null ? totalSam * scan.qtyProduced : 0,
+        minutesProduced: scan.minutesProduced,
         qtyProduced: scan.qtyProduced,
       };
     })
