@@ -235,8 +235,8 @@ export interface WagesBatch {
 // formulas.
 export interface OrderWiseReportRow {
   workOrder: string; // ANL# in the legacy printout
-  totalSam: number | null; // per-garment SMV summed across the order's Sewing operations (style bulletin, not scan-scoped)
-  totalRate: number | null; // per-garment piece rate summed across the order's Sewing operations
+  totalSam: number | null; // full Sewing SAM for the order's coupon section(s) from the IndusPlus live style bulletin — NOT scoped to generated ops
+  totalRate: number | null; // full Sewing piece-rate sum for the order's coupon section(s) from the IndusPlus live style bulletin — NOT scoped to generated ops; Plan = totalRate × washQty
   washQty: number | null; // the order's overall cut quantity (cut-detail snapshot) — legacy column name, NOT department-scoped
   plan: number | null; // totalRate * washQty — total price to finish the whole order
   previousPaid: number; // sum(qty * rate) for this WO's Sewing coupons scanned during LAST pay-cycle

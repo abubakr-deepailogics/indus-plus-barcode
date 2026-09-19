@@ -228,44 +228,43 @@ export async function buildOrderWiseReport(
 
   const pitPool = await getPool("pitSystem");
 
-  const bulletinTotals = new Map<
-    string,
-    { totalSam: number; totalRate: number }
-  >();
-  for (const workOrder of workOrders) {
-    const sewingOps = [...(sewingOpsByWo.get(workOrder) ?? [])];
-    if (sewingOps.length === 0) continue;
-    for (const batch of chunk(sewingOps, IN_LIST_CHUNK_SIZE)) {
-      const req = pitPool.request().input("wo", sql.NVarChar, workOrder);
-      const inClause = buildInClause(req, "op", batch);
+  const sectionsByWo = new Map<string, Set<string>>();
+  for (const row of allScans) {
+    const section =
+      typeof row.SectionName === "string" && row.SectionName
+        ? row.SectionName
+        : null;
+    if (!section) continue;
+    if (!sectionsByWo.has(row.WorkOrder))
+      sectionsByWo.set(row.WorkOrder, new Set());
+    sectionsByWo.get(row.WorkOrder)!.add(section);
+  }
 
+  const totalSamByWo = new Map<string, { sam: number; rate: number }>();
+  const indusPool = await getPool("indusPlus");
+  for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
+    // Sections are handled per-WO because each WO can have a different set.
+    for (const workOrder of batch) {
+      const sections = [...(sectionsByWo.get(workOrder) ?? [])];
+      if (sections.length === 0) continue;
+      const req = indusPool.request().input("wo", sql.NVarChar, workOrder);
+      const sectionInClause = buildInClause(req, "sec", sections);
       const result = await req.query(`
-        WITH Latest AS (
-          SELECT
-            [Operation Code] AS OpCode,
-            [Operation Sequeance] AS OpSeq,
-            [Piece Rate] AS Rate,
-            [Smv/Sam] AS Smv,
-            ROW_NUMBER() OVER (
-              PARTITION BY [Order No], [Operation Code], [Operation Sequeance] ORDER BY InsertedAt DESC
-            ) AS RowId
-          FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
-          WHERE IsDeleted = 0 AND [Order No] = @wo AND [Operation Code] IN (${inClause})
-        )
-        SELECT SUM(ISNULL(Rate, 0)) AS TotalRate, SUM(ISNULL(Smv, 0)) AS TotalSam
-        FROM Latest
-        WHERE RowId = 1
+        SELECT
+          SUM(TRY_CAST(sb.[Smv/Sam] AS FLOAT))   AS TotalSam,
+          SUM(TRY_CAST(sb.[Piece Rate] AS FLOAT)) AS TotalRate
+        FROM ${STYLE_BULLETIN_TABLE} sb
+        LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op ON sb.[Operation Code] = op.OperationCode
+        WHERE sb.[Order No] = @wo
+          AND sb.Section IN (${sectionInClause})
+          AND LOWER(ISNULL(op.Department, '')) = 'sewing'
       `);
       const row = result.recordset[0] as
-        | { TotalRate: number; TotalSam: number }
+        | { TotalSam: number | null; TotalRate: number | null }
         | undefined;
-      const existing = bulletinTotals.get(workOrder) ?? {
-        totalSam: 0,
-        totalRate: 0,
-      };
-      existing.totalSam += Number(row?.TotalSam) || 0;
-      existing.totalRate += Number(row?.TotalRate) || 0;
-      bulletinTotals.set(workOrder, existing);
+      const sam = Number(row?.TotalSam) || 0;
+      const rate = Number(row?.TotalRate) || 0;
+      if (sam > 0 || rate > 0) totalSamByWo.set(workOrder, { sam, rate });
     }
   }
 
@@ -295,10 +294,10 @@ export async function buildOrderWiseReport(
   const rows: OrderWiseReportRow[] = workOrders
     .map((workOrder) => {
       const scan = byWorkOrder.get(workOrder)!;
-      const bulletin = bulletinTotals.get(workOrder);
+      const bulletin = totalSamByWo.get(workOrder);
       const washQty = washQtyByWo.get(workOrder) ?? null;
-      const totalSam = bulletin?.totalSam ?? null;
-      const totalRate = bulletin?.totalRate ?? null;
+      const totalSam = bulletin?.sam ?? null;
+      const totalRate = bulletin?.rate ?? null;
       const plan =
         totalRate != null && washQty != null ? totalRate * washQty : null;
       const totalClaim = scan.previousPaid + scan.currentClaim;
