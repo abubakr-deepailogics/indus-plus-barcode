@@ -73,6 +73,19 @@ interface EmployeeGrouped {
   totalPay: number;
 }
 
+// Rework coupons carry a bundle number in the RW<work order><seq> form (see
+// rework-coupon/page.tsx's assignedBundles) — no other bundle numbering
+// scheme starts with "RW", so this is a reliable way to tell a rework
+// coupon apart from a regular production one wherever only the operation
+// name/coupon row is visible (no separate "type" column).
+function isReworkBundle(bundleNo?: string | null): boolean {
+  return !!bundleNo && bundleNo.toUpperCase().startsWith("RW");
+}
+
+function withReworkTag(operationLabel: string, bundleNo?: string | null): string {
+  return isReworkBundle(bundleNo) ? `${operationLabel} (Rework)` : operationLabel;
+}
+
 // Groups an employee/coupon list (from any summary — a specific search or
 // the "all employees" fetch) into per-employee, per-(workOrder, date,
 // operation, rate) rows, used both for the on-screen breakdown and for
@@ -118,7 +131,10 @@ function groupEmployeeData(
       const dateStr = c.scannedAt
         ? format(new Date(c.scannedAt), "dd-MM-yy")
         : "—";
-      const op = c.operationName || c.operationCode || "—";
+      const op = withReworkTag(
+        c.operationName || c.operationCode || "—",
+        c.bundleNo,
+      );
       const rate = c.rate != null ? Number(c.rate) : null;
       const key = `${wo}__${dateStr}__${op}__${rate}`;
 
@@ -759,7 +775,7 @@ export function EmployeeReportDashboard() {
         c.cutNo,
         c.bundleNo,
         c.qty,
-        c.operationName || c.operationCode,
+        withReworkTag(c.operationName || c.operationCode || "", c.bundleNo),
         ...(showEmployeeColumn
           ? [formatEmployeeLabel(c.employeeCode, c.employeeName)]
           : []),
@@ -2053,7 +2069,10 @@ export function EmployeeReportDashboard() {
                             </td>
                             <td className="py-2 px-3">
                               <span className="font-semibold text-slate-800 text-[11px]">
-                                {c.operationName || c.operationCode || "—"}
+                                {withReworkTag(
+                                  c.operationName || c.operationCode || "—",
+                                  c.bundleNo,
+                                )}
                               </span>
                             </td>
                             {showEmployeeColumn && (
@@ -2493,7 +2512,12 @@ export function EmployeeReportDashboard() {
                           <td className="text-center font-bold">
                             {c.qty ?? "—"}
                           </td>
-                          <td>{c.operationName || c.operationCode || "—"}</td>
+                          <td>
+                            {withReworkTag(
+                              c.operationName || c.operationCode || "—",
+                              c.bundleNo,
+                            )}
+                          </td>
                           {showEmployeeColumn && (
                             <td>
                               {formatEmployeeLabel(
