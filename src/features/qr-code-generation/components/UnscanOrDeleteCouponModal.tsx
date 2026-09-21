@@ -1,56 +1,33 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
-  Eraser,
-  Trash2,
-  Loader2,
-  CheckCircle2,
   AlertCircle,
+  CheckCircle2,
+  Eraser,
+  Loader2,
+  Trash2,
   X,
-  Search,
 } from "lucide-react";
-import { Autocomplete } from "@/components/ui/autocomplete";
 
-interface OperationSuggestion {
-  Operation_Code: string;
-  Operation_Name: string | null;
-}
+export type CouponActionFilters = {
+  workOrder: string;
+  fromBundle: string;
+  toBundle: string;
+  opNo: string;
+  section: string;
+  isScanned: "" | "true" | "false";
+  fromCut: string;
+  toCut: string;
+  employeeCode: string;
+  employeeName: string;
+  couponCodes: string[];
+};
 
 interface UnscanOrDeleteResult {
   unscannedCount: number;
   deletedCount: number;
 }
-
-type CouponFields = {
-  workOrder: string;
-  cutNo: string;
-  bundleNo: string;
-  opNo: string;
-};
-
-interface UnscanOrDeleteCouponModalProps {
-  workOrder: string;
-  onClose: () => void;
-  onDone: () => void;
-  // Unscan and delete are separate requests (separate API routes) now,
-  // rather than one combined "submit" — the modal decides which to call
-  // based on the current match's scanned/unscanned split. Both routes
-  // stream newline-delimited progress ({done, total} per processed batch,
-  // same protocol as coupon generation) — onProgress fires per tick so the
-  // "processing" step below can show a live bar instead of a bare spinner.
-  submitUnscan: (
-    fields: CouponFields,
-    onProgress: (done: number, total: number) => void,
-  ) => Promise<{ unscannedCount: number }>;
-  submitDelete: (
-    fields: CouponFields,
-    onProgress: (done: number, total: number) => void,
-  ) => Promise<{ deletedCount: number }>;
-}
-
-type Step = "form" | "confirm" | "processing" | "success" | "error";
-type MatchStatus = "idle" | "checking" | "matched" | "not_found";
 
 interface MatchCounts {
   totalCount: number;
@@ -58,118 +35,83 @@ interface MatchCounts {
   unscannedCount: number;
 }
 
-const FIELD_LABEL =
-  "text-[10px] font-bold text-[#64748b] uppercase tracking-wider mb-1.5 block";
-const FIELD_INPUT =
-  "w-full px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/10 focus:border-amber-400 transition-all";
+interface UnscanOrDeleteCouponModalProps {
+  filters: CouponActionFilters;
+  onClose: () => void;
+  onDone: () => void;
+  submitUnscan: (
+    filters: CouponActionFilters,
+    onProgress: (done: number, total: number) => void,
+  ) => Promise<{ unscannedCount: number }>;
+  submitDelete: (
+    filters: CouponActionFilters,
+    onProgress: (done: number, total: number) => void,
+  ) => Promise<{ deletedCount: number }>;
+}
 
-// Manual lookup-and-act: user keys in whichever of the fields printed on the
-// physical coupon(s) they have (Cut, Bundle, Operation) — none of the three
-// is required, Work Order (already selected on the page) is the only fixed
-// scope. Whatever subset is filled in narrows the match; leaving all three
-// empty scopes the action to every coupon on the work order, so a match can
-// be many coupons rather than one — the modal always shows the match count
-// and requires an explicit confirm before acting on a set larger than one.
-// The action per coupon isn't chosen by the user: the server (see
-// /api/coupons/unscan-or-delete) unscans whichever matched coupons are
-// currently scanned and soft-deletes the rest (never a hard DELETE) — so a
-// coupon is never deleted while still scanned.
+type Step = "checking" | "confirm" | "processing" | "success" | "error";
+
+function filterEntries(filters: CouponActionFilters) {
+  const entries: { label: string; value: string }[] = [];
+  if (filters.couponCodes.length > 0) {
+    entries.push({
+      label: "Selected",
+      value: `${filters.couponCodes.length} coupon${filters.couponCodes.length === 1 ? "" : "s"}`,
+    });
+    return entries;
+  }
+  if (filters.fromBundle.trim() || filters.toBundle.trim()) {
+    entries.push({
+      label: "Bundle",
+      value: `${filters.fromBundle.trim() || "Start"} - ${filters.toBundle.trim() || "End"}`,
+    });
+  }
+  if (filters.opNo.trim()) {
+    entries.push({ label: "Operation", value: filters.opNo.trim() });
+  }
+  if (filters.fromCut.trim() || filters.toCut.trim()) {
+    entries.push({
+      label: "Cut",
+      value: `${filters.fromCut.trim() || "Start"} - ${filters.toCut.trim() || "End"}`,
+    });
+  }
+  if (filters.section)
+    entries.push({ label: "Section", value: filters.section });
+  if (filters.isScanned) {
+    entries.push({
+      label: "Status",
+      value: filters.isScanned === "true" ? "Scanned" : "Not scanned",
+    });
+  }
+  if (filters.employeeCode.trim()) {
+    entries.push({
+      label: "Operator",
+      value: filters.employeeName.trim() || filters.employeeCode.trim(),
+    });
+  }
+  return entries;
+}
+
 export function UnscanOrDeleteCouponModal({
-  workOrder,
+  filters,
   onClose,
   onDone,
   submitUnscan,
   submitDelete,
 }: UnscanOrDeleteCouponModalProps) {
-  const [step, setStep] = useState<Step>("form");
-  const [cutNo, setCutNo] = useState("");
-  const [bundleNo, setBundleNo] = useState("");
-  const [opNo, setOpNo] = useState("");
-  const [errorMessage, setErrorMessage] = useState("");
-  const [result, setResult] = useState<UnscanOrDeleteResult | null>(null);
-  const [matchStatus, setMatchStatus] = useState<MatchStatus>("idle");
+  const [step, setStep] = useState<Step>("checking");
   const [matchCounts, setMatchCounts] = useState<MatchCounts | null>(null);
-  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [progress, setProgress] = useState<{
+    done: number;
+    total: number;
+  } | null>(null);
+  const [result, setResult] = useState<UnscanOrDeleteResult | null>(null);
 
-  const canReview = step === "form" && matchStatus === "matched";
+  const entries = useMemo(() => filterEntries(filters), [filters]);
+  const hasFilters = entries.length > 0;
 
-  const requestIdRef = useRef(0);
   useEffect(() => {
-    if (step !== "form") return;
-    const requestId = ++requestIdRef.current;
-    setMatchStatus("checking");
-    const timer = setTimeout(async () => {
-      try {
-        const params = new URLSearchParams({
-          workOrder,
-          cutNo: cutNo.trim(),
-          bundleNo: bundleNo.trim(),
-          opNo: opNo.trim(),
-        });
-        const res = await fetch(`/api/coupons/unscan-or-delete?${params}`);
-        if (requestIdRef.current !== requestId) return;
-        if (!res.ok) {
-          setMatchStatus("not_found");
-          setMatchCounts(null);
-          return;
-        }
-        const data = await res.json();
-        setMatchCounts({
-          totalCount: data.totalCount,
-          scannedCount: data.scannedCount,
-          unscannedCount: data.unscannedCount,
-        });
-        setMatchStatus("matched");
-      } catch {
-        if (requestIdRef.current !== requestId) return;
-        setMatchStatus("not_found");
-        setMatchCounts(null);
-      }
-    }, 400);
-    return () => clearTimeout(timer);
-  }, [workOrder, cutNo, bundleNo, opNo, step]);
-
-  // Suggestions are scoped to this coupon's work order and sourced straight
-  // from dbo.QrCode_Coupon (only_generated=true / type=cut), the same
-  // endpoints the trace table's own filters use — so a dropdown option is
-  // guaranteed to match an actual (non-deleted) coupon, not just anything
-  // in the style bulletin.
-  const fetchCutSuggestions = async (query: string): Promise<string[]> => {
-    try {
-      const res = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=cut&query=${encodeURIComponent(query)}`,
-      );
-      return res.ok ? await res.json() : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const fetchBundleSuggestions = async (query: string): Promise<string[]> => {
-    try {
-      const res = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=bundle&query=${encodeURIComponent(query)}&only_generated=true`,
-      );
-      return res.ok ? await res.json() : [];
-    } catch {
-      return [];
-    }
-  };
-
-  const fetchOpSuggestions = async (
-    query: string,
-  ): Promise<OperationSuggestion[]> => {
-    try {
-      const res = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=operation&query=${encodeURIComponent(query)}&only_generated=true`,
-      );
-      return res.ok ? await res.json() : [];
-    } catch {
-      return [];
-    }
-  };
-
-  React.useEffect(() => {
     if (step === "processing") return;
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -178,40 +120,81 @@ export function UnscanOrDeleteCouponModal({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [step, onClose]);
 
-  const handleReview = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!canReview) return;
-    setStep("confirm");
-  };
+  useEffect(() => {
+    let cancelled = false;
+    const loadMatchCounts = async () => {
+      setStep("checking");
+      setErrorMessage("");
+      setMatchCounts(null);
+      try {
+        const params = new URLSearchParams({
+          workOrder: filters.workOrder,
+          fromBundle: filters.fromBundle.trim(),
+          toBundle: filters.toBundle.trim(),
+          opNo: filters.opNo.trim(),
+          section: filters.section,
+          isScanned: filters.isScanned,
+          fromCut: filters.fromCut.trim(),
+          toCut: filters.toCut.trim(),
+          employeeCode: filters.employeeCode.trim(),
+        });
+        if (filters.couponCodes.length > 0) {
+          params.set("couponCodes", filters.couponCodes.join(","));
+        }
+        const res = await fetch(`/api/coupons/unscan-or-delete?${params}`);
+        const data = await res.json().catch(() => ({}));
+        if (cancelled) return;
+        if (!res.ok) {
+          throw new Error(data.error || "No matching coupons found.");
+        }
+        setMatchCounts({
+          totalCount: Number(data.totalCount) || 0,
+          scannedCount: Number(data.scannedCount) || 0,
+          unscannedCount: Number(data.unscannedCount) || 0,
+        });
+        setStep("confirm");
+      } catch (err) {
+        if (cancelled) return;
+        setErrorMessage(
+          err instanceof Error
+            ? err.message
+            : "Failed to check matching coupons.",
+        );
+        setStep("error");
+      }
+    };
+    loadMatchCounts();
+    return () => {
+      cancelled = true;
+    };
+  }, [filters]);
+
+  const confirmAction: "unscan" | "delete" | "unscan_then_delete" | null =
+    matchCounts
+      ? matchCounts.scannedCount > 0 && matchCounts.unscannedCount === 0
+        ? "unscan"
+        : matchCounts.unscannedCount > 0 && matchCounts.scannedCount === 0
+          ? "delete"
+          : matchCounts.scannedCount > 0 && matchCounts.unscannedCount > 0
+            ? "unscan_then_delete"
+            : null
+      : null;
 
   const handleConfirm = async () => {
-    if (!matchCounts) return;
+    if (!matchCounts || !confirmAction) return;
     setStep("processing");
-    setErrorMessage("");
     setProgress(null);
+    setErrorMessage("");
     try {
-      const fields = {
-        workOrder,
-        cutNo: cutNo.trim(),
-        bundleNo: bundleNo.trim(),
-        opNo: opNo.trim(),
-      };
-      const onProgress = (done: number, total: number) => setProgress({ done, total });
+      const onProgress = (done: number, total: number) =>
+        setProgress({ done, total });
       let unscannedCount = 0;
       let deletedCount = 0;
-      // Mixed matches (some scanned, some not) are never actioned in one
-      // click: only the scanned ones get unscanned here (confirmAction ===
-      // "unscan_then_delete"), and the user has to re-run the action once
-      // those are unscanned to delete the rest. This keeps delete from ever
-      // touching a coupon in the same click that just unscanned it.
       if (confirmAction === "delete") {
-        const res = await submitDelete(fields, onProgress);
+        const res = await submitDelete(filters, onProgress);
         deletedCount = res.deletedCount;
-      } else if (
-        confirmAction === "unscan" ||
-        confirmAction === "unscan_then_delete"
-      ) {
-        const res = await submitUnscan(fields, onProgress);
+      } else {
+        const res = await submitUnscan(filters, onProgress);
         unscannedCount = res.unscannedCount;
       }
       setResult({ unscannedCount, deletedCount });
@@ -224,45 +207,25 @@ export function UnscanOrDeleteCouponModal({
     }
   };
 
-  // Drives both the confirm-step wording and its button label/icon — a
-  // homogeneous match (all-scanned or all-unscanned) only mentions/performs
-  // the one applicable action. A mixed match is never actioned in one click:
-  // it only unscans the scanned coupons and tells the user to re-run the
-  // action afterward to delete the remainder — delete never runs against
-  // coupons that were still scanned a moment ago.
-  const confirmAction: "unscan" | "delete" | "unscan_then_delete" | null =
-    matchCounts
-      ? matchCounts.scannedCount > 0 && matchCounts.unscannedCount === 0
-        ? "unscan"
-        : matchCounts.unscannedCount > 0 && matchCounts.scannedCount === 0
-          ? "delete"
-          : matchCounts.scannedCount > 0 && matchCounts.unscannedCount > 0
-            ? "unscan_then_delete"
-            : null
-      : null;
-
-  const hasFilter = !!(cutNo.trim() || bundleNo.trim() || opNo.trim());
-
   return (
     <div className="fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] max-w-[420px] w-full p-6 animate-scale-up">
+      <div className="bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] max-w-[460px] w-full p-6 animate-scale-up">
         <div className="flex items-center justify-between border-b border-[#f1f5f9] pb-3 mb-4">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-amber-50 text-amber-600">
-              <Eraser className="w-3.5 h-3.5" />
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-amber-50 text-amber-600">
+              <Eraser className="w-4 h-4" />
             </span>
             <h3 className="text-sm font-extrabold text-[#0f172a]">
               {step === "success"
                 ? "Done"
                 : step === "error"
                   ? "Action Failed"
-                  : step === "confirm"
-                    ? "Confirm Action"
-                    : "Unscan / Delete Coupon"}
+                  : "Confirm Unscan / Delete"}
             </h3>
           </div>
           {step !== "processing" && (
             <button
+              type="button"
               onClick={onClose}
               className="p-1.5 rounded-lg hover:bg-[#f1f5f9] text-[#64748b] hover:text-[#0f172a] transition-colors cursor-pointer"
             >
@@ -272,134 +235,47 @@ export function UnscanOrDeleteCouponModal({
         </div>
 
         <div className="flex flex-col items-center text-center py-1">
-          {step === "form" && (
-            <form onSubmit={handleReview} className="w-full">
-              <p className="text-sm text-slate-800 font-medium mb-4 text-left leading-relaxed">
-                Enter as much of the coupon details as you have — leave any of
-                Cut/Bundle/Operation blank to match more coupons. Leave all
-                three blank to match every coupon on this work order. Matched
-                coupons that are already scanned will be{" "}
-                <strong className="text-slate-700">unscanned</strong>; the
-                rest will be <strong className="text-slate-700">deleted</strong>
-                .
-              </p>
-
-              <div className="mb-3 text-left">
-                <span className={FIELD_LABEL}>Work Order</span>
-                <div className="w-full px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-bold text-slate-600">
-                  {workOrder}
-                </div>
-              </div>
-
-              <div className="grid grid-cols-3 gap-2 mb-2 text-left">
-                <div>
-                  <label className={FIELD_LABEL} htmlFor="uod-cut-no">
-                    Cut No
-                  </label>
-                  <Autocomplete<string>
-                    value={cutNo}
-                    onChange={setCutNo}
-                    onSelect={setCutNo}
-                    fetchSuggestions={fetchCutSuggestions}
-                    renderSuggestion={(item) => <span>{item}</span>}
-                    getSuggestionValue={(item) => item}
-                    placeholder="Any"
-                    inputClassName={FIELD_INPUT}
-                  />
-                </div>
-                <div>
-                  <label className={FIELD_LABEL} htmlFor="uod-bundle-no">
-                    Bundle No
-                  </label>
-                  <Autocomplete<string>
-                    value={bundleNo}
-                    onChange={setBundleNo}
-                    onSelect={setBundleNo}
-                    fetchSuggestions={fetchBundleSuggestions}
-                    renderSuggestion={(item) => <span>{item}</span>}
-                    getSuggestionValue={(item) => item}
-                    placeholder="Any"
-                    inputClassName={FIELD_INPUT}
-                  />
-                </div>
-                <div>
-                  <label className={FIELD_LABEL} htmlFor="uod-op-no">
-                    Operation
-                  </label>
-                  <Autocomplete<OperationSuggestion>
-                    value={opNo}
-                    onChange={setOpNo}
-                    onSelect={(op) => setOpNo(op.Operation_Code)}
-                    fetchSuggestions={fetchOpSuggestions}
-                    renderSuggestion={(op) => (
-                      <div className="flex flex-col">
-                        <span className="text-[#4f46e5] font-bold text-[10px]">
-                          {op.Operation_Code}
-                        </span>
-                        {op.Operation_Name && (
-                          <span className="text-[10px] text-slate-500 truncate">
-                            {op.Operation_Name}
-                          </span>
-                        )}
-                      </div>
-                    )}
-                    getSuggestionValue={(op) => op.Operation_Code}
-                    placeholder="Any"
-                    inputClassName={FIELD_INPUT}
-                  />
-                </div>
-              </div>
-
-              <div className="mt-3 text-left">
-                {matchStatus === "checking" && (
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
-                    <Loader2 className="w-3 h-3 animate-spin" />
-                    Checking matching coupons...
-                  </div>
-                )}
-                {matchStatus === "matched" && matchCounts && (
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-amber-700">
-                    <Search className="w-3 h-3" />
-                    {matchCounts.totalCount} coupon
-                    {matchCounts.totalCount === 1 ? "" : "s"} match
-                    {!hasFilter && " (entire work order)"} —{" "}
-                    {matchCounts.scannedCount} scanned,{" "}
-                    {matchCounts.unscannedCount} not scanned.
-                  </div>
-                )}
-                {matchStatus === "not_found" && (
-                  <div className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-400">
-                    <Search className="w-3 h-3" />
-                    No matching coupons found.
-                  </div>
-                )}
-              </div>
-
-              <div className="flex gap-2 w-full mt-5">
-                <button
-                  type="button"
-                  onClick={onClose}
-                  className="flex-1 bg-white border border-[#e2e8f0] text-[#64748b] px-4 py-2 rounded-xl text-xs font-bold hover:bg-[#f8fafc] transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={!canReview}
-                  className="flex-1 flex items-center justify-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none bg-amber-600 hover:bg-amber-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
-                >
-                  Review
-                </button>
-              </div>
-            </form>
+          {step === "checking" && (
+            <div className="flex flex-col items-center py-8">
+              <Loader2 className="w-10 h-10 text-amber-600 animate-spin mb-4" />
+              <h4 className="text-sm font-extrabold text-slate-800">
+                Checking matching coupons...
+              </h4>
+            </div>
           )}
 
           {step === "confirm" && matchCounts && confirmAction && (
             <div className="w-full flex flex-col items-center py-2">
               <AlertCircle className="w-12 h-12 text-amber-500 mb-4" />
-              <h4 className="text-sm font-extrabold text-slate-800 mb-1">
+              <h4 className="text-sm font-extrabold text-slate-800 mb-2">
                 Confirm this action
               </h4>
+
+              <div className="w-full rounded-2xl border border-amber-100 bg-amber-50/60 p-3 mb-4 text-left">
+                <div className="text-[10px] font-black uppercase tracking-wider text-amber-700 mb-2">
+                  Active Scope
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700">
+                    W/O: {filters.workOrder}
+                  </span>
+                  {hasFilters ? (
+                    entries.map((entry) => (
+                      <span
+                        key={`${entry.label}:${entry.value}`}
+                        className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-white px-2 py-1 text-[10px] font-bold text-amber-800"
+                      >
+                        {entry.label}: {entry.value}
+                      </span>
+                    ))
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-white px-2 py-1 text-[10px] font-bold text-red-700">
+                      Entire work order
+                    </span>
+                  )}
+                </div>
+              </div>
+
               <p className="text-sm text-slate-800 font-medium mb-5 text-left leading-relaxed">
                 {confirmAction === "unscan" && (
                   <>
@@ -407,10 +283,8 @@ export function UnscanOrDeleteCouponModal({
                     <strong className="text-amber-700">
                       unscan {matchCounts.scannedCount} coupon
                       {matchCounts.scannedCount === 1 ? "" : "s"}
-                    </strong>{" "}
-                    on work order{" "}
-                    <strong className="text-slate-700">{workOrder}</strong>
-                    {!hasFilter && " — every coupon on this work order"}.
+                    </strong>
+                    .
                   </>
                 )}
                 {confirmAction === "delete" && (
@@ -419,22 +293,16 @@ export function UnscanOrDeleteCouponModal({
                     <strong className="text-red-600">
                       delete {matchCounts.unscannedCount} coupon
                       {matchCounts.unscannedCount === 1 ? "" : "s"}
-                    </strong>{" "}
-                    on work order{" "}
-                    <strong className="text-slate-700">{workOrder}</strong>
-                    {!hasFilter && " — every coupon on this work order"}. This
-                    cannot be undone from this screen.
+                    </strong>
+                    . This cannot be undone from this screen.
                   </>
                 )}
                 {confirmAction === "unscan_then_delete" && (
                   <>
                     <strong className="text-slate-700">
-                      {matchCounts.totalCount} coupon
-                      {matchCounts.totalCount === 1 ? "" : "s"} match
-                      {!hasFilter && " (entire work order)"}
-                    </strong>{" "}
-                    on work order{" "}
-                    <strong className="text-slate-700">{workOrder}</strong> —{" "}
+                      {matchCounts.totalCount} coupons match
+                    </strong>
+                    :{" "}
                     <strong className="text-amber-700">
                       {matchCounts.scannedCount} scanned
                     </strong>
@@ -442,29 +310,19 @@ export function UnscanOrDeleteCouponModal({
                     <strong className="text-red-600">
                       {matchCounts.unscannedCount} not scanned
                     </strong>
-                    . Scanned coupons must be unscanned before they can be
-                    deleted, so this will only{" "}
-                    <strong className="text-amber-700">
-                      unscan {matchCounts.scannedCount} coupon
-                      {matchCounts.scannedCount === 1 ? "" : "s"}
-                    </strong>{" "}
-                    for now. Run this action again afterward to delete the
-                    remaining{" "}
-                    <strong className="text-red-600">
-                      {matchCounts.unscannedCount} coupon
-                      {matchCounts.unscannedCount === 1 ? "" : "s"}
-                    </strong>
-                    .
+                    . This click will only unscan the scanned coupons. Run it
+                    again afterward to delete the remaining unscanned coupons.
                   </>
                 )}
               </p>
+
               <div className="flex gap-2 w-full">
                 <button
                   type="button"
-                  onClick={() => setStep("form")}
+                  onClick={onClose}
                   className="flex-1 bg-white border border-[#e2e8f0] text-[#64748b] px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#f8fafc] transition-colors cursor-pointer"
                 >
-                  Back
+                  Cancel
                 </button>
                 <button
                   type="button"
@@ -475,17 +333,15 @@ export function UnscanOrDeleteCouponModal({
                       : "bg-amber-600 hover:bg-amber-700"
                   }`}
                 >
-                  {(confirmAction === "unscan" ||
-                    confirmAction === "unscan_then_delete") && (
-                    <>
-                      <Eraser className="w-3.5 h-3.5" />
-                      Unscan Coupon{matchCounts.scannedCount === 1 ? "" : "s"}
-                    </>
-                  )}
-                  {confirmAction === "delete" && (
+                  {confirmAction === "delete" ? (
                     <>
                       <Trash2 className="w-3.5 h-3.5" />
-                      Delete Coupon{matchCounts.unscannedCount === 1 ? "" : "s"}
+                      Delete
+                    </>
+                  ) : (
+                    <>
+                      <Eraser className="w-3.5 h-3.5" />
+                      Unscan
                     </>
                   )}
                 </button>
@@ -497,14 +353,17 @@ export function UnscanOrDeleteCouponModal({
             <div className="flex flex-col items-center py-4 w-full">
               <Loader2 className="w-10 h-10 text-amber-600 animate-spin mb-4" />
               <h4 className="text-sm font-extrabold text-slate-800 mb-1">
-                Processing {progress?.total ?? matchCounts?.totalCount ?? 0} Coupons...
+                Processing {progress?.total ?? matchCounts?.totalCount ?? 0}{" "}
+                Coupons...
               </h4>
               {progress && progress.total > 0 && (
                 <div className="w-full mt-3 mb-1">
                   <div className="w-full h-2 rounded-full bg-slate-100 overflow-hidden">
                     <div
                       className="h-full bg-amber-600 transition-all duration-200"
-                      style={{ width: `${Math.min(100, (progress.done / progress.total) * 100)}%` }}
+                      style={{
+                        width: `${Math.min(100, (progress.done / progress.total) * 100)}%`,
+                      }}
                     />
                   </div>
                   <p className="text-[11px] text-[#64748b] font-semibold mt-1.5">
@@ -512,9 +371,6 @@ export function UnscanOrDeleteCouponModal({
                   </p>
                 </div>
               )}
-              <p className="text-[11px] text-[#94a3b8] font-medium mt-2">
-                Applying the right action to each matched coupon. Please do not close or refresh this page.
-              </p>
             </div>
           )}
 
@@ -523,29 +379,26 @@ export function UnscanOrDeleteCouponModal({
               <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4" />
               <h4 className="text-sm font-extrabold text-slate-800 mb-1">
                 {result.unscannedCount + result.deletedCount} Coupon
-                {result.unscannedCount + result.deletedCount === 1 ? "" : "s"}{" "}
+                {result.unscannedCount + result.deletedCount === 1
+                  ? ""
+                  : "s"}{" "}
                 Processed
               </h4>
               <p className="text-sm text-slate-800 font-medium mb-5">
                 {result.unscannedCount > 0 && (
                   <>
-                    <strong className="text-slate-700">
-                      {result.unscannedCount}
-                    </strong>{" "}
-                    unscanned
+                    <strong>{result.unscannedCount}</strong> unscanned
                     {result.deletedCount > 0 ? ", " : "."}
                   </>
                 )}
                 {result.deletedCount > 0 && (
                   <>
-                    <strong className="text-slate-700">
-                      {result.deletedCount}
-                    </strong>{" "}
-                    deleted.
+                    <strong>{result.deletedCount}</strong> deleted.
                   </>
                 )}
               </p>
               <button
+                type="button"
                 onClick={onDone}
                 className="w-full bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
               >
@@ -565,20 +418,13 @@ export function UnscanOrDeleteCouponModal({
                   {errorMessage}
                 </p>
               </div>
-              <div className="flex gap-2 w-full">
-                <button
-                  onClick={onClose}
-                  className="flex-1 bg-white border border-[#e2e8f0] text-[#64748b] px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#f8fafc] transition-colors cursor-pointer"
-                >
-                  Close
-                </button>
-                <button
-                  onClick={() => setStep("form")}
-                  className="flex-1 bg-amber-600 hover:bg-amber-700 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
-                >
-                  Try Again
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={onClose}
+                className="w-full bg-white border border-[#e2e8f0] text-[#64748b] px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#f8fafc] transition-colors cursor-pointer"
+              >
+                Close
+              </button>
             </div>
           )}
         </div>

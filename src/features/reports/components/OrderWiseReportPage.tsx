@@ -87,6 +87,8 @@ export function OrderWiseReportPage() {
                 "Current Claim (Rs.)",
                 "Total Claim (Rs.)",
                 "Balance (Rs.)",
+                "Op Inc",
+                "Total",
                 "Minutes Produced",
                 "Qty Produced",
               ]}
@@ -100,6 +102,8 @@ export function OrderWiseReportPage() {
                 r.currentClaim,
                 r.totalClaim,
                 r.balance,
+                r.opInc,
+                r.total,
                 r.minutesProduced,
                 r.qtyProduced,
               ])}
@@ -181,6 +185,12 @@ export function OrderWiseReportPage() {
                     Balance
                   </th>
                   <th className="py-2 px-2 text-right border-r border-slate-200">
+                    Op Inc
+                  </th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">
+                    Total
+                  </th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">
                     Min. Produced
                   </th>
                   <th className="py-2 px-2 text-right">Qty Produced</th>
@@ -217,7 +227,13 @@ export function OrderWiseReportPage() {
                       {r.balance != null ? formatAmount(r.balance) : "—"}
                     </td>
                     <td className="py-1.5 px-2 text-right border-r border-slate-100">
-                      {r.minutesProduced.toFixed(2)}
+                      {formatAmount(r.opInc)}
+                    </td>
+                    <td className="py-1.5 px-2 text-right border-r border-slate-100 font-bold text-emerald-700">
+                      {formatAmount(r.total)}
+                    </td>
+                    <td className="py-1.5 px-2 text-right border-r border-slate-100">
+                      {r.minutesProduced.toFixed(0)}
                     </td>
                     <td className="py-1.5 px-2 text-right">
                       {r.qtyProduced.toLocaleString()}

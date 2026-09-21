@@ -713,7 +713,6 @@ export function EmployeeReportDashboard() {
         "SMV",
         "Coupons",
         "Output (Pcs)",
-        "SAM Earned",
         "Total Amount",
       ];
       rows = summary.operations.map((op) => [
@@ -724,7 +723,6 @@ export function EmployeeReportDashboard() {
         op.smv,
         op.couponCount,
         op.totalQty,
-        Number(op.totalSam.toFixed(2)),
         Number(op.totalAmount.toFixed(2)),
       ]);
     } else if (effectiveTab === "workOrders") {
@@ -733,7 +731,6 @@ export function EmployeeReportDashboard() {
         "Operations",
         "Coupons",
         "Output (Pcs)",
-        "SAM Earned",
         "Total Amount",
       ];
       rows = summary.workOrders.map((wo) => [
@@ -741,7 +738,6 @@ export function EmployeeReportDashboard() {
         wo.operationsCount,
         wo.couponCount,
         wo.totalQty,
-        Number(wo.totalSam.toFixed(2)),
         Number(wo.totalAmount.toFixed(2)),
       ]);
     } else if (effectiveTab === "sections") {
@@ -750,7 +746,6 @@ export function EmployeeReportDashboard() {
         "Operations",
         "Coupons",
         "Output (Pcs)",
-        "SAM Earned",
         "Total Amount",
       ];
       rows = summary.sections.map((s) => [
@@ -758,7 +753,6 @@ export function EmployeeReportDashboard() {
         s.operationsCount,
         s.couponCount,
         s.totalQty,
-        Number(s.totalSam.toFixed(2)),
         Number(s.totalAmount.toFixed(2)),
       ]);
     } else if (effectiveTab === "bundles") {
@@ -768,7 +762,6 @@ export function EmployeeReportDashboard() {
         "Work Order",
         "Coupons",
         "Output (Pcs)",
-        "SAM Earned",
         "Total Amount",
       ];
       rows = summary.bundles.map((b) => [
@@ -777,7 +770,6 @@ export function EmployeeReportDashboard() {
         b.workOrder,
         b.couponCount,
         b.totalQty,
-        Number(b.totalSam.toFixed(2)),
         Number(b.totalAmount.toFixed(2)),
       ]);
     } else if (effectiveTab === "employees") {
@@ -795,11 +787,10 @@ export function EmployeeReportDashboard() {
       ];
       rows = [];
       for (const eg of employeeGroupedData) {
-        for (let i = 0; i < eg.items.length; i++) {
-          const item = eg.items[i];
+        for (const item of eg.items) {
           rows.push([
-            i === 0 ? eg.employeeCode : "",
-            i === 0 ? eg.employeeName : "",
+            eg.employeeCode,
+            eg.employeeName,
             item.workOrder,
             item.date,
             item.operation,
@@ -810,31 +801,7 @@ export function EmployeeReportDashboard() {
             "",
           ]);
         }
-        rows.push([
-          "",
-          "",
-          "",
-          "",
-          "",
-          "Employee wise Total :",
-          eg.totalBundles,
-          eg.totalQty,
-          Number(eg.totalPay.toFixed(2)),
-          "",
-        ]);
       }
-      rows.push([
-        "",
-        "",
-        "",
-        "",
-        "",
-        "Grand Total :",
-        grandTotalBundles,
-        grandTotalQty,
-        Number(grandTotalPay.toFixed(2)),
-        "",
-      ]);
     } else {
       headers = [
         "Coupon Code",
@@ -894,9 +861,6 @@ export function EmployeeReportDashboard() {
     filteredCoupons,
     showEmployeeColumn,
     employeeGroupedData,
-    grandTotalBundles,
-    grandTotalQty,
-    grandTotalPay,
   ]);
 
   return (
@@ -1891,7 +1855,6 @@ export function EmployeeReportDashboard() {
                       <th className="py-2.5 px-3 text-right">SMV</th>
                       <th className="py-2.5 px-3 text-center">Coupons</th>
                       <th className="py-2.5 px-3 text-center">Output (Pcs)</th>
-                      <th className="py-2.5 px-3 text-right">SAM Earned</th>
                       <th className="py-2.5 px-3 text-right">Total Amount</th>
                     </tr>
                   </thead>
@@ -1899,7 +1862,7 @@ export function EmployeeReportDashboard() {
                     {summary.operations.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={8}
+                          colSpan={7}
                           className="py-8 text-center text-slate-400 font-medium"
                         >
                           No operations recorded for this period.
@@ -1940,9 +1903,6 @@ export function EmployeeReportDashboard() {
                           <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
                             {op.totalQty.toLocaleString()}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
-                            {op.totalSam.toFixed(2)} min
-                          </td>
                           <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
                             Rs. {formatAmount(op.totalAmount)}
                           </td>
@@ -1961,9 +1921,6 @@ export function EmployeeReportDashboard() {
                         </td>
                         <td className="py-2.5 px-3 text-center text-[#4f46e5]">
                           {summary.totalQty.toLocaleString()}
-                        </td>
-                        <td className="py-2.5 px-3 text-right">
-                          {summary.totalSam.toFixed(2)} min
                         </td>
                         <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                           Rs. {formatAmount(summary.totalAmount)}
@@ -1985,7 +1942,6 @@ export function EmployeeReportDashboard() {
                       <th className="py-2.5 px-3 text-center">Operations</th>
                       <th className="py-2.5 px-3 text-center">Coupons</th>
                       <th className="py-2.5 px-3 text-center">Output (Pcs)</th>
-                      <th className="py-2.5 px-3 text-right">SAM Earned</th>
                       <th className="py-2.5 px-3 text-right">Total Amount</th>
                     </tr>
                   </thead>
@@ -1993,7 +1949,7 @@ export function EmployeeReportDashboard() {
                     {summary.sections.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={6}
+                          colSpan={5}
                           className="py-8 text-center text-slate-400 font-medium"
                         >
                           No sections recorded for this period.
@@ -2019,9 +1975,6 @@ export function EmployeeReportDashboard() {
                           <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
                             {s.totalQty.toLocaleString()}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
-                            {s.totalSam.toFixed(2)} min
-                          </td>
                           <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
                             Rs. {formatAmount(s.totalAmount)}
                           </td>
@@ -2040,9 +1993,6 @@ export function EmployeeReportDashboard() {
                         </td>
                         <td className="py-2.5 px-3 text-center text-[#4f46e5]">
                           {summary.totalQty.toLocaleString()}
-                        </td>
-                        <td className="py-2.5 px-3 text-right">
-                          {summary.totalSam.toFixed(2)} min
                         </td>
                         <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                           Rs. {formatAmount(summary.totalAmount)}
@@ -2067,7 +2017,6 @@ export function EmployeeReportDashboard() {
                       )}
                       <th className="py-2.5 px-3 text-center">Coupons</th>
                       <th className="py-2.5 px-3 text-center">Output (Pcs)</th>
-                      <th className="py-2.5 px-3 text-right">SAM Earned</th>
                       <th className="py-2.5 px-3 text-right">Total Amount</th>
                     </tr>
                   </thead>
@@ -2075,7 +2024,7 @@ export function EmployeeReportDashboard() {
                     {summary.bundles.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={isAllSummary ? 7 : 6}
+                          colSpan={isAllSummary ? 6 : 5}
                           className="py-8 text-center text-slate-400 font-medium"
                         >
                           No bundles recorded for this period.
@@ -2106,9 +2055,6 @@ export function EmployeeReportDashboard() {
                           <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
                             {b.totalQty.toLocaleString()}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
-                            {b.totalSam.toFixed(2)} min
-                          </td>
                           <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
                             Rs. {formatAmount(b.totalAmount)}
                           </td>
@@ -2130,9 +2076,6 @@ export function EmployeeReportDashboard() {
                         </td>
                         <td className="py-2.5 px-3 text-center text-[#4f46e5]">
                           {summary.totalQty.toLocaleString()}
-                        </td>
-                        <td className="py-2.5 px-3 text-right">
-                          {summary.totalSam.toFixed(2)} min
                         </td>
                         <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                           Rs. {formatAmount(summary.totalAmount)}
@@ -2156,7 +2099,6 @@ export function EmployeeReportDashboard() {
                       <th className="py-2.5 px-3 text-center">
                         Total Output (Pcs)
                       </th>
-                      <th className="py-2.5 px-3 text-right">SAM Earned</th>
                       <th className="py-2.5 px-3 text-right">Total Amount</th>
                     </tr>
                   </thead>
@@ -2164,7 +2106,7 @@ export function EmployeeReportDashboard() {
                     {summary.workOrders.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={6}
+                          colSpan={5}
                           className="py-8 text-center text-slate-400 font-medium"
                         >
                           No work orders recorded for this period.
@@ -2190,9 +2132,6 @@ export function EmployeeReportDashboard() {
                           <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
                             {wo.totalQty.toLocaleString()}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
-                            {wo.totalSam.toFixed(2)} min
-                          </td>
                           <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
                             Rs. {formatAmount(wo.totalAmount)}
                           </td>
@@ -2211,9 +2150,6 @@ export function EmployeeReportDashboard() {
                         </td>
                         <td className="py-2.5 px-3 text-center text-[#4f46e5]">
                           {summary.totalQty.toLocaleString()}
-                        </td>
-                        <td className="py-2.5 px-3 text-right">
-                          {summary.totalSam.toFixed(2)} min
                         </td>
                         <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                           Rs. {formatAmount(summary.totalAmount)}
@@ -2916,7 +2852,6 @@ export function EmployeeReportDashboard() {
                             <th className="text-right w-14">SMV</th>
                             <th className="text-center w-16">COUPONS</th>
                             <th className="text-center w-18">OUTPUT (PCS)</th>
-                            <th className="text-right w-20">SAM EARNED</th>
                             <th className="text-right w-22">TOTAL AMOUNT</th>
                           </tr>
                         </thead>
@@ -2943,9 +2878,6 @@ export function EmployeeReportDashboard() {
                               <td className="text-center font-bold">
                                 {op.totalQty.toLocaleString()}
                               </td>
-                              <td className="text-right">
-                                {op.totalSam.toFixed(2)} min
-                              </td>
                               <td className="text-right font-bold">
                                 Rs. {formatAmount(op.totalAmount)}
                               </td>
@@ -2960,9 +2892,6 @@ export function EmployeeReportDashboard() {
                             </td>
                             <td className="text-center">
                               {summary.totalQty.toLocaleString()}
-                            </td>
-                            <td className="text-right">
-                              {summary.totalSam.toFixed(2)} min
                             </td>
                             <td className="text-right">
                               Rs. {formatAmount(summary.totalAmount)}
@@ -2988,7 +2917,6 @@ export function EmployeeReportDashboard() {
                             <th className="text-center w-20">OPERATIONS</th>
                             <th className="text-center w-20">COUPONS</th>
                             <th className="text-center w-24">OUTPUT (PCS)</th>
-                            <th className="text-right w-24">SAM EARNED</th>
                             <th className="text-right w-28">
                               TOTAL AMOUNT (RS.)
                             </th>
@@ -3009,9 +2937,6 @@ export function EmployeeReportDashboard() {
                               </td>
                               <td className="text-center">
                                 {wo.totalQty.toLocaleString()}
-                              </td>
-                              <td className="text-right">
-                                {wo.totalSam.toFixed(2)} min
                               </td>
                               <td className="text-right font-bold">
                                 Rs. {formatAmount(wo.totalAmount)}
@@ -3038,7 +2963,6 @@ export function EmployeeReportDashboard() {
                             <th className="text-center w-20">OPERATIONS</th>
                             <th className="text-center w-20">COUPONS</th>
                             <th className="text-center w-24">OUTPUT (PCS)</th>
-                            <th className="text-right w-24">SAM EARNED</th>
                             <th className="text-right w-28">
                               TOTAL AMOUNT (RS.)
                             </th>
@@ -3057,9 +2981,6 @@ export function EmployeeReportDashboard() {
                               </td>
                               <td className="text-center">
                                 {s.totalQty.toLocaleString()}
-                              </td>
-                              <td className="text-right">
-                                {s.totalSam.toFixed(2)} min
                               </td>
                               <td className="text-right font-bold">
                                 Rs. {formatAmount(s.totalAmount)}
@@ -3087,7 +3008,6 @@ export function EmployeeReportDashboard() {
                             {isAllSummary && <th>WORK ORDER</th>}
                             <th className="text-center w-20">COUPONS</th>
                             <th className="text-center w-24">OUTPUT (PCS)</th>
-                            <th className="text-right w-24">SAM EARNED</th>
                             <th className="text-right w-28">
                               TOTAL AMOUNT (RS.)
                             </th>
@@ -3109,9 +3029,6 @@ export function EmployeeReportDashboard() {
                               </td>
                               <td className="text-center">
                                 {b.totalQty.toLocaleString()}
-                              </td>
-                              <td className="text-right">
-                                {b.totalSam.toFixed(2)} min
                               </td>
                               <td className="text-right font-bold">
                                 Rs. {formatAmount(b.totalAmount)}

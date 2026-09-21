@@ -29,7 +29,8 @@ const VALID_LAYOUTS: CouponLayout[] = [
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = searchParams.get("work_order") || "";
-  const bundleNo = searchParams.get("bundle_no") || undefined;
+  const fromBundle = searchParams.get("from_bundle") || undefined;
+  const toBundle = searchParams.get("to_bundle") || undefined;
   const opNo = searchParams.get("op_no") || undefined;
   const section = searchParams.get("section") || undefined;
   const scannedParam = searchParams.get("is_scanned");
@@ -40,6 +41,7 @@ export async function GET(request: Request) {
     : undefined;
   const fromCut = searchParams.get("from_cut") || undefined;
   const toCut = searchParams.get("to_cut") || undefined;
+  const employeeCode = searchParams.get("employee_code") || undefined;
   const codeTypeParam = searchParams.get("code_type");
   const codeType = codeTypeParam === "barcode" ? "barcode" : "qr";
 
@@ -54,12 +56,14 @@ export async function GET(request: Request) {
     const pool = await getPool("pitSystem");
 
     const coupons = await listAllCoupons(pool, workOrder, {
-      bundleNo,
+      fromBundle,
+      toBundle,
       opNo,
       section,
       isScanned,
       fromCut,
       toCut,
+      employeeCode,
     });
     if (coupons.length === 0) {
       return Response.json(

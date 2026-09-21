@@ -3,7 +3,11 @@
 // every mode shows the same shape of dashboard (totals, breakdowns, coupon
 // trail). `mode` discriminates which one is the search subject; the other
 // two dimensions always show up as breakdown tables regardless of mode.
-export type ReportSearchMode = "employee" | "workOrder" | "operation" | "section";
+export type ReportSearchMode =
+  | "employee"
+  | "workOrder"
+  | "operation"
+  | "section";
 
 export interface EmployeeReportInfo {
   EmployeeID: number | string;
@@ -227,12 +231,11 @@ export interface WagesBatch {
 //
 // Order Wise is currently scoped to the Sewing department only (a
 // deliberate first pass — see DEPARTMENT_FILTER in
-// finance-report.service.ts). Incentive-scheme amounts and production-line
-// assignment have NO source data anywhere in this system — rather than
-// showing them as 0/estimated, those columns are simply not part of this
-// report. Previous Paid / Current Claim are both scan-derived (not from the
-// wage ledger) — see finance-report.service.ts for the exact per-column
-// formulas.
+// finance-report.service.ts). Op Inc is sourced from Indus Plus
+// StyleBullettinInt.[UD_Commission]. Production-line assignment still has
+// no source data here. Previous Paid / Current Claim are both scan-derived
+// (not from the wage ledger) — see finance-report.service.ts for the exact
+// per-column formulas.
 export interface OrderWiseReportRow {
   workOrder: string; // ANL# in the legacy printout
   totalSam: number | null; // total Sewing SAM across ALL sections for this work order from the IndusPlus live style bulletin
@@ -243,8 +246,10 @@ export interface OrderWiseReportRow {
   currentClaim: number; // sum(qty * rate) for this WO's Sewing coupons scanned during THIS pay-cycle
   totalClaim: number; // previousPaid + currentClaim
   balance: number | null; // plan - totalClaim (null when plan is null, i.e. no order quantity on record)
-  minutesProduced: number; // sum(qty * that scan's own SMV) across every Sewing coupon scanned THIS pay-cycle — unlike qtyProduced, NOT deduped by bundle: a bundle scanned at 3 operations genuinely consumed 3 operations' worth of minutes
-  qtyProduced: number; // sum(qty), once per distinct bundle scanned (at any Sewing operation) for this WO during THIS pay-cycle — a bundle scanned at multiple operations doesn't add its qty more than once
+  opInc: number; // sum(qty * UD_Commission) for the report's scanned Sewing coupons
+  total: number; // totalClaim + opInc
+  minutesProduced: number; // totalSam (order-level) * qtyProduced — NOT sum(qty * smv) per scan
+  qtyProduced: number; // sum(qty) for this WO's Sewing coupons scanned during THIS pay-cycle
 }
 
 // Also currently scoped to the Sewing department only — same first-pass
@@ -254,7 +259,9 @@ export interface OperatorWiseReportRow {
   employeeName: string;
   section: string; // HRMS DepartmentName — closest available analogue to the legacy "Section :" grouping (see service for caveats)
   joiningDate: string | null; // HRMS JoiningDate
-  totalAmt: number; // sum(qty * rate) earned this pay-cycle across every Sewing-operation coupon scanned
+  pieceRateTotal: number; // sum of piece rates across every Sewing-operation coupon scanned
+  opInc: number; // sum of UD_Commission across every Sewing-operation coupon scanned
+  total: number; // pieceRateTotal + opInc
 }
 
 export interface FinanceReportPeriod {

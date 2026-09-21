@@ -11,11 +11,20 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
+    const couponCodesParam = searchParams.get("couponCodes");
     const parsed = readCouponFilter({
       workOrder: searchParams.get("workOrder"),
-      cutNo: searchParams.get("cutNo"),
-      bundleNo: searchParams.get("bundleNo"),
+      fromBundle: searchParams.get("fromBundle"),
+      toBundle: searchParams.get("toBundle"),
       opNo: searchParams.get("opNo"),
+      section: searchParams.get("section"),
+      isScanned: searchParams.get("isScanned"),
+      fromCut: searchParams.get("fromCut"),
+      toCut: searchParams.get("toCut"),
+      employeeCode: searchParams.get("employeeCode"),
+      couponCodes: couponCodesParam
+        ? couponCodesParam.split(",").filter(Boolean)
+        : undefined,
     });
     if ("error" in parsed) {
       return Response.json({ error: parsed.error }, { status: 400 });
