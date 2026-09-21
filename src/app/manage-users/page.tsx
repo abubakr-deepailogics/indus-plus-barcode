@@ -7,8 +7,10 @@ import { useManageUsersFacade } from "@/features/auth/hooks/useManageUsersFacade
 import { CreateUserDialog } from "@/features/auth/components/CreateUserDialog";
 import { ResetPasswordResultDialog } from "@/features/auth/components/ResetPasswordResultDialog";
 import { DataTable } from "@/components/ui/data-table/data-table";
-import { Button } from "@/components/ui/button";
 import type { ManagedUser } from "@/features/auth/types";
+
+const pillButtonClassName =
+  "inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed";
 
 export default function ManageUsersPage() {
   const { user: currentUser, loading: authLoading } = useAuth();
@@ -37,7 +39,17 @@ export default function ManageUsersPage() {
         accessorKey: "isActive",
         header: "Status",
         size: 100,
-        cell: ({ row }) => (row.original.isActive ? "Active" : "Disabled"),
+        cell: ({ row }) => (
+          <span
+            className={`inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-bold ${
+              row.original.isActive
+                ? "bg-emerald-50 text-emerald-600"
+                : "bg-red-50 text-red-600"
+            }`}
+          >
+            {row.original.isActive ? "Active" : "Disabled"}
+          </span>
+        ),
       },
       {
         accessorKey: "lastLoginAt",
@@ -55,9 +67,13 @@ export default function ManageUsersPage() {
           const isSelf = u.id === currentUser?.id;
           return (
             <div className="flex flex-wrap gap-2">
-              <Button
-                size="sm"
-                variant="outline"
+              <button
+                type="button"
+                className={`${pillButtonClassName} ${
+                  u.isAdmin
+                    ? "bg-amber-50 text-amber-700 hover:bg-amber-100 hover:text-amber-800"
+                    : "bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800"
+                }`}
                 disabled={isSelf}
                 onClick={async () => {
                   setActionError(null);
@@ -69,10 +85,14 @@ export default function ManageUsersPage() {
                 }}
               >
                 {u.isAdmin ? "Revoke admin" : "Make admin"}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
+              </button>
+              <button
+                type="button"
+                className={`${pillButtonClassName} ${
+                  u.isActive
+                    ? "bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700"
+                    : "bg-emerald-50 text-emerald-700 hover:bg-emerald-100 hover:text-emerald-800"
+                }`}
                 disabled={isSelf}
                 onClick={async () => {
                   setActionError(null);
@@ -84,10 +104,10 @@ export default function ManageUsersPage() {
                 }}
               >
                 {u.isActive ? "Disable" : "Enable"}
-              </Button>
-              <Button
-                size="sm"
-                variant="outline"
+              </button>
+              <button
+                type="button"
+                className={`${pillButtonClassName} bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700`}
                 onClick={async () => {
                   setActionError(null);
                   try {
@@ -99,7 +119,7 @@ export default function ManageUsersPage() {
                 }}
               >
                 Reset password
-              </Button>
+              </button>
             </div>
           );
         },
