@@ -259,8 +259,8 @@ export interface OperatorWiseReportRow {
   employeeName: string;
   section: string; // HRMS DepartmentName — closest available analogue to the legacy "Section :" grouping (see service for caveats)
   joiningDate: string | null; // HRMS JoiningDate
-  pieceRateTotal: number; // sum of piece rates across every Sewing-operation coupon scanned
-  opInc: number; // sum of UD_Commission across every Sewing-operation coupon scanned
+  pieceRateTotal: number; // sum(qty * rate) across every Sewing-operation coupon scanned
+  opInc: number; // sum(qty * UD_Commission) across every Sewing-operation coupon scanned
   total: number; // pieceRateTotal + opInc
 }
 

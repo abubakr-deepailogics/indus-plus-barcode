@@ -354,11 +354,13 @@ export async function buildOperatorWiseReport(
   const opIncByEmployee = new Map<string, number>();
   for (const row of scans) {
     if (!row.EmployeeCode) continue;
+    const qty = Number(row.Qty) || 0;
     const rate = Number(row.Rate) || 0;
-    const opInc = operationCommissions.get(`${row.WorkOrder}|${row.OpNo}`) ?? 0;
+    const opInc =
+      qty * (operationCommissions.get(`${row.WorkOrder}|${row.OpNo}`) ?? 0);
     pieceRateByEmployee.set(
       row.EmployeeCode,
-      (pieceRateByEmployee.get(row.EmployeeCode) ?? 0) + rate,
+      (pieceRateByEmployee.get(row.EmployeeCode) ?? 0) + qty * rate,
     );
     opIncByEmployee.set(
       row.EmployeeCode,
