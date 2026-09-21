@@ -668,7 +668,7 @@ export default function ReworkCouponPage() {
                 <thead>
                   <tr className="border-b border-[#e2e8f0]">
                     <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
-                      Cut #
+                      Cut # <span className="text-red-500">*</span>
                     </th>
                     <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
                       Inseam
@@ -677,7 +677,7 @@ export default function ReworkCouponPage() {
                       Size #
                     </th>
                     <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
-                      Pcs
+                      Pcs <span className="text-red-500">*</span>
                     </th>
                     <th className="py-2 w-8 sticky top-0 z-10 bg-white" />
                   </tr>
