@@ -111,6 +111,10 @@ export default function ReworkCouponPage() {
     alreadyExistedCount: number;
   } | null>(null);
 
+  const [lowPcsConfirmIntent, setLowPcsConfirmIntent] = useState<
+    "generate" | "print" | null
+  >(null);
+
   // Shared Work Order search: seeds this page's search from the
   // global/URL Work Order (set by Cut Report, Style Bulletin, Coupon
   // Generation or Coupon Tracing) on mount, and propagates a search
@@ -413,7 +417,10 @@ export default function ReworkCouponPage() {
   // 3. Registers coupon identities in dbo.QrCode_Coupon (shared batchId).
   // 4. Snapshots operations into dbo.StyleBullettinInt (shared batchId).
   // These coupons immediately appear in Coupon Tracing, scanning, and reports.
-  const handleGenerateAndSave = async (): Promise<boolean> => {
+  const handleGenerateAndSave = async (options?: {
+    skipLowPcsConfirm?: boolean;
+    intent?: "generate" | "print";
+  }): Promise<boolean> => {
     if (isSaving || generatingPdf) return false;
     if (!workOrder) {
       setValidationError("Search and select a Work Order first.");
@@ -466,6 +473,10 @@ export default function ReworkCouponPage() {
       );
       return false;
     }
+    if (!options?.skipLowPcsConfirm && pcsTotal < Number(reworkQty)) {
+      setLowPcsConfirmIntent(options?.intent ?? "generate");
+      return false;
+    }
 
     setIsSaving(true);
     try {
@@ -512,10 +523,21 @@ export default function ReworkCouponPage() {
   const handlePrintClick = async () => {
     if (isSaving || generatingPdf) return;
     if (!savedBundles) {
-      const ok = await handleGenerateAndSave();
+      const ok = await handleGenerateAndSave({ intent: "print" });
       if (!ok) return;
     }
     await handleDownloadPdf();
+  };
+
+  // Resumes whichever action (Generate vs Print) the low-Pcs confirmation
+  // interrupted, this time skipping the check.
+  const confirmLowPcsAndProceed = async () => {
+    const intent = lowPcsConfirmIntent ?? "generate";
+    setLowPcsConfirmIntent(null);
+    const ok = await handleGenerateAndSave({ skipLowPcsConfirm: true, intent });
+    if (ok && intent === "print") {
+      await handleDownloadPdf();
+    }
   };
 
   const isBusy = isSaving || generatingPdf;
@@ -608,7 +630,7 @@ export default function ReworkCouponPage() {
               <div className="mt-3 w-full flex flex-col gap-2">
                 <button
                   type="button"
-                  onClick={handleGenerateAndSave}
+                  onClick={() => handleGenerateAndSave()}
                   disabled={!activeStyle || isBusy || !hasCouponsGenerated}
                   className="w-full flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md cursor-pointer text-xs"
                 >
@@ -814,6 +836,52 @@ export default function ReworkCouponPage() {
             >
               OK
             </button>
+          </div>
+        </div>
+      )}
+
+      {lowPcsConfirmIntent && (
+        <div
+          className="fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4"
+          onMouseDown={() => setLowPcsConfirmIntent(null)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] max-w-sm w-full p-6 animate-scale-up"
+            onMouseDown={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3 mb-4">
+              <div className="shrink-0 w-9 h-9 rounded-full bg-amber-50 flex items-center justify-center">
+                <AlertTriangle className="w-4.5 h-4.5 text-amber-500" />
+              </div>
+              <div>
+                <h3 className="text-sm font-extrabold text-[#0f172a] mb-1">
+                  Fewer Pieces Than Re-Work Qty
+                </h3>
+                <p className="text-xs text-slate-600 font-medium">
+                  You&apos;re about to generate coupons for{" "}
+                  <strong className="text-slate-800">{pcsTotal} pcs</strong>,
+                  which is less than the Re-Work Qty of{" "}
+                  <strong className="text-slate-800">{reworkQty}</strong>. Are
+                  you sure you want to continue?
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2 w-full">
+              <button
+                type="button"
+                onClick={() => setLowPcsConfirmIntent(null)}
+                className="flex-1 bg-white border border-[#e2e8f0] text-[#64748b] px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#f8fafc] transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={confirmLowPcsAndProceed}
+                className="flex-1 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+              >
+                Yes, Continue
+              </button>
+            </div>
           </div>
         </div>
       )}
