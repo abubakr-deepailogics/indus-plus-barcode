@@ -88,13 +88,17 @@ export default function ReworkCouponPage() {
     size: "",
     pcs: "",
   });
-  const [bundles, setBundles] = useState<ReworkBundleRow[]>(() => [makeBlankRow()]);
+  const [bundles, setBundles] = useState<ReworkBundleRow[]>(() => [
+    makeBlankRow(),
+  ]);
 
   // Operations Detail — real data loaded from the style bulletin, same
   // shape/component as Coupon Generation (checkbox selection only, nothing
   // manual here).
   const [operations, setOperations] = useState<OperationsDetailRow[]>([]);
-  const [savedBundles, setSavedBundles] = useState<BundleDetailRow[] | null>(null);
+  const [savedBundles, setSavedBundles] = useState<BundleDetailRow[] | null>(
+    null,
+  );
 
   const [isSaving, setIsSaving] = useState(false);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -123,7 +127,9 @@ export default function ReworkCouponPage() {
       if (filters.workOrder) params.set("work_order", filters.workOrder);
       if (filters.customer) params.set("customer", filters.customer);
       if (filters.saleOrderNo) params.set("sale_order_no", filters.saleOrderNo);
-      const res = await fetch(`/api/open-order/work-orders?${params.toString()}`);
+      const res = await fetch(
+        `/api/open-order/work-orders?${params.toString()}`,
+      );
       return res.ok ? res.json() : [];
     },
     [],
@@ -150,14 +156,45 @@ export default function ReworkCouponPage() {
       const loadedBulletins: StyleBulletinRow[] = data.styleBulletins || [];
 
       if (loadedBulletins.length === 0) {
-        throw new Error("No operations found in style bulletin for this work order.");
+        throw new Error(
+          "No operations found in style bulletin for this work order.",
+        );
       }
 
       setCutDetails(loadedCuts);
       setStyleBulletins(loadedBulletins);
 
+      const countRes = await fetch(
+        `/api/qr-code-generation/pdf?work_order=${encodeURIComponent(trimmedWo)}`,
+      );
+      let generatedOpCodes: string[] | null = null;
+      if (countRes.ok) {
+        const countData = await countRes.json();
+        const origCount =
+          countData.originalCouponCount ?? countData.couponCount ?? 0;
+        if (origCount === 0) {
+          setHasCouponsGenerated(false);
+          setErrorMsg(
+            "Coupons have not been generated for this Work Order yet. Rework coupons can only be created for work orders with generated coupons.",
+          );
+        } else {
+          setHasCouponsGenerated(true);
+        }
+        generatedOpCodes = Array.isArray(countData.generatedOpCodes)
+          ? countData.generatedOpCodes
+          : [];
+      } else {
+        setHasCouponsGenerated(true);
+      }
+
+      const generatedOpCodeSet = new Set(generatedOpCodes ?? []);
       setOperations(
         loadedBulletins
+          .filter(
+            (row) =>
+              !generatedOpCodes ||
+              generatedOpCodeSet.has(row.Operation_Code ?? ""),
+          )
           .slice()
           .sort(
             (a, b) => (a.Operation_Sequence ?? 0) - (b.Operation_Sequence ?? 0),
@@ -174,27 +211,6 @@ export default function ReworkCouponPage() {
             lastOpSection: false,
           })),
       );
-
-      // Verify that production coupons were previously generated for this work order.
-      // Rework coupons cannot be created if coupons were never generated for this work order.
-      const countRes = await fetch(
-        `/api/qr-code-generation/pdf?work_order=${encodeURIComponent(trimmedWo)}`,
-      );
-      if (countRes.ok) {
-        const countData = await countRes.json();
-        const origCount =
-          countData.originalCouponCount ?? countData.couponCount ?? 0;
-        if (origCount === 0) {
-          setHasCouponsGenerated(false);
-          setErrorMsg(
-            "Coupons have not been generated for this Work Order yet. Rework coupons can only be created for work orders with generated coupons.",
-          );
-        } else {
-          setHasCouponsGenerated(true);
-        }
-      } else {
-        setHasCouponsGenerated(true);
-      }
 
       // Cutting Detail is fully manual — reset to a single blank row for
       // the newly loaded work order rather than carrying over rows from a
@@ -275,10 +291,14 @@ export default function ReworkCouponPage() {
   };
 
   const handleOperationChange = (id: number, field: string, value: boolean) => {
-    setOperations((prev) => prev.map((o) => (o.id === id ? { ...o, [field]: value } : o)));
+    setOperations((prev) =>
+      prev.map((o) => (o.id === id ? { ...o, [field]: value } : o)),
+    );
   };
   const handleAllOperationsSelChange = (checked: boolean) => {
-    setOperations((prev) => prev.map((o) => ({ ...o, lastOpSection: checked })));
+    setOperations((prev) =>
+      prev.map((o) => ({ ...o, lastOpSection: checked })),
+    );
   };
 
   // Total Pcs across every Cutting Detail row — checked live against
@@ -354,21 +374,27 @@ export default function ReworkCouponPage() {
       operations,
       bundles: mappedBundles,
     };
-  }, [mappedBundles, operations, saleOrderNo, customerName, workOrder, reworkQty, pcsTotal, user]);
+  }, [
+    mappedBundles,
+    operations,
+    saleOrderNo,
+    customerName,
+    workOrder,
+    reworkQty,
+    pcsTotal,
+    user,
+  ]);
 
-  const {
-    handleDownloadPdf,
-    generatingPdf,
-    couponCount,
-  } = useGenerateCouponPdf(
-    activeStyle ?? {
-      workOrder: "",
-      saleOrderNo: "",
-      styleCode: "",
-      bundles: [],
-      operations: [],
-    },
-  );
+  const { handleDownloadPdf, generatingPdf, couponCount } =
+    useGenerateCouponPdf(
+      activeStyle ?? {
+        workOrder: "",
+        saleOrderNo: "",
+        styleCode: "",
+        bundles: [],
+        operations: [],
+      },
+    );
 
   // Generate Coupon(s):
   // 1. Saves manual cut details into dbo.ReworkCouponEntry (pitSystem).
@@ -408,7 +434,9 @@ export default function ReworkCouponPage() {
     }
     const selectedOperations = operations.filter((op) => op.lastOpSection);
     if (selectedOperations.length === 0) {
-      setValidationError("Select at least one operation under Operations Detail.");
+      setValidationError(
+        "Select at least one operation under Operations Detail.",
+      );
       return false;
     }
     if (reworkQty === "") {
@@ -642,65 +670,65 @@ export default function ReworkCouponPage() {
                 </thead>
                 <tbody className="divide-y divide-[#f1f5f9]">
                   {bundles.map((b) => (
-                      <tr
-                        key={b.id}
-                        className="hover:bg-[#f8fafc] transition-colors text-[11px]"
-                      >
-                        <td className="p-0.5">
-                          <input
-                            type="text"
-                            value={b.cutNo}
-                            onChange={(e) =>
-                              updateBundleCell(b.id, "cutNo", e.target.value)
-                            }
-                            placeholder="Cut #"
-                            className={cellInputClassName}
-                          />
-                        </td>
-                        <td className="p-0.5">
-                          <input
-                            type="text"
-                            value={b.inseam}
-                            onChange={(e) =>
-                              updateBundleCell(b.id, "inseam", e.target.value)
-                            }
-                            placeholder="Inseam"
-                            className={cellInputClassName}
-                          />
-                        </td>
-                        <td className="p-0.5">
-                          <input
-                            type="text"
-                            value={b.size}
-                            onChange={(e) =>
-                              updateBundleCell(b.id, "size", e.target.value)
-                            }
-                            placeholder="Size"
-                            className={cellInputClassName}
-                          />
-                        </td>
-                        <td className="p-0.5">
-                          <input
-                            type="number"
-                            value={b.pcs}
-                            onChange={(e) =>
-                              updateBundleCell(b.id, "pcs", e.target.value)
-                            }
-                            placeholder="Pcs"
-                            className={cellInputClassName}
-                          />
-                        </td>
-                        <td className="p-0.5 text-center">
-                          <button
-                            type="button"
-                            onClick={() => removeBundleRow(b.id)}
-                            className="text-slate-300 hover:text-red-500 cursor-pointer p-1"
-                            aria-label="Remove row"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </td>
-                      </tr>
+                    <tr
+                      key={b.id}
+                      className="hover:bg-[#f8fafc] transition-colors text-[11px]"
+                    >
+                      <td className="p-0.5">
+                        <input
+                          type="text"
+                          value={b.cutNo}
+                          onChange={(e) =>
+                            updateBundleCell(b.id, "cutNo", e.target.value)
+                          }
+                          placeholder="Cut #"
+                          className={cellInputClassName}
+                        />
+                      </td>
+                      <td className="p-0.5">
+                        <input
+                          type="text"
+                          value={b.inseam}
+                          onChange={(e) =>
+                            updateBundleCell(b.id, "inseam", e.target.value)
+                          }
+                          placeholder="Inseam"
+                          className={cellInputClassName}
+                        />
+                      </td>
+                      <td className="p-0.5">
+                        <input
+                          type="text"
+                          value={b.size}
+                          onChange={(e) =>
+                            updateBundleCell(b.id, "size", e.target.value)
+                          }
+                          placeholder="Size"
+                          className={cellInputClassName}
+                        />
+                      </td>
+                      <td className="p-0.5">
+                        <input
+                          type="number"
+                          value={b.pcs}
+                          onChange={(e) =>
+                            updateBundleCell(b.id, "pcs", e.target.value)
+                          }
+                          placeholder="Pcs"
+                          className={cellInputClassName}
+                        />
+                      </td>
+                      <td className="p-0.5 text-center">
+                        <button
+                          type="button"
+                          onClick={() => removeBundleRow(b.id)}
+                          className="text-slate-300 hover:text-red-500 cursor-pointer p-1"
+                          aria-label="Remove row"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    </tr>
                   ))}
                 </tbody>
               </table>

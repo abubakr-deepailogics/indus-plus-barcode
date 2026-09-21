@@ -2,8 +2,15 @@ import { randomUUID } from "crypto";
 import { getPool, sql } from "@/lib/db";
 import { generateCouponPdf } from "@/features/qr-code-generation/services/pdf-generation.service";
 import { buildCouponCards } from "@/features/qr-code-generation/services/coupon-pairing.service";
-import { registerCoupons, countCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
-import type { BundleDetailRow, CouponLayout, OperationsDetailRow } from "@/features/qr-code-generation/types";
+import {
+  registerCoupons,
+  countCoupons,
+} from "@/features/qr-code-generation/services/coupon-registration.service";
+import type {
+  BundleDetailRow,
+  CouponLayout,
+  OperationsDetailRow,
+} from "@/features/qr-code-generation/types";
 
 interface GenerateRequestBody {
   workOrder: string;
@@ -23,7 +30,17 @@ interface GenerateRequestBody {
 // rendered bytes themselves are print-and-discard, regenerated on demand.
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<GenerateRequestBody>;
-  const { workOrder, saleOrderNo, styleCode, bundles, operations, layout, margins, codeType, generatedBy } = body;
+  const {
+    workOrder,
+    saleOrderNo,
+    styleCode,
+    bundles,
+    operations,
+    layout,
+    margins,
+    codeType,
+    generatedBy,
+  } = body;
 
   // styleCode is only a display label in the PDF header — some sources
   // (e.g. Open Order) have no real style code and legitimately send "".
@@ -86,7 +103,8 @@ export async function POST(request: Request) {
     });
   } catch (err: unknown) {
     console.error("PDF generation error:", err);
-    const message = err instanceof Error ? err.message : "Internal Server Error";
+    const message =
+      err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
 }
@@ -112,10 +130,26 @@ export async function GET(request: Request) {
         "SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0 AND BundleNo NOT LIKE 'RW%'",
       );
     const originalCouponCount = origRes.recordset[0]?.total ?? 0;
-    return Response.json({ couponCount, originalCouponCount });
+
+    const opRes = await pool
+      .request()
+      .input("workOrder", sql.NVarChar, workOrder)
+      .query(
+        "SELECT DISTINCT OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0 AND BundleNo NOT LIKE 'RW%'",
+      );
+    const generatedOpCodes: string[] = opRes.recordset.map(
+      (r: { OpNo: string }) => r.OpNo,
+    );
+
+    return Response.json({
+      couponCount,
+      originalCouponCount,
+      generatedOpCodes,
+    });
   } catch (err: unknown) {
     console.error("Coupon count lookup error:", err);
-    const message = err instanceof Error ? err.message : "Internal Server Error";
+    const message =
+      err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
 }
