@@ -4,7 +4,10 @@ import {
   WORKERS_VIEW,
   CUT_DETAIL_SNAPSHOT_TABLE,
   STYLE_BULLETIN_SNAPSHOT_TABLE,
+  STYLE_BULLETIN_TABLE,
+  OPERATIONS_CATALOG_TABLE,
 } from "@/lib/db";
+import { classifyDepartment } from "@/lib/department-classification";
 import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import type {
   BundleReportItem,
@@ -63,6 +66,55 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
+function buildInClause(
+  req: sql.Request,
+  prefix: string,
+  values: string[],
+): string {
+  return values
+    .map((v, i) => {
+      req.input(`${prefix}${i}`, sql.NVarChar, v);
+      return `@${prefix}${i}`;
+    })
+    .join(", ");
+}
+
+async function fetchSewingRateTotalByWorkOrder(
+  workOrders: string[],
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (workOrders.length === 0) return map;
+
+  const indusPool = await getPool("indusPlus");
+  for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
+    const req = indusPool.request();
+    const inClause = buildInClause(req, "wo", batch);
+    const result = await req.query(`
+      SELECT
+        sb.[Order No] AS WorkOrder,
+        sb.[Operation Code] AS OpNo,
+        op.Department,
+        TRY_CAST(sb.[Piece Rate] AS FLOAT) AS PieceRate
+      FROM ${STYLE_BULLETIN_TABLE} sb
+      LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op ON sb.[Operation Code] = op.OperationCode
+      WHERE sb.[Order No] IN (${inClause})
+    `);
+    for (const row of result.recordset as {
+      WorkOrder: string;
+      OpNo: string;
+      Department: string | null;
+      PieceRate: number | null;
+    }[]) {
+      if (classifyDepartment(row) !== "sewing") continue;
+      map.set(
+        row.WorkOrder,
+        (map.get(row.WorkOrder) ?? 0) + (Number(row.PieceRate) || 0),
+      );
+    }
+  }
+  return map;
+}
+
 // Every distinct Operation Code belonging to the given section, from the
 // (global, catalog-level) style bulletin — same source operation mode
 // resolves a single code against. A section can span many operation codes,
@@ -94,7 +146,11 @@ async function resolveSubject(
     }
     return {
       ok: true,
-      subject: { mode: "section", section: value, operationsCount: opCodes.length },
+      subject: {
+        mode: "section",
+        section: value,
+        operationsCount: opCodes.length,
+      },
       boundValue: value,
       opCodes,
     };
@@ -237,7 +293,9 @@ export async function buildReportSummary(
   const couponRequest = pitPool.request();
   if (mode === "section" && !isAll) {
     const codes = (opCodes ?? []).slice(0, IN_LIST_CHUNK_SIZE);
-    couponConditions.push(`${column} IN (${buildInClause(couponRequest, codes)})`);
+    couponConditions.push(
+      `${column} IN (${buildInClause(couponRequest, codes)})`,
+    );
   } else if (isAll) {
     couponConditions.push(`${column} IS NOT NULL`);
   } else {
@@ -292,6 +350,15 @@ export async function buildReportSummary(
   const rows = couponResult.recordset as RawCouponRow[];
   const enriched = await enrichCouponRows(rows);
 
+  const sewingRateTotalByWo = await fetchSewingRateTotalByWorkOrder([
+    ...new Set(enriched.map((row) => row.WorkOrder)),
+  ]);
+
+  const qtyFromValue = (value: number | null, workOrder: string): number => {
+    const rateTotal = sewingRateTotalByWo.get(workOrder) ?? 0;
+    return rateTotal > 0 ? (value ?? 0) / rateTotal : 0;
+  };
+
   // Employee display names for the breakdown + coupon trail — one batch
   // lookup for every distinct EmployeeCode seen, rather than one per row.
   const employeeCodes = [
@@ -322,16 +389,11 @@ export async function buildReportSummary(
   }
 
   const totalAmount = enriched.reduce((sum, row) => sum + (row.Value ?? 0), 0);
-  const totalQty = enriched.reduce(
-    (sum, row) => sum + (Number(row.Qty) || 0),
-    0,
-  );
   const totalSam = enriched.reduce((sum, row) => {
     const qty = Number(row.Qty) || 0;
     const smv = Number(row.Smv) || 0;
     return sum + qty * smv;
   }, 0);
-  const avgRatePerPiece = totalQty > 0 ? totalAmount / totalQty : 0;
   const totalWorkOrders = new Set(enriched.map((row) => row.WorkOrder)).size;
   const totalEmployees = new Set(enriched.map((row) => row.EmployeeCode)).size;
 
@@ -354,7 +416,10 @@ export async function buildReportSummary(
     string,
     SectionReportItem & { operations: Set<string> }
   >();
-  const bundleMap = new Map<string, BundleReportItem>();
+  const bundleMap = new Map<
+    string,
+    BundleReportItem & { operations: Set<string> }
+  >();
 
   const couponItems: CouponReportItem[] = enriched.map((row) => {
     const qty = row.Qty != null ? Number(row.Qty) : null;
@@ -376,7 +441,8 @@ export async function buildReportSummary(
       sectionCounts.set(section, (sectionCounts.get(section) || 0) + 1);
     }
 
-    // Aggregate Operation
+    const impliedQty = qtyFromValue(val, row.WorkOrder);
+
     const existingOp = opMap.get(opCode);
     if (!existingOp) {
       opMap.set(opCode, {
@@ -386,13 +452,13 @@ export async function buildReportSummary(
         rate,
         smv,
         couponCount: 1,
-        totalQty: qty || 0,
+        totalQty: impliedQty,
         totalSam: (qty || 0) * (smv || 0),
         totalAmount: val || 0,
       });
     } else {
       existingOp.couponCount += 1;
-      existingOp.totalQty += qty || 0;
+      existingOp.totalQty += impliedQty;
       existingOp.totalSam += (qty || 0) * (smv || 0);
       existingOp.totalAmount += val || 0;
       if (!existingOp.rate && rate) existingOp.rate = rate;
@@ -405,7 +471,7 @@ export async function buildReportSummary(
       woMap.set(row.WorkOrder, {
         workOrder: row.WorkOrder,
         couponCount: 1,
-        totalQty: qty || 0,
+        totalQty: impliedQty,
         totalSam: (qty || 0) * (smv || 0),
         totalAmount: val || 0,
         operationsCount: 0,
@@ -413,7 +479,7 @@ export async function buildReportSummary(
       });
     } else {
       existingWo.couponCount += 1;
-      existingWo.totalQty += qty || 0;
+      existingWo.totalQty += impliedQty;
       existingWo.totalSam += (qty || 0) * (smv || 0);
       existingWo.totalAmount += val || 0;
       existingWo.operations.add(opCode);
@@ -425,7 +491,7 @@ export async function buildReportSummary(
       sectionMap.set(section, {
         section,
         couponCount: 1,
-        totalQty: qty || 0,
+        totalQty: impliedQty,
         totalSam: (qty || 0) * (smv || 0),
         totalAmount: val || 0,
         operationsCount: 0,
@@ -433,7 +499,7 @@ export async function buildReportSummary(
       });
     } else {
       existingSection.couponCount += 1;
-      existingSection.totalQty += qty || 0;
+      existingSection.totalQty += impliedQty;
       existingSection.totalSam += (qty || 0) * (smv || 0);
       existingSection.totalAmount += val || 0;
       existingSection.operations.add(opCode);
@@ -449,15 +515,17 @@ export async function buildReportSummary(
         cutNo: row.CutNo != null ? String(row.CutNo) : null,
         workOrder: row.WorkOrder,
         couponCount: 1,
-        totalQty: qty || 0,
+        totalQty: impliedQty,
         totalSam: (qty || 0) * (smv || 0),
         totalAmount: val || 0,
+        operations: new Set([opCode]),
       });
     } else {
       existingBundle.couponCount += 1;
-      existingBundle.totalQty += qty || 0;
+      existingBundle.totalQty += impliedQty;
       existingBundle.totalSam += (qty || 0) * (smv || 0);
       existingBundle.totalAmount += val || 0;
+      existingBundle.operations.add(opCode);
     }
 
     // Aggregate Employee
@@ -468,7 +536,7 @@ export async function buildReportSummary(
         employeeName: empName ?? row.EmployeeCode,
         designation: empInfo?.designation ?? null,
         couponCount: 1,
-        totalQty: qty || 0,
+        totalQty: impliedQty,
         totalSam: (qty || 0) * (smv || 0),
         totalAmount: val || 0,
         operationsCount: 0,
@@ -478,7 +546,7 @@ export async function buildReportSummary(
       });
     } else {
       existingEmp.couponCount += 1;
-      existingEmp.totalQty += qty || 0;
+      existingEmp.totalQty += impliedQty;
       existingEmp.totalSam += (qty || 0) * (smv || 0);
       existingEmp.totalAmount += val || 0;
       existingEmp.operationCodes.add(opCode);
@@ -516,14 +584,14 @@ export async function buildReportSummary(
     }
   }
 
-  const operations = Array.from(opMap.values()).sort(
-    (a, b) => b.totalAmount - a.totalAmount,
-  );
+  const operations = Array.from(opMap.values())
+    .map((op) => ({ ...op, totalQty: Math.round(op.totalQty) }))
+    .sort((a, b) => b.totalAmount - a.totalAmount);
   const workOrders = Array.from(woMap.values())
     .map((w) => ({
       workOrder: w.workOrder,
       couponCount: w.couponCount,
-      totalQty: w.totalQty,
+      totalQty: Math.round(w.totalQty),
       totalSam: w.totalSam,
       totalAmount: w.totalAmount,
       operationsCount: w.operations.size,
@@ -533,29 +601,48 @@ export async function buildReportSummary(
     .map((s) => ({
       section: s.section,
       couponCount: s.couponCount,
-      totalQty: s.totalQty,
+      totalQty: Math.round(s.totalQty),
       totalSam: s.totalSam,
       totalAmount: s.totalAmount,
       operationsCount: s.operations.size,
     }))
     .sort((a, b) => b.totalAmount - a.totalAmount);
-  const bundles = Array.from(bundleMap.values()).sort((a, b) => {
-    if (a.workOrder !== b.workOrder) return a.workOrder.localeCompare(b.workOrder);
-    return a.bundleNo.localeCompare(b.bundleNo);
-  });
+  const bundles = Array.from(bundleMap.values())
+    .map((b) => ({
+      bundleNo: b.bundleNo,
+      cutNo: b.cutNo,
+      workOrder: b.workOrder,
+      couponCount: b.couponCount,
+      totalQty: Math.round(b.totalQty),
+      totalSam: b.totalSam,
+      totalAmount: b.totalAmount,
+    }))
+    .sort((a, b) => {
+      if (a.workOrder !== b.workOrder)
+        return a.workOrder.localeCompare(b.workOrder);
+      return a.bundleNo.localeCompare(b.bundleNo);
+    });
   const employees = Array.from(empMap.values())
     .map((e) => ({
       employeeCode: e.employeeCode,
       employeeName: e.employeeName,
       designation: e.designation,
       couponCount: e.couponCount,
-      totalQty: e.totalQty,
+      totalQty: Math.round(e.totalQty),
       totalSam: e.totalSam,
       totalAmount: e.totalAmount,
       operationsCount: e.operationCodes.size,
       workOrdersCount: e.workOrderCodes.size,
     }))
     .sort((a, b) => b.totalAmount - a.totalAmount);
+
+  const totalQty = Math.round(
+    enriched.reduce(
+      (sum, row) => sum + qtyFromValue(row.Value, row.WorkOrder),
+      0,
+    ),
+  );
+  const avgRatePerPiece = totalQty > 0 ? totalAmount / totalQty : 0;
 
   const scanCounts = scanCountsResult.recordset[0] || {};
   const todayScans = Number(scanCounts.TodayScans) || 0;
@@ -564,8 +651,11 @@ export async function buildReportSummary(
     ? employeeInfoByCode.get(latest.EmployeeCode)
     : undefined;
 
-  const uncalculatedCouponsCount = couponItems.filter((c) => !c.isWageCalculated).length;
-  const allWagesCalculated = couponItems.length > 0 && uncalculatedCouponsCount === 0;
+  const uncalculatedCouponsCount = couponItems.filter(
+    (c) => !c.isWageCalculated,
+  ).length;
+  const allWagesCalculated =
+    couponItems.length > 0 && uncalculatedCouponsCount === 0;
 
   const summary: ReportSummary = {
     subject,

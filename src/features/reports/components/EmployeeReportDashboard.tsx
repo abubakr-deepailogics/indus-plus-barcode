@@ -16,7 +16,6 @@ import {
   FileSpreadsheet,
   Users,
   Layers,
-  Package,
   Coins,
   Trash2,
   Loader2,
@@ -272,34 +271,26 @@ const MODE_CONFIG: Record<
   },
 };
 
-type BreakdownDimension =
-  | "operations"
-  | "workOrders"
-  | "employees"
-  | "sections"
-  | "bundles";
+type BreakdownDimension = "workOrders" | "employees";
 
 // Every report always carries every breakdown dimension. The own-dimension
 // (e.g. "employees" tab in employee mode) is always shown first so the user
 // can see grouped-breakdown data for both specific and All searches.
-// Sections/bundles only make sense once you're already scoped to a single
-// work order (or "all work orders"), so they're work-order-only.
+// Operations/Sections/Bundles breakdowns have been removed — only Work
+// Orders and Employees remain.
 const BREAKDOWN_DIMENSIONS: Record<ReportSearchMode, BreakdownDimension[]> = {
-  employee: ["employees", "operations", "workOrders"],
-  workOrder: ["workOrders", "employees", "operations", "sections", "bundles"],
-  operation: ["operations", "employees", "workOrders"],
-  section: ["sections", "employees", "workOrders", "operations", "bundles"],
+  employee: ["employees", "workOrders"],
+  workOrder: ["workOrders", "employees"],
+  operation: ["employees", "workOrders"],
+  section: ["employees", "workOrders"],
 };
 
 const TAB_META: Record<
   BreakdownDimension,
   { label: string; icon: LucideIcon }
 > = {
-  operations: { label: "Operations Breakdown", icon: Scissors },
   workOrders: { label: "Work Orders", icon: ClipboardList },
   employees: { label: "Employees", icon: UserRound },
-  sections: { label: "Sections", icon: Layers },
-  bundles: { label: "Bundles", icon: Package },
 };
 
 type TabKey = BreakdownDimension | "coupons";
@@ -704,28 +695,7 @@ export function EmployeeReportDashboard() {
     let headers: string[];
     let rows: (string | number | null | undefined)[][];
 
-    if (effectiveTab === "operations") {
-      headers = [
-        "Operation Code",
-        "Operation Name",
-        "Section",
-        "Rate",
-        "SMV",
-        "Coupons",
-        "Output (Pcs)",
-        "Total Amount",
-      ];
-      rows = summary.operations.map((op) => [
-        op.operationCode,
-        op.operationName,
-        op.section,
-        op.rate,
-        op.smv,
-        op.couponCount,
-        op.totalQty,
-        Number(op.totalAmount.toFixed(2)),
-      ]);
-    } else if (effectiveTab === "workOrders") {
+    if (effectiveTab === "workOrders") {
       headers = [
         "Work Order #",
         "Operations",
@@ -739,38 +709,6 @@ export function EmployeeReportDashboard() {
         wo.couponCount,
         wo.totalQty,
         Number(wo.totalAmount.toFixed(2)),
-      ]);
-    } else if (effectiveTab === "sections") {
-      headers = [
-        "Section",
-        "Operations",
-        "Coupons",
-        "Output (Pcs)",
-        "Total Amount",
-      ];
-      rows = summary.sections.map((s) => [
-        s.section,
-        s.operationsCount,
-        s.couponCount,
-        s.totalQty,
-        Number(s.totalAmount.toFixed(2)),
-      ]);
-    } else if (effectiveTab === "bundles") {
-      headers = [
-        "Bundle #",
-        "Cut #",
-        "Work Order",
-        "Coupons",
-        "Output (Pcs)",
-        "Total Amount",
-      ];
-      rows = summary.bundles.map((b) => [
-        b.bundleNo,
-        b.cutNo,
-        b.workOrder,
-        b.couponCount,
-        b.totalQty,
-        Number(b.totalAmount.toFixed(2)),
       ]);
     } else if (effectiveTab === "employees") {
       headers = [
@@ -1844,249 +1782,6 @@ export function EmployeeReportDashboard() {
             </div>
 
             {/* Tab: Operations Breakdown Table */}
-            {effectiveTab === "operations" && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
-                      <th className="py-2.5 px-3">Operation</th>
-                      <th className="py-2.5 px-3">Section</th>
-                      <th className="py-2.5 px-3 text-right">Rate</th>
-                      <th className="py-2.5 px-3 text-right">SMV</th>
-                      <th className="py-2.5 px-3 text-center">Coupons</th>
-                      <th className="py-2.5 px-3 text-center">Output (Pcs)</th>
-                      <th className="py-2.5 px-3 text-right">Total Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {summary.operations.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={7}
-                          className="py-8 text-center text-slate-400 font-medium"
-                        >
-                          No operations recorded for this period.
-                        </td>
-                      </tr>
-                    ) : (
-                      summary.operations.map((op, idx) => (
-                        <tr
-                          key={idx}
-                          className="hover:bg-slate-50/70 transition-colors"
-                        >
-                          <td className="py-2.5 px-3">
-                            <div className="flex flex-col">
-                              <span className="font-bold text-slate-900">
-                                {op.operationName}
-                              </span>
-                              <span className="text-[10px] font-mono text-indigo-600 font-bold">
-                                {op.operationCode}
-                              </span>
-                            </div>
-                          </td>
-                          <td className="py-2.5 px-3">
-                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-semibold text-[10px]">
-                              {op.section || "—"}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-semibold text-slate-700">
-                            {op.rate != null
-                              ? `Rs. ${op.rate.toFixed(2)}`
-                              : "—"}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-700">
-                            {op.smv != null ? op.smv.toFixed(2) : "—"}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-bold text-slate-800">
-                            {op.couponCount.toLocaleString()}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
-                            {op.totalQty.toLocaleString()}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
-                            Rs. {formatAmount(op.totalAmount)}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  {summary.operations.length > 0 && (
-                    <tfoot>
-                      <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
-                        <td className="py-2.5 px-3" colSpan={4}>
-                          Total ({summary.operations.length} Operations)
-                        </td>
-                        <td className="py-2.5 px-3 text-center text-slate-900">
-                          {summary.totalCoupons.toLocaleString()}
-                        </td>
-                        <td className="py-2.5 px-3 text-center text-[#4f46e5]">
-                          {summary.totalQty.toLocaleString()}
-                        </td>
-                        <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
-                          Rs. {formatAmount(summary.totalAmount)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-            )}
-
-            {/* Tab: Sections Breakdown Table (Work Order mode only) */}
-            {effectiveTab === "sections" && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
-                      <th className="py-2.5 px-3">Section</th>
-                      <th className="py-2.5 px-3 text-center">Operations</th>
-                      <th className="py-2.5 px-3 text-center">Coupons</th>
-                      <th className="py-2.5 px-3 text-center">Output (Pcs)</th>
-                      <th className="py-2.5 px-3 text-right">Total Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {summary.sections.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={5}
-                          className="py-8 text-center text-slate-400 font-medium"
-                        >
-                          No sections recorded for this period.
-                        </td>
-                      </tr>
-                    ) : (
-                      summary.sections.map((s, idx) => (
-                        <tr
-                          key={idx}
-                          className="hover:bg-slate-50/70 transition-colors"
-                        >
-                          <td className="py-2.5 px-3">
-                            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 font-bold text-[11px]">
-                              {s.section}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-semibold text-slate-700">
-                            {s.operationsCount}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-bold text-slate-800">
-                            {s.couponCount.toLocaleString()}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
-                            {s.totalQty.toLocaleString()}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
-                            Rs. {formatAmount(s.totalAmount)}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  {summary.sections.length > 0 && (
-                    <tfoot>
-                      <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
-                        <td className="py-2.5 px-3" colSpan={2}>
-                          Total ({summary.sections.length} Sections)
-                        </td>
-                        <td className="py-2.5 px-3 text-center text-slate-900">
-                          {summary.totalCoupons.toLocaleString()}
-                        </td>
-                        <td className="py-2.5 px-3 text-center text-[#4f46e5]">
-                          {summary.totalQty.toLocaleString()}
-                        </td>
-                        <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
-                          Rs. {formatAmount(summary.totalAmount)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-            )}
-
-            {/* Tab: Bundles Breakdown Table (Work Order mode only) */}
-            {effectiveTab === "bundles" && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
-                      <th className="py-2.5 px-3">Bundle #</th>
-                      <th className="py-2.5 px-3">Cut #</th>
-                      {isAllSummary && (
-                        <th className="py-2.5 px-3">Work Order</th>
-                      )}
-                      <th className="py-2.5 px-3 text-center">Coupons</th>
-                      <th className="py-2.5 px-3 text-center">Output (Pcs)</th>
-                      <th className="py-2.5 px-3 text-right">Total Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {summary.bundles.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={isAllSummary ? 6 : 5}
-                          className="py-8 text-center text-slate-400 font-medium"
-                        >
-                          No bundles recorded for this period.
-                        </td>
-                      </tr>
-                    ) : (
-                      summary.bundles.map((b, idx) => (
-                        <tr
-                          key={idx}
-                          className="hover:bg-slate-50/70 transition-colors"
-                        >
-                          <td className="py-2.5 px-3">
-                            <span className="font-mono font-bold text-[#4f46e5] bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
-                              {b.bundleNo}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 font-semibold text-slate-700">
-                            {b.cutNo || "—"}
-                          </td>
-                          {isAllSummary && (
-                            <td className="py-2.5 px-3 font-mono text-slate-600">
-                              {b.workOrder}
-                            </td>
-                          )}
-                          <td className="py-2.5 px-3 text-center font-bold text-slate-800">
-                            {b.couponCount.toLocaleString()}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
-                            {b.totalQty.toLocaleString()}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
-                            Rs. {formatAmount(b.totalAmount)}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  {summary.bundles.length > 0 && (
-                    <tfoot>
-                      <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
-                        <td
-                          className="py-2.5 px-3"
-                          colSpan={isAllSummary ? 3 : 2}
-                        >
-                          Total ({summary.bundles.length} Bundles)
-                        </td>
-                        <td className="py-2.5 px-3 text-center text-slate-900">
-                          {summary.totalCoupons.toLocaleString()}
-                        </td>
-                        <td className="py-2.5 px-3 text-center text-[#4f46e5]">
-                          {summary.totalQty.toLocaleString()}
-                        </td>
-                        <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
-                          Rs. {formatAmount(summary.totalAmount)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-            )}
-
             {/* Tab: Work Orders Breakdown Table */}
             {effectiveTab === "workOrders" && (
               <div className="overflow-x-auto">
@@ -2835,74 +2530,6 @@ export function EmployeeReportDashboard() {
                 const items = summary[dimension];
                 if (!items || items.length === 0) return null;
 
-                if (dimension === "operations") {
-                  return (
-                    <div key={dimension}>
-                      <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
-                        Operations Breakdown
-                      </h3>
-                      <table className="print-ops-table">
-                        <thead>
-                          <tr>
-                            <th className="text-center w-10">#</th>
-                            <th>OPERATION CODE</th>
-                            <th>OPERATION NAME</th>
-                            <th>SECTION</th>
-                            <th className="text-right w-16">RATE (RS.)</th>
-                            <th className="text-right w-14">SMV</th>
-                            <th className="text-center w-16">COUPONS</th>
-                            <th className="text-center w-18">OUTPUT (PCS)</th>
-                            <th className="text-right w-22">TOTAL AMOUNT</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {summary.operations.map((op, idx) => (
-                            <tr key={idx}>
-                              <td className="text-center">{idx + 1}</td>
-                              <td className="font-mono font-bold">
-                                {op.operationCode}
-                              </td>
-                              <td>{op.operationName}</td>
-                              <td>{op.section || "—"}</td>
-                              <td className="text-right font-mono">
-                                {op.rate != null
-                                  ? `Rs. ${op.rate.toFixed(2)}`
-                                  : "—"}
-                              </td>
-                              <td className="text-right font-mono">
-                                {op.smv != null ? op.smv.toFixed(2) : "—"}
-                              </td>
-                              <td className="text-center font-bold">
-                                {op.couponCount.toLocaleString()}
-                              </td>
-                              <td className="text-center font-bold">
-                                {op.totalQty.toLocaleString()}
-                              </td>
-                              <td className="text-right font-bold">
-                                Rs. {formatAmount(op.totalAmount)}
-                              </td>
-                            </tr>
-                          ))}
-                          <tr className="print-totals-row">
-                            <td colSpan={6} className="text-right uppercase">
-                              Grand Total
-                            </td>
-                            <td className="text-center">
-                              {summary.totalCoupons.toLocaleString()}
-                            </td>
-                            <td className="text-center">
-                              {summary.totalQty.toLocaleString()}
-                            </td>
-                            <td className="text-right">
-                              Rs. {formatAmount(summary.totalAmount)}
-                            </td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                }
-
                 if (dimension === "workOrders") {
                   return (
                     <div key={dimension}>
@@ -2940,98 +2567,6 @@ export function EmployeeReportDashboard() {
                               </td>
                               <td className="text-right font-bold">
                                 Rs. {formatAmount(wo.totalAmount)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                }
-
-                if (dimension === "sections") {
-                  return (
-                    <div key={dimension}>
-                      <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
-                        Sections Breakdown
-                      </h3>
-                      <table className="print-ops-table">
-                        <thead>
-                          <tr>
-                            <th className="text-center w-10">#</th>
-                            <th>SECTION</th>
-                            <th className="text-center w-20">OPERATIONS</th>
-                            <th className="text-center w-20">COUPONS</th>
-                            <th className="text-center w-24">OUTPUT (PCS)</th>
-                            <th className="text-right w-28">
-                              TOTAL AMOUNT (RS.)
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {summary.sections.map((s, idx) => (
-                            <tr key={idx}>
-                              <td className="text-center">{idx + 1}</td>
-                              <td className="font-bold">{s.section}</td>
-                              <td className="text-center">
-                                {s.operationsCount}
-                              </td>
-                              <td className="text-center">
-                                {s.couponCount.toLocaleString()}
-                              </td>
-                              <td className="text-center">
-                                {s.totalQty.toLocaleString()}
-                              </td>
-                              <td className="text-right font-bold">
-                                Rs. {formatAmount(s.totalAmount)}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  );
-                }
-
-                if (dimension === "bundles") {
-                  return (
-                    <div key={dimension}>
-                      <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
-                        Bundles Breakdown
-                      </h3>
-                      <table className="print-ops-table">
-                        <thead>
-                          <tr>
-                            <th className="text-center w-10">#</th>
-                            <th>BUNDLE #</th>
-                            <th>CUT #</th>
-                            {isAllSummary && <th>WORK ORDER</th>}
-                            <th className="text-center w-20">COUPONS</th>
-                            <th className="text-center w-24">OUTPUT (PCS)</th>
-                            <th className="text-right w-28">
-                              TOTAL AMOUNT (RS.)
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {summary.bundles.map((b, idx) => (
-                            <tr key={idx}>
-                              <td className="text-center">{idx + 1}</td>
-                              <td className="font-mono font-bold">
-                                {b.bundleNo}
-                              </td>
-                              <td>{b.cutNo || "—"}</td>
-                              {isAllSummary && (
-                                <td className="font-mono">{b.workOrder}</td>
-                              )}
-                              <td className="text-center">
-                                {b.couponCount.toLocaleString()}
-                              </td>
-                              <td className="text-center">
-                                {b.totalQty.toLocaleString()}
-                              </td>
-                              <td className="text-right font-bold">
-                                Rs. {formatAmount(b.totalAmount)}
                               </td>
                             </tr>
                           ))}
