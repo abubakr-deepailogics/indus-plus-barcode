@@ -45,7 +45,7 @@ export function useCouponScanning() {
     setScanBy(user?.email || user?.displayName || "");
   }
 
-  const [dated, setDated] = useState(() => format(new Date(), "yyyy-MM-dd"));
+  const [dated, setDated] = useState("");
   const [employeeName, setEmployeeName] = useState("");
   const [section, setSection] = useState("");
   const [shift, setShift] = useState("");
@@ -137,21 +137,27 @@ export function useCouponScanning() {
   // flushPendingScans below), in case a scan is triggered through a path
   // that bypasses that field's disabled state.
   //
-  // Accepts an optional date override: a caller that just called setDated
-  // synchronously (e.g. picking a date from the calendar) would otherwise
-  // read the pre-update `dated` from this closure, since the state update
-  // hasn't re-rendered yet — passing the just-set value sidesteps that.
+  // Accepts optional date/employee-code overrides: a caller that just called
+  // setDated/setEmployeeCode synchronously (e.g. picking a date from the
+  // calendar, or selecting a worker — which stamps in today's date and
+  // verifies in the same call) would otherwise read the pre-update values
+  // from this closure, since the state update hasn't re-rendered yet —
+  // passing the just-set values sidesteps that.
   const verifyAttendance = useCallback(
-    async (overrideDate?: string): Promise<boolean> => {
+    async (
+      overrideDate?: string,
+      overrideEmployeeCode?: string,
+    ): Promise<boolean> => {
       const dateToCheck = overrideDate ?? dated;
-      if (!employeeCode.trim() || !dateToCheck) {
+      const employeeCodeToCheck = overrideEmployeeCode ?? employeeCode;
+      if (!employeeCodeToCheck.trim() || !dateToCheck) {
         setIsEmployeePresent(null);
         return false;
       }
       setCheckingAttendance(true);
       try {
         const result = await couponScanningService.checkAttendance(
-          employeeCode,
+          employeeCodeToCheck,
           dateToCheck,
         );
         if (!result.ok) {
@@ -429,7 +435,7 @@ export function useCouponScanning() {
     setAlreadyMonthlyScanPrice("");
     setLineId("");
     setScanBy(user?.email || user?.displayName || "");
-    setDated(format(new Date(), "yyyy-MM-dd"));
+    setDated("");
     setEmployeeName("");
     setSection("");
     setShift("");
@@ -683,6 +689,10 @@ export function useCouponScanning() {
     setDepartment(worker.ParentDepartment || worker.DepartmentName || "");
     setDesignation(worker.DesignationName || "");
     setSection(worker.DepartmentName || "");
+
+    const today = format(new Date(), "yyyy-MM-dd");
+    setDated(today);
+    void verifyAttendance(today, empCode);
 
     // Fetch dynamic scan stats
     try {
