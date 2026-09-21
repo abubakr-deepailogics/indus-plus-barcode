@@ -207,14 +207,12 @@ export async function buildOrderWiseReport(
     {
       previousPaid: number;
       currentClaim: number;
-      qtyProduced: number;
       opInc: number;
     }
   >();
   for (const row of scans) {
     const qty = Number(row.Qty) || 0;
     const rate = Number(row.Rate) || 0;
-    const smv = Number(row.Smv) || 0;
     const value = qty * rate;
     const opInc =
       qty * (operationCommissions.get(`${row.WorkOrder}|${row.OpNo}`) ?? 0);
@@ -223,13 +221,11 @@ export async function buildOrderWiseReport(
     const existing = byWorkOrder.get(row.WorkOrder) ?? {
       previousPaid: 0,
       currentClaim: 0,
-      qtyProduced: 0,
       opInc: 0,
     };
     existing.opInc += opInc;
     if (isCurrentCycle) {
       existing.currentClaim += value;
-      existing.qtyProduced += qty;
     } else {
       existing.previousPaid += value;
     }
@@ -308,6 +304,15 @@ export async function buildOrderWiseReport(
         totalRate != null && washQty != null ? totalRate * washQty : null;
       const totalClaim = scan.previousPaid + scan.currentClaim;
       const total = totalClaim + scan.opInc;
+      // Qty Produced = Current Claim ÷ Total Rate (not a bundle-scan count) —
+      // Minutes Produced then derives from that qty × Total SAM. Both are
+      // rounded to whole numbers for display, not fractional.
+      const qtyProduced =
+        totalRate != null && totalRate > 0
+          ? Math.round(scan.currentClaim / totalRate)
+          : 0;
+      const minutesProduced =
+        totalSam != null ? Math.round(totalSam * qtyProduced) : 0;
       return {
         workOrder,
         totalSam,
@@ -320,8 +325,8 @@ export async function buildOrderWiseReport(
         balance: plan != null ? plan - totalClaim : null,
         opInc: scan.opInc,
         total,
-        minutesProduced: totalSam != null ? totalSam * scan.qtyProduced : 0,
-        qtyProduced: scan.qtyProduced,
+        minutesProduced,
+        qtyProduced,
       };
     })
     .sort((a, b) => a.workOrder.localeCompare(b.workOrder));
