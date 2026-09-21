@@ -156,8 +156,42 @@ export default function ReworkCouponPage() {
       setCutDetails(loadedCuts);
       setStyleBulletins(loadedBulletins);
 
+      // Verify that production coupons were previously generated for this work order.
+      // Rework coupons cannot be created if coupons were never generated for this work order.
+      // Operations Detail is then limited to only the operations that
+      // actually have generated (non-rework) coupons on record — not
+      // every operation in the style bulletin.
+      const countRes = await fetch(
+        `/api/qr-code-generation/pdf?work_order=${encodeURIComponent(trimmedWo)}`,
+      );
+      let generatedOpCodes: string[] | null = null;
+      if (countRes.ok) {
+        const countData = await countRes.json();
+        const origCount =
+          countData.originalCouponCount ?? countData.couponCount ?? 0;
+        if (origCount === 0) {
+          setHasCouponsGenerated(false);
+          setErrorMsg(
+            "Coupons have not been generated for this Work Order yet. Rework coupons can only be created for work orders with generated coupons.",
+          );
+        } else {
+          setHasCouponsGenerated(true);
+        }
+        generatedOpCodes = Array.isArray(countData.generatedOpCodes)
+          ? countData.generatedOpCodes
+          : [];
+      } else {
+        setHasCouponsGenerated(true);
+      }
+
+      const generatedOpCodeSet = new Set(generatedOpCodes ?? []);
       setOperations(
         loadedBulletins
+          .filter(
+            (row) =>
+              !generatedOpCodes ||
+              generatedOpCodeSet.has(row.Operation_Code ?? ""),
+          )
           .slice()
           .sort(
             (a, b) => (a.Operation_Sequence ?? 0) - (b.Operation_Sequence ?? 0),
@@ -174,27 +208,6 @@ export default function ReworkCouponPage() {
             lastOpSection: false,
           })),
       );
-
-      // Verify that production coupons were previously generated for this work order.
-      // Rework coupons cannot be created if coupons were never generated for this work order.
-      const countRes = await fetch(
-        `/api/qr-code-generation/pdf?work_order=${encodeURIComponent(trimmedWo)}`,
-      );
-      if (countRes.ok) {
-        const countData = await countRes.json();
-        const origCount =
-          countData.originalCouponCount ?? countData.couponCount ?? 0;
-        if (origCount === 0) {
-          setHasCouponsGenerated(false);
-          setErrorMsg(
-            "Coupons have not been generated for this Work Order yet. Rework coupons can only be created for work orders with generated coupons.",
-          );
-        } else {
-          setHasCouponsGenerated(true);
-        }
-      } else {
-        setHasCouponsGenerated(true);
-      }
 
       // Cutting Detail is fully manual — reset to a single blank row for
       // the newly loaded work order rather than carrying over rows from a

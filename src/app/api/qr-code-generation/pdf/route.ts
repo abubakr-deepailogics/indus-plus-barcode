@@ -112,7 +112,22 @@ export async function GET(request: Request) {
         "SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0 AND BundleNo NOT LIKE 'RW%'",
       );
     const originalCouponCount = origRes.recordset[0]?.total ?? 0;
-    return Response.json({ couponCount, originalCouponCount });
+
+    // Distinct operation codes that actually have generated (non-rework)
+    // coupons on record — used by Rework Coupon to only offer operations
+    // that were already coupon-generated, not every operation in the style
+    // bulletin.
+    const opRes = await pool
+      .request()
+      .input("workOrder", sql.NVarChar, workOrder)
+      .query(
+        "SELECT DISTINCT OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0 AND BundleNo NOT LIKE 'RW%'",
+      );
+    const generatedOpCodes: string[] = opRes.recordset.map(
+      (r: { OpNo: string }) => r.OpNo,
+    );
+
+    return Response.json({ couponCount, originalCouponCount, generatedOpCodes });
   } catch (err: unknown) {
     console.error("Coupon count lookup error:", err);
     const message = err instanceof Error ? err.message : "Internal Server Error";
