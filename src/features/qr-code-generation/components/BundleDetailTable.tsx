@@ -13,6 +13,11 @@ interface BundleDetailTableProps {
   onBundleSelChange: (id: number, checked: boolean) => void;
   onAllBundlesSelChange: (checked: boolean) => void;
   onReworkQtyBundleChange: (value: string) => void;
+  // When provided, Cut # renders as an editable input instead of plain
+  // text — used by the Rework Coupon page, where Cut is never looked up
+  // from the DB and has to be typed in manually per row. Omitted (as on
+  // the Coupon Generation page) keeps the original read-only display.
+  onCutNoChange?: (id: number, value: string) => void;
 }
 
 export function BundleDetailTable({
@@ -23,6 +28,7 @@ export function BundleDetailTable({
   onBundleSelChange,
   onAllBundlesSelChange,
   onReworkQtyBundleChange,
+  onCutNoChange,
 }: BundleDetailTableProps) {
   const [isCutWise, setIsCutWise] = useState(false);
   const [isSizeWise, setIsSizeWise] = useState(false);
@@ -203,7 +209,17 @@ export function BundleDetailTable({
             {bundles.map((bd) => (
               <tr key={bd.id} className="hover:bg-[#f8fafc] border-b border-[#f1f5f9] transition-colors text-[11px] font-semibold text-slate-700">
                 <td className="py-2.5 text-center text-[#4f46e5] font-bold">
-                  {bd.cutNo}
+                  {onCutNoChange ? (
+                    <input
+                      type="text"
+                      value={bd.cutNo}
+                      onChange={(e) => onCutNoChange(bd.id, e.target.value)}
+                      placeholder="Cut #"
+                      className="w-16 px-1.5 py-1 rounded-lg border border-[#e2e8f0] bg-white text-center text-[11px] font-bold text-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
+                    />
+                  ) : (
+                    bd.cutNo
+                  )}
                 </td>
                 <td className="py-2.5 text-center text-slate-500 font-bold uppercase">
                   {bd.char}

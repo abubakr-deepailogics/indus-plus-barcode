@@ -13,9 +13,19 @@
 // without re-deriving the same regex.
 export function trimBundleNo(workOrder: string, bundleNo: string): string {
   const workOrderDigits = workOrder.replace(/\D/g, "").replace(/^0+/, "");
-  return workOrderDigits && bundleNo.startsWith(workOrderDigits)
-    ? bundleNo.slice(workOrderDigits.length)
-    : bundleNo;
+  // Normal ERP bundle: "2653001" → strip "2653" → "001"
+  if (workOrderDigits && bundleNo.startsWith(workOrderDigits)) {
+    return bundleNo.slice(workOrderDigits.length);
+  }
+  // Rework bundle: "RW002653001" → strip "RW002653" → keep "RW" + "001" = "RW001"
+  // Raw WO digits preserve leading zeros (e.g. "002653"), unlike workOrderDigits
+  // which strips them. We check the raw-digit prefix embedded inside the bundle.
+  const workOrderRawDigits = workOrder.replace(/\D/g, ""); // "002653"
+  const rwPrefix = `RW${workOrderRawDigits}`;             // "RW002653"
+  if (workOrderRawDigits && bundleNo.startsWith(rwPrefix)) {
+    return `RW${bundleNo.slice(rwPrefix.length)}`;        // "RW001"
+  }
+  return bundleNo;
 }
 
 export function buildCouponCode(workOrder: string, bundleNo: string, opNo: string): string {
@@ -34,6 +44,9 @@ export function demo() {
     [["W/O-003355", "0001", "OP1"], "3355-0001-OP1"],
     // no digits in work order at all — falls back to the raw string
     [["WO-ABC", "ABC0001", "OP1"], "WO-ABC-ABC0001-OP1"],
+    // rework bundle: RW+rawWODigits+seq → strips to RW+seq in barcode
+    [["W/O-002653", "RW002653001", "OP1"], "2653-RW001-OP1"],
+    [["W/O-001935", "RW001935002", "OP1"], "1935-RW002-OP1"],
   ];
   for (const [args, expected] of cases) {
     const actual = buildCouponCode(...args);
