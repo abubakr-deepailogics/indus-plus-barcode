@@ -592,6 +592,7 @@ export default function ReworkCouponPage() {
                     e.target.value !== "" ? Number(e.target.value) : "",
                   )
                 }
+                onWheel={(e) => e.currentTarget.blur()}
                 placeholder="e.g. 10"
                 className={`w-24 text-center px-3 py-3 rounded-xl border bg-white text-base font-extrabold text-indigo-600 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 transition-all ${
                   reworkQtyExceedsOrder
@@ -728,6 +729,7 @@ export default function ReworkCouponPage() {
                           onChange={(e) =>
                             updateBundleCell(b.id, "pcs", e.target.value)
                           }
+                          onWheel={(e) => e.currentTarget.blur()}
                           placeholder="Pcs"
                           className={cellInputClassName}
                         />
