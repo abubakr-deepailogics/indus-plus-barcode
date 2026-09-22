@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { PasswordInput } from "@/features/auth/components/PasswordInput";
+import { useAuth } from "@/features/auth/context/auth-context";
 import {
   Card,
   CardContent,
@@ -15,6 +16,7 @@ import {
 
 export default function ChangePasswordPage() {
   const router = useRouter();
+  const { refresh } = useAuth();
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -44,6 +46,7 @@ export default function ChangePasswordPage() {
         return;
       }
       setSuccess(true);
+      await refresh();
       setTimeout(() => router.replace("/"), 1200);
     } catch {
       setError("Something went wrong. Please try again.");

@@ -1,6 +1,8 @@
+import { cookies } from "next/headers";
 import { requireSession, AuthError } from "@/lib/require-session";
 import { setUserPassword, verifyCurrentPassword } from "@/features/auth/services/users.service";
 import { isPasswordStrongEnough } from "@/lib/password";
+import { createSessionToken, SESSION_COOKIE_MAX_AGE_SECONDS, SESSION_COOKIE_NAME } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -32,6 +34,23 @@ export async function POST(request: Request) {
     }
 
     await setUserPassword(session.userId, newPassword, false);
+
+    const token = createSessionToken({
+      userId: session.userId,
+      email: session.email,
+      displayName: session.displayName,
+      isAdmin: session.isAdmin,
+      mustResetPassword: false,
+    });
+    const store = await cookies();
+    store.set(SESSION_COOKIE_NAME, token, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      path: "/",
+      maxAge: SESSION_COOKIE_MAX_AGE_SECONDS,
+    });
+
     return Response.json({ ok: true });
   } catch (err) {
     if (err instanceof AuthError) {

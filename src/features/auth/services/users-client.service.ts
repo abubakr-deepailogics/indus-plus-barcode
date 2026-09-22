@@ -35,3 +35,8 @@ export async function resetUserPasswordRequest(userId: number): Promise<{ tempor
   const res = await fetch(`/api/users/${userId}/reset-password`, { method: "POST" });
   return parseJsonOrThrow(res);
 }
+
+export async function deleteUserRequest(userId: number): Promise<void> {
+  const res = await fetch(`/api/users/${userId}`, { method: "DELETE" });
+  await parseJsonOrThrow(res);
+}

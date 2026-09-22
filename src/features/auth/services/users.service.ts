@@ -20,6 +20,7 @@ function toAuthUser(row: UserRow): AuthUser {
     email: row.Email,
     displayName: row.DisplayName,
     isAdmin: row.IsAdmin,
+    mustResetPassword: row.MustResetPassword,
   };
 }
 
@@ -43,6 +44,17 @@ export async function findUserByEmail(email: string): Promise<UserRow | null> {
     .input("email", sql.NVarChar, email.trim().toLowerCase())
     .query<UserRow>(
       "SELECT UserId, Email, DisplayName, PasswordHash, IsAdmin, IsActive, MustResetPassword, CreatedAt, LastLoginAt FROM dbo.Users WHERE Email = @email",
+    );
+  return result.recordset[0] ?? null;
+}
+
+export async function findUserById(userId: number): Promise<UserRow | null> {
+  const pool = await getPool("pitSystem");
+  const result = await pool
+    .request()
+    .input("userId", sql.Int, userId)
+    .query<UserRow>(
+      "SELECT UserId, Email, DisplayName, PasswordHash, IsAdmin, IsActive, MustResetPassword, CreatedAt, LastLoginAt FROM dbo.Users WHERE UserId = @userId",
     );
   return result.recordset[0] ?? null;
 }
@@ -158,6 +170,15 @@ export async function setUserPassword(
     .query(
       "UPDATE dbo.Users SET PasswordHash = @passwordHash, MustResetPassword = @mustReset, UpdatedAt = GETDATE() WHERE UserId = @userId",
     );
+}
+
+export async function deleteUser(userId: number): Promise<boolean> {
+  const pool = await getPool("pitSystem");
+  const result = await pool
+    .request()
+    .input("userId", sql.Int, userId)
+    .query("DELETE FROM dbo.Users WHERE UserId = @userId");
+  return result.rowsAffected[0] > 0;
 }
 
 export async function verifyCurrentPassword(userId: number, password: string): Promise<boolean> {
