@@ -292,18 +292,19 @@ const MODE_CONFIG: Record<
   },
 };
 
-type BreakdownDimension = "workOrders" | "employees";
+type BreakdownDimension = "workOrders" | "employees" | "sections";
 
 // Every report always carries every breakdown dimension. The own-dimension
-// (e.g. "employees" tab in employee mode) is always shown first so the user
-// can see grouped-breakdown data for both specific and All searches.
-// Operations/Sections/Bundles breakdowns have been removed — only Work
-// Orders and Employees remain.
+// (e.g. "employees" tab in employee mode, "sections" tab in section mode)
+// is always shown first — and opens by default (see availableTabs[0] below)
+// — so the user lands on the breakdown matching what they searched for, for
+// both specific and All searches. Operations/Bundles breakdowns remain
+// removed — only Work Orders, Employees and Sections are shown.
 const BREAKDOWN_DIMENSIONS: Record<ReportSearchMode, BreakdownDimension[]> = {
-  employee: ["employees", "workOrders"],
-  workOrder: ["workOrders", "employees"],
-  operation: ["employees", "workOrders"],
-  section: ["employees", "workOrders"],
+  employee: ["employees", "workOrders", "sections"],
+  workOrder: ["workOrders", "employees", "sections"],
+  operation: ["employees", "workOrders", "sections"],
+  section: ["sections", "employees", "workOrders"],
 };
 
 const TAB_META: Record<
@@ -312,6 +313,7 @@ const TAB_META: Record<
 > = {
   workOrders: { label: "Work Orders", icon: ClipboardList },
   employees: { label: "Employees", icon: UserRound },
+  sections: { label: "Sections", icon: Layers },
 };
 
 type TabKey = BreakdownDimension | "coupons";
@@ -761,6 +763,14 @@ export function EmployeeReportDashboard() {
           ]);
         }
       }
+    } else if (effectiveTab === "sections") {
+      headers = ["Section", "Operations", "Coupons", "Total Amount"];
+      rows = summary.sections.map((sec) => [
+        sec.section,
+        sec.operationsCount,
+        sec.couponCount,
+        Number(sec.totalAmount.toFixed(2)),
+      ]);
     } else {
       headers = [
         "Coupon Code",
@@ -1879,6 +1889,87 @@ export function EmployeeReportDashboard() {
               </div>
             )}
 
+            {/* Tab: Sections Breakdown Table — same shape as the printed
+                "Productivity & Scan Report" Sections Breakdown, minus
+                Output (Pcs) and SAM Earned (those track scanned volume, not
+                what this tab is summarizing per section). */}
+            {effectiveTab === "sections" && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
+                      <th className="py-2.5 px-3 text-center">#</th>
+                      <th className="py-2.5 px-3">Section</th>
+                      <th className="py-2.5 px-3 text-center">Operations</th>
+                      <th className="py-2.5 px-3 text-center">Coupons</th>
+                      <th className="py-2.5 px-3 text-right">Total Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {summary.sections.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="py-8 text-center text-slate-400 font-medium"
+                        >
+                          No sections recorded for this period.
+                        </td>
+                      </tr>
+                    ) : (
+                      summary.sections.map((sec, idx) => (
+                        <tr
+                          key={`${sec.section}-${idx}`}
+                          className="hover:bg-slate-50/70 transition-colors"
+                        >
+                          <td className="py-2.5 px-3 text-center text-slate-500 font-semibold">
+                            {idx + 1}
+                          </td>
+                          <td className="py-2.5 px-3 font-semibold text-slate-700">
+                            {sec.section}
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-semibold text-slate-700">
+                            {sec.operationsCount}
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-bold text-slate-800">
+                            {sec.couponCount.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
+                            Rs. {formatAmount(sec.totalAmount)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  {summary.sections.length > 0 && (
+                    <tfoot>
+                      <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
+                        <td className="py-2.5 px-3" colSpan={2}>
+                          Total ({summary.sections.length} Sections)
+                        </td>
+                        <td className="py-2.5 px-3 text-center text-slate-900">
+                          {summary.operations.length}
+                        </td>
+                        <td className="py-2.5 px-3 text-center text-slate-900">
+                          {summary.sections
+                            .reduce((acc, sec) => acc + sec.couponCount, 0)
+                            .toLocaleString()}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
+                          Rs.{" "}
+                          {formatAmount(
+                            summary.sections.reduce(
+                              (acc, sec) => acc + sec.totalAmount,
+                              0,
+                            ),
+                          )}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            )}
+
             {/* Tab: Employees Breakdown Table (Payment Verification Format matching PDF) */}
             {effectiveTab === "employees" && (
               <div className="flex flex-col border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
@@ -2598,6 +2689,46 @@ export function EmployeeReportDashboard() {
                               </td>
                               <td className="text-right font-bold">
                                 Rs. {formatAmount(wo.totalAmount)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                }
+
+                if (dimension === "sections") {
+                  return (
+                    <div key={dimension}>
+                      <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
+                        Sections Summary
+                      </h3>
+                      <table className="print-ops-table">
+                        <thead>
+                          <tr>
+                            <th className="text-center w-10">#</th>
+                            <th>SECTION</th>
+                            <th className="text-center w-20">OPERATIONS</th>
+                            <th className="text-center w-20">COUPONS</th>
+                            <th className="text-right w-28">
+                              TOTAL AMOUNT (RS.)
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {summary.sections.map((sec, idx) => (
+                            <tr key={idx}>
+                              <td className="text-center">{idx + 1}</td>
+                              <td className="font-bold">{sec.section}</td>
+                              <td className="text-center">
+                                {sec.operationsCount}
+                              </td>
+                              <td className="text-center">
+                                {sec.couponCount.toLocaleString()}
+                              </td>
+                              <td className="text-right font-bold">
+                                Rs. {formatAmount(sec.totalAmount)}
                               </td>
                             </tr>
                           ))}
