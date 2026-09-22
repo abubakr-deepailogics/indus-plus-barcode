@@ -243,6 +243,9 @@ export async function buildOrderWiseReport(
   // from the IndusPlus live style bulletin — no section restriction.
   // Department is resolved via S_OperationsCatalog (same source as
   // fetchSewingOpCodesByWorkOrder) — never inferred from the Section column.
+  // Total SAM excludes operations with a zero Piece Rate (matches the
+  // "Excl 0" total shown on the Style Bulletin page) — Total Rate still
+  // sums every operation, since zero-rate rows already contribute 0 to it.
   const totalSamByWo = new Map<string, { sam: number; rate: number }>();
   const indusPool = await getPool("indusPlus");
   for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
@@ -251,7 +254,11 @@ export async function buildOrderWiseReport(
     const result = await req.query(`
       SELECT
         sb.[Order No]                               AS WorkOrder,
-        SUM(TRY_CAST(sb.[Smv/Sam] AS FLOAT))        AS TotalSam,
+        SUM(CASE
+          WHEN TRY_CAST(sb.[Piece Rate] AS FLOAT) <> 0
+          THEN TRY_CAST(sb.[Smv/Sam] AS FLOAT)
+          ELSE 0
+        END)                                         AS TotalSam,
         SUM(TRY_CAST(sb.[Piece Rate] AS FLOAT))     AS TotalRate
       FROM ${STYLE_BULLETIN_TABLE} sb
       LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op ON sb.[Operation Code] = op.OperationCode
