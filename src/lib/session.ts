@@ -1,4 +1,5 @@
 import { createHmac, timingSafeEqual } from "crypto";
+import type { cookies } from "next/headers";
 
 export const SESSION_COOKIE_NAME = "pits_session";
 const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // 12h
@@ -55,3 +56,22 @@ export function verifySessionToken(token: string | undefined | null): SessionPay
 }
 
 export const SESSION_COOKIE_MAX_AGE_SECONDS = SESSION_TTL_MS / 1000;
+
+// Sets the session cookie consistently across every route that issues one
+// (login, change-password). `secure` must reflect the actual request
+// protocol, not NODE_ENV — browsers silently drop `Secure` cookies set over
+// plain HTTP, which breaks login entirely on a production deployment that
+// isn't served over TLS (e.g. an on-prem/internal-network deployment).
+export async function setSessionCookie(
+  cookieStore: Awaited<ReturnType<typeof cookies>>,
+  token: string,
+  requestUrl: string,
+): Promise<void> {
+  cookieStore.set(SESSION_COOKIE_NAME, token, {
+    httpOnly: true,
+    secure: new URL(requestUrl).protocol === "https:",
+    sameSite: "lax",
+    path: "/",
+    maxAge: SESSION_COOKIE_MAX_AGE_SECONDS,
+  });
+}

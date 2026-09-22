@@ -1,6 +1,6 @@
 import { cookies } from "next/headers";
 import { verifyCredentials } from "@/features/auth/services/users.service";
-import { createSessionToken, SESSION_COOKIE_MAX_AGE_SECONDS, SESSION_COOKIE_NAME } from "@/lib/session";
+import { createSessionToken, setSessionCookie } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -32,13 +32,7 @@ export async function POST(request: Request) {
   });
 
   const store = await cookies();
-  store.set(SESSION_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === "production",
-    sameSite: "lax",
-    path: "/",
-    maxAge: SESSION_COOKIE_MAX_AGE_SECONDS,
-  });
+  await setSessionCookie(store, token, request.url);
 
   return Response.json({ user: result.user, mustResetPassword: result.mustResetPassword });
 }

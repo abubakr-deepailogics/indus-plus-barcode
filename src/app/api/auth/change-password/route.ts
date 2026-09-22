@@ -2,7 +2,7 @@ import { cookies } from "next/headers";
 import { requireSession, AuthError } from "@/lib/require-session";
 import { setUserPassword, verifyCurrentPassword } from "@/features/auth/services/users.service";
 import { isPasswordStrongEnough } from "@/lib/password";
-import { createSessionToken, SESSION_COOKIE_MAX_AGE_SECONDS, SESSION_COOKIE_NAME } from "@/lib/session";
+import { createSessionToken, setSessionCookie } from "@/lib/session";
 
 export const dynamic = "force-dynamic";
 
@@ -43,13 +43,7 @@ export async function POST(request: Request) {
       mustResetPassword: false,
     });
     const store = await cookies();
-    store.set(SESSION_COOKIE_NAME, token, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      path: "/",
-      maxAge: SESSION_COOKIE_MAX_AGE_SECONDS,
-    });
+    await setSessionCookie(store, token, request.url);
 
     return Response.json({ ok: true });
   } catch (err) {
