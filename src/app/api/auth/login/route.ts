@@ -28,6 +28,7 @@ export async function POST(request: Request) {
     email: result.user.email,
     displayName: result.user.displayName,
     isAdmin: result.user.isAdmin,
+    mustResetPassword: result.mustResetPassword,
   });
 
   const store = await cookies();

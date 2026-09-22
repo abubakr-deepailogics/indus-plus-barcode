@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { CreateUserInput, ManagedUser } from "@/features/auth/types";
 import {
   createUserRequest,
+  deleteUserRequest,
   fetchUsers,
   resetUserPasswordRequest,
   updateUserRequest,
@@ -53,5 +54,20 @@ export function useManageUsersFacade() {
     return resetUserPasswordRequest(user.id);
   }, []);
 
-  return { users, loading, error, createUser, toggleAdmin, toggleActive, resetPassword, reload: load };
+  const deleteUser = useCallback(async (user: ManagedUser) => {
+    await deleteUserRequest(user.id);
+    setUsers((prev) => prev.filter((u) => u.id !== user.id));
+  }, []);
+
+  return {
+    users,
+    loading,
+    error,
+    createUser,
+    toggleAdmin,
+    toggleActive,
+    resetPassword,
+    deleteUser,
+    reload: load,
+  };
 }

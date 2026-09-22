@@ -30,6 +30,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     void refresh();
+    // Catches an idle tab whose account was deleted/disabled or demoted by
+    // an admin elsewhere — the cookie itself stays validly signed until it
+    // expires, so only a re-check against the DB (via /api/auth/me) can
+    // detect that server-side state changed under it.
+    const interval = setInterval(() => void refresh(), 60_000);
+    return () => clearInterval(interval);
   }, [refresh]);
 
   const logout = useCallback(async () => {

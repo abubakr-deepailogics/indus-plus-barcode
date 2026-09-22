@@ -7,6 +7,15 @@ import { useManageUsersFacade } from "@/features/auth/hooks/useManageUsersFacade
 import { CreateUserDialog } from "@/features/auth/components/CreateUserDialog";
 import { ResetPasswordResultDialog } from "@/features/auth/components/ResetPasswordResultDialog";
 import { DataTable } from "@/components/ui/data-table/data-table";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import type { ManagedUser } from "@/features/auth/types";
 
 const pillButtonClassName =
@@ -14,10 +23,14 @@ const pillButtonClassName =
 
 export default function ManageUsersPage() {
   const { user: currentUser, loading: authLoading } = useAuth();
-  const { users, loading, error, createUser, toggleAdmin, toggleActive, resetPassword } =
+  const { users, loading, error, createUser, toggleAdmin, toggleActive, resetPassword, deleteUser } =
     useManageUsersFacade();
   const [temporaryPassword, setTemporaryPassword] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+  const [resetConfirmUser, setResetConfirmUser] = useState<ManagedUser | null>(null);
+  const [resettingPassword, setResettingPassword] = useState(false);
+  const [deleteConfirmUser, setDeleteConfirmUser] = useState<ManagedUser | null>(null);
+  const [deletingUser, setDeletingUser] = useState(false);
 
   const columns = useMemo<ColumnDef<ManagedUser>[]>(
     () => [
@@ -61,7 +74,7 @@ export default function ManageUsersPage() {
       {
         id: "actions",
         header: "Actions",
-        size: 340,
+        size: 420,
         cell: ({ row }) => {
           const u = row.original;
           const isSelf = u.id === currentUser?.id;
@@ -108,25 +121,60 @@ export default function ManageUsersPage() {
               <button
                 type="button"
                 className={`${pillButtonClassName} bg-blue-50 text-blue-600 hover:bg-blue-100 hover:text-blue-700`}
-                onClick={async () => {
+                onClick={() => {
                   setActionError(null);
-                  try {
-                    const { temporaryPassword } = await resetPassword(u);
-                    setTemporaryPassword(temporaryPassword);
-                  } catch (err) {
-                    setActionError(err instanceof Error ? err.message : "Action failed.");
-                  }
+                  setResetConfirmUser(u);
                 }}
               >
                 Reset password
+              </button>
+              <button
+                type="button"
+                className={`${pillButtonClassName} bg-red-50 text-red-600 hover:bg-red-100 hover:text-red-700`}
+                disabled={isSelf}
+                onClick={() => {
+                  setActionError(null);
+                  setDeleteConfirmUser(u);
+                }}
+              >
+                Delete
               </button>
             </div>
           );
         },
       },
     ],
-    [currentUser?.id, toggleAdmin, toggleActive, resetPassword],
+    [currentUser?.id, toggleAdmin, toggleActive],
   );
+
+  async function handleConfirmReset() {
+    if (!resetConfirmUser) return;
+    setActionError(null);
+    setResettingPassword(true);
+    try {
+      const { temporaryPassword } = await resetPassword(resetConfirmUser);
+      setTemporaryPassword(temporaryPassword);
+      setResetConfirmUser(null);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Action failed.");
+    } finally {
+      setResettingPassword(false);
+    }
+  }
+
+  async function handleConfirmDelete() {
+    if (!deleteConfirmUser) return;
+    setActionError(null);
+    setDeletingUser(true);
+    try {
+      await deleteUser(deleteConfirmUser);
+      setDeleteConfirmUser(null);
+    } catch (err) {
+      setActionError(err instanceof Error ? err.message : "Action failed.");
+    } finally {
+      setDeletingUser(false);
+    }
+  }
 
   if (authLoading) return null;
 
@@ -151,6 +199,66 @@ export default function ManageUsersPage() {
         temporaryPassword={temporaryPassword}
         onClose={() => setTemporaryPassword(null)}
       />
+      <Dialog
+        open={!!resetConfirmUser}
+        onOpenChange={(open) => !open && !resettingPassword && setResetConfirmUser(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Reset password?</DialogTitle>
+            <DialogDescription>
+              This immediately invalidates {resetConfirmUser?.email}&apos;s current
+              password and replaces it with a new temporary one. They will be
+              required to change it on their next sign-in.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={resettingPassword}
+              onClick={() => setResetConfirmUser(null)}
+            >
+              Cancel
+            </Button>
+            <Button type="button" disabled={resettingPassword} onClick={handleConfirmReset}>
+              {resettingPassword ? "Resetting..." : "Reset password"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog
+        open={!!deleteConfirmUser}
+        onOpenChange={(open) => !open && !deletingUser && setDeleteConfirmUser(null)}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete user?</DialogTitle>
+            <DialogDescription>
+              This permanently deletes {deleteConfirmUser?.email}&apos;s account.
+              They will no longer be able to sign in. This cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={deletingUser}
+              onClick={() => setDeleteConfirmUser(null)}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              disabled={deletingUser}
+              onClick={handleConfirmDelete}
+            >
+              {deletingUser ? "Deleting..." : "Delete user"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

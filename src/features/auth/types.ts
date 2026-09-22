@@ -3,6 +3,7 @@ export type AuthUser = {
   email: string;
   displayName: string;
   isAdmin: boolean;
+  mustResetPassword: boolean;
 };
 
 export type ManagedUser = {

@@ -8,6 +8,7 @@ export type SessionPayload = {
   email: string;
   displayName: string;
   isAdmin: boolean;
+  mustResetPassword: boolean;
   exp: number; // epoch ms
 };
 

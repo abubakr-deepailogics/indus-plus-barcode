@@ -13,6 +13,7 @@ export async function GET() {
       email: session.email,
       displayName: session.displayName,
       isAdmin: session.isAdmin,
+      mustResetPassword: session.mustResetPassword,
     },
   });
 }
