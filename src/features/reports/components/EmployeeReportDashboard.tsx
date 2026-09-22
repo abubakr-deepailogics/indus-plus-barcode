@@ -82,8 +82,13 @@ function isReworkBundle(bundleNo?: string | null): boolean {
   return !!bundleNo && bundleNo.toUpperCase().startsWith("RW");
 }
 
-function withReworkTag(operationLabel: string, bundleNo?: string | null): string {
-  return isReworkBundle(bundleNo) ? `${operationLabel} (Rework)` : operationLabel;
+function withReworkTag(
+  operationLabel: string,
+  bundleNo?: string | null,
+): string {
+  return isReworkBundle(bundleNo)
+    ? `${operationLabel} (Rework)`
+    : operationLabel;
 }
 
 // Groups an employee/coupon list (from any summary — a specific search or
@@ -1807,9 +1812,7 @@ export function EmployeeReportDashboard() {
                       <th className="py-2.5 px-3">Work Order #</th>
                       <th className="py-2.5 px-3 text-center">Operations</th>
                       <th className="py-2.5 px-3 text-center">Coupons</th>
-                      <th className="py-2.5 px-3 text-center">
-                        Total Output (Pcs)
-                      </th>
+                      <th className="py-2.5 px-3 text-center">Total Qty</th>
                       <th className="py-2.5 px-3 text-right">Total Amount</th>
                     </tr>
                   </thead>
@@ -1841,7 +1844,9 @@ export function EmployeeReportDashboard() {
                             {wo.couponCount.toLocaleString()}
                           </td>
                           <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
-                            {wo.totalQty.toLocaleString()}
+                            {wo.orderQty != null
+                              ? wo.orderQty.toLocaleString()
+                              : "—"}
                           </td>
                           <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
                             Rs. {formatAmount(wo.totalAmount)}
@@ -1860,7 +1865,9 @@ export function EmployeeReportDashboard() {
                           {summary.totalCoupons.toLocaleString()}
                         </td>
                         <td className="py-2.5 px-3 text-center text-[#4f46e5]">
-                          {summary.totalQty.toLocaleString()}
+                          {summary.workOrders
+                            .reduce((acc, wo) => acc + (wo.orderQty ?? 0), 0)
+                            .toLocaleString()}
                         </td>
                         <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                           Rs. {formatAmount(summary.totalAmount)}
@@ -2455,7 +2462,7 @@ export function EmployeeReportDashboard() {
                         {card2.value}
                       </div>
                       <div>
-                        <strong>TOTAL OUTPUT (PCS):</strong>{" "}
+                        <strong>TOTAL Qty:</strong>{" "}
                         {summary.totalQty.toLocaleString()}
                       </div>
                       <div>

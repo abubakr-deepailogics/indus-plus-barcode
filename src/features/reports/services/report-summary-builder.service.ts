@@ -115,6 +115,37 @@ async function fetchSewingRateTotalByWorkOrder(
   return map;
 }
 
+// Order Qty is a per-work-order constant (repeated on every cut-detail row),
+// not scanned/derived — same source and MAX()-per-WO approach as washQtyByWo
+// in finance-report.service.ts. Returns null for a work order with no
+// cut-detail snapshot row rather than defaulting to 0, so the UI can show
+// "—" instead of an inaccurate zero.
+async function fetchOrderQtyByWorkOrder(
+  workOrders: string[],
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (workOrders.length === 0) return map;
+
+  const pitPool = await getPool("pitSystem");
+  for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
+    const req = pitPool.request();
+    const inClause = buildInClause(req, "wo", batch);
+    const result = await req.query(`
+      SELECT [Work Order #] AS WorkOrder, MAX([Order Qty After % Add]) AS OrderQty
+      FROM ${CUT_DETAIL_SNAPSHOT_TABLE}
+      WHERE IsDeleted = 0 AND [Work Order #] IN (${inClause})
+      GROUP BY [Work Order #]
+    `);
+    for (const row of result.recordset as {
+      WorkOrder: string;
+      OrderQty: number | null;
+    }[]) {
+      if (row.OrderQty != null) map.set(row.WorkOrder, Number(row.OrderQty));
+    }
+  }
+  return map;
+}
+
 // Every distinct Operation Code belonging to the given section, from the
 // (global, catalog-level) style bulletin — same source operation mode
 // resolves a single code against. A section can span many operation codes,
@@ -350,8 +381,10 @@ export async function buildReportSummary(
   const rows = couponResult.recordset as RawCouponRow[];
   const enriched = await enrichCouponRows(rows);
 
-  const sewingRateTotalByWo = await fetchSewingRateTotalByWorkOrder([
-    ...new Set(enriched.map((row) => row.WorkOrder)),
+  const distinctWorkOrders = [...new Set(enriched.map((row) => row.WorkOrder))];
+  const [sewingRateTotalByWo, orderQtyByWo] = await Promise.all([
+    fetchSewingRateTotalByWorkOrder(distinctWorkOrders),
+    fetchOrderQtyByWorkOrder(distinctWorkOrders),
   ]);
 
   const qtyFromValue = (value: number | null, workOrder: string): number => {
@@ -472,6 +505,7 @@ export async function buildReportSummary(
         workOrder: row.WorkOrder,
         couponCount: 1,
         totalQty: impliedQty,
+        orderQty: null, // resolved from orderQtyByWo in the final projection below
         totalSam: (qty || 0) * (smv || 0),
         totalAmount: val || 0,
         operationsCount: 0,
@@ -592,6 +626,7 @@ export async function buildReportSummary(
       workOrder: w.workOrder,
       couponCount: w.couponCount,
       totalQty: Math.round(w.totalQty),
+      orderQty: orderQtyByWo.get(w.workOrder) ?? null,
       totalSam: w.totalSam,
       totalAmount: w.totalAmount,
       operationsCount: w.operations.size,
