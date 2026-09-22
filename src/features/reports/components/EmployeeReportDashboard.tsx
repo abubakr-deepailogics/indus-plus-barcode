@@ -73,6 +73,25 @@ interface EmployeeGrouped {
   totalPay: number;
 }
 
+interface OperationGroupedItem {
+  employeeCode: string;
+  employeeName: string;
+  workOrder: string;
+  date: string;
+  rate: number | null;
+  bundleCount: number;
+  qty: number;
+  totalPay: number;
+}
+
+interface OperationGrouped {
+  operation: string;
+  items: OperationGroupedItem[];
+  totalBundles: number;
+  totalQty: number;
+  totalPay: number;
+}
+
 // Rework coupons carry a bundle number in the RW<work order><seq> form (see
 // rework-coupon/page.tsx's assignedBundles) — no other bundle numbering
 // scheme starts with "RW", so this is a reliable way to tell a rework
@@ -180,6 +199,78 @@ function groupEmployeeData(
       totalPay,
     };
   });
+}
+
+// Groups a coupon list by operation, then by (employee, workOrder, date,
+// rate) within each operation — the inverse of groupEmployeeData, used for
+// operation-mode searches where one operation is performed by many
+// employees rather than one employee performing many operations.
+function groupByOperationData(
+  couponsList: CouponReportItem[] | undefined,
+): OperationGrouped[] {
+  const coupons = couponsList || [];
+  const groupMap = new Map<string, OperationGrouped>();
+
+  for (const c of coupons) {
+    const op = withReworkTag(
+      c.operationName || c.operationCode || "—",
+      c.bundleNo,
+    );
+    const empCode = c.employeeCode || "—";
+    const empName = c.employeeName || "—";
+    const wo = c.workOrder || "—";
+    const dateStr = c.scannedAt
+      ? format(new Date(c.scannedAt), "dd-MM-yy")
+      : "—";
+    const rate = c.rate != null ? Number(c.rate) : null;
+    const qty = c.qty || 0;
+    const pay =
+      c.value != null ? Number(c.value) : rate != null ? qty * rate : 0;
+
+    let group = groupMap.get(op);
+    if (!group) {
+      group = { operation: op, items: [], totalBundles: 0, totalQty: 0, totalPay: 0 };
+      groupMap.set(op, group);
+    }
+
+    const itemKey = `${empCode}__${wo}__${dateStr}__${rate}`;
+    const existing = group.items.find(
+      (it) =>
+        `${it.employeeCode}__${it.workOrder}__${it.date}__${it.rate}` ===
+        itemKey,
+    );
+    if (!existing) {
+      group.items.push({
+        employeeCode: empCode,
+        employeeName: empName,
+        workOrder: wo,
+        date: dateStr,
+        rate,
+        bundleCount: 1,
+        qty,
+        totalPay: pay,
+      });
+    } else {
+      existing.bundleCount += 1;
+      existing.qty += qty;
+      existing.totalPay += pay;
+    }
+  }
+
+  const groups = Array.from(groupMap.values());
+  for (const group of groups) {
+    group.items.sort((a, b) => {
+      const cmpDate = a.date.localeCompare(b.date);
+      if (cmpDate !== 0) return cmpDate;
+      return a.employeeCode.localeCompare(b.employeeCode);
+    });
+    group.totalBundles = group.items.reduce((acc, it) => acc + it.bundleCount, 0);
+    group.totalQty = group.items.reduce((acc, it) => acc + it.qty, 0);
+    group.totalPay = group.items.reduce((acc, it) => acc + it.totalPay, 0);
+  }
+  groups.sort((a, b) => a.operation.localeCompare(b.operation));
+
+  return groups;
 }
 
 function formatAmount(value: number): string {
@@ -493,6 +584,12 @@ export function EmployeeReportDashboard() {
     [employeesList, couponsList],
   );
 
+  const isOperationMode = summary?.subject.mode === "operation";
+  const operationGroupedData = useMemo(
+    () => (isOperationMode ? groupByOperationData(couponsList) : []),
+    [isOperationMode, couponsList],
+  );
+
   const handleCreateWages = useCallback(async () => {
     if (isCreatingWages) return;
     setIsCreatingWages(true);
@@ -726,6 +823,36 @@ export function EmployeeReportDashboard() {
         wo.totalQty,
         Number(wo.totalAmount.toFixed(2)),
       ]);
+    } else if (effectiveTab === "employees" && isOperationMode) {
+      headers = [
+        "Operation",
+        "W/O",
+        "Date",
+        "EmpCode",
+        "Employee Name",
+        "Rate",
+        "Bundle",
+        "Quantity",
+        "Total Pay",
+        "Signature",
+      ];
+      rows = [];
+      for (const og of operationGroupedData) {
+        for (const item of og.items) {
+          rows.push([
+            og.operation,
+            item.workOrder,
+            item.date,
+            item.employeeCode,
+            item.employeeName,
+            item.rate != null ? Number(item.rate.toFixed(2)) : "",
+            item.bundleCount,
+            item.qty,
+            Number(item.totalPay.toFixed(2)),
+            "",
+          ]);
+        }
+      }
     } else if (effectiveTab === "employees") {
       headers = [
         "EmpCode",
@@ -815,6 +942,8 @@ export function EmployeeReportDashboard() {
     filteredCoupons,
     showEmployeeColumn,
     employeeGroupedData,
+    isOperationMode,
+    operationGroupedData,
   ]);
 
   return (
@@ -1730,8 +1859,13 @@ export function EmployeeReportDashboard() {
                           label: "Scanned Coupons Trail",
                           icon: FileSpreadsheet,
                         }
-                      : TAB_META[tab];
-                  const count = summary[tab]?.length || 0;
+                      : tab === "employees" && isOperationMode
+                        ? { label: "Operations", icon: UserRound }
+                        : TAB_META[tab];
+                  const count =
+                    tab === "employees" && isOperationMode
+                      ? operationGroupedData.length
+                      : summary[tab]?.length || 0;
                   const Icon = meta.icon;
                   return (
                     <button
@@ -1881,21 +2015,40 @@ export function EmployeeReportDashboard() {
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
-                        <th className="py-2.5 px-3 border-r border-slate-200">
-                          EmpCode
-                        </th>
-                        <th className="py-2.5 px-3 border-r border-slate-200">
-                          Employee Name
-                        </th>
+                        {isOperationMode ? (
+                          <th className="py-2.5 px-3 border-r border-slate-200">
+                            Operation
+                          </th>
+                        ) : (
+                          <>
+                            <th className="py-2.5 px-3 border-r border-slate-200">
+                              EmpCode
+                            </th>
+                            <th className="py-2.5 px-3 border-r border-slate-200">
+                              Employee Name
+                            </th>
+                          </>
+                        )}
                         <th className="py-2.5 px-3 border-r border-slate-200">
                           W/O
                         </th>
                         <th className="py-2.5 px-3 text-center border-r border-slate-200">
                           Date
                         </th>
-                        <th className="py-2.5 px-3 border-r border-slate-200">
-                          Operation
-                        </th>
+                        {isOperationMode ? (
+                          <>
+                            <th className="py-2.5 px-3 border-r border-slate-200">
+                              EmpCode
+                            </th>
+                            <th className="py-2.5 px-3 border-r border-slate-200">
+                              Employee Name
+                            </th>
+                          </>
+                        ) : (
+                          <th className="py-2.5 px-3 border-r border-slate-200">
+                            Operation
+                          </th>
+                        )}
                         <th className="py-2.5 px-3 text-right border-r border-slate-200">
                           Rate
                         </th>
@@ -1914,7 +2067,81 @@ export function EmployeeReportDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
-                      {employeeGroupedData.length === 0 ? (
+                      {isOperationMode ? (
+                        operationGroupedData.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={10}
+                              className="py-8 text-center text-slate-400 font-medium"
+                            >
+                              No operations recorded for this period.
+                            </td>
+                          </tr>
+                        ) : (
+                          operationGroupedData.map((og) => (
+                            <Fragment key={og.operation}>
+                              {og.items.map((item, idx) => (
+                                <tr
+                                  key={idx}
+                                  className="hover:bg-slate-50/70 transition-colors"
+                                >
+                                  <td className="py-2 px-3 text-[11px] font-semibold text-slate-800 border-r border-slate-200 align-top">
+                                    {idx === 0 ? og.operation : ""}
+                                  </td>
+                                  <td className="py-2 px-3 font-mono font-bold text-slate-700 text-[11px] border-r border-slate-200">
+                                    {item.workOrder}
+                                  </td>
+                                  <td className="py-2 px-3 text-center text-[11px] text-slate-600 font-medium whitespace-nowrap border-r border-slate-200">
+                                    {item.date}
+                                  </td>
+                                  <td className="py-2 px-3 font-mono font-bold text-slate-800 text-[11px] border-r border-slate-200">
+                                    {item.employeeCode}
+                                  </td>
+                                  <td className="py-2 px-3 font-bold text-slate-900 text-[11px] border-r border-slate-200">
+                                    {item.employeeName}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
+                                    {item.rate != null
+                                      ? item.rate.toFixed(2).replace(/\.00$/, "")
+                                      : "—"}
+                                  </td>
+                                  <td className="py-2 px-3 text-center font-semibold text-slate-700 text-[11px] border-r border-slate-200">
+                                    {item.bundleCount}
+                                  </td>
+                                  <td className="py-2 px-3 text-center font-bold text-slate-800 text-[11px] border-r border-slate-200">
+                                    {item.qty.toLocaleString()}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-bold text-slate-900 font-mono text-[11px] border-r border-slate-200">
+                                    {formatAmount(item.totalPay)}
+                                  </td>
+                                  <td className="py-2 px-3 text-center">
+                                    <div className="border border-slate-300 w-16 h-5 mx-auto rounded-sm" />
+                                  </td>
+                                </tr>
+                              ))}
+                              {/* Operation wise Total row */}
+                              <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
+                                <td
+                                  colSpan={6}
+                                  className="py-2 px-3 text-right border-r border-slate-200"
+                                >
+                                  Operation wise Total :
+                                </td>
+                                <td className="py-2 px-3 text-center border-r border-slate-200">
+                                  {og.totalBundles.toLocaleString()}
+                                </td>
+                                <td className="py-2 px-3 text-center border-r border-slate-200">
+                                  {og.totalQty.toLocaleString()}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono border-r border-slate-200 text-emerald-800">
+                                  {formatAmount(og.totalPay)}
+                                </td>
+                                <td className="py-2 px-3"></td>
+                              </tr>
+                            </Fragment>
+                          ))
+                        )
+                      ) : employeeGroupedData.length === 0 ? (
                         <tr>
                           <td
                             colSpan={10}
@@ -2595,6 +2822,116 @@ export function EmployeeReportDashboard() {
                             </tr>
                           ))}
                         </tbody>
+                      </table>
+                    </div>
+                  );
+                }
+
+                if (isOperationMode) {
+                  return (
+                    <div key={dimension}>
+                      <table className="print-ops-table">
+                        <thead>
+                          <tr>
+                            <th>OPERATION</th>
+                            <th>W/O</th>
+                            <th className="text-center">DATE</th>
+                            <th>EMPCODE</th>
+                            <th>EMPLOYEE NAME</th>
+                            <th className="text-right">RATE</th>
+                            <th className="text-center">BUNDLE</th>
+                            <th className="text-center">QUANTITY</th>
+                            <th className="text-right">TOTAL PAY</th>
+                            <th className="text-center w-24">SIGNATURE</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {operationGroupedData.length === 0 ? (
+                            <tr>
+                              <td colSpan={10} className="text-center">
+                                No operations recorded for this period.
+                              </td>
+                            </tr>
+                          ) : (
+                            operationGroupedData.map((og) => (
+                              <Fragment key={og.operation}>
+                                {og.items.map((item, idx) => (
+                                  <tr key={idx}>
+                                    <td className="font-bold align-top">
+                                      {idx === 0 ? og.operation : ""}
+                                    </td>
+                                    <td className="font-mono font-bold">
+                                      {item.workOrder}
+                                    </td>
+                                    <td className="text-center whitespace-nowrap">
+                                      {item.date}
+                                    </td>
+                                    <td className="font-mono font-bold">
+                                      {item.employeeCode}
+                                    </td>
+                                    <td className="font-bold">
+                                      {item.employeeName}
+                                    </td>
+                                    <td className="text-right font-mono">
+                                      {item.rate != null
+                                        ? item.rate
+                                            .toFixed(2)
+                                            .replace(/\.00$/, "")
+                                        : "—"}
+                                    </td>
+                                    <td className="text-center">
+                                      {item.bundleCount}
+                                    </td>
+                                    <td className="text-center font-bold">
+                                      {item.qty.toLocaleString()}
+                                    </td>
+                                    <td className="text-right font-bold font-mono">
+                                      {formatAmount(item.totalPay)}
+                                    </td>
+                                    <td className="text-center"></td>
+                                  </tr>
+                                ))}
+                                <tr className="print-totals-row">
+                                  <td
+                                    colSpan={6}
+                                    className="text-right font-bold"
+                                  >
+                                    Operation wise Total :
+                                  </td>
+                                  <td className="text-center font-bold">
+                                    {og.totalBundles.toLocaleString()}
+                                  </td>
+                                  <td className="text-center font-bold">
+                                    {og.totalQty.toLocaleString()}
+                                  </td>
+                                  <td className="text-right font-bold font-mono">
+                                    {formatAmount(og.totalPay)}
+                                  </td>
+                                  <td></td>
+                                </tr>
+                              </Fragment>
+                            ))
+                          )}
+                        </tbody>
+                        {operationGroupedData.length > 0 && (
+                          <tfoot>
+                            <tr className="print-totals-row font-bold">
+                              <td colSpan={6} className="text-right">
+                                Grand Total :
+                              </td>
+                              <td className="text-center">
+                                {grandTotalBundles.toLocaleString()}
+                              </td>
+                              <td className="text-center">
+                                {grandTotalQty.toLocaleString()}
+                              </td>
+                              <td className="text-right font-mono">
+                                {formatAmount(grandTotalPay)}
+                              </td>
+                              <td></td>
+                            </tr>
+                          </tfoot>
+                        )}
                       </table>
                     </div>
                   );
