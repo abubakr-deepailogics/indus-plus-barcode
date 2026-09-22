@@ -312,14 +312,13 @@ export async function buildOrderWiseReport(
       const totalClaim = scan.previousPaid + scan.currentClaim;
       const total = totalClaim + scan.opInc;
       // Qty Produced = Current Claim ÷ Total Rate (not a bundle-scan count) —
-      // Minutes Produced then derives from that qty × Total SAM. Both are
-      // rounded to whole numbers for display, not fractional.
-      const qtyProduced =
-        totalRate != null && totalRate > 0
-          ? Math.round(scan.currentClaim / totalRate)
-          : 0;
+      // Minutes Produced derives from that SAME ratio × Total SAM, rounded
+
+      const qtyProducedExact =
+        totalRate != null && totalRate > 0 ? scan.currentClaim / totalRate : 0;
+      const qtyProduced = Math.round(qtyProducedExact);
       const minutesProduced =
-        totalSam != null ? Math.round(totalSam * qtyProduced) : 0;
+        totalSam != null ? Math.round(totalSam * qtyProducedExact) : 0;
       return {
         workOrder,
         totalSam,
