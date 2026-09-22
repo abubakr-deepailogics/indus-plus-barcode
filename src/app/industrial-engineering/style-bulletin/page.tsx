@@ -409,8 +409,13 @@ export default function OpenOrderPage() {
             return sum + (val ?? 0);
           }, 0);
           return (
-            <div className="text-right font-bold text-slate-700">
-              {total.toFixed(4)}
+            <div className="flex flex-col items-end gap-0.5">
+              <span className="text-right font-bold text-slate-700">
+                {total.toFixed(4)}
+              </span>
+              <span className="invisible text-[9px] leading-tight">
+                spacer
+              </span>
             </div>
           );
         },
@@ -432,13 +437,23 @@ export default function OpenOrderPage() {
           </div>
         ),
         footer: ({ table }) => {
-          const total = table.getFilteredRowModel().rows.reduce((sum, row) => {
+          const rows = table.getFilteredRowModel().rows;
+          const total = rows.reduce((sum, row) => {
             const val = row.original.Smv_Sam;
             return sum + (val ?? 0);
           }, 0);
+          const totalExclZeroRate = rows.reduce((sum, row) => {
+            const { Piece_Rate, Smv_Sam } = row.original;
+            return sum + (Piece_Rate ? (Smv_Sam ?? 0) : 0);
+          }, 0);
           return (
-            <div className="text-right font-bold text-purple-600">
-              {total.toFixed(2)}
+            <div className="flex flex-col items-end gap-0.5">
+              <span className="text-right font-bold text-purple-600">
+                {total.toFixed(2)}
+              </span>
+              <span className="whitespace-nowrap text-[9px] leading-tight font-semibold text-slate-500">
+                Excl 0: {totalExclZeroRate.toFixed(2)}
+              </span>
             </div>
           );
         },
