@@ -77,10 +77,11 @@ export interface MatchedCoupon {
   Id: string | null; // per-generation tracking key, shared by every coupon one "Generate Coupons" run produced
   EmployeeCode: string | null;
   ScannedAt: string | null;
+  WageId: number | null; // set once a wage batch has paid this coupon — see wage-lock.service
 }
 
 const MATCH_COLUMNS =
-  "CouponCode, IsScanned, WorkOrder, BundleNo, OpNo, CutNo, Section, Id, EmployeeCode, ScannedAt";
+  "CouponCode, IsScanned, WorkOrder, BundleNo, OpNo, CutNo, Section, Id, EmployeeCode, ScannedAt, WageId";
 
 export async function findMatchingCoupons(
   pool: Awaited<ReturnType<typeof getPool>>,

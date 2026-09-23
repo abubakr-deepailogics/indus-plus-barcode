@@ -1,5 +1,6 @@
 import { getPool, sql } from "@/lib/db";
 import { logCouponActionHistory } from "@/features/qr-code-generation/services/coupon-history.service";
+import { findLockedDates } from "@/features/wages/services/wage-lock.service";
 import { readCouponFilter, findMatchingCoupons, chunk } from "../shared";
 
 export const dynamic = "force-dynamic";
@@ -41,6 +42,27 @@ export async function POST(request: Request) {
     return Response.json(
       { error: "No matching scanned coupons found for the given filters." },
       { status: 404 },
+    );
+  }
+
+  // A coupon inside a paid wage's tenure can never be unscanned — unscanning
+  // clears EmployeeCode/ScannedAt but NOT WageId, so it would silently
+  // desync that wage's recorded totals from live coupon data, and the
+  // coupon could later be rescanned into a different (unlocked) date and
+  // paid a second time with nothing to catch it. Same hard rule as the scan
+  // endpoints' lock, checked in bulk here instead of one date at a time.
+  const lockCheck = await findLockedDates(scanned.map((m) => m.ScannedAt));
+  if (lockCheck) {
+    const titles = lockCheck.locks
+      .map((l) => `"${l.title}" (${l.from} to ${l.to})`)
+      .join(", ");
+    return Response.json(
+      {
+        error: `${lockCheck.lockedCount} of the matched coupon(s) fall inside a paid wage tenure — ${titles}. Delete ${
+          lockCheck.locks.length === 1 ? "that wage" : "those wages"
+        } first, or narrow the filter to exclude them.`,
+      },
+      { status: 409 },
     );
   }
 
