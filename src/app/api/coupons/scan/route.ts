@@ -4,6 +4,10 @@ import {
   withinCutRange,
 } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import { chunk } from "@/features/qr-code-generation/services/coupon-registration.service";
+import {
+  findWageLockForDate,
+  wageLockMessage,
+} from "@/features/wages/services/wage-lock.service";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +18,6 @@ interface CouponRow {
   OpNo: string;
   IsScanned: boolean;
   ScannedAt: string | null;
-  IsWageCalculated?: boolean | null;
   WageId?: number | null;
 }
 
@@ -41,6 +44,17 @@ export async function GET(request: Request) {
   }
 
   try {
+    // Wages already generated for this date? The whole tenure is closed —
+    // checked once up front rather than per coupon, since the lock is a
+    // property of the scan date, not of any individual row. "fetch" mode is
+    // a read-only lookup, so it stays open; only writes are refused.
+    if (mode !== "fetch") {
+      const lock = await findWageLockForDate(scanDate);
+      if (lock) {
+        return Response.json({ error: wageLockMessage(lock) }, { status: 400 });
+      }
+    }
+
     // QrCode_Coupon lives on pitSystem; bundle/op display data (cut,
     // size, section, rate, …) is on indusPlus — see coupon-enrichment
     // service for why those can't be joined in one query.
@@ -58,14 +72,14 @@ export async function GET(request: Request) {
       .query(
         barcode.trim() !== ""
           ? `
-            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, IsWageCalculated, WageId
+            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, WageId
             FROM dbo.QrCode_Coupon WITH (NOLOCK)
             WHERE CouponCode = @barcode
               AND (@wo = '' OR WorkOrder = @wo)
               AND IsDeleted = 0
           `
           : `
-            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, IsWageCalculated, WageId
+            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, WageId
             FROM dbo.QrCode_Coupon WITH (NOLOCK)
             WHERE WorkOrder = @wo
               AND (@bundle = '' OR BundleNo = @bundle)
@@ -91,13 +105,6 @@ export async function GET(request: Request) {
 
     if (barcode) {
       const match = records[0];
-
-      if (match.IsWageCalculated) {
-        return Response.json(
-          { error: "Wages already calculated for this coupon. Need to delete wages first." },
-          { status: 400 },
-        );
-      }
 
       if (match.IsScanned) {
         return Response.json(
@@ -139,14 +146,6 @@ export async function GET(request: Request) {
           error:
             "All matching coupons for this selection have already been scanned!",
         },
-        { status: 400 },
-      );
-    }
-
-    const wageCalculatedCount = unscanned.filter((r) => r.IsWageCalculated).length;
-    if (wageCalculatedCount > 0) {
-      return Response.json(
-        { error: "Wages already calculated for matching coupon(s). Need to delete wages first." },
         { status: 400 },
       );
     }

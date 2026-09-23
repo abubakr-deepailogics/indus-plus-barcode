@@ -39,7 +39,6 @@ interface RawCouponRow {
   OpNo: string;
   EmployeeCode: string;
   ScannedAt: string | null;
-  IsWageCalculated?: boolean | number | null;
   WageId?: number | null;
 }
 
@@ -327,7 +326,7 @@ export async function buildReportSummary(
 
   const [couponResult, scanCountsResult] = await Promise.all([
     couponRequest.query(`
-      SELECT CouponCode, WorkOrder, BundleNo, OpNo, EmployeeCode, ScannedAt, IsWageCalculated, WageId
+      SELECT CouponCode, WorkOrder, BundleNo, OpNo, EmployeeCode, ScannedAt, WageId
       FROM dbo.QrCode_Coupon
       WHERE ${couponConditions.join(" AND ")}
       ORDER BY ScannedAt DESC
@@ -434,8 +433,8 @@ export async function buildReportSummary(
     const empInfo = employeeInfoByCode.get(row.EmployeeCode);
     const empName = empInfo?.name ?? row.EmployeeCode ?? null;
 
-    const isWageCalc = Boolean(row.IsWageCalculated);
     const wageId = row.WageId ? Number(row.WageId) : null;
+    const isWageCalc = wageId != null;
 
     if (section && section !== "General") {
       sectionCounts.set(section, (sectionCounts.get(section) || 0) + 1);

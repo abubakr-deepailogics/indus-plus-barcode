@@ -6,8 +6,6 @@ import type {
   ReportSearchMode,
   ReportSearchSuggestion,
   ReportSummary,
-  WageRow,
-  WagesBatch,
 } from "../types";
 
 // Employee search reuses coupon-scanning's worker lookup (same /api/workers
@@ -105,54 +103,6 @@ export async function fetchSectionSearchSuggestions(
   return sections.map((s) => ({ value: s, label: s }));
 }
 
-// ── Wages ─────────────────────────────────────────────────────────────────────
-
-export async function createWages(params: {
-  from?: string;
-  to?: string;
-  createdBy?: string;
-  rows: WageRow[];
-}): Promise<
-  | { ok: true; wageId: number; totalRows: number; totalAmount: number }
-  | { ok: false; error: string }
-> {
-  const response = await fetch("/api/wages", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(params),
-  });
-  const data = await response.json();
-  if (!response.ok) {
-    return { ok: false, error: data.error || "Failed to create wages." };
-  }
-  return {
-    ok: true,
-    wageId: data.wageId,
-    totalRows: data.totalRows,
-    totalAmount: data.totalAmount,
-  };
-}
-
-export async function fetchWages(params: {
-  wageId?: number;
-  employeeCode?: string;
-  from?: string;
-  to?: string;
-}): Promise<{ ok: true; wages: WagesBatch[] } | { ok: false; error: string }> {
-  const qp = new URLSearchParams();
-  if (params.wageId) qp.set("wageId", String(params.wageId));
-  if (params.employeeCode) qp.set("employeeCode", params.employeeCode);
-  if (params.from) qp.set("from", params.from);
-  if (params.to) qp.set("to", params.to);
-
-  const response = await fetch(`/api/wages?${qp.toString()}`);
-  const data = await response.json();
-  if (!response.ok) {
-    return { ok: false, error: data.error || "Failed to fetch wages." };
-  }
-  return { ok: true, wages: data.wages ?? [] };
-}
-
 // ── Finance reports (Order Wise / Operator Wise) ────────────────────────────
 // Both default to the current pay-cycle month server-side — pass
 // `cycleStart` (yyyy-MM-dd, a 24th — see the report pages' month picker) to
@@ -182,16 +132,3 @@ export async function fetchOperatorWiseReport(
   return { ok: true, data };
 }
 
-export async function deleteWages(params: {
-  wageId: number;
-}): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
-  const qp = new URLSearchParams({ wageId: String(params.wageId) });
-  const response = await fetch(`/api/wages?${qp.toString()}`, {
-    method: "DELETE",
-  });
-  const data = await response.json();
-  if (!response.ok) {
-    return { ok: false, error: data.error || "Failed to delete wages." };
-  }
-  return { ok: true, message: data.message };
-}

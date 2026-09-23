@@ -1,5 +1,9 @@
 import { getPool, sql, SCANNED_AT_FROM_DATE_SQL } from "@/lib/db";
 import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
+import {
+  findWageLockForDate,
+  wageLockMessage,
+} from "@/features/wages/services/wage-lock.service";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +51,14 @@ export async function POST(request: Request) {
       );
     }
 
+    // Wages already generated for this date? The whole tenure is closed.
+    // One check for the batch — the lock belongs to the scan date, which is
+    // the same for every code in it.
+    const lock = await findWageLockForDate(scanDate);
+    if (lock) {
+      return Response.json({ error: wageLockMessage(lock) }, { status: 400 });
+    }
+
     // QrCode_Coupon lives on pitSystem; bundle/op display data is on
     // indusPlus — see coupon-enrichment service for why those can't be
     // joined in one query.
@@ -77,7 +89,7 @@ export async function POST(request: Request) {
       OUTPUT inserted.CouponCode INTO @Updated
       FROM dbo.QrCode_Coupon c
       INNER JOIN @Codes src ON src.CouponCode = c.CouponCode
-      WHERE c.IsScanned = 0 AND c.IsDeleted = 0 AND (c.IsWageCalculated = 0 OR c.IsWageCalculated IS NULL);
+      WHERE c.IsScanned = 0 AND c.IsDeleted = 0;
 
       SELECT c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.IsScanned, c.ScannedAt
       FROM @Updated u
@@ -86,7 +98,6 @@ export async function POST(request: Request) {
       SELECT src.CouponCode,
              CASE
                WHEN c.CouponCode IS NULL THEN 'not_found'
-               WHEN c.IsWageCalculated = 1 THEN 'wages_already_calculated'
                ELSE 'already_scanned'
              END AS Reason
       FROM @Codes src
@@ -100,7 +111,7 @@ export async function POST(request: Request) {
     // array-or-map, hence the cast (same pattern as the sql.Table casts above).
     const recordsets = updateResult.recordsets as unknown as [
       ScannedRecord[],
-      { CouponCode: string; Reason: "already_scanned" | "not_found" | "wages_already_calculated" }[],
+      { CouponCode: string; Reason: "already_scanned" | "not_found" }[],
     ];
     const scannedRows: ScannedRecord[] = recordsets[0] ?? [];
     const reasonRows = recordsets[1] ?? [];

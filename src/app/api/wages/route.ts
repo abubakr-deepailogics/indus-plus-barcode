@@ -1,25 +1,15 @@
 import { getPool, sql } from "@/lib/db";
+import {
+  buildWageData,
+  validateTenure,
+} from "@/features/wages/services/wage-builder.service";
+import { findOverlappingWage } from "@/features/wages/services/wage-lock.service";
 
 export const dynamic = "force-dynamic";
 
-// One row per grouped operation entry — same shape as the Employees tab table
-// in the report UI (EmpCode, EmployeeName, W/O, Date, Operation, Rate,
-// BundleCount, Qty, TotalPay).
-interface WageRowPayload {
-  employeeCode: string;
-  employeeName?: string | null;
-  workOrder?: string | null;
-  workDate?: string | null;
-  operation?: string | null;
-  rate?: number | null;
-  bundleCount?: number | null;
-  qty?: number | null;
-  totalPay?: number | null;
-}
-
 // ── GET ──────────────────────────────────────────────────────────────────────
 // ?wageId=<n>               → rows for a specific wage batch
-// ?employeeCode=<code>      → most-recent wage batch for that employee
+// ?employeeCode=<code>      → wage batches covering that employee
 //   &from=yyyy-MM-dd &to=yyyy-MM-dd  (optional date filters)
 // ?from=<d> &to=<d>         → all wage batches in the date range
 export async function GET(request: Request) {
@@ -44,7 +34,7 @@ export async function GET(request: Request) {
           .request()
           .input("wageId", sql.Int, wageId)
           .query(`
-            SELECT WageId, FromDate, ToDate, TotalCoupons AS TotalRows,
+            SELECT WageId, Title, FromDate, ToDate, TotalCoupons AS TotalRows,
                    TotalQty, TotalAmount, CreatedBy, CreatedAt
             FROM dbo.EmployeeWages
             WHERE WageId = @wageId
@@ -67,20 +57,8 @@ export async function GET(request: Request) {
         return Response.json({ error: "Wage record not found." }, { status: 404 });
       }
 
-      const rows = rowsRes.recordset.map((r) => ({
-        employeeCode: String(r.employeeCode ?? ""),
-        employeeName: r.employeeName ?? null,
-        workOrder: r.workOrder ?? null,
-        workDate: r.workDate ?? null,
-        operation: r.operation ?? null,
-        rate: r.rate != null ? Number(r.rate) : null,
-        bundleCount: Number(r.bundleCount) || 0,
-        qty: Number(r.qty) || 0,
-        totalPay: Number(r.totalPay) || 0,
-      }));
-
       return Response.json({
-        wages: [{ ...headerRes.recordset[0], rows }],
+        wages: [{ ...headerRes.recordset[0], rows: rowsRes.recordset.map(mapRow) }],
       });
     }
 
@@ -95,19 +73,21 @@ export async function GET(request: Request) {
         SELECT DISTINCT WageId FROM dbo.EmployeeWageRows WHERE EmployeeCode = @empCode
       )`);
     }
+    // A batch is in scope when its tenure overlaps the requested window —
+    // containment would hide a wage that merely straddles the range edge.
     if (from) {
       req.input("from", sql.Date, from);
-      conditions.push("(FromDate IS NULL OR FromDate >= @from)");
+      conditions.push("ToDate >= @from");
     }
     if (to) {
       req.input("to", sql.Date, to);
-      conditions.push("(ToDate IS NULL OR ToDate <= @to)");
+      conditions.push("FromDate <= @to");
     }
 
     const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
 
     const headersRes = await req.query(`
-      SELECT TOP 50 WageId, FromDate, ToDate, TotalCoupons AS TotalRows,
+      SELECT TOP 50 WageId, Title, FromDate, ToDate, TotalCoupons AS TotalRows,
              TotalQty, TotalAmount, CreatedBy, CreatedAt
       FROM dbo.EmployeeWages
       ${where}
@@ -135,21 +115,11 @@ export async function GET(request: Request) {
     `);
 
     // Group rows under each header
-    const rowsByWageId = new Map<number, any[]>();
+    const rowsByWageId = new Map<number, ReturnType<typeof mapRow>[]>();
     for (const row of rowsRes.recordset) {
       const wId = Number(row.WageId);
       if (!rowsByWageId.has(wId)) rowsByWageId.set(wId, []);
-      rowsByWageId.get(wId)!.push({
-        employeeCode: String(row.employeeCode ?? ""),
-        employeeName: row.employeeName ?? null,
-        workOrder: row.workOrder ?? null,
-        workDate: row.workDate ?? null,
-        operation: row.operation ?? null,
-        rate: row.rate != null ? Number(row.rate) : null,
-        bundleCount: Number(row.bundleCount) || 0,
-        qty: Number(row.qty) || 0,
-        totalPay: Number(row.totalPay) || 0,
-      });
+      rowsByWageId.get(wId)!.push(mapRow(row));
     }
 
     const wages = headersRes.recordset.map((h) => ({
@@ -168,76 +138,88 @@ export async function GET(request: Request) {
 }
 
 // ── POST ─────────────────────────────────────────────────────────────────────
-// Body: { from?, to?, createdBy?, rows: WageRowPayload[] }
-// Inserts a wage batch header + operation-wise rows, then marks all
-// QrCode_Coupon rows for the involved employee codes + date range as
-// IsWageCalculated = 1.
+// Body: { title, from, to, createdBy? }
+//
+// The tenure is the whole scope: the server builds the wage rows itself from
+// every scanned coupon in the range (no client-supplied rows, no filters), so
+// what the confirm modal previewed is exactly what gets written. Scanning is
+// then locked for the tenure — see wage-lock.service.
 export async function POST(request: Request) {
   try {
     const body = await request.json();
-    const fromDate: string | null = body.from ? String(body.from) : null;
-    const toDate: string | null = body.to ? String(body.to) : null;
-    const createdBy: string | null = body.createdBy ? String(body.createdBy) : null;
-    const rawRows: WageRowPayload[] = Array.isArray(body.rows) ? body.rows : [];
 
-    if (rawRows.length === 0) {
+    const title = typeof body?.title === "string" ? body.title.trim() : "";
+    if (!title) {
+      return Response.json({ error: "A wage title is required." }, { status: 400 });
+    }
+    if (title.length > 200) {
       return Response.json(
-        { error: "No wage rows provided." },
+        { error: "Wage title must be 200 characters or fewer." },
         { status: 400 },
       );
     }
 
-    const validRows = rawRows
-      .filter((r) => r && typeof r.employeeCode === "string" && r.employeeCode.trim())
-      .map((r) => ({
-        employeeCode: r.employeeCode.trim(),
-        employeeName: r.employeeName ? String(r.employeeName) : null,
-        workOrder: r.workOrder ? String(r.workOrder) : null,
-        workDate: r.workDate ? String(r.workDate) : null,
-        operation: r.operation ? String(r.operation) : null,
-        rate: r.rate != null ? Number(r.rate) : null,
-        bundleCount: Number(r.bundleCount) || 0,
-        qty: Number(r.qty) || 0,
-        totalPay: Number(r.totalPay) || 0,
-      }));
+    const tenure = validateTenure(body?.from, body?.to);
+    if (!tenure.ok) {
+      return Response.json({ error: tenure.error }, { status: 400 });
+    }
+    const { from: fromDate, to: toDate } = tenure;
 
-    if (validRows.length === 0) {
+    const createdBy = body?.createdBy ? String(body.createdBy) : null;
+
+    // A date may belong to only one wage — otherwise the same coupons get
+    // paid twice and the lock can't say which wage owns the date.
+    const overlap = await findOverlappingWage(fromDate, toDate);
+    if (overlap) {
       return Response.json(
-        { error: "No valid wage rows found in payload." },
+        {
+          error: `This tenure overlaps wage "${overlap.title}" (${overlap.from} to ${overlap.to}). Delete that wage first or pick a different tenure.`,
+        },
+        { status: 409 },
+      );
+    }
+
+    const built = await buildWageData(fromDate, toDate);
+    if (!built.ok) {
+      return Response.json({ error: built.error }, { status: built.status });
+    }
+
+    const { rows, preview } = built;
+    if (rows.length === 0) {
+      return Response.json(
+        { error: "No scanned coupons found in this tenure — nothing to pay." },
         { status: 400 },
       );
     }
 
-    const totalRows = validRows.length;
-    const totalQty = validRows.reduce((s, r) => s + r.qty, 0);
-    const totalAmount = validRows.reduce((s, r) => s + r.totalPay, 0);
-    const employeeCodes = [...new Set(validRows.map((r) => r.employeeCode))];
-
+    const totalRows = rows.length;
     const pool = await getPool("pitSystem");
 
     // 1. Insert header
     const headerResult = await pool
       .request()
+      .input("title", sql.NVarChar(200), title)
       .input("fromDate", sql.Date, fromDate)
       .input("toDate", sql.Date, toDate)
       .input("totalRows", sql.Int, totalRows)
-      .input("totalQty", sql.Int, totalQty)
-      .input("totalAmount", sql.Decimal(18, 2), totalAmount)
+      .input("totalQty", sql.Int, preview.totalQty)
+      .input("totalAmount", sql.Decimal(18, 2), preview.totalAmount)
       .input("createdBy", sql.NVarChar, createdBy)
       .query(`
         INSERT INTO dbo.EmployeeWages
-          (FromDate, ToDate, EmployeeCode, TotalCoupons, TotalQty, TotalAmount, CreatedBy, CreatedAt)
+          (Title, FromDate, ToDate, TotalCoupons, TotalQty, TotalAmount, CreatedBy, CreatedAt)
         OUTPUT inserted.WageId
-        VALUES (@fromDate, @toDate, '', @totalRows, @totalQty, @totalAmount, @createdBy, GETDATE());
+        VALUES (@title, @fromDate, @toDate, @totalRows, @totalQty, @totalAmount, @createdBy, GETDATE());
       `);
 
     const wageId = headerResult.recordset[0]?.WageId as number;
     if (!wageId) throw new Error("Failed to insert wage header.");
 
-    // 2. Batch insert detail rows (up to 500 at a time to stay under param cap)
-    const BATCH = 500;
-    for (let start = 0; start < validRows.length; start += BATCH) {
-      const batch = validRows.slice(start, start + BATCH);
+    // 2. Batch insert detail rows (up to 200 at a time — 9 params per row
+    //    keeps this under SQL Server's ~2100 parameter cap).
+    const BATCH = 200;
+    for (let start = 0; start < rows.length; start += BATCH) {
+      const batch = rows.slice(start, start + BATCH);
       const detailReq = pool.request().input("wageId", sql.Int, wageId);
       const values: string[] = [];
 
@@ -264,42 +246,32 @@ export async function POST(request: Request) {
       `);
     }
 
-    // 3. Mark matching QrCode_Coupon rows as wage-calculated
-    const markReq = pool.request().input("wageId", sql.Int, wageId);
-    const empPlaceholders = employeeCodes.map((code, i) => {
-      markReq.input(`emp${i}`, sql.NVarChar, code);
-      return `@emp${i}`;
-    });
-
-    const dateConds: string[] = [];
-    if (fromDate) {
-      markReq.input("fromDate", sql.Date, fromDate);
-      dateConds.push("ScannedAt >= @fromDate");
-    }
-    if (toDate) {
-      markReq.input("toDate", sql.Date, toDate);
-      dateConds.push("ScannedAt < DATEADD(day, 1, @toDate)");
-    }
-
-    const couponWhere = [
-      `EmployeeCode IN (${empPlaceholders.join(", ")})`,
-      "IsScanned = 1",
-      "IsDeleted = 0",
-      ...dateConds,
-    ].join(" AND ");
-
-    await markReq.query(`
-      UPDATE dbo.QrCode_Coupon
-      SET IsWageCalculated = 1, WageId = @wageId
-      WHERE ${couponWhere};
-    `);
+    // 3. Stamp WageId on every coupon in the tenure — the audit link of which
+    //    wage paid a coupon, and what DELETE uses to unwind the batch. The
+    //    scan lock itself is the tenure, not this column.
+    await pool
+      .request()
+      .input("wageId", sql.Int, wageId)
+      .input("fromDate", sql.Date, fromDate)
+      .input("toDate", sql.Date, toDate)
+      .query(`
+        UPDATE dbo.QrCode_Coupon
+        SET WageId = @wageId
+        WHERE IsScanned = 1
+          AND IsDeleted = 0
+          AND ScannedAt >= @fromDate
+          AND ScannedAt < DATEADD(day, 1, @toDate);
+      `);
 
     return Response.json({
       ok: true,
       wageId,
+      title,
+      from: fromDate,
+      to: toDate,
       totalRows,
-      totalQty,
-      totalAmount,
+      totalQty: preview.totalQty,
+      totalAmount: preview.totalAmount,
       message: "Wages created successfully.",
     });
   } catch (err: unknown) {
@@ -313,7 +285,7 @@ export async function POST(request: Request) {
 
 // ── DELETE ───────────────────────────────────────────────────────────────────
 // ?wageId=<n>  — hard-deletes the wage batch (cascade removes EmployeeWageRows)
-// and resets IsWageCalculated = 0 on all linked QrCode_Coupon rows.
+// and clears WageId on its coupons, which reopens the tenure for scanning.
 export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
   const wageIdStr = searchParams.get("wageId") || "";
@@ -333,21 +305,27 @@ export async function DELETE(request: Request) {
   try {
     const pool = await getPool("pitSystem");
 
-    // Reset coupon flags first, then hard-delete (cascade handles rows table)
-    await pool
+    // Clear coupon links first, then hard-delete (cascade handles rows table)
+    const result = await pool
       .request()
       .input("wageId", sql.Int, wageId)
       .query(`
         UPDATE dbo.QrCode_Coupon
-        SET IsWageCalculated = 0, WageId = NULL
+        SET WageId = NULL
         WHERE WageId = @wageId;
 
         DELETE FROM dbo.EmployeeWages WHERE WageId = @wageId;
+        SELECT @@ROWCOUNT AS Deleted;
       `);
+
+    const deleted = Number(result.recordset?.[0]?.Deleted ?? 0);
+    if (deleted === 0) {
+      return Response.json({ error: "Wage record not found." }, { status: 404 });
+    }
 
     return Response.json({
       ok: true,
-      message: `Wage batch #${wageId} deleted and coupon flags reset.`,
+      message: `Wage batch #${wageId} deleted — scanning reopened for its tenure.`,
     });
   } catch (err: unknown) {
     console.error("DELETE /api/wages error:", err);
@@ -356,4 +334,20 @@ export async function DELETE(request: Request) {
       { status: 500 },
     );
   }
+}
+
+// Detail rows come back straight from SQL; normalise the numerics so the
+// client never has to guard against mssql's decimal-as-string.
+function mapRow(r: Record<string, unknown>) {
+  return {
+    employeeCode: String(r.employeeCode ?? ""),
+    employeeName: (r.employeeName as string | null) ?? null,
+    workOrder: (r.workOrder as string | null) ?? null,
+    workDate: (r.workDate as string | null) ?? null,
+    operation: (r.operation as string | null) ?? null,
+    rate: r.rate != null ? Number(r.rate) : null,
+    bundleCount: Number(r.bundleCount) || 0,
+    qty: Number(r.qty) || 0,
+    totalPay: Number(r.totalPay) || 0,
+  };
 }

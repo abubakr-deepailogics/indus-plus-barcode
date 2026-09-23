@@ -34,10 +34,16 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
 import {
-  createWages,
   deleteWages,
-  fetchAllReportSummary,
   fetchWages,
+} from "@/features/wages/services/wages.service";
+import { CreateWagesModal } from "@/features/wages/components/CreateWagesModal";
+import { useAuth } from "@/features/auth/context/auth-context";
+import {
+  groupEmployeeData,
+  withReworkTag,
+} from "@/features/wages/services/employee-grouping.service";
+import {
   fetchEmployeeSearchSuggestions,
   fetchOperationSearchSuggestions,
   fetchSectionSearchSuggestions,
@@ -46,32 +52,12 @@ import {
 import { useReportSearch } from "../hooks/useReportSearch";
 import type {
   CouponReportItem,
-  EmployeeBreakdownItem,
   ReportDateRange,
   ReportSearchMode,
   ReportSearchSuggestion,
   ReportSummary,
-  WagesBatch,
 } from "../types";
-
-interface EmployeeGroupedItem {
-  workOrder: string;
-  date: string;
-  operation: string;
-  rate: number | null;
-  bundleCount: number;
-  qty: number;
-  totalPay: number;
-}
-
-interface EmployeeGrouped {
-  employeeCode: EmployeeBreakdownItem["employeeCode"];
-  employeeName: EmployeeBreakdownItem["employeeName"];
-  items: EmployeeGroupedItem[];
-  totalBundles: number;
-  totalQty: number;
-  totalPay: number;
-}
+import type { WagesBatch } from "@/features/wages/types";
 
 interface OperationGroupedItem {
   employeeCode: string;
@@ -97,110 +83,6 @@ interface OperationGrouped {
 // scheme starts with "RW", so this is a reliable way to tell a rework
 // coupon apart from a regular production one wherever only the operation
 // name/coupon row is visible (no separate "type" column).
-function isReworkBundle(bundleNo?: string | null): boolean {
-  return !!bundleNo && bundleNo.toUpperCase().startsWith("RW");
-}
-
-function withReworkTag(operationLabel: string, bundleNo?: string | null): string {
-  return isReworkBundle(bundleNo) ? `${operationLabel} (Rework)` : operationLabel;
-}
-
-// Groups an employee/coupon list (from any summary — a specific search or
-// the "all employees" fetch) into per-employee, per-(workOrder, date,
-// operation, rate) rows, used both for the on-screen breakdown and for
-// building wage rows.
-function groupEmployeeData(
-  employeesList: EmployeeBreakdownItem[] | undefined,
-  couponsList: CouponReportItem[] | undefined,
-): EmployeeGrouped[] {
-  if (!employeesList) return [];
-  const coupons = couponsList || [];
-
-  return employeesList.map((emp) => {
-    const empCoupons = coupons.filter(
-      (c) => c.employeeCode === emp.employeeCode,
-    );
-
-    if (empCoupons.length === 0) {
-      return {
-        employeeCode: emp.employeeCode,
-        employeeName: emp.employeeName,
-        items: [
-          {
-            workOrder: "—",
-            date: "—",
-            operation: "—",
-            rate: null as number | null,
-            bundleCount: emp.couponCount || 0,
-            qty: emp.totalQty || 0,
-            totalPay: emp.totalAmount || 0,
-          },
-        ],
-        totalBundles: emp.couponCount || 0,
-        totalQty: emp.totalQty || 0,
-        totalPay: emp.totalAmount || 0,
-      };
-    }
-
-    // Group by workOrder, date (dd-MM-yy), operation, rate
-    const groupMap = new Map<string, EmployeeGroupedItem>();
-
-    for (const c of empCoupons) {
-      const wo = c.workOrder || "—";
-      const dateStr = c.scannedAt
-        ? format(new Date(c.scannedAt), "dd-MM-yy")
-        : "—";
-      const op = withReworkTag(
-        c.operationName || c.operationCode || "—",
-        c.bundleNo,
-      );
-      const rate = c.rate != null ? Number(c.rate) : null;
-      const key = `${wo}__${dateStr}__${op}__${rate}`;
-
-      const existing = groupMap.get(key);
-      const qty = c.qty || 0;
-      const pay =
-        c.value != null ? Number(c.value) : rate != null ? qty * rate : 0;
-
-      if (!existing) {
-        groupMap.set(key, {
-          workOrder: wo,
-          date: dateStr,
-          operation: op,
-          rate,
-          bundleCount: 1,
-          qty,
-          totalPay: pay,
-        });
-      } else {
-        existing.bundleCount += 1;
-        existing.qty += qty;
-        existing.totalPay += pay;
-      }
-    }
-
-    // Sort items by date then workOrder
-    const items = Array.from(groupMap.values()).sort((a, b) => {
-      const cmpDate = a.date.localeCompare(b.date);
-      if (cmpDate !== 0) return cmpDate;
-      return a.workOrder.localeCompare(b.workOrder);
-    });
-
-    const totalBundles = items.reduce((acc, it) => acc + it.bundleCount, 0);
-    const totalQty = items.reduce((acc, it) => acc + it.qty, 0);
-    const totalPay = items.reduce((acc, it) => acc + it.totalPay, 0);
-
-    return {
-      employeeCode: emp.employeeCode,
-      employeeName: emp.employeeName,
-      items,
-      totalBundles,
-      totalQty,
-      totalPay,
-    };
-  });
-}
-
 // Groups a coupon list by operation, then by (employee, workOrder, date,
 // rate) within each operation — the inverse of groupEmployeeData, used for
 // operation-mode searches where one operation is performed by many
@@ -569,7 +451,8 @@ export function EmployeeReportDashboard() {
   const [wagesVisible, setWagesVisible] = useState(false);
   const [wagesBatches, setWagesBatches] = useState<WagesBatch[]>([]);
   const [wagesLoading, setWagesLoading] = useState(false);
-  const [isCreatingWages, setIsCreatingWages] = useState(false);
+  const [createWagesOpen, setCreateWagesOpen] = useState(false);
+  const { user } = useAuth();
   const [isDeletingWages, setIsDeletingWages] = useState(false);
   const [wageMsg, setWageMsg] = useState<{
     type: "success" | "error";
@@ -589,77 +472,6 @@ export function EmployeeReportDashboard() {
     () => (isOperationMode ? groupByOperationData(couponsList) : []),
     [isOperationMode, couponsList],
   );
-
-  const handleCreateWages = useCallback(async () => {
-    if (isCreatingWages) return;
-    setIsCreatingWages(true);
-    setWageMsg(null);
-    try {
-      const fromStr = dateRange.from
-        ? format(dateRange.from, "yyyy-MM-dd")
-        : undefined;
-      const toStr = dateRange.to
-        ? format(dateRange.to, "yyyy-MM-dd")
-        : undefined;
-
-      const allResult = await fetchAllReportSummary("employee", dateRange);
-      if (!allResult.ok) {
-        setWageMsg({ type: "error", message: allResult.error });
-        return;
-      }
-
-      const grouped = groupEmployeeData(
-        allResult.data.employees,
-        allResult.data.coupons,
-      );
-      if (grouped.length === 0) {
-        setWageMsg({
-          type: "error",
-          message: "No employee data found for this date range.",
-        });
-        return;
-      }
-
-      // Flatten grouped employee data into one WageRow per operation-group item
-      const rows = grouped.flatMap((eg) =>
-        eg.items.map((item) => ({
-          employeeCode: eg.employeeCode ?? "",
-          employeeName: eg.employeeName ?? null,
-          workOrder: item.workOrder !== "—" ? item.workOrder : null,
-          workDate: item.date !== "—" ? item.date : null,
-          operation: item.operation !== "—" ? item.operation : null,
-          rate: item.rate,
-          bundleCount: item.bundleCount,
-          qty: item.qty,
-          totalPay: item.totalPay,
-        })),
-      );
-
-      const res = await createWages({ from: fromStr, to: toStr, rows });
-      if (!res.ok) {
-        setWageMsg({ type: "error", message: res.error });
-      } else {
-        setWageMsg({
-          type: "success",
-          message: `Wages created — ${res.totalRows} row(s), Rs. ${formatAmount(res.totalAmount)} total.`,
-        });
-        // Auto-load the wages table to show the new batch and refresh summary state
-        const viewRes = await fetchWages({ wageId: res.wageId });
-        if (viewRes.ok) {
-          setWagesBatches(viewRes.wages);
-          setWagesVisible(true);
-        }
-        if (summary) search();
-      }
-    } catch (err: unknown) {
-      setWageMsg({
-        type: "error",
-        message: err instanceof Error ? err.message : "Create wages failed.",
-      });
-    } finally {
-      setIsCreatingWages(false);
-    }
-  }, [isCreatingWages, dateRange, summary, search]);
 
   const handleViewWages = useCallback(async () => {
     if (wagesLoading) return;
@@ -961,16 +773,11 @@ export function EmployeeReportDashboard() {
           <div className="flex items-center gap-2 flex-wrap">
             <button
               type="button"
-              onClick={handleCreateWages}
-              disabled={isCreatingWages}
-              title="Generate wages for all employees in the selected date range"
+              onClick={() => setCreateWagesOpen(true)}
+              title="Generate wages for a tenure — covers every scanned coupon in that range"
               className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm bg-[#4f46e5] text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
-              {isCreatingWages ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Coins className="w-3.5 h-3.5" />
-              )}
+              <Coins className="w-3.5 h-3.5" />
               Create Wages
             </button>
             <button
@@ -1009,6 +816,23 @@ export function EmployeeReportDashboard() {
             </Link>
           </div>
         </div>
+
+        <CreateWagesModal
+          open={createWagesOpen}
+          onOpenChange={setCreateWagesOpen}
+          createdBy={user?.email ?? null}
+          onCreated={async (wageId) => {
+            setWageMsg({ type: "success", message: "Wages created successfully." });
+            // Show the new batch straight away, and refresh the summary so
+            // the paid-coupon state on screen reflects the new wage.
+            const viewRes = await fetchWages({ wageId });
+            if (viewRes.ok) {
+              setWagesBatches(viewRes.wages);
+              setWagesVisible(true);
+            }
+            if (summary) search();
+          }}
+        />
 
         {/* Feedback message */}
         {wageMsg && (

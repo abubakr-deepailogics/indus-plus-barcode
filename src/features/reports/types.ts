@@ -195,33 +195,6 @@ export function getErrorMessage(err: unknown, fallback: string): string {
   return err instanceof Error && err.message ? err.message : fallback;
 }
 
-// ── Wages ────────────────────────────────────────────────────────────────────
-// One operation-grouped row — same columns as the Employees breakdown tab.
-export interface WageRow {
-  employeeCode: string;
-  employeeName?: string | null;
-  workOrder?: string | null;
-  workDate?: string | null;
-  operation?: string | null;
-  rate?: number | null;
-  bundleCount: number;
-  qty: number;
-  totalPay: number;
-}
-
-// A wage batch header plus its detail rows, returned by GET /api/wages.
-export interface WagesBatch {
-  WageId: number;
-  FromDate?: string | null;
-  ToDate?: string | null;
-  TotalRows: number;
-  TotalQty: number;
-  TotalAmount: number;
-  CreatedBy?: string | null;
-  CreatedAt: string;
-  rows: WageRow[];
-}
-
 // ── Finance reports (Order Wise / Operator Wise) ────────────────────────────
 // Mirrors two legacy Azgard-9 finance printouts ("Order Wise Finishing
 // Payment (Audit)" and "Operator Wise Final Payment"). Both are always

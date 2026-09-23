@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo, useRef } from "react";
+import { useState, useMemo, useRef, useEffect } from "react";
 import { Calendar as CalendarIcon, Cpu } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import {
@@ -11,6 +11,8 @@ import {
 import { Calendar } from "@/components/ui/calendar";
 import { format } from "date-fns";
 import type { Worker, OperationSuggestion } from "../types";
+import { fetchLockedWageRanges } from "@/features/wages/services/wages.service";
+import type { LockedRange } from "@/features/wages/types";
 import type { useCouponScanning } from "../hooks/useCouponScanning";
 
 type Facade = ReturnType<typeof useCouponScanning>;
@@ -36,7 +38,18 @@ function parseDateString(str: string): Date | null {
   return null;
 }
 
-function isValidSelectedDate(date: Date): boolean {
+// The wage tenure covering this date, or null when it's open for scanning.
+// Compared as yyyy-MM-dd strings so a locked range never shifts by a day
+// through a Date parse in a non-UTC time zone.
+function lockedRangeFor(
+  date: Date,
+  lockedRanges: LockedRange[],
+): LockedRange | null {
+  const iso = format(date, "yyyy-MM-dd");
+  return lockedRanges.find((r) => iso >= r.from && iso <= r.to) ?? null;
+}
+
+function isValidSelectedDate(date: Date, lockedRanges: LockedRange[] = []): boolean {
   if (date.getDay() === 0) return false; // Sunday
 
   const today = new Date();
@@ -44,6 +57,10 @@ function isValidSelectedDate(date: Date): boolean {
   const comp = new Date(date);
   comp.setHours(0, 0, 0, 0);
   if (comp > today) return false; // Future
+
+  // Wages already generated for this date — the whole tenure is closed.
+  // Enforced server-side too; this only keeps the UI from offering it.
+  if (lockedRangeFor(date, lockedRanges)) return false;
 
   return true;
 }
@@ -97,6 +114,19 @@ export function InformationPanel(props: Facade) {
   const [prevDated, setPrevDated] = useState(dated);
   const [typedValue, setTypedValue] = useState<string | null>(null);
 
+  // Tenures with a generated wage — fetched once, since a wage created
+  // mid-session is rare and the scan API rejects a locked date regardless.
+  const [lockedRanges, setLockedRanges] = useState<LockedRange[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    void fetchLockedWageRanges().then((ranges) => {
+      if (!cancelled) setLockedRanges(ranges);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   if (dated !== prevDated) {
     setPrevDated(dated);
     let matches = false;
@@ -148,8 +178,16 @@ export function InformationPanel(props: Facade) {
     if (!displayValue.trim()) return false;
     const parsed = parseDateString(displayValue);
     if (!parsed) return true;
-    return !isValidSelectedDate(parsed);
-  }, [displayValue]);
+    return !isValidSelectedDate(parsed, lockedRanges);
+  }, [displayValue, lockedRanges]);
+
+  // A locked date turns the field red like any other invalid one, so name
+  // the wage responsible rather than leaving the user guessing.
+  const lockedWage = useMemo(() => {
+    if (!displayValue.trim()) return null;
+    const parsed = parseDateString(displayValue);
+    return parsed ? lockedRangeFor(parsed, lockedRanges) : null;
+  }, [displayValue, lockedRanges]);
 
   // Closes the calendar popover imperatively once a date is picked — left
   // uncontrolled otherwise (no `open`/`onOpenChange`) since only this one
@@ -274,7 +312,7 @@ export function InformationPanel(props: Facade) {
                       return;
                     }
                     const parsed = parseDateString(val);
-                    if (parsed && isValidSelectedDate(parsed)) {
+                    if (parsed && isValidSelectedDate(parsed, lockedRanges)) {
                       setDated(format(parsed, "yyyy-MM-dd"));
                     } else {
                       setDated("");
@@ -328,18 +366,16 @@ export function InformationPanel(props: Facade) {
                           setTypedValue(null);
                         }
                       }}
-                      disabled={(date) => {
-                        if (date.getDay() === 0) return true;
-                        const today = new Date();
-                        today.setHours(0, 0, 0, 0);
-                        const comp = new Date(date);
-                        comp.setHours(0, 0, 0, 0);
-                        return comp > today;
-                      }}
+                      disabled={(date) => !isValidSelectedDate(date, lockedRanges)}
                     />
                   </PopoverContent>
                 </Popover>
               </div>
+              {lockedWage && (
+                <span className="text-[10px] font-bold text-red-600">
+                  Wages generated ({lockedWage.title}) — scanning locked
+                </span>
+              )}
               {checkingAttendance && (
                 <span className="text-[10px] font-semibold text-slate-400">
                   Checking attendance…
