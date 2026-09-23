@@ -87,6 +87,24 @@ export async function deleteWages(params: {
   return { ok: true, message: data.message };
 }
 
+// Distinct wage titles matching the typed text, for the Wages page's title
+// Autocomplete. Failure returns an empty list — worst case the field just
+// behaves like a plain text input instead of blocking the search.
+export async function fetchWageTitleSuggestions(
+  query: string,
+): Promise<string[]> {
+  try {
+    const response = await fetch(
+      `/api/wages/suggestions?query=${encodeURIComponent(query)}`,
+    );
+    if (!response.ok) return [];
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
 // Tenures that already have a wage — used to disable dates in the coupon
 // scanning date picker. Failure returns an empty list: the server enforces
 // the lock regardless, so a fetch error must not block scanning entirely.
