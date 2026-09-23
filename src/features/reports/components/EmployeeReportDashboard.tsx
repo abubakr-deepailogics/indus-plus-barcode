@@ -787,6 +787,8 @@ export function EmployeeReportDashboard() {
         "Operations",
         "Coupons",
         "Output (Pcs)",
+        "Piece Rate",
+        "Plan",
         "Total Amount",
       ];
       rows = summary.workOrders.map((wo) => [
@@ -794,6 +796,8 @@ export function EmployeeReportDashboard() {
         wo.operationsCount,
         wo.couponCount,
         wo.totalQty,
+        wo.pieceRate != null ? Number(wo.pieceRate.toFixed(2)) : "",
+        wo.plan != null ? Number(wo.plan.toFixed(2)) : "",
         Number(wo.totalAmount.toFixed(2)),
       ]);
     } else if (effectiveTab === "employees" && employeeGroupDimension) {
@@ -1792,6 +1796,8 @@ export function EmployeeReportDashboard() {
                         <th className="py-2.5 px-3 text-center">Operations</th>
                         <th className="py-2.5 px-3 text-center">Coupons</th>
                         <th className="py-2.5 px-3 text-center">Total Qty</th>
+                        <th className="py-2.5 px-3 text-right">Piece Rate</th>
+                        <th className="py-2.5 px-3 text-right">Plan</th>
                         <th className="py-2.5 px-3 text-right">Total Amount</th>
                       </tr>
                     </thead>
@@ -1799,7 +1805,7 @@ export function EmployeeReportDashboard() {
                       {summary.workOrders.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={5}
+                            colSpan={7}
                             className="py-8 text-center text-slate-400 font-medium"
                           >
                             No work orders recorded for this period.
@@ -1827,6 +1833,14 @@ export function EmployeeReportDashboard() {
                                 ? wo.orderQty.toLocaleString()
                                 : "—"}
                             </td>
+                            <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
+                              {wo.pieceRate != null
+                                ? formatAmount(wo.pieceRate)
+                                : "—"}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
+                              {wo.plan != null ? formatAmount(wo.plan) : "—"}
+                            </td>
                             <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
                               Rs. {formatAmount(wo.totalAmount)}
                             </td>
@@ -1847,6 +1861,17 @@ export function EmployeeReportDashboard() {
                             {summary.workOrders
                               .reduce((acc, wo) => acc + (wo.orderQty ?? 0), 0)
                               .toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-slate-700">
+                            —
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-slate-700">
+                            {formatAmount(
+                              summary.workOrders.reduce(
+                                (acc, wo) => acc + (wo.plan ?? 0),
+                                0,
+                              ),
+                            )}
                           </td>
                           <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                             Rs. {formatAmount(summary.totalAmount)}

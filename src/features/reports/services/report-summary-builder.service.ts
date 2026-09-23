@@ -508,6 +508,8 @@ export async function buildReportSummary(
         totalSam: (qty || 0) * (smv || 0),
         totalAmount: val || 0,
         operationsCount: 0,
+        pieceRate: null, // resolved from sewingRateTotalByWo in the final projection below
+        plan: null, // resolved from pieceRate * orderQty in the final projection below
         operations: new Set([opCode]),
       });
     } else {
@@ -625,15 +627,22 @@ export async function buildReportSummary(
     .map((op) => ({ ...op, totalQty: Math.round(op.totalQty) }))
     .sort((a, b) => b.totalAmount - a.totalAmount);
   const workOrders = Array.from(woMap.values())
-    .map((w) => ({
-      workOrder: w.workOrder,
-      couponCount: w.couponCount,
-      totalQty: Math.round(w.totalQty),
-      orderQty: orderQtyByWo.get(w.workOrder) ?? null,
-      totalSam: w.totalSam,
-      totalAmount: w.totalAmount,
-      operationsCount: w.operations.size,
-    }))
+    .map((w) => {
+      const orderQty = orderQtyByWo.get(w.workOrder) ?? null;
+      const pieceRate = sewingRateTotalByWo.get(w.workOrder) ?? null;
+      return {
+        workOrder: w.workOrder,
+        couponCount: w.couponCount,
+        totalQty: Math.round(w.totalQty),
+        orderQty,
+        totalSam: w.totalSam,
+        totalAmount: w.totalAmount,
+        operationsCount: w.operations.size,
+        pieceRate,
+        plan:
+          pieceRate != null && orderQty != null ? pieceRate * orderQty : null,
+      };
+    })
     .sort((a, b) => b.totalAmount - a.totalAmount);
   const sections = Array.from(sectionMap.values())
     .map((s) => ({
