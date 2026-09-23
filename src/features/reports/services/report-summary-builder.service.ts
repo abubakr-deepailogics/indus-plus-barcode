@@ -434,7 +434,10 @@ export async function buildReportSummary(
   const opMap = new Map<string, OperationReportItem>();
   const woMap = new Map<
     string,
-    WorkOrderReportItem & { operations: Set<string> }
+    WorkOrderReportItem & {
+      operations: Set<string>;
+      operationRates: Map<string, number>;
+    }
   >();
   const empMap = new Map<
     string,
@@ -508,9 +511,10 @@ export async function buildReportSummary(
         totalSam: (qty || 0) * (smv || 0),
         totalAmount: val || 0,
         operationsCount: 0,
-        pieceRate: null, // resolved from sewingRateTotalByWo in the final projection below
+        pieceRate: null, // resolved from operationRates in the final projection below
         plan: null, // resolved from pieceRate * orderQty in the final projection below
         operations: new Set([opCode]),
+        operationRates: new Map(rate != null ? [[opCode, rate]] : []),
       });
     } else {
       existingWo.couponCount += 1;
@@ -518,6 +522,9 @@ export async function buildReportSummary(
       existingWo.totalSam += (qty || 0) * (smv || 0);
       existingWo.totalAmount += val || 0;
       existingWo.operations.add(opCode);
+      if (rate != null && !existingWo.operationRates.has(opCode)) {
+        existingWo.operationRates.set(opCode, rate);
+      }
     }
 
     // Aggregate Section (per work order — the same section name can appear
@@ -629,7 +636,13 @@ export async function buildReportSummary(
   const workOrders = Array.from(woMap.values())
     .map((w) => {
       const orderQty = orderQtyByWo.get(w.workOrder) ?? null;
-      const pieceRate = sewingRateTotalByWo.get(w.workOrder) ?? null;
+      // Sum of each distinct scanned operation's own piece rate (once per
+      // op code, not per coupon) — NOT the whole department's bulletin
+      // total, so it only reflects operations actually scanned on this WO.
+      const pieceRate =
+        w.operationRates.size > 0
+          ? Array.from(w.operationRates.values()).reduce((a, b) => a + b, 0)
+          : null;
       return {
         workOrder: w.workOrder,
         couponCount: w.couponCount,
