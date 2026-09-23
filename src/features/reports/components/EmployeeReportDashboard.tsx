@@ -662,37 +662,6 @@ export function EmployeeReportDashboard() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* Finance reports — Wages itself now lives on its own page, linked
-          from the navbar rather than from here. */}
-      <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden no-print">
-        <div className="flex items-center justify-between px-4 py-3 flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <ClipboardList className="w-4 h-4 text-[#4f46e5]" />
-            <h2 className="font-bold text-[#4f46e5] text-xs uppercase tracking-wider">
-              Finance Reports
-            </h2>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <Link
-              href="/industrial-engineering/reports/order-wise"
-              title="Order Wise Finishing Payment (Audit) — always for the current pay-cycle month (24th → today)"
-              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200"
-            >
-              <ClipboardList className="w-3.5 h-3.5" />
-              Order Wise Report
-            </Link>
-            <Link
-              href="/industrial-engineering/reports/operator-wise"
-              title="Operator Wise Final Payment — always for the current pay-cycle month (24th → today)"
-              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200"
-            >
-              <Users className="w-3.5 h-3.5" />
-              Operator Wise Report
-            </Link>
-          </div>
-        </div>
-      </div>
-
       {/* Search Bar */}
       <div className="bg-white border border-[#e2e8f0] rounded-2xl p-4 shadow-sm no-print">
         <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2 flex-wrap gap-2">
@@ -1313,6 +1282,24 @@ export function EmployeeReportDashboard() {
                     </button>
                   );
                 })}
+                {/* Operator Wise is a separate page (always current pay-cycle,
+                    no date-range picker), not a breakdown tab — but it's an
+                    employee-scoped report, so it only shows up alongside the
+                    other Employee-mode tabs, not for Work Order/Operation/
+                    Section searches. */}
+                {mode === "employee" && (
+                  <>
+                    <span className="w-px h-6 bg-slate-200 mx-1 shrink-0" />
+                    <Link
+                      href="/industrial-engineering/reports/operator-wise"
+                      title="Operator Wise Final Payment — always for the current pay-cycle month (24th → today)"
+                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-slate-600 hover:bg-slate-100 shrink-0"
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Operator Wise Report</span>
+                    </Link>
+                  </>
+                )}
               </div>
 
               <div className="flex items-center gap-2 pb-2.5 sm:pb-2 w-full sm:w-auto shrink-0">
