@@ -88,7 +88,8 @@ export function OperatorWiseReportPage() {
               rows={data.rows.map((r) => [
                 r.employeeCode,
                 r.employeeName,
-                r.joiningDate,
+
+                r.joiningDate ? r.joiningDate.slice(0, 10) : "",
                 r.section,
                 r.pieceRateTotal,
                 r.opInc,

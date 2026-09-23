@@ -11,11 +11,13 @@ export const dynamic = "force-dynamic";
 // ?wageId=<n>               → rows for a specific wage batch
 // ?employeeCode=<code>      → wage batches covering that employee
 //   &from=yyyy-MM-dd &to=yyyy-MM-dd  (optional date filters)
+// ?title=<text>             → wage batches whose title contains this text
 // ?from=<d> &to=<d>         → all wage batches in the date range
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const wageIdStr = searchParams.get("wageId") || "";
   const employeeCode = searchParams.get("employeeCode") || "";
+  const title = searchParams.get("title") || "";
   const from = searchParams.get("from") || "";
   const to = searchParams.get("to") || "";
 
@@ -72,6 +74,13 @@ export async function GET(request: Request) {
       conditions.push(`WageId IN (
         SELECT DISTINCT WageId FROM dbo.EmployeeWageRows WHERE EmployeeCode = @empCode
       )`);
+    }
+    if (title.trim()) {
+      // Escape LIKE wildcards in the search text itself so a literal % or _
+      // typed by the user matches literally rather than acting as a wildcard.
+      const likeSafe = title.trim().replace(/[%_[\]]/g, (c) => `[${c}]`);
+      req.input("title", sql.NVarChar, `%${likeSafe}%`);
+      conditions.push("Title LIKE @title");
     }
     // A batch is in scope when its tenure overlaps the requested window —
     // containment would hide a wage that merely straddles the range edge.

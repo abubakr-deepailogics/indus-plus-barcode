@@ -110,19 +110,42 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated }: P
     [onOpenChange],
   );
 
-  const blocked =
-    !rangeComplete ||
-    !title.trim() ||
-    previewing ||
-    submitting ||
-    !preview ||
-    preview.couponCount === 0 ||
-    preview.overlap != null;
-
+  // The button itself stays clickable (only `submitting` disables it) so a
+  // premature click always surfaces a specific reason via setError below,
+  // rather than silently doing nothing behind a disabled button.
   const handleCreate = useCallback(async () => {
-    if (blocked) return;
-    setSubmitting(true);
+    if (submitting) return;
     setError(null);
+
+    const hasTitle = Boolean(title.trim());
+    if (!hasTitle && !rangeComplete) {
+      setError("A wage title and a tenure (start and end date) are both required.");
+      return;
+    }
+    if (!hasTitle) {
+      setError("A wage title is required.");
+      return;
+    }
+    if (!rangeComplete) {
+      setError("A tenure (start and end date) is required.");
+      return;
+    }
+    if (previewing) {
+      setError("Still checking this tenure — try again in a moment.");
+      return;
+    }
+    if (preview?.overlap) {
+      setError(
+        `This tenure overlaps wage "${preview.overlap.title}" (${preview.overlap.from} to ${preview.overlap.to}). Delete that wage first or pick a different tenure.`,
+      );
+      return;
+    }
+    if (!preview || preview.couponCount === 0) {
+      setError("No scanned coupons in this tenure — there is nothing to pay.");
+      return;
+    }
+
+    setSubmitting(true);
     try {
       const res = await createWages({
         title: title.trim(),
@@ -141,7 +164,18 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated }: P
     } finally {
       setSubmitting(false);
     }
-  }, [blocked, title, from, to, createdBy, onCreated, handleOpenChange]);
+  }, [
+    submitting,
+    title,
+    rangeComplete,
+    previewing,
+    preview,
+    from,
+    to,
+    createdBy,
+    onCreated,
+    handleOpenChange,
+  ]);
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -202,20 +236,24 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated }: P
                 <span className="text-slate-400">Select a start and end date</span>
               )}
             </div>
-            <Calendar
-              mode="range"
-              captionLayout="dropdown"
-              selected={range.from || range.to ? { from: range.from, to: range.to } : undefined}
-              onSelect={(r) => pickRange({ from: r?.from, to: r?.to })}
-              disabled={(date) => {
-                const today = new Date();
-                today.setHours(0, 0, 0, 0);
-                const comp = new Date(date);
-                comp.setHours(0, 0, 0, 0);
-                return comp > today;
-              }}
-              className="w-full"
-            />
+            {/* Centered explicitly: Calendar's own root defaults to a fixed
+                280px width, which otherwise sits flush against the left
+                edge of this wider (560px) dialog. */}
+            <div className="flex justify-center">
+              <Calendar
+                mode="range"
+                captionLayout="dropdown"
+                selected={range.from || range.to ? { from: range.from, to: range.to } : undefined}
+                onSelect={(r) => pickRange({ from: r?.from, to: r?.to })}
+                disabled={(date) => {
+                  const today = new Date();
+                  today.setHours(0, 0, 0, 0);
+                  const comp = new Date(date);
+                  comp.setHours(0, 0, 0, 0);
+                  return comp > today;
+                }}
+              />
+            </div>
           </div>
 
           {/* Preview / confirmation */}
@@ -287,7 +325,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated }: P
           >
             Cancel
           </Button>
-          <Button onClick={handleCreate} disabled={blocked}>
+          <Button onClick={handleCreate} disabled={submitting}>
             {submitting && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
             {submitting ? "Creating…" : "Create Wages"}
           </Button>

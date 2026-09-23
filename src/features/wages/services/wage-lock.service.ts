@@ -72,6 +72,45 @@ export async function fetchLockedRanges(): Promise<LockedRange[]> {
   }));
 }
 
+export interface LockedDatesResult {
+  lockedCount: number;
+  locks: LockedRange[];
+}
+
+// Bulk equivalent of findWageLockForDate — checks many already-scanned dates
+// (e.g. a whole unscan-by-filter batch) against every locked tenure in ONE
+// query, rather than one round trip per coupon. Unlike a single new scan
+// (which only ever tests one incoming date), a bulk unscan can span many
+// dates at once and must know about every locked one it touches, not just
+// the first.
+//
+// `dates` is `unknown[]`, not `string[]` — mssql hands DATETIME columns back
+// as native JS Date objects, not strings, despite what a hand-written row
+// interface may claim. Reuses the same toIsoDate() every other date read in
+// this file goes through, rather than a naive String(date).slice(0, 10)
+// (which stringifies a Date as "Mon Sep 15 2026 ...", silently matching
+// nothing).
+export async function findLockedDates(
+  dates: unknown[],
+): Promise<LockedDatesResult | null> {
+  const ranges = await fetchLockedRanges();
+  if (ranges.length === 0) return null;
+
+  let lockedCount = 0;
+  const locksHit = new Map<number, LockedRange>();
+  for (const raw of dates) {
+    if (!raw) continue;
+    const d = toIsoDate(raw);
+    const hit = ranges.find((r) => d >= r.from && d <= r.to);
+    if (hit) {
+      lockedCount++;
+      locksHit.set(hit.wageId, hit);
+    }
+  }
+  if (lockedCount === 0) return null;
+  return { lockedCount, locks: [...locksHit.values()] };
+}
+
 // Does [from,to] overlap an existing tenure? A date may belong to only one
 // wage, so creation rejects an overlap rather than double-paying it.
 export async function findOverlappingWage(

@@ -54,12 +54,14 @@ export async function createWages(params: {
 export async function fetchWages(params: {
   wageId?: number;
   employeeCode?: string;
+  title?: string;
   from?: string;
   to?: string;
 }): Promise<{ ok: true; wages: WagesBatch[] } | { ok: false; error: string }> {
   const qp = new URLSearchParams();
   if (params.wageId) qp.set("wageId", String(params.wageId));
   if (params.employeeCode) qp.set("employeeCode", params.employeeCode);
+  if (params.title) qp.set("title", params.title);
   if (params.from) qp.set("from", params.from);
   if (params.to) qp.set("to", params.to);
 
@@ -83,6 +85,24 @@ export async function deleteWages(params: {
     return { ok: false, error: data.error || "Failed to delete wages." };
   }
   return { ok: true, message: data.message };
+}
+
+// Distinct wage titles matching the typed text, for the Wages page's title
+// Autocomplete. Failure returns an empty list — worst case the field just
+// behaves like a plain text input instead of blocking the search.
+export async function fetchWageTitleSuggestions(
+  query: string,
+): Promise<string[]> {
+  try {
+    const response = await fetch(
+      `/api/wages/suggestions?query=${encodeURIComponent(query)}`,
+    );
+    if (!response.ok) return [];
+    const data = await response.json();
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
 }
 
 // Tenures that already have a wage — used to disable dates in the coupon

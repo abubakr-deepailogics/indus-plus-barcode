@@ -64,6 +64,21 @@ export async function POST(request: Request) {
     );
   }
 
+  // Defense in depth: an unscanned coupon should never carry a WageId (it's
+  // only ever stamped on scanned coupons — see POST /api/wages), so this
+  // should be unreachable in normal operation. It's still checked directly
+  // here — cheap, since WageId is already fetched — so a hard-delete can
+  // never wipe out a coupon that a wage batch's detail rows still reference.
+  const wageLinked = unscanned.filter((m) => m.WageId != null);
+  if (wageLinked.length > 0) {
+    return Response.json(
+      {
+        error: `${wageLinked.length} of the matched coupon(s) are linked to a wage batch and cannot be deleted. Delete the wage batch first if these coupons should be removed.`,
+      },
+      { status: 409 },
+    );
+  }
+
   const by = String(actedBy).trim();
   const workOrder = parsed.workOrder;
   const total = unscanned.length;

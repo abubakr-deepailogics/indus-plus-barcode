@@ -16,12 +16,6 @@ import {
   FileSpreadsheet,
   Users,
   Layers,
-  Coins,
-  Trash2,
-  Loader2,
-  CheckCircle2,
-  ShieldAlert,
-  Eye,
   type LucideIcon,
 } from "lucide-react";
 import Link from "next/link";
@@ -33,12 +27,6 @@ import {
 } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
-import {
-  deleteWages,
-  fetchWages,
-} from "@/features/wages/services/wages.service";
-import { CreateWagesModal } from "@/features/wages/components/CreateWagesModal";
-import { useAuth } from "@/features/auth/context/auth-context";
 import {
   groupByDimension,
   groupEmployeeData,
@@ -53,7 +41,10 @@ import {
   fetchSectionSearchSuggestions,
   fetchWorkOrderSearchSuggestions,
 } from "../services/reports.service";
-import { currentPayCycleStart, useReportSearch } from "../hooks/useReportSearch";
+import {
+  currentPayCycleStart,
+  useReportSearch,
+} from "../hooks/useReportSearch";
 import type {
   OperationReportItem,
   ReportDateRange,
@@ -62,7 +53,6 @@ import type {
   ReportSummary,
   SectionReportItem,
 } from "../types";
-import type { WagesBatch } from "@/features/wages/types";
 
 // Rework coupons carry a bundle number in the RW<work order><seq> form (see
 // rework-coupon/page.tsx's assignedBundles) — no other bundle numbering
@@ -340,7 +330,11 @@ const MODE_CONFIG: Record<
   },
 };
 
-type BreakdownDimension = "workOrders" | "employees" | "operations" | "sections";
+type BreakdownDimension =
+  | "workOrders"
+  | "employees"
+  | "operations"
+  | "sections";
 
 // Every report always carries every breakdown dimension. The own-dimension
 // (e.g. "employees" tab in employee mode, "sections" tab in section mode)
@@ -375,7 +369,10 @@ const DIMENSION_META: Record<
   { columnLabel: string; totalLabel: string }
 > = {
   employee: { columnLabel: "Employee", totalLabel: "Employee wise Total" },
-  workOrder: { columnLabel: "Work Order #", totalLabel: "Work Order wise Total" },
+  workOrder: {
+    columnLabel: "Work Order #",
+    totalLabel: "Work Order wise Total",
+  },
   operation: { columnLabel: "Operation", totalLabel: "Operation wise Total" },
   section: { columnLabel: "Section", totalLabel: "Section wise Total" },
 };
@@ -545,18 +542,6 @@ export function EmployeeReportDashboard() {
     unmount: () => void;
   } | null>(null);
 
-  // ── Wages panel state ────────────────────────────────────────────────────
-  const [wagesVisible, setWagesVisible] = useState(false);
-  const [wagesBatches, setWagesBatches] = useState<WagesBatch[]>([]);
-  const [wagesLoading, setWagesLoading] = useState(false);
-  const [createWagesOpen, setCreateWagesOpen] = useState(false);
-  const { user } = useAuth();
-  const [isDeletingWages, setIsDeletingWages] = useState(false);
-  const [wageMsg, setWageMsg] = useState<{
-    type: "success" | "error";
-    message: string;
-  } | null>(null);
-
   const employeesList = summary?.employees;
   const couponsList = summary?.coupons;
 
@@ -697,79 +682,6 @@ export function EmployeeReportDashboard() {
       amount: sectionRowGroups.reduce((acc, g) => acc + g.totalAmount, 0),
     }),
     [sectionRowGroups],
-  );
-
-  const handleViewWages = useCallback(async () => {
-    if (wagesLoading) return;
-    if (wagesVisible && wagesBatches.length > 0) {
-      setWagesVisible(false);
-      return;
-    }
-    setWagesLoading(true);
-    setWageMsg(null);
-    try {
-      const fromStr = dateRange.from
-        ? format(dateRange.from, "yyyy-MM-dd")
-        : undefined;
-      const toStr = dateRange.to
-        ? format(dateRange.to, "yyyy-MM-dd")
-        : undefined;
-      const empCode =
-        summary?.subject.mode === "employee" && !summary.subject.all
-          ? String(summary.subject.employee.EmployeeID)
-          : undefined;
-
-      const res = await fetchWages({
-        employeeCode: empCode,
-        from: fromStr,
-        to: toStr,
-      });
-      if (!res.ok) {
-        setWageMsg({ type: "error", message: res.error });
-      } else if (res.wages.length === 0) {
-        setWageMsg({
-          type: "error",
-          message: "No saved wages found for this scope.",
-        });
-      } else {
-        setWagesBatches(res.wages);
-        setWagesVisible(true);
-      }
-    } catch (err: unknown) {
-      setWageMsg({
-        type: "error",
-        message: err instanceof Error ? err.message : "Fetch wages failed.",
-      });
-    } finally {
-      setWagesLoading(false);
-    }
-  }, [wagesLoading, wagesVisible, wagesBatches, dateRange, summary]);
-
-  const handleDeleteWages = useCallback(
-    async (wageId: number) => {
-      if (isDeletingWages) return;
-      setIsDeletingWages(true);
-      setWageMsg(null);
-      try {
-        const res = await deleteWages({ wageId });
-        if (!res.ok) {
-          setWageMsg({ type: "error", message: res.error });
-        } else {
-          setWageMsg({ type: "success", message: res.message });
-          setWagesBatches((prev) => prev.filter((b) => b.WageId !== wageId));
-          // Refresh report summary live so isWageCalculated flags are reset
-          search();
-        }
-      } catch (err: unknown) {
-        setWageMsg({
-          type: "error",
-          message: err instanceof Error ? err.message : "Delete wages failed.",
-        });
-      } finally {
-        setIsDeletingWages(false);
-      }
-    },
-    [isDeletingWages, search],
   );
 
   const modeConfig = MODE_CONFIG[mode];
@@ -947,7 +859,10 @@ export function EmployeeReportDashboard() {
           ]);
         }
       }
-    } else if (effectiveTab === "operations" && searchDimension !== "operation") {
+    } else if (
+      effectiveTab === "operations" &&
+      searchDimension !== "operation"
+    ) {
       const groupHeader = DIMENSION_META[searchDimension].columnLabel;
       headers = [
         groupHeader,
@@ -1093,345 +1008,6 @@ export function EmployeeReportDashboard() {
 
   return (
     <div className="flex flex-col gap-6">
-      {/* ── Wages Panel ───────────────────────────────────────────────────── */}
-      <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden no-print">
-        {/* Header bar */}
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <Coins className="w-4 h-4 text-[#4f46e5]" />
-            <h2 className="font-bold text-[#4f46e5] text-xs uppercase tracking-wider">
-              Employee Wages
-            </h2>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <button
-              type="button"
-              onClick={() => setCreateWagesOpen(true)}
-              title="Generate wages for a tenure — covers every scanned coupon in that range"
-              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all shadow-sm bg-[#4f46e5] text-white hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
-            >
-              <Coins className="w-3.5 h-3.5" />
-              Create Wages
-            </button>
-            <button
-              type="button"
-              onClick={handleViewWages}
-              disabled={wagesLoading}
-              className={`flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
-                wagesVisible
-                  ? "bg-indigo-100 text-[#4f46e5] border border-indigo-200"
-                  : "bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200"
-              }`}
-            >
-              {wagesLoading ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin" />
-              ) : (
-                <Eye className="w-3.5 h-3.5" />
-              )}
-              {wagesVisible ? "Hide Wages" : "View Wages"}
-            </button>
-            <span className="w-px h-5 bg-slate-200 mx-0.5" />
-            <Link
-              href="/industrial-engineering/reports/order-wise"
-              title="Order Wise Finishing Payment (Audit) — always for the current pay-cycle month (24th → today)"
-              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200"
-            >
-              <ClipboardList className="w-3.5 h-3.5" />
-              Order Wise Report
-            </Link>
-            <Link
-              href="/industrial-engineering/reports/operator-wise"
-              title="Operator Wise Final Payment — always for the current pay-cycle month (24th → today)"
-              className="flex items-center gap-1.5 h-8 px-3.5 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer bg-slate-100 text-slate-600 border border-slate-200 hover:bg-slate-200"
-            >
-              <Users className="w-3.5 h-3.5" />
-              Operator Wise Report
-            </Link>
-          </div>
-        </div>
-
-        <CreateWagesModal
-          open={createWagesOpen}
-          onOpenChange={setCreateWagesOpen}
-          createdBy={user?.email ?? null}
-          onCreated={async (wageId) => {
-            setWageMsg({
-              type: "success",
-              message: "Wages created successfully.",
-            });
-            // Show the new batch straight away, and refresh the summary so
-            // the paid-coupon state on screen reflects the new wage.
-            const viewRes = await fetchWages({ wageId });
-            if (viewRes.ok) {
-              setWagesBatches(viewRes.wages);
-              setWagesVisible(true);
-            }
-            if (summary) search();
-          }}
-        />
-
-        {/* Feedback message */}
-        {wageMsg && (
-          <div
-            className={`mx-4 mt-3 p-3 rounded-xl border text-xs font-semibold flex items-center justify-between gap-3 ${
-              wageMsg.type === "success"
-                ? "bg-emerald-50 border-emerald-200 text-emerald-900"
-                : "bg-rose-50 border-rose-200 text-rose-900"
-            }`}
-          >
-            <div className="flex items-center gap-2">
-              {wageMsg.type === "success" ? (
-                <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-              ) : (
-                <ShieldAlert className="w-4 h-4 text-rose-600 shrink-0" />
-              )}
-              <span>{wageMsg.message}</span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setWageMsg(null)}
-              className="text-slate-400 hover:text-slate-600 font-bold text-sm px-1"
-            >
-              ×
-            </button>
-          </div>
-        )}
-
-        {/* Wages table — visible when View Wages is active */}
-        {wagesVisible && wagesBatches.length > 0 && (
-          <div className="flex flex-col gap-5 p-4">
-            {wagesBatches.map((batch) => {
-              // Group rows by employee
-              const empGroups = new Map<
-                string,
-                {
-                  employeeCode: string;
-                  employeeName: string | null | undefined;
-                  items: typeof batch.rows;
-                  totalBundles: number;
-                  totalQty: number;
-                  totalPay: number;
-                }
-              >();
-              for (const row of batch.rows) {
-                const r = row as any;
-                const empCode = String(
-                  row.employeeCode || r.EmployeeCode || "",
-                );
-                const empName = row.employeeName ?? r.EmployeeName ?? null;
-                const bundleCount =
-                  Number(row.bundleCount ?? r.BundleCount) || 0;
-                const qty = Number(row.qty ?? r.Qty) || 0;
-                const totalPay = Number(row.totalPay ?? r.TotalPay) || 0;
-
-                if (!empGroups.has(empCode)) {
-                  empGroups.set(empCode, {
-                    employeeCode: empCode,
-                    employeeName: empName,
-                    items: [],
-                    totalBundles: 0,
-                    totalQty: 0,
-                    totalPay: 0,
-                  });
-                }
-                const g = empGroups.get(empCode)!;
-                g.items.push(row);
-                g.totalBundles += bundleCount;
-                g.totalQty += qty;
-                g.totalPay += totalPay;
-              }
-              const groups = Array.from(empGroups.values());
-              const batchGrandBundles = groups.reduce(
-                (s, g) => s + g.totalBundles,
-                0,
-              );
-              const batchGrandQty = groups.reduce((s, g) => s + g.totalQty, 0);
-              const batchGrandPay = groups.reduce((s, g) => s + g.totalPay, 0);
-
-              return (
-                <div
-                  key={batch.WageId}
-                  className="border border-slate-200 rounded-xl overflow-hidden"
-                >
-                  {/* Batch header */}
-                  <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex-wrap gap-2">
-                    <div className="flex items-center gap-3 text-xs text-slate-600 flex-wrap">
-                      <span className="font-bold text-slate-800">
-                        Batch #{batch.WageId}
-                      </span>
-                      {batch.FromDate && (
-                        <span className="text-slate-500">
-                          {batch.FromDate.slice(0, 10)} →{" "}
-                          {batch.ToDate?.slice(0, 10) ?? "—"}
-                        </span>
-                      )}
-                      {batch.CreatedBy && (
-                        <span className="bg-slate-200 text-slate-700 px-2 py-0.5 rounded-md font-medium">
-                          {batch.CreatedBy}
-                        </span>
-                      )}
-                      <span className="font-bold text-emerald-700">
-                        Rs. {formatAmount(Number(batch.TotalAmount))}
-                      </span>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => handleDeleteWages(batch.WageId)}
-                      disabled={isDeletingWages}
-                      className="flex items-center gap-1.5 h-7 px-3 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-rose-50 border border-rose-200 text-rose-700 hover:bg-rose-100 disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer"
-                    >
-                      {isDeletingWages ? (
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                      ) : (
-                        <Trash2 className="w-3 h-3" />
-                      )}
-                      Delete
-                    </button>
-                  </div>
-
-                  {/* Same table format as the Employees breakdown tab */}
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-xs border-collapse">
-                      <thead>
-                        <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
-                          <th className="py-2.5 px-3 border-r border-slate-200">
-                            EmpCode
-                          </th>
-                          <th className="py-2.5 px-3 border-r border-slate-200">
-                            Employee Name
-                          </th>
-                          <th className="py-2.5 px-3 border-r border-slate-200">
-                            W/O
-                          </th>
-                          <th className="py-2.5 px-3 text-center border-r border-slate-200">
-                            Date
-                          </th>
-                          <th className="py-2.5 px-3 border-r border-slate-200">
-                            Operation
-                          </th>
-                          <th className="py-2.5 px-3 text-right border-r border-slate-200">
-                            Rate
-                          </th>
-                          <th className="py-2.5 px-3 text-center border-r border-slate-200">
-                            Bundle
-                          </th>
-                          <th className="py-2.5 px-3 text-center border-r border-slate-200">
-                            Quantity
-                          </th>
-                          <th className="py-2.5 px-3 text-right border-r border-slate-200">
-                            Total Pay
-                          </th>
-                          <th className="py-2.5 px-3 text-center w-20">
-                            Signature
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-slate-200">
-                        {groups.map((g) => (
-                          <Fragment key={g.employeeCode}>
-                            {g.items.map((item, rowIdx) => {
-                              const r = item as any;
-                              const wo = item.workOrder || r.WorkOrder || "—";
-                              const wd = item.workDate || r.WorkDate || "—";
-                              const op = item.operation || r.Operation || "—";
-                              const rateVal = item.rate ?? r.Rate;
-                              const bundleVal =
-                                Number(item.bundleCount ?? r.BundleCount) || 0;
-                              const qtyVal = Number(item.qty ?? r.Qty) || 0;
-                              const payVal =
-                                Number(item.totalPay ?? r.TotalPay) || 0;
-
-                              return (
-                                <tr
-                                  key={rowIdx}
-                                  className="hover:bg-slate-50/60 transition-colors"
-                                >
-                                  <td className="py-2 px-3 border-r border-slate-100 font-mono font-bold text-[#4f46e5] text-[11px]">
-                                    {rowIdx === 0 ? g.employeeCode : ""}
-                                  </td>
-                                  <td className="py-2 px-3 border-r border-slate-100 font-semibold text-slate-800">
-                                    {rowIdx === 0 ? g.employeeName || "—" : ""}
-                                  </td>
-                                  <td className="py-2 px-3 border-r border-slate-100 font-mono text-slate-700">
-                                    {wo}
-                                  </td>
-                                  <td className="py-2 px-3 border-r border-slate-100 text-center text-slate-600">
-                                    {wd}
-                                  </td>
-                                  <td className="py-2 px-3 border-r border-slate-100 text-slate-700">
-                                    {op}
-                                  </td>
-                                  <td className="py-2 px-3 border-r border-slate-100 text-right font-mono text-slate-700">
-                                    {rateVal != null
-                                      ? `Rs. ${Number(rateVal).toFixed(2)}`
-                                      : "—"}
-                                  </td>
-                                  <td className="py-2 px-3 border-r border-slate-100 text-center font-bold text-slate-800">
-                                    {bundleVal}
-                                  </td>
-                                  <td className="py-2 px-3 border-r border-slate-100 text-center font-extrabold text-[#4f46e5]">
-                                    {qtyVal.toLocaleString()}
-                                  </td>
-                                  <td className="py-2 px-3 border-r border-slate-100 text-right font-bold text-emerald-700">
-                                    Rs. {formatAmount(payVal)}
-                                  </td>
-                                  <td className="py-2 px-3 text-center border-slate-100" />
-                                </tr>
-                              );
-                            })}
-                            {/* Employee sub-total */}
-                            <tr className="bg-slate-50/80 border-t border-slate-200 text-[11px] font-bold text-slate-700">
-                              <td
-                                className="py-1.5 px-3 border-r border-slate-200"
-                                colSpan={5}
-                              >
-                                Employee wise Total :
-                              </td>
-                              <td className="py-1.5 px-3 border-r border-slate-200" />
-                              <td className="py-1.5 px-3 border-r border-slate-200 text-center">
-                                {g.totalBundles}
-                              </td>
-                              <td className="py-1.5 px-3 border-r border-slate-200 text-center text-[#4f46e5]">
-                                {g.totalQty.toLocaleString()}
-                              </td>
-                              <td className="py-1.5 px-3 border-r border-slate-200 text-right text-emerald-700">
-                                Rs. {formatAmount(g.totalPay)}
-                              </td>
-                              <td className="py-1.5 px-3" />
-                            </tr>
-                          </Fragment>
-                        ))}
-                      </tbody>
-                      <tfoot>
-                        <tr className="bg-slate-100 border-t-2 border-slate-300 font-black text-slate-800 text-xs">
-                          <td
-                            className="py-2.5 px-3 border-r border-slate-200"
-                            colSpan={5}
-                          >
-                            Grand Total :
-                          </td>
-                          <td className="py-2.5 px-3 border-r border-slate-200" />
-                          <td className="py-2.5 px-3 border-r border-slate-200 text-center">
-                            {batchGrandBundles}
-                          </td>
-                          <td className="py-2.5 px-3 border-r border-slate-200 text-center text-[#4f46e5]">
-                            {batchGrandQty.toLocaleString()}
-                          </td>
-                          <td className="py-2.5 px-3 border-r border-slate-200 text-right text-emerald-700">
-                            Rs. {formatAmount(batchGrandPay)}
-                          </td>
-                          <td className="py-2.5 px-3" />
-                        </tr>
-                      </tfoot>
-                    </table>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
       {/* Search Bar */}
       <div className="bg-white border border-[#e2e8f0] rounded-2xl p-4 shadow-sm no-print">
         <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2 flex-wrap gap-2">
@@ -2047,6 +1623,24 @@ export function EmployeeReportDashboard() {
                     </button>
                   );
                 })}
+                {/* Operator Wise is a separate page (always current pay-cycle,
+                    no date-range picker), not a breakdown tab — but it's an
+                    employee-scoped report, so it only shows up alongside the
+                    other Employee-mode tabs, not for Work Order/Operation/
+                    Section searches. */}
+                {mode === "employee" && (
+                  <>
+                    <span className="w-px h-6 bg-slate-200 mx-1 shrink-0" />
+                    <Link
+                      href="/industrial-engineering/reports/operator-wise"
+                      title="Operator Wise Final Payment — always for the current pay-cycle month (24th → today)"
+                      className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-slate-600 hover:bg-slate-100 shrink-0"
+                    >
+                      <Users className="w-3.5 h-3.5" />
+                      <span>Operator Wise Report</span>
+                    </Link>
+                  </>
+                )}
               </div>
 
               <div className="flex items-center gap-2 pb-2.5 sm:pb-2 w-full sm:w-auto shrink-0">
@@ -2090,368 +1684,378 @@ export function EmployeeReportDashboard() {
                 dimension the active top tab is (Employee / Operation /
                 Section), so it reads "this <subject>'s work orders". Work
                 Order mode keeps the flat own-dimension table below. */}
-            {effectiveTab === "workOrders" && searchDimension !== "workOrder" && (
-              <div className="flex flex-col border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
+            {effectiveTab === "workOrders" &&
+              searchDimension !== "workOrder" && (
+                <div className="flex flex-col border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
+                          <th className="py-2.5 px-3 border-r border-slate-200">
+                            {DIMENSION_META[searchDimension].columnLabel}
+                          </th>
+                          <th className="py-2.5 px-3 border-r border-slate-200">
+                            Work Order #
+                          </th>
+                          <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                            Coupons
+                          </th>
+                          <th className="py-2.5 px-3 text-right">
+                            Total Amount
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {workOrderRowGroups.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={4}
+                              className="py-8 text-center text-slate-400 font-medium"
+                            >
+                              No work orders recorded for this period.
+                            </td>
+                          </tr>
+                        ) : (
+                          workOrderRowGroups.map((g) => (
+                            <Fragment key={g.groupKey}>
+                              {g.rows.map((row, idx) => (
+                                <tr
+                                  key={`${row.key}-${idx}`}
+                                  className="hover:bg-slate-50/70 transition-colors"
+                                >
+                                  <td className="py-2 px-3 font-mono font-bold text-slate-800 text-[11px] border-r border-slate-200 align-top">
+                                    {idx === 0 ? g.groupLabel : ""}
+                                  </td>
+                                  <td className="py-2 px-3 border-r border-slate-200">
+                                    <span className="font-mono font-bold text-[#4f46e5] bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
+                                      {row.label}
+                                    </span>
+                                  </td>
+                                  <td className="py-2 px-3 text-center font-bold text-slate-800 text-[11px] border-r border-slate-200">
+                                    {row.couponCount.toLocaleString()}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono text-[11px]">
+                                    {formatAmount(row.totalAmount)}
+                                  </td>
+                                </tr>
+                              ))}
+                              {/* Group-wise Total row */}
+                              <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
+                                <td
+                                  colSpan={2}
+                                  className="py-2 px-3 text-right border-r border-slate-200"
+                                >
+                                  {DIMENSION_META[searchDimension].totalLabel} :
+                                </td>
+                                <td className="py-2 px-3 text-center border-r border-slate-200">
+                                  {g.totalCoupons.toLocaleString()}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono text-emerald-800">
+                                  {formatAmount(g.totalAmount)}
+                                </td>
+                              </tr>
+                            </Fragment>
+                          ))
+                        )}
+                      </tbody>
+                      {workOrderRowGroups.length > 0 && (
+                        <tfoot>
+                          <tr className="bg-slate-100 border-t-2 border-slate-400 font-black text-xs text-slate-900">
+                            <td
+                              colSpan={2}
+                              className="py-2.5 px-3 text-right border-r border-slate-300"
+                            >
+                              Grand Total :
+                            </td>
+                            <td className="py-2.5 px-3 text-center border-r border-slate-300">
+                              {workOrderRowGrandTotals.coupons.toLocaleString()}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
+                              Rs. {formatAmount(workOrderRowGrandTotals.amount)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
+                </div>
+              )}
+
+            {/* Tab: Work Orders Breakdown Table (flat, Work Order mode) */}
+            {effectiveTab === "workOrders" &&
+              searchDimension === "workOrder" && (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
-                        <th className="py-2.5 px-3 border-r border-slate-200">
-                          {DIMENSION_META[searchDimension].columnLabel}
-                        </th>
-                        <th className="py-2.5 px-3 border-r border-slate-200">
-                          Work Order #
-                        </th>
-                        <th className="py-2.5 px-3 text-center border-r border-slate-200">
-                          Coupons
-                        </th>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
+                        <th className="py-2.5 px-3">Work Order #</th>
+                        <th className="py-2.5 px-3 text-center">Operations</th>
+                        <th className="py-2.5 px-3 text-center">Coupons</th>
+                        <th className="py-2.5 px-3 text-center">Total Qty</th>
                         <th className="py-2.5 px-3 text-right">Total Amount</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {workOrderRowGroups.length === 0 ? (
+                    <tbody className="divide-y divide-slate-100">
+                      {summary.workOrders.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={4}
+                            colSpan={5}
                             className="py-8 text-center text-slate-400 font-medium"
                           >
                             No work orders recorded for this period.
                           </td>
                         </tr>
                       ) : (
-                        workOrderRowGroups.map((g) => (
-                          <Fragment key={g.groupKey}>
-                            {g.rows.map((row, idx) => (
-                              <tr
-                                key={`${row.key}-${idx}`}
-                                className="hover:bg-slate-50/70 transition-colors"
-                              >
-                                <td className="py-2 px-3 font-mono font-bold text-slate-800 text-[11px] border-r border-slate-200 align-top">
-                                  {idx === 0 ? g.groupLabel : ""}
-                                </td>
-                                <td className="py-2 px-3 border-r border-slate-200">
-                                  <span className="font-mono font-bold text-[#4f46e5] bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
-                                    {row.label}
-                                  </span>
-                                </td>
-                                <td className="py-2 px-3 text-center font-bold text-slate-800 text-[11px] border-r border-slate-200">
-                                  {row.couponCount.toLocaleString()}
-                                </td>
-                                <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono text-[11px]">
-                                  {formatAmount(row.totalAmount)}
-                                </td>
-                              </tr>
-                            ))}
-                            {/* Group-wise Total row */}
-                            <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
-                              <td
-                                colSpan={2}
-                                className="py-2 px-3 text-right border-r border-slate-200"
-                              >
-                                {DIMENSION_META[searchDimension].totalLabel} :
-                              </td>
-                              <td className="py-2 px-3 text-center border-r border-slate-200">
-                                {g.totalCoupons.toLocaleString()}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono text-emerald-800">
-                                {formatAmount(g.totalAmount)}
-                              </td>
-                            </tr>
-                          </Fragment>
+                        summary.workOrders.map((wo, idx) => (
+                          <tr
+                            key={idx}
+                            className="hover:bg-slate-50/70 transition-colors"
+                          >
+                            <td className="py-2.5 px-3">
+                              <span className="font-mono font-bold text-[#4f46e5] bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
+                                {wo.workOrder}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-semibold text-slate-700">
+                              {wo.operationsCount}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-bold text-slate-800">
+                              {wo.couponCount.toLocaleString()}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
+                              {wo.orderQty != null
+                                ? wo.orderQty.toLocaleString()
+                                : "—"}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
+                              Rs. {formatAmount(wo.totalAmount)}
+                            </td>
+                          </tr>
                         ))
                       )}
                     </tbody>
-                    {workOrderRowGroups.length > 0 && (
+                    {summary.workOrders.length > 0 && (
                       <tfoot>
-                        <tr className="bg-slate-100 border-t-2 border-slate-400 font-black text-xs text-slate-900">
-                          <td
-                            colSpan={2}
-                            className="py-2.5 px-3 text-right border-r border-slate-300"
-                          >
-                            Grand Total :
+                        <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
+                          <td className="py-2.5 px-3" colSpan={2}>
+                            Total ({summary.workOrders.length} Work Orders)
                           </td>
-                          <td className="py-2.5 px-3 text-center border-r border-slate-300">
-                            {workOrderRowGrandTotals.coupons.toLocaleString()}
+                          <td className="py-2.5 px-3 text-center text-slate-900">
+                            {summary.totalCoupons.toLocaleString()}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
-                            Rs. {formatAmount(workOrderRowGrandTotals.amount)}
+                          <td className="py-2.5 px-3 text-center text-[#4f46e5]">
+                            {summary.workOrders
+                              .reduce((acc, wo) => acc + (wo.orderQty ?? 0), 0)
+                              .toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
+                            Rs. {formatAmount(summary.totalAmount)}
                           </td>
                         </tr>
                       </tfoot>
                     )}
                   </table>
                 </div>
-              </div>
-            )}
-
-            {/* Tab: Work Orders Breakdown Table (flat, Work Order mode) */}
-            {effectiveTab === "workOrders" && searchDimension === "workOrder" && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
-                      <th className="py-2.5 px-3">Work Order #</th>
-                      <th className="py-2.5 px-3 text-center">Operations</th>
-                      <th className="py-2.5 px-3 text-center">Coupons</th>
-                      <th className="py-2.5 px-3 text-center">Total Qty</th>
-                      <th className="py-2.5 px-3 text-right">Total Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {summary.workOrders.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={5}
-                          className="py-8 text-center text-slate-400 font-medium"
-                        >
-                          No work orders recorded for this period.
-                        </td>
-                      </tr>
-                    ) : (
-                      summary.workOrders.map((wo, idx) => (
-                        <tr
-                          key={idx}
-                          className="hover:bg-slate-50/70 transition-colors"
-                        >
-                          <td className="py-2.5 px-3">
-                            <span className="font-mono font-bold text-[#4f46e5] bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
-                              {wo.workOrder}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-semibold text-slate-700">
-                            {wo.operationsCount}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-bold text-slate-800">
-                            {wo.couponCount.toLocaleString()}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
-                            {wo.orderQty != null
-                              ? wo.orderQty.toLocaleString()
-                              : "—"}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
-                            Rs. {formatAmount(wo.totalAmount)}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  {summary.workOrders.length > 0 && (
-                    <tfoot>
-                      <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
-                        <td className="py-2.5 px-3" colSpan={2}>
-                          Total ({summary.workOrders.length} Work Orders)
-                        </td>
-                        <td className="py-2.5 px-3 text-center text-slate-900">
-                          {summary.totalCoupons.toLocaleString()}
-                        </td>
-                        <td className="py-2.5 px-3 text-center text-[#4f46e5]">
-                          {summary.workOrders
-                            .reduce((acc, wo) => acc + (wo.orderQty ?? 0), 0)
-                            .toLocaleString()}
-                        </td>
-                        <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
-                          Rs. {formatAmount(summary.totalAmount)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-            )}
+              )}
 
             {/* Tab: Operations Breakdown Table — nested under whichever
                 dimension the active top tab is (Employee / Work Order /
                 Section), so it reads "this <subject>'s operations". Operation
                 mode keeps the flat own-dimension table below (includes Piece
                 Rate and SAM per operation). */}
-            {effectiveTab === "operations" && searchDimension !== "operation" && (
-              <div className="flex flex-col border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
+            {effectiveTab === "operations" &&
+              searchDimension !== "operation" && (
+                <div className="flex flex-col border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
+                          <th className="py-2.5 px-3 border-r border-slate-200">
+                            {DIMENSION_META[searchDimension].columnLabel}
+                          </th>
+                          <th className="py-2.5 px-3 border-r border-slate-200">
+                            Operation
+                          </th>
+                          <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                            Piece Rate
+                          </th>
+                          <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                            SAM
+                          </th>
+                          <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                            Coupons
+                          </th>
+                          <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                            Output (Pcs)
+                          </th>
+                          <th className="py-2.5 px-3 text-right">
+                            Total Amount
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {operationRowGroups.length === 0 ? (
+                          <tr>
+                            <td
+                              colSpan={7}
+                              className="py-8 text-center text-slate-400 font-medium"
+                            >
+                              No operations recorded for this period.
+                            </td>
+                          </tr>
+                        ) : (
+                          operationRowGroups.map((g) => (
+                            <Fragment key={g.groupKey}>
+                              {g.rows.map((row, idx) => (
+                                <tr
+                                  key={`${row.key}-${idx}`}
+                                  className="hover:bg-slate-50/70 transition-colors"
+                                >
+                                  <td className="py-2 px-3 font-mono font-bold text-slate-800 text-[11px] border-r border-slate-200 align-top">
+                                    {idx === 0 ? g.groupLabel : ""}
+                                  </td>
+                                  <td className="py-2 px-3 font-semibold text-slate-800 text-[11px] border-r border-slate-200">
+                                    {row.label}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
+                                    {row.rate != null
+                                      ? row.rate.toFixed(2).replace(/\.00$/, "")
+                                      : "—"}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
+                                    {row.sam != null ? row.sam.toFixed(2) : "—"}
+                                  </td>
+                                  <td className="py-2 px-3 text-center font-bold text-slate-800 text-[11px] border-r border-slate-200">
+                                    {row.couponCount.toLocaleString()}
+                                  </td>
+                                  <td className="py-2 px-3 text-center font-extrabold text-[#4f46e5] text-[11px] border-r border-slate-200">
+                                    {row.totalQty.toLocaleString()}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono text-[11px]">
+                                    {formatAmount(row.totalAmount)}
+                                  </td>
+                                </tr>
+                              ))}
+                              {/* Group-wise Total row — Output (Pcs) deliberately left
+                                blank: per user request, this column isn't summed. */}
+                              <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
+                                <td
+                                  colSpan={4}
+                                  className="py-2 px-3 text-right border-r border-slate-200"
+                                >
+                                  {DIMENSION_META[searchDimension].totalLabel} :
+                                </td>
+                                <td className="py-2 px-3 text-center border-r border-slate-200">
+                                  {g.totalCoupons.toLocaleString()}
+                                </td>
+                                <td className="py-2 px-3 border-r border-slate-200" />
+                                <td className="py-2 px-3 text-right font-mono text-emerald-800">
+                                  {formatAmount(g.totalAmount)}
+                                </td>
+                              </tr>
+                            </Fragment>
+                          ))
+                        )}
+                      </tbody>
+                      {operationRowGroups.length > 0 && (
+                        <tfoot>
+                          <tr className="bg-slate-100 border-t-2 border-slate-400 font-black text-xs text-slate-900">
+                            <td
+                              colSpan={4}
+                              className="py-2.5 px-3 text-right border-r border-slate-300"
+                            >
+                              Grand Total :
+                            </td>
+                            <td className="py-2.5 px-3 text-center border-r border-slate-300">
+                              {operationRowGrandTotals.coupons.toLocaleString()}
+                            </td>
+                            <td className="py-2.5 px-3 border-r border-slate-300" />
+                            <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
+                              Rs. {formatAmount(operationRowGrandTotals.amount)}
+                            </td>
+                          </tr>
+                        </tfoot>
+                      )}
+                    </table>
+                  </div>
+                </div>
+              )}
+
+            {/* Tab: Operations Breakdown Table (flat, Operation mode) */}
+            {effectiveTab === "operations" &&
+              searchDimension === "operation" && (
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
-                      <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
-                        <th className="py-2.5 px-3 border-r border-slate-200">
-                          {DIMENSION_META[searchDimension].columnLabel}
-                        </th>
-                        <th className="py-2.5 px-3 border-r border-slate-200">
-                          Operation
-                        </th>
-                        <th className="py-2.5 px-3 text-right border-r border-slate-200">
-                          Piece Rate
-                        </th>
-                        <th className="py-2.5 px-3 text-right border-r border-slate-200">
-                          SAM
-                        </th>
-                        <th className="py-2.5 px-3 text-center border-r border-slate-200">
-                          Coupons
-                        </th>
-                        <th className="py-2.5 px-3 text-center border-r border-slate-200">
-                          Output (Pcs)
-                        </th>
+                      <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
+                        <th className="py-2.5 px-3">Operation</th>
+                        <th className="py-2.5 px-3">Section</th>
+                        <th className="py-2.5 px-3 text-right">Piece Rate</th>
+                        <th className="py-2.5 px-3 text-right">SAM</th>
+                        <th className="py-2.5 px-3 text-center">Coupons</th>
                         <th className="py-2.5 px-3 text-right">Total Amount</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-200">
-                      {operationRowGroups.length === 0 ? (
+                    <tbody className="divide-y divide-slate-100">
+                      {summary.operations.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={7}
+                            colSpan={6}
                             className="py-8 text-center text-slate-400 font-medium"
                           >
                             No operations recorded for this period.
                           </td>
                         </tr>
                       ) : (
-                        operationRowGroups.map((g) => (
-                          <Fragment key={g.groupKey}>
-                            {g.rows.map((row, idx) => (
-                              <tr
-                                key={`${row.key}-${idx}`}
-                                className="hover:bg-slate-50/70 transition-colors"
-                              >
-                                <td className="py-2 px-3 font-mono font-bold text-slate-800 text-[11px] border-r border-slate-200 align-top">
-                                  {idx === 0 ? g.groupLabel : ""}
-                                </td>
-                                <td className="py-2 px-3 font-semibold text-slate-800 text-[11px] border-r border-slate-200">
-                                  {row.label}
-                                </td>
-                                <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
-                                  {row.rate != null
-                                    ? row.rate.toFixed(2).replace(/\.00$/, "")
-                                    : "—"}
-                                </td>
-                                <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
-                                  {row.sam != null ? row.sam.toFixed(2) : "—"}
-                                </td>
-                                <td className="py-2 px-3 text-center font-bold text-slate-800 text-[11px] border-r border-slate-200">
-                                  {row.couponCount.toLocaleString()}
-                                </td>
-                                <td className="py-2 px-3 text-center font-extrabold text-[#4f46e5] text-[11px] border-r border-slate-200">
-                                  {row.totalQty.toLocaleString()}
-                                </td>
-                                <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono text-[11px]">
-                                  {formatAmount(row.totalAmount)}
-                                </td>
-                              </tr>
-                            ))}
-                            {/* Group-wise Total row — Output (Pcs) deliberately left
-                                blank: per user request, this column isn't summed. */}
-                            <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
-                              <td
-                                colSpan={4}
-                                className="py-2 px-3 text-right border-r border-slate-200"
-                              >
-                                {DIMENSION_META[searchDimension].totalLabel} :
-                              </td>
-                              <td className="py-2 px-3 text-center border-r border-slate-200">
-                                {g.totalCoupons.toLocaleString()}
-                              </td>
-                              <td className="py-2 px-3 border-r border-slate-200" />
-                              <td className="py-2 px-3 text-right font-mono text-emerald-800">
-                                {formatAmount(g.totalAmount)}
-                              </td>
-                            </tr>
-                          </Fragment>
+                        summary.operations.map((op, idx) => (
+                          <tr
+                            key={idx}
+                            className="hover:bg-slate-50/70 transition-colors"
+                          >
+                            <td className="py-2.5 px-3">
+                              <span className="font-semibold text-slate-800">
+                                {op.operationName || op.operationCode}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-slate-600">
+                              {op.section}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono text-slate-700">
+                              {op.rate != null
+                                ? `Rs. ${op.rate.toFixed(2)}`
+                                : "—"}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono text-slate-700">
+                              {op.smv != null ? op.smv.toFixed(2) : "—"}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-bold text-slate-800">
+                              {op.couponCount.toLocaleString()}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
+                              Rs. {formatAmount(op.totalAmount)}
+                            </td>
+                          </tr>
                         ))
                       )}
                     </tbody>
-                    {operationRowGroups.length > 0 && (
+                    {summary.operations.length > 0 && (
                       <tfoot>
-                        <tr className="bg-slate-100 border-t-2 border-slate-400 font-black text-xs text-slate-900">
-                          <td
-                            colSpan={4}
-                            className="py-2.5 px-3 text-right border-r border-slate-300"
-                          >
-                            Grand Total :
+                        <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
+                          <td className="py-2.5 px-3" colSpan={4}>
+                            Total ({summary.operations.length} Operations)
                           </td>
-                          <td className="py-2.5 px-3 text-center border-r border-slate-300">
-                            {operationRowGrandTotals.coupons.toLocaleString()}
+                          <td className="py-2.5 px-3 text-center text-slate-900">
+                            {summary.totalCoupons.toLocaleString()}
                           </td>
-                          <td className="py-2.5 px-3 border-r border-slate-300" />
-                          <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
-                            Rs. {formatAmount(operationRowGrandTotals.amount)}
+                          <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
+                            Rs. {formatAmount(summary.totalAmount)}
                           </td>
                         </tr>
                       </tfoot>
                     )}
                   </table>
                 </div>
-              </div>
-            )}
-
-            {/* Tab: Operations Breakdown Table (flat, Operation mode) */}
-            {effectiveTab === "operations" && searchDimension === "operation" && (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
-                      <th className="py-2.5 px-3">Operation</th>
-                      <th className="py-2.5 px-3">Section</th>
-                      <th className="py-2.5 px-3 text-right">Piece Rate</th>
-                      <th className="py-2.5 px-3 text-right">SAM</th>
-                      <th className="py-2.5 px-3 text-center">Coupons</th>
-                      <th className="py-2.5 px-3 text-right">Total Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {summary.operations.length === 0 ? (
-                      <tr>
-                        <td
-                          colSpan={6}
-                          className="py-8 text-center text-slate-400 font-medium"
-                        >
-                          No operations recorded for this period.
-                        </td>
-                      </tr>
-                    ) : (
-                      summary.operations.map((op, idx) => (
-                        <tr
-                          key={idx}
-                          className="hover:bg-slate-50/70 transition-colors"
-                        >
-                          <td className="py-2.5 px-3">
-                            <span className="font-semibold text-slate-800">
-                              {op.operationName || op.operationCode}
-                            </span>
-                          </td>
-                          <td className="py-2.5 px-3 text-slate-600">
-                            {op.section}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-700">
-                            {op.rate != null ? `Rs. ${op.rate.toFixed(2)}` : "—"}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-mono text-slate-700">
-                            {op.smv != null ? op.smv.toFixed(2) : "—"}
-                          </td>
-                          <td className="py-2.5 px-3 text-center font-bold text-slate-800">
-                            {op.couponCount.toLocaleString()}
-                          </td>
-                          <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
-                            Rs. {formatAmount(op.totalAmount)}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                  {summary.operations.length > 0 && (
-                    <tfoot>
-                      <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
-                        <td className="py-2.5 px-3" colSpan={4}>
-                          Total ({summary.operations.length} Operations)
-                        </td>
-                        <td className="py-2.5 px-3 text-center text-slate-900">
-                          {summary.totalCoupons.toLocaleString()}
-                        </td>
-                        <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
-                          Rs. {formatAmount(summary.totalAmount)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
-                </table>
-              </div>
-            )}
+              )}
 
             {/* Tab: Sections Breakdown Table — nested under whichever
                 dimension the active top tab is (Employee / Work Order /
@@ -2670,10 +2274,13 @@ export function EmployeeReportDashboard() {
                       {dimensionGroupedData.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={employeeGroupDimension === "workOrder" ? 10 : 11}
+                            colSpan={
+                              employeeGroupDimension === "workOrder" ? 10 : 11
+                            }
                             className="py-8 text-center text-slate-400 font-medium"
                           >
-                            No {TAB_META[
+                            No{" "}
+                            {TAB_META[
                               employeeGroupDimension === "workOrder"
                                 ? "workOrders"
                                 : employeeGroupDimension === "section"
@@ -2733,10 +2340,16 @@ export function EmployeeReportDashboard() {
                             {/* Group-wise Total row */}
                             <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
                               <td
-                                colSpan={employeeGroupDimension === "workOrder" ? 6 : 7}
+                                colSpan={
+                                  employeeGroupDimension === "workOrder" ? 6 : 7
+                                }
                                 className="py-2 px-3 text-right border-r border-slate-200"
                               >
-                                {DIMENSION_META[employeeGroupDimension].totalLabel} :
+                                {
+                                  DIMENSION_META[employeeGroupDimension]
+                                    .totalLabel
+                                }{" "}
+                                :
                               </td>
                               <td className="py-2 px-3 text-center border-r border-slate-200">
                                 {g.totalBundles.toLocaleString()}
@@ -2757,7 +2370,9 @@ export function EmployeeReportDashboard() {
                       <tfoot>
                         <tr className="bg-slate-100 border-t-2 border-slate-400 font-black text-xs text-slate-900">
                           <td
-                            colSpan={employeeGroupDimension === "workOrder" ? 6 : 7}
+                            colSpan={
+                              employeeGroupDimension === "workOrder" ? 6 : 7
+                            }
                             className="py-2.5 px-3 text-right border-r border-slate-300"
                           >
                             Grand Total :
