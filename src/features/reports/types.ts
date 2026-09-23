@@ -75,6 +75,7 @@ export interface WorkOrderReportItem {
 
 export interface SectionReportItem {
   section: string;
+  workOrder: string; // sections repeat across work orders, so each row is scoped to one W/O — same reasoning as BundleReportItem below
   couponCount: number;
   totalQty: number;
   totalSam: number;

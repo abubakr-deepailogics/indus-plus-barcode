@@ -519,11 +519,15 @@ export async function buildReportSummary(
       existingWo.operations.add(opCode);
     }
 
-    // Aggregate Section
-    const existingSection = sectionMap.get(section);
+    // Aggregate Section (per work order — the same section name can appear
+    // on multiple work orders, so key on both together, same reasoning as
+    // Bundle below rather than assuming Section is globally unique)
+    const sectionKey = `${row.WorkOrder}::${section}`;
+    const existingSection = sectionMap.get(sectionKey);
     if (!existingSection) {
-      sectionMap.set(section, {
+      sectionMap.set(sectionKey, {
         section,
+        workOrder: row.WorkOrder,
         couponCount: 1,
         totalQty: impliedQty,
         totalSam: (qty || 0) * (smv || 0),
@@ -635,13 +639,18 @@ export async function buildReportSummary(
   const sections = Array.from(sectionMap.values())
     .map((s) => ({
       section: s.section,
+      workOrder: s.workOrder,
       couponCount: s.couponCount,
       totalQty: Math.round(s.totalQty),
       totalSam: s.totalSam,
       totalAmount: s.totalAmount,
       operationsCount: s.operations.size,
     }))
-    .sort((a, b) => b.totalAmount - a.totalAmount);
+    .sort((a, b) => {
+      if (a.workOrder !== b.workOrder)
+        return a.workOrder.localeCompare(b.workOrder);
+      return b.totalAmount - a.totalAmount;
+    });
   const bundles = Array.from(bundleMap.values())
     .map((b) => ({
       bundleNo: b.bundleNo,
