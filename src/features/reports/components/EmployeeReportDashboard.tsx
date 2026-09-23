@@ -51,108 +51,191 @@ import {
 } from "../services/reports.service";
 import { useReportSearch } from "../hooks/useReportSearch";
 import type {
-  CouponReportItem,
+  OperationReportItem,
   ReportDateRange,
   ReportSearchMode,
   ReportSearchSuggestion,
   ReportSummary,
+  SectionReportItem,
 } from "../types";
 import type { WagesBatch } from "@/features/wages/types";
-
-interface OperationGroupedItem {
-  employeeCode: string;
-  employeeName: string;
-  workOrder: string;
-  date: string;
-  rate: number | null;
-  bundleCount: number;
-  qty: number;
-  totalPay: number;
-}
-
-interface OperationGrouped {
-  operation: string;
-  items: OperationGroupedItem[];
-  totalBundles: number;
-  totalQty: number;
-  totalPay: number;
-}
 
 // Rework coupons carry a bundle number in the RW<work order><seq> form (see
 // rework-coupon/page.tsx's assignedBundles) — no other bundle numbering
 // scheme starts with "RW", so this is a reliable way to tell a rework
 // coupon apart from a regular production one wherever only the operation
 // name/coupon row is visible (no separate "type" column).
-// Groups a coupon list by operation, then by (employee, workOrder, date,
-// rate) within each operation — the inverse of groupEmployeeData, used for
-// operation-mode searches where one operation is performed by many
-// employees rather than one employee performing many operations.
-function groupByOperationData(
-  couponsList: CouponReportItem[] | undefined,
-): OperationGrouped[] {
-  const coupons = couponsList || [];
-  const groupMap = new Map<string, OperationGrouped>();
+// function isReworkBundle(bundleNo?: string | null): boolean {
+//   return !!bundleNo && bundleNo.toUpperCase().startsWith("RW");
+// }
 
-  for (const c of coupons) {
-    const op = withReworkTag(
-      c.operationName || c.operationCode || "—",
-      c.bundleNo,
-    );
-    const empCode = c.employeeCode || "—";
-    const empName = c.employeeName || "—";
-    const wo = c.workOrder || "—";
-    const dateStr = c.scannedAt
-      ? format(new Date(c.scannedAt), "dd-MM-yy")
-      : "—";
-    const rate = c.rate != null ? Number(c.rate) : null;
-    const qty = c.qty || 0;
-    const pay =
-      c.value != null ? Number(c.value) : rate != null ? qty * rate : 0;
+// function withReworkTag(
+//   operationLabel: string,
+//   bundleNo?: string | null,
+// ): string {
+//   return isReworkBundle(bundleNo)
+//     ? `${operationLabel} (Rework)`
+//     : operationLabel;
+// }
 
-    let group = groupMap.get(op);
-    if (!group) {
-      group = { operation: op, items: [], totalBundles: 0, totalQty: 0, totalPay: 0 };
-      groupMap.set(op, group);
-    }
+// Groups an employee/coupon list (from any summary — a specific search or
+// the "all employees" fetch) into per-employee, per-(workOrder, date,
+// operation, rate) rows, used both for the on-screen breakdown and for
+// building wage rows.
+// function groupEmployeeData(
+//   employeesList: EmployeeBreakdownItem[] | undefined,
+//   couponsList: CouponReportItem[] | undefined,
+// ): EmployeeGrouped[] {
+//   if (!employeesList) return [];
+//   const coupons = couponsList || [];
 
-    const itemKey = `${empCode}__${wo}__${dateStr}__${rate}`;
-    const existing = group.items.find(
-      (it) =>
-        `${it.employeeCode}__${it.workOrder}__${it.date}__${it.rate}` ===
-        itemKey,
-    );
+//   return employeesList.map((emp) => {
+//     const empCoupons = coupons.filter(
+//       (c) => c.employeeCode === emp.employeeCode,
+//     );
+
+//     if (empCoupons.length === 0) {
+//       return {
+//         employeeCode: emp.employeeCode,
+//         employeeName: emp.employeeName,
+//         items: [
+//           {
+//             workOrder: "—",
+//             date: "—",
+//             operation: "—",
+//             rate: null as number | null,
+//             bundleCount: emp.couponCount || 0,
+//             qty: emp.totalQty || 0,
+//             totalPay: emp.totalAmount || 0,
+//           },
+//         ],
+//         totalBundles: emp.couponCount || 0,
+//         totalQty: emp.totalQty || 0,
+//         totalPay: emp.totalAmount || 0,
+//       };
+//     }
+
+//     // Group by workOrder, date (dd-MM-yy), operation, rate
+//     const groupMap = new Map<string, EmployeeGroupedItem>();
+
+//     for (const c of empCoupons) {
+//       const wo = c.workOrder || "—";
+//       const dateStr = c.scannedAt
+//         ? format(new Date(c.scannedAt), "dd-MM-yy")
+//         : "—";
+//       const op = withReworkTag(
+//         c.operationName || c.operationCode || "—",
+//         c.bundleNo,
+//       );
+//       const rate = c.rate != null ? Number(c.rate) : null;
+//       const key = `${wo}__${dateStr}__${op}__${rate}`;
+
+//       const existing = groupMap.get(key);
+//       const qty = c.qty || 0;
+//       const pay =
+//         c.value != null ? Number(c.value) : rate != null ? qty * rate : 0;
+
+//       if (!existing) {
+//         groupMap.set(key, {
+//           workOrder: wo,
+//           date: dateStr,
+//           operation: op,
+//           rate,
+//           bundleCount: 1,
+//           qty,
+//           totalPay: pay,
+//         });
+//       } else {
+//         existing.bundleCount += 1;
+//         existing.qty += qty;
+//         existing.totalPay += pay;
+//       }
+//     }
+
+//     // Sort items by date then workOrder
+//     const items = Array.from(groupMap.values()).sort((a, b) => {
+//       const cmpDate = a.date.localeCompare(b.date);
+//       if (cmpDate !== 0) return cmpDate;
+//       return a.workOrder.localeCompare(b.workOrder);
+//     });
+
+//     const totalBundles = items.reduce((acc, it) => acc + it.bundleCount, 0);
+//     const totalQty = items.reduce((acc, it) => acc + it.qty, 0);
+//     const totalPay = items.reduce((acc, it) => acc + it.totalPay, 0);
+
+//     return {
+//       employeeCode: emp.employeeCode,
+//       employeeName: emp.employeeName,
+//       items,
+//       totalBundles,
+//       totalQty,
+//       totalPay,
+//     };
+//   });
+// }
+
+interface SectionGroupedItem {
+  workOrder: string;
+  operationsCount: number;
+  couponCount: number;
+  totalAmount: number;
+}
+
+interface SectionGrouped {
+  section: string;
+  items: SectionGroupedItem[];
+  // Distinct operation codes across every work order in this section — NOT
+  // a sum of each work order's own operationsCount, which would double-count
+  // an operation code shared by more than one work order under the same
+  // section. Derived from the (already globally-deduped) operations
+  // breakdown instead, filtered to this section.
+  totalOperations: number;
+  totalCoupons: number;
+  totalAmount: number;
+}
+
+// Groups the (section, work order)-scoped rows from summary.sections by
+// section — one row per work order that section, sub-grouped under its
+// section, same shape/pattern as groupEmployeeData above.
+function groupSectionData(
+  sectionsList: SectionReportItem[] | undefined,
+  operationsList: OperationReportItem[] | undefined,
+): SectionGrouped[] {
+  if (!sectionsList) return [];
+  const operations = operationsList || [];
+
+  const map = new Map<string, SectionGrouped>();
+  for (const sec of sectionsList) {
+    const item: SectionGroupedItem = {
+      workOrder: sec.workOrder,
+      operationsCount: sec.operationsCount,
+      couponCount: sec.couponCount,
+      totalAmount: sec.totalAmount,
+    };
+    const existing = map.get(sec.section);
     if (!existing) {
-      group.items.push({
-        employeeCode: empCode,
-        employeeName: empName,
-        workOrder: wo,
-        date: dateStr,
-        rate,
-        bundleCount: 1,
-        qty,
-        totalPay: pay,
+      map.set(sec.section, {
+        section: sec.section,
+        items: [item],
+        totalOperations: 0,
+        totalCoupons: sec.couponCount,
+        totalAmount: sec.totalAmount,
       });
     } else {
-      existing.bundleCount += 1;
-      existing.qty += qty;
-      existing.totalPay += pay;
+      existing.items.push(item);
+      existing.totalCoupons += sec.couponCount;
+      existing.totalAmount += sec.totalAmount;
     }
   }
 
-  const groups = Array.from(groupMap.values());
+  const groups = Array.from(map.values());
   for (const group of groups) {
-    group.items.sort((a, b) => {
-      const cmpDate = a.date.localeCompare(b.date);
-      if (cmpDate !== 0) return cmpDate;
-      return a.employeeCode.localeCompare(b.employeeCode);
-    });
-    group.totalBundles = group.items.reduce((acc, it) => acc + it.bundleCount, 0);
-    group.totalQty = group.items.reduce((acc, it) => acc + it.qty, 0);
-    group.totalPay = group.items.reduce((acc, it) => acc + it.totalPay, 0);
+    group.totalOperations = operations.filter(
+      (op) => op.section === group.section,
+    ).length;
+    group.items.sort((a, b) => b.totalAmount - a.totalAmount);
   }
-  groups.sort((a, b) => a.operation.localeCompare(b.operation));
-
-  return groups;
+  return groups.sort((a, b) => b.totalAmount - a.totalAmount);
 }
 
 function formatAmount(value: number): string {
@@ -260,18 +343,19 @@ const MODE_CONFIG: Record<
   },
 };
 
-type BreakdownDimension = "workOrders" | "employees";
+type BreakdownDimension = "workOrders" | "employees" | "sections";
 
 // Every report always carries every breakdown dimension. The own-dimension
-// (e.g. "employees" tab in employee mode) is always shown first so the user
-// can see grouped-breakdown data for both specific and All searches.
-// Operations/Sections/Bundles breakdowns have been removed — only Work
-// Orders and Employees remain.
+// (e.g. "employees" tab in employee mode, "sections" tab in section mode)
+// is always shown first — and opens by default (see availableTabs[0] below)
+// — so the user lands on the breakdown matching what they searched for, for
+// both specific and All searches. Operations/Bundles breakdowns remain
+// removed — only Work Orders, Employees and Sections are shown.
 const BREAKDOWN_DIMENSIONS: Record<ReportSearchMode, BreakdownDimension[]> = {
-  employee: ["employees", "workOrders"],
-  workOrder: ["workOrders", "employees"],
-  operation: ["employees", "workOrders"],
-  section: ["employees", "workOrders"],
+  employee: ["employees", "workOrders", "sections"],
+  workOrder: ["workOrders", "employees", "sections"],
+  operation: ["employees", "workOrders", "sections"],
+  section: ["sections", "employees", "workOrders"],
 };
 
 const TAB_META: Record<
@@ -280,6 +364,7 @@ const TAB_META: Record<
 > = {
   workOrders: { label: "Work Orders", icon: ClipboardList },
   employees: { label: "Employees", icon: UserRound },
+  sections: { label: "Sections", icon: Layers },
 };
 
 type TabKey = BreakdownDimension | "coupons";
@@ -467,10 +552,9 @@ export function EmployeeReportDashboard() {
     [employeesList, couponsList],
   );
 
-  const isOperationMode = summary?.subject.mode === "operation";
-  const operationGroupedData = useMemo(
-    () => (isOperationMode ? groupByOperationData(couponsList) : []),
-    [isOperationMode, couponsList],
+  const sectionGroupedData = useMemo(
+    () => groupSectionData(summary?.sections, summary?.operations),
+    [summary],
   );
 
   const handleViewWages = useCallback(async () => {
@@ -635,36 +719,6 @@ export function EmployeeReportDashboard() {
         wo.totalQty,
         Number(wo.totalAmount.toFixed(2)),
       ]);
-    } else if (effectiveTab === "employees" && isOperationMode) {
-      headers = [
-        "Operation",
-        "W/O",
-        "Date",
-        "EmpCode",
-        "Employee Name",
-        "Rate",
-        "Bundle",
-        "Quantity",
-        "Total Pay",
-        "Signature",
-      ];
-      rows = [];
-      for (const og of operationGroupedData) {
-        for (const item of og.items) {
-          rows.push([
-            og.operation,
-            item.workOrder,
-            item.date,
-            item.employeeCode,
-            item.employeeName,
-            item.rate != null ? Number(item.rate.toFixed(2)) : "",
-            item.bundleCount,
-            item.qty,
-            Number(item.totalPay.toFixed(2)),
-            "",
-          ]);
-        }
-      }
     } else if (effectiveTab === "employees") {
       headers = [
         "EmpCode",
@@ -692,6 +746,26 @@ export function EmployeeReportDashboard() {
             item.qty,
             Number(item.totalPay.toFixed(2)),
             "",
+          ]);
+        }
+      }
+    } else if (effectiveTab === "sections") {
+      headers = [
+        "Section",
+        "Work Order",
+        "Operations",
+        "Coupons",
+        "Total Amount",
+      ];
+      rows = [];
+      for (const group of sectionGroupedData) {
+        for (const item of group.items) {
+          rows.push([
+            group.section,
+            item.workOrder,
+            item.operationsCount,
+            item.couponCount,
+            Number(item.totalAmount.toFixed(2)),
           ]);
         }
       }
@@ -754,8 +828,7 @@ export function EmployeeReportDashboard() {
     filteredCoupons,
     showEmployeeColumn,
     employeeGroupedData,
-    isOperationMode,
-    operationGroupedData,
+    sectionGroupedData,
   ]);
 
   return (
@@ -822,7 +895,10 @@ export function EmployeeReportDashboard() {
           onOpenChange={setCreateWagesOpen}
           createdBy={user?.email ?? null}
           onCreated={async (wageId) => {
-            setWageMsg({ type: "success", message: "Wages created successfully." });
+            setWageMsg({
+              type: "success",
+              message: "Wages created successfully.",
+            });
             // Show the new batch straight away, and refresh the summary so
             // the paid-coupon state on screen reflects the new wage.
             const viewRes = await fetchWages({ wageId });
@@ -1683,13 +1759,8 @@ export function EmployeeReportDashboard() {
                           label: "Scanned Coupons Trail",
                           icon: FileSpreadsheet,
                         }
-                      : tab === "employees" && isOperationMode
-                        ? { label: "Operations", icon: UserRound }
-                        : TAB_META[tab];
-                  const count =
-                    tab === "employees" && isOperationMode
-                      ? operationGroupedData.length
-                      : summary[tab]?.length || 0;
+                      : TAB_META[tab];
+                  const count = summary[tab]?.length || 0;
                   const Icon = meta.icon;
                   return (
                     <button
@@ -1765,9 +1836,7 @@ export function EmployeeReportDashboard() {
                       <th className="py-2.5 px-3">Work Order #</th>
                       <th className="py-2.5 px-3 text-center">Operations</th>
                       <th className="py-2.5 px-3 text-center">Coupons</th>
-                      <th className="py-2.5 px-3 text-center">
-                        Total Output (Pcs)
-                      </th>
+                      <th className="py-2.5 px-3 text-center">Total Qty</th>
                       <th className="py-2.5 px-3 text-right">Total Amount</th>
                     </tr>
                   </thead>
@@ -1799,7 +1868,9 @@ export function EmployeeReportDashboard() {
                             {wo.couponCount.toLocaleString()}
                           </td>
                           <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
-                            {wo.totalQty.toLocaleString()}
+                            {wo.orderQty != null
+                              ? wo.orderQty.toLocaleString()
+                              : "—"}
                           </td>
                           <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
                             Rs. {formatAmount(wo.totalAmount)}
@@ -1818,7 +1889,9 @@ export function EmployeeReportDashboard() {
                           {summary.totalCoupons.toLocaleString()}
                         </td>
                         <td className="py-2.5 px-3 text-center text-[#4f46e5]">
-                          {summary.totalQty.toLocaleString()}
+                          {summary.workOrders
+                            .reduce((acc, wo) => acc + (wo.orderQty ?? 0), 0)
+                            .toLocaleString()}
                         </td>
                         <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                           Rs. {formatAmount(summary.totalAmount)}
@@ -1826,6 +1899,72 @@ export function EmployeeReportDashboard() {
                       </tr>
                     </tfoot>
                   )}
+                </table>
+              </div>
+            )}
+
+            {/* Tab: Sections Breakdown Table — one row per (Section, Work
+                Order) pair. A section worked by a single work order is one
+                row; a section worked by 2 work orders is 2 rows, with the
+                Section cell merged (rowSpan) across them so it reads as one
+                label rather than repeating the text. Excludes Output (Pcs)
+                and SAM Earned, matching the printed report's other tabs. */}
+            {effectiveTab === "sections" && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
+                      <th className="py-2.5 px-3">Section</th>
+                      <th className="py-2.5 px-3">Work Order</th>
+                      <th className="py-2.5 px-3 text-center">Operations</th>
+                      <th className="py-2.5 px-3 text-center">Coupons</th>
+                      <th className="py-2.5 px-3 text-right">Total Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {sectionGroupedData.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={5}
+                          className="py-8 text-center text-slate-400 font-medium"
+                        >
+                          No sections recorded for this period.
+                        </td>
+                      </tr>
+                    ) : (
+                      sectionGroupedData.map((group) =>
+                        group.items.map((item, idx) => (
+                          <tr
+                            key={`${group.section}-${item.workOrder}-${idx}`}
+                            className="hover:bg-slate-50/70 transition-colors"
+                          >
+                            {idx === 0 && (
+                              <td
+                                className="py-2.5 px-3 font-semibold text-slate-700 align-top border-r border-slate-100"
+                                rowSpan={group.items.length}
+                              >
+                                {group.section}
+                              </td>
+                            )}
+                            <td className="py-2.5 px-3">
+                              <span className="font-mono font-bold text-[#4f46e5] bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
+                                {item.workOrder}
+                              </span>
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-semibold text-slate-700">
+                              {item.operationsCount}
+                            </td>
+                            <td className="py-2.5 px-3 text-center font-bold text-slate-800">
+                              {item.couponCount.toLocaleString()}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
+                              Rs. {formatAmount(item.totalAmount)}
+                            </td>
+                          </tr>
+                        )),
+                      )
+                    )}
+                  </tbody>
                 </table>
               </div>
             )}
@@ -1839,40 +1978,21 @@ export function EmployeeReportDashboard() {
                   <table className="w-full text-left text-xs border-collapse">
                     <thead>
                       <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
-                        {isOperationMode ? (
-                          <th className="py-2.5 px-3 border-r border-slate-200">
-                            Operation
-                          </th>
-                        ) : (
-                          <>
-                            <th className="py-2.5 px-3 border-r border-slate-200">
-                              EmpCode
-                            </th>
-                            <th className="py-2.5 px-3 border-r border-slate-200">
-                              Employee Name
-                            </th>
-                          </>
-                        )}
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          EmpCode
+                        </th>
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          Employee Name
+                        </th>
                         <th className="py-2.5 px-3 border-r border-slate-200">
                           W/O
                         </th>
                         <th className="py-2.5 px-3 text-center border-r border-slate-200">
                           Date
                         </th>
-                        {isOperationMode ? (
-                          <>
-                            <th className="py-2.5 px-3 border-r border-slate-200">
-                              EmpCode
-                            </th>
-                            <th className="py-2.5 px-3 border-r border-slate-200">
-                              Employee Name
-                            </th>
-                          </>
-                        ) : (
-                          <th className="py-2.5 px-3 border-r border-slate-200">
-                            Operation
-                          </th>
-                        )}
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          Operation
+                        </th>
                         <th className="py-2.5 px-3 text-right border-r border-slate-200">
                           Rate
                         </th>
@@ -1891,81 +2011,7 @@ export function EmployeeReportDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-200">
-                      {isOperationMode ? (
-                        operationGroupedData.length === 0 ? (
-                          <tr>
-                            <td
-                              colSpan={10}
-                              className="py-8 text-center text-slate-400 font-medium"
-                            >
-                              No operations recorded for this period.
-                            </td>
-                          </tr>
-                        ) : (
-                          operationGroupedData.map((og) => (
-                            <Fragment key={og.operation}>
-                              {og.items.map((item, idx) => (
-                                <tr
-                                  key={idx}
-                                  className="hover:bg-slate-50/70 transition-colors"
-                                >
-                                  <td className="py-2 px-3 text-[11px] font-semibold text-slate-800 border-r border-slate-200 align-top">
-                                    {idx === 0 ? og.operation : ""}
-                                  </td>
-                                  <td className="py-2 px-3 font-mono font-bold text-slate-700 text-[11px] border-r border-slate-200">
-                                    {item.workOrder}
-                                  </td>
-                                  <td className="py-2 px-3 text-center text-[11px] text-slate-600 font-medium whitespace-nowrap border-r border-slate-200">
-                                    {item.date}
-                                  </td>
-                                  <td className="py-2 px-3 font-mono font-bold text-slate-800 text-[11px] border-r border-slate-200">
-                                    {item.employeeCode}
-                                  </td>
-                                  <td className="py-2 px-3 font-bold text-slate-900 text-[11px] border-r border-slate-200">
-                                    {item.employeeName}
-                                  </td>
-                                  <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
-                                    {item.rate != null
-                                      ? item.rate.toFixed(2).replace(/\.00$/, "")
-                                      : "—"}
-                                  </td>
-                                  <td className="py-2 px-3 text-center font-semibold text-slate-700 text-[11px] border-r border-slate-200">
-                                    {item.bundleCount}
-                                  </td>
-                                  <td className="py-2 px-3 text-center font-bold text-slate-800 text-[11px] border-r border-slate-200">
-                                    {item.qty.toLocaleString()}
-                                  </td>
-                                  <td className="py-2 px-3 text-right font-bold text-slate-900 font-mono text-[11px] border-r border-slate-200">
-                                    {formatAmount(item.totalPay)}
-                                  </td>
-                                  <td className="py-2 px-3 text-center">
-                                    <div className="border border-slate-300 w-16 h-5 mx-auto rounded-sm" />
-                                  </td>
-                                </tr>
-                              ))}
-                              {/* Operation wise Total row */}
-                              <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
-                                <td
-                                  colSpan={6}
-                                  className="py-2 px-3 text-right border-r border-slate-200"
-                                >
-                                  Operation wise Total :
-                                </td>
-                                <td className="py-2 px-3 text-center border-r border-slate-200">
-                                  {og.totalBundles.toLocaleString()}
-                                </td>
-                                <td className="py-2 px-3 text-center border-r border-slate-200">
-                                  {og.totalQty.toLocaleString()}
-                                </td>
-                                <td className="py-2 px-3 text-right font-mono border-r border-slate-200 text-emerald-800">
-                                  {formatAmount(og.totalPay)}
-                                </td>
-                                <td className="py-2 px-3"></td>
-                              </tr>
-                            </Fragment>
-                          ))
-                        )
-                      ) : employeeGroupedData.length === 0 ? (
+                      {employeeGroupedData.length === 0 ? (
                         <tr>
                           <td
                             colSpan={10}
@@ -2506,7 +2552,7 @@ export function EmployeeReportDashboard() {
                         {card2.value}
                       </div>
                       <div>
-                        <strong>TOTAL OUTPUT (PCS):</strong>{" "}
+                        <strong>TOTAL Qty:</strong>{" "}
                         {summary.totalQty.toLocaleString()}
                       </div>
                       <div>
@@ -2651,111 +2697,47 @@ export function EmployeeReportDashboard() {
                   );
                 }
 
-                if (isOperationMode) {
+                if (dimension === "sections") {
                   return (
                     <div key={dimension}>
+                      <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
+                        Sections Summary
+                      </h3>
                       <table className="print-ops-table">
                         <thead>
                           <tr>
-                            <th>OPERATION</th>
-                            <th>W/O</th>
-                            <th className="text-center">DATE</th>
-                            <th>EMPCODE</th>
-                            <th>EMPLOYEE NAME</th>
-                            <th className="text-right">RATE</th>
-                            <th className="text-center">BUNDLE</th>
-                            <th className="text-center">QUANTITY</th>
-                            <th className="text-right">TOTAL PAY</th>
-                            <th className="text-center w-24">SIGNATURE</th>
+                            <th>SECTION</th>
+                            <th>WORK ORDER</th>
+                            <th className="text-center w-20">OPERATIONS</th>
+                            <th className="text-center w-20">COUPONS</th>
+                            <th className="text-right w-28">
+                              TOTAL AMOUNT (RS.)
+                            </th>
                           </tr>
                         </thead>
                         <tbody>
-                          {operationGroupedData.length === 0 ? (
-                            <tr>
-                              <td colSpan={10} className="text-center">
-                                No operations recorded for this period.
-                              </td>
-                            </tr>
-                          ) : (
-                            operationGroupedData.map((og) => (
-                              <Fragment key={og.operation}>
-                                {og.items.map((item, idx) => (
-                                  <tr key={idx}>
-                                    <td className="font-bold align-top">
-                                      {idx === 0 ? og.operation : ""}
-                                    </td>
-                                    <td className="font-mono font-bold">
-                                      {item.workOrder}
-                                    </td>
-                                    <td className="text-center whitespace-nowrap">
-                                      {item.date}
-                                    </td>
-                                    <td className="font-mono font-bold">
-                                      {item.employeeCode}
-                                    </td>
-                                    <td className="font-bold">
-                                      {item.employeeName}
-                                    </td>
-                                    <td className="text-right font-mono">
-                                      {item.rate != null
-                                        ? item.rate
-                                            .toFixed(2)
-                                            .replace(/\.00$/, "")
-                                        : "—"}
-                                    </td>
-                                    <td className="text-center">
-                                      {item.bundleCount}
-                                    </td>
-                                    <td className="text-center font-bold">
-                                      {item.qty.toLocaleString()}
-                                    </td>
-                                    <td className="text-right font-bold font-mono">
-                                      {formatAmount(item.totalPay)}
-                                    </td>
-                                    <td className="text-center"></td>
-                                  </tr>
-                                ))}
-                                <tr className="print-totals-row">
-                                  <td
-                                    colSpan={6}
-                                    className="text-right font-bold"
-                                  >
-                                    Operation wise Total :
-                                  </td>
-                                  <td className="text-center font-bold">
-                                    {og.totalBundles.toLocaleString()}
-                                  </td>
-                                  <td className="text-center font-bold">
-                                    {og.totalQty.toLocaleString()}
-                                  </td>
-                                  <td className="text-right font-bold font-mono">
-                                    {formatAmount(og.totalPay)}
-                                  </td>
-                                  <td></td>
-                                </tr>
-                              </Fragment>
-                            ))
+                          {sectionGroupedData.map((group) =>
+                            group.items.map((item, idx) => (
+                              <tr key={`${group.section}-${idx}`}>
+                                <td className="font-bold align-top">
+                                  {idx === 0 ? group.section : ""}
+                                </td>
+                                <td className="font-mono font-bold">
+                                  {item.workOrder}
+                                </td>
+                                <td className="text-center">
+                                  {item.operationsCount}
+                                </td>
+                                <td className="text-center">
+                                  {item.couponCount.toLocaleString()}
+                                </td>
+                                <td className="text-right font-bold">
+                                  Rs. {formatAmount(item.totalAmount)}
+                                </td>
+                              </tr>
+                            )),
                           )}
                         </tbody>
-                        {operationGroupedData.length > 0 && (
-                          <tfoot>
-                            <tr className="print-totals-row font-bold">
-                              <td colSpan={6} className="text-right">
-                                Grand Total :
-                              </td>
-                              <td className="text-center">
-                                {grandTotalBundles.toLocaleString()}
-                              </td>
-                              <td className="text-center">
-                                {grandTotalQty.toLocaleString()}
-                              </td>
-                              <td className="text-right font-mono">
-                                {formatAmount(grandTotalPay)}
-                              </td>
-                              <td></td>
-                            </tr>
-                          </tfoot>
-                        )}
                       </table>
                     </div>
                   );

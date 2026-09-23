@@ -66,7 +66,8 @@ export interface OperationReportItem {
 export interface WorkOrderReportItem {
   workOrder: string;
   couponCount: number;
-  totalQty: number;
+  totalQty: number; // scanned/produced qty within the report's date range (used by CSV export as "Output (Pcs)")
+  orderQty: number | null; // the work order's overall ERP order quantity (cut-detail snapshot), not scanned/date-scoped
   totalSam: number;
   totalAmount: number;
   operationsCount: number;
@@ -74,6 +75,7 @@ export interface WorkOrderReportItem {
 
 export interface SectionReportItem {
   section: string;
+  workOrder: string; // sections repeat across work orders, so each row is scoped to one W/O — same reasoning as BundleReportItem below
   couponCount: number;
   totalQty: number;
   totalSam: number;
