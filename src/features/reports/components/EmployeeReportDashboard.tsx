@@ -40,8 +40,12 @@ import {
 import { CreateWagesModal } from "@/features/wages/components/CreateWagesModal";
 import { useAuth } from "@/features/auth/context/auth-context";
 import {
+  groupByDimension,
   groupEmployeeData,
+  groupRowsByDimension,
   withReworkTag,
+  type EmployeeGroupDimension,
+  type SearchDimension,
 } from "@/features/wages/services/employee-grouping.service";
 import {
   fetchEmployeeSearchSuggestions,
@@ -49,7 +53,7 @@ import {
   fetchSectionSearchSuggestions,
   fetchWorkOrderSearchSuggestions,
 } from "../services/reports.service";
-import { useReportSearch } from "../hooks/useReportSearch";
+import { currentPayCycleStart, useReportSearch } from "../hooks/useReportSearch";
 import type {
   OperationReportItem,
   ReportDateRange,
@@ -280,13 +284,6 @@ function formatEmployeeLabel(
   return code ? `#${code}` : name || "—";
 }
 
-function currentPayCycleStart(): Date {
-  const now = new Date();
-  const day = now.getDate();
-  const cycleMonth = day >= 24 ? now.getMonth() : now.getMonth() - 1;
-  return new Date(now.getFullYear(), cycleMonth, 24);
-}
-
 const PRESETS: { label: string; range: () => ReportDateRange }[] = [
   {
     label: "Last 7 Days",
@@ -343,19 +340,18 @@ const MODE_CONFIG: Record<
   },
 };
 
-type BreakdownDimension = "workOrders" | "employees" | "sections";
+type BreakdownDimension = "workOrders" | "employees" | "operations" | "sections";
 
 // Every report always carries every breakdown dimension. The own-dimension
 // (e.g. "employees" tab in employee mode, "sections" tab in section mode)
 // is always shown first — and opens by default (see availableTabs[0] below)
 // — so the user lands on the breakdown matching what they searched for, for
-// both specific and All searches. Operations/Bundles breakdowns remain
-// removed — only Work Orders, Employees and Sections are shown.
+// both specific and All searches. Bundles breakdown remains removed.
 const BREAKDOWN_DIMENSIONS: Record<ReportSearchMode, BreakdownDimension[]> = {
-  employee: ["employees", "workOrders", "sections"],
-  workOrder: ["workOrders", "employees", "sections"],
-  operation: ["employees", "workOrders", "sections"],
-  section: ["sections", "employees", "workOrders"],
+  employee: ["employees", "workOrders", "operations", "sections"],
+  workOrder: ["workOrders", "employees", "operations", "sections"],
+  operation: ["operations", "employees", "workOrders", "sections"],
+  section: ["sections", "employees", "workOrders", "operations"],
 };
 
 const TAB_META: Record<
@@ -364,7 +360,24 @@ const TAB_META: Record<
 > = {
   workOrders: { label: "Work Orders", icon: ClipboardList },
   employees: { label: "Employees", icon: UserRound },
+  operations: { label: "Operations", icon: Scissors },
   sections: { label: "Sections", icon: Layers },
+};
+
+// Column/label wording for a breakdown tab's group column, per the dimension
+// it's grouped by — matches how each mode's own breakdown tab already labels
+// that same dimension (TAB_META / table headers above). Covers all four
+// search modes since any of them can be the outer group for the Work Orders
+// and Sections tabs (only the Employees tab excludes "employee" — see
+// EmployeeGroupDimension).
+const DIMENSION_META: Record<
+  SearchDimension,
+  { columnLabel: string; totalLabel: string }
+> = {
+  employee: { columnLabel: "Employee", totalLabel: "Employee wise Total" },
+  workOrder: { columnLabel: "Work Order #", totalLabel: "Work Order wise Total" },
+  operation: { columnLabel: "Operation", totalLabel: "Operation wise Total" },
+  section: { columnLabel: "Section", totalLabel: "Section wise Total" },
 };
 
 type TabKey = BreakdownDimension | "coupons";
@@ -547,14 +560,143 @@ export function EmployeeReportDashboard() {
   const employeesList = summary?.employees;
   const couponsList = summary?.coupons;
 
+  // Every breakdown tab (Work Orders / Employees / Sections) always reads as
+  // "this <search subject>'s breakdown" — grouped by whichever dimension the
+  // active top tab (search mode) is — except the one tab that IS that same
+  // dimension (e.g. the Employees tab in Employee mode, the Work Orders tab
+  // in Work Order mode), which stays flat since nesting a dimension under
+  // itself is a no-op.
+  const searchDimension: SearchDimension = mode;
+
+  // One group per distinct employee / work order / operation / section the
+  // current summary covers — each summary breakdown array already carries
+  // exactly those rows (deduped by the report builder), so this just adapts
+  // each dimension's row shape into the generic {key, label} form the
+  // group-by helpers take.
+  const searchGroups = useMemo(() => {
+    if (!summary) return [];
+    if (searchDimension === "employee") {
+      return summary.employees.map((emp) => ({
+        key: emp.employeeCode,
+        label: emp.employeeName || emp.employeeCode,
+      }));
+    }
+    if (searchDimension === "workOrder") {
+      return summary.workOrders.map((wo) => ({
+        key: wo.workOrder,
+        label: wo.workOrder,
+      }));
+    }
+    if (searchDimension === "operation") {
+      return summary.operations.map((op) => ({
+        key: op.operationCode || op.operationName,
+        label: op.operationName || op.operationCode,
+      }));
+    }
+    // section — dedupe since summary.sections has one row per
+    // (section, workOrder) pair.
+    const seen = new Set<string>();
+    const groups: { key: string; label: string }[] = [];
+    for (const sec of summary.sections) {
+      if (seen.has(sec.section)) continue;
+      seen.add(sec.section);
+      groups.push({ key: sec.section, label: sec.section });
+    }
+    return groups;
+  }, [summary, searchDimension]);
+
+  // Employees tab: only nests when the search subject isn't already the
+  // employee (see comment above).
+  const employeeGroupDimension: EmployeeGroupDimension | null =
+    searchDimension === "employee" ? null : searchDimension;
+
   const employeeGroupedData = useMemo(
     () => groupEmployeeData(employeesList, couponsList),
     [employeesList, couponsList],
   );
 
+  const dimensionGroupedData = useMemo(
+    () =>
+      employeeGroupDimension
+        ? groupByDimension(employeeGroupDimension, searchGroups, couponsList)
+        : [],
+    [employeeGroupDimension, searchGroups, couponsList],
+  );
+
+  // Work Orders tab: only nests when the search subject isn't already the
+  // work order.
+  const workOrderRowGroups = useMemo(
+    () =>
+      searchDimension === "workOrder"
+        ? []
+        : groupRowsByDimension(
+            searchDimension,
+            "workOrder",
+            searchGroups,
+            couponsList,
+          ),
+    [searchDimension, searchGroups, couponsList],
+  );
+
+  // Sections tab: only nests when the search subject isn't already the
+  // section.
+  const sectionRowGroups = useMemo(
+    () =>
+      searchDimension === "section"
+        ? []
+        : groupRowsByDimension(
+            searchDimension,
+            "section",
+            searchGroups,
+            couponsList,
+          ),
+    [searchDimension, searchGroups, couponsList],
+  );
+
+  // Operations tab: only nests when the search subject isn't already the
+  // operation.
+  const operationRowGroups = useMemo(
+    () =>
+      searchDimension === "operation"
+        ? []
+        : groupRowsByDimension(
+            searchDimension,
+            "operation",
+            searchGroups,
+            couponsList,
+          ),
+    [searchDimension, searchGroups, couponsList],
+  );
+
   const sectionGroupedData = useMemo(
     () => groupSectionData(summary?.sections, summary?.operations),
     [summary],
+  );
+
+  // Grand totals (coupon count + amount) for the nested Work Orders /
+  // Operations / Sections tabs' tfoot row — same "sum of every group's
+  // subtotal" shape as grandTotalBundles/Qty/Pay above, for whichever of the
+  // three row-group datasets is currently on screen.
+  const workOrderRowGrandTotals = useMemo(
+    () => ({
+      coupons: workOrderRowGroups.reduce((acc, g) => acc + g.totalCoupons, 0),
+      amount: workOrderRowGroups.reduce((acc, g) => acc + g.totalAmount, 0),
+    }),
+    [workOrderRowGroups],
+  );
+  const operationRowGrandTotals = useMemo(
+    () => ({
+      coupons: operationRowGroups.reduce((acc, g) => acc + g.totalCoupons, 0),
+      amount: operationRowGroups.reduce((acc, g) => acc + g.totalAmount, 0),
+    }),
+    [operationRowGroups],
+  );
+  const sectionRowGrandTotals = useMemo(
+    () => ({
+      coupons: sectionRowGroups.reduce((acc, g) => acc + g.totalCoupons, 0),
+      amount: sectionRowGroups.reduce((acc, g) => acc + g.totalAmount, 0),
+    }),
+    [sectionRowGroups],
   );
 
   const handleViewWages = useCallback(async () => {
@@ -680,16 +822,25 @@ export function EmployeeReportDashboard() {
     summary?.subject.mode !== "employee" || isAllSummary;
 
   const grandTotalBundles = useMemo(
-    () => employeeGroupedData.reduce((acc, eg) => acc + eg.totalBundles, 0),
-    [employeeGroupedData],
+    () =>
+      employeeGroupDimension
+        ? dimensionGroupedData.reduce((acc, g) => acc + g.totalBundles, 0)
+        : employeeGroupedData.reduce((acc, eg) => acc + eg.totalBundles, 0),
+    [employeeGroupDimension, dimensionGroupedData, employeeGroupedData],
   );
   const grandTotalQty = useMemo(
-    () => employeeGroupedData.reduce((acc, eg) => acc + eg.totalQty, 0),
-    [employeeGroupedData],
+    () =>
+      employeeGroupDimension
+        ? dimensionGroupedData.reduce((acc, g) => acc + g.totalQty, 0)
+        : employeeGroupedData.reduce((acc, eg) => acc + eg.totalQty, 0),
+    [employeeGroupDimension, dimensionGroupedData, employeeGroupedData],
   );
   const grandTotalPay = useMemo(
-    () => employeeGroupedData.reduce((acc, eg) => acc + eg.totalPay, 0),
-    [employeeGroupedData],
+    () =>
+      employeeGroupDimension
+        ? dimensionGroupedData.reduce((acc, g) => acc + g.totalPay, 0)
+        : employeeGroupedData.reduce((acc, eg) => acc + eg.totalPay, 0),
+    [employeeGroupDimension, dimensionGroupedData, employeeGroupedData],
   );
 
   const card2 = summary ? getCard2Config(summary) : null;
@@ -704,7 +855,21 @@ export function EmployeeReportDashboard() {
     let headers: string[];
     let rows: (string | number | null | undefined)[][];
 
-    if (effectiveTab === "workOrders") {
+    if (effectiveTab === "workOrders" && searchDimension !== "workOrder") {
+      const groupHeader = DIMENSION_META[searchDimension].columnLabel;
+      headers = [groupHeader, "Work Order #", "Coupons", "Total Amount"];
+      rows = [];
+      for (const g of workOrderRowGroups) {
+        for (const row of g.rows) {
+          rows.push([
+            g.groupLabel,
+            row.label,
+            row.couponCount,
+            Number(row.totalAmount.toFixed(2)),
+          ]);
+        }
+      }
+    } else if (effectiveTab === "workOrders") {
       headers = [
         "Work Order #",
         "Operations",
@@ -719,6 +884,39 @@ export function EmployeeReportDashboard() {
         wo.totalQty,
         Number(wo.totalAmount.toFixed(2)),
       ]);
+    } else if (effectiveTab === "employees" && employeeGroupDimension) {
+      const groupHeader = DIMENSION_META[employeeGroupDimension].columnLabel;
+      headers = [
+        groupHeader,
+        "EmpCode",
+        "Employee Name",
+        ...(employeeGroupDimension === "workOrder" ? [] : ["W/O"]),
+        "Date",
+        "Operation",
+        "Rate",
+        "Bundle",
+        "Quantity",
+        "Total Pay",
+        "Signature",
+      ];
+      rows = [];
+      for (const g of dimensionGroupedData) {
+        for (const item of g.items) {
+          rows.push([
+            g.groupLabel,
+            item.employeeCode,
+            item.employeeName,
+            ...(employeeGroupDimension === "workOrder" ? [] : [item.workOrder]),
+            item.date,
+            item.operation,
+            item.rate != null ? Number(item.rate.toFixed(2)) : "",
+            item.bundleCount,
+            item.qty,
+            Number(item.totalPay.toFixed(2)),
+            "",
+          ]);
+        }
+      }
     } else if (effectiveTab === "employees") {
       headers = [
         "EmpCode",
@@ -746,6 +944,62 @@ export function EmployeeReportDashboard() {
             item.qty,
             Number(item.totalPay.toFixed(2)),
             "",
+          ]);
+        }
+      }
+    } else if (effectiveTab === "operations" && searchDimension !== "operation") {
+      const groupHeader = DIMENSION_META[searchDimension].columnLabel;
+      headers = [
+        groupHeader,
+        "Operation",
+        "Piece Rate",
+        "SAM",
+        "Coupons",
+        "Output (Pcs)",
+        "Total Amount",
+      ];
+      rows = [];
+      for (const g of operationRowGroups) {
+        for (const row of g.rows) {
+          rows.push([
+            g.groupLabel,
+            row.label,
+            row.rate != null ? Number(row.rate.toFixed(2)) : "",
+            row.sam != null ? Number(row.sam.toFixed(2)) : "",
+            row.couponCount,
+            row.totalQty,
+            Number(row.totalAmount.toFixed(2)),
+          ]);
+        }
+      }
+    } else if (effectiveTab === "operations") {
+      headers = [
+        "Operation",
+        "Section",
+        "Piece Rate",
+        "SAM",
+        "Coupons",
+        "Total Amount",
+      ];
+      rows = summary.operations.map((op) => [
+        op.operationName || op.operationCode,
+        op.section,
+        op.rate != null ? Number(op.rate.toFixed(2)) : "",
+        op.smv != null ? Number(op.smv.toFixed(2)) : "",
+        op.couponCount,
+        Number(op.totalAmount.toFixed(2)),
+      ]);
+    } else if (effectiveTab === "sections" && searchDimension !== "section") {
+      const groupHeader = DIMENSION_META[searchDimension].columnLabel;
+      headers = [groupHeader, "Section", "Coupons", "Total Amount"];
+      rows = [];
+      for (const g of sectionRowGroups) {
+        for (const row of g.rows) {
+          rows.push([
+            g.groupLabel,
+            row.label,
+            row.couponCount,
+            Number(row.totalAmount.toFixed(2)),
           ]);
         }
       }
@@ -829,6 +1083,12 @@ export function EmployeeReportDashboard() {
     showEmployeeColumn,
     employeeGroupedData,
     sectionGroupedData,
+    employeeGroupDimension,
+    dimensionGroupedData,
+    searchDimension,
+    workOrderRowGroups,
+    sectionRowGroups,
+    operationRowGroups,
   ]);
 
   return (
@@ -1826,9 +2086,106 @@ export function EmployeeReportDashboard() {
               </div>
             </div>
 
-            {/* Tab: Operations Breakdown Table */}
-            {/* Tab: Work Orders Breakdown Table */}
-            {effectiveTab === "workOrders" && (
+            {/* Tab: Work Orders Breakdown Table — nested under whichever
+                dimension the active top tab is (Employee / Operation /
+                Section), so it reads "this <subject>'s work orders". Work
+                Order mode keeps the flat own-dimension table below. */}
+            {effectiveTab === "workOrders" && searchDimension !== "workOrder" && (
+              <div className="flex flex-col border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          {DIMENSION_META[searchDimension].columnLabel}
+                        </th>
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          Work Order #
+                        </th>
+                        <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                          Coupons
+                        </th>
+                        <th className="py-2.5 px-3 text-right">Total Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {workOrderRowGroups.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="py-8 text-center text-slate-400 font-medium"
+                          >
+                            No work orders recorded for this period.
+                          </td>
+                        </tr>
+                      ) : (
+                        workOrderRowGroups.map((g) => (
+                          <Fragment key={g.groupKey}>
+                            {g.rows.map((row, idx) => (
+                              <tr
+                                key={`${row.key}-${idx}`}
+                                className="hover:bg-slate-50/70 transition-colors"
+                              >
+                                <td className="py-2 px-3 font-mono font-bold text-slate-800 text-[11px] border-r border-slate-200 align-top">
+                                  {idx === 0 ? g.groupLabel : ""}
+                                </td>
+                                <td className="py-2 px-3 border-r border-slate-200">
+                                  <span className="font-mono font-bold text-[#4f46e5] bg-indigo-50 border border-indigo-100 px-2 py-0.5 rounded-md">
+                                    {row.label}
+                                  </span>
+                                </td>
+                                <td className="py-2 px-3 text-center font-bold text-slate-800 text-[11px] border-r border-slate-200">
+                                  {row.couponCount.toLocaleString()}
+                                </td>
+                                <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono text-[11px]">
+                                  {formatAmount(row.totalAmount)}
+                                </td>
+                              </tr>
+                            ))}
+                            {/* Group-wise Total row */}
+                            <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
+                              <td
+                                colSpan={2}
+                                className="py-2 px-3 text-right border-r border-slate-200"
+                              >
+                                {DIMENSION_META[searchDimension].totalLabel} :
+                              </td>
+                              <td className="py-2 px-3 text-center border-r border-slate-200">
+                                {g.totalCoupons.toLocaleString()}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono text-emerald-800">
+                                {formatAmount(g.totalAmount)}
+                              </td>
+                            </tr>
+                          </Fragment>
+                        ))
+                      )}
+                    </tbody>
+                    {workOrderRowGroups.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-slate-100 border-t-2 border-slate-400 font-black text-xs text-slate-900">
+                          <td
+                            colSpan={2}
+                            className="py-2.5 px-3 text-right border-r border-slate-300"
+                          >
+                            Grand Total :
+                          </td>
+                          <td className="py-2.5 px-3 text-center border-r border-slate-300">
+                            {workOrderRowGrandTotals.coupons.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
+                            Rs. {formatAmount(workOrderRowGrandTotals.amount)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Work Orders Breakdown Table (flat, Work Order mode) */}
+            {effectiveTab === "workOrders" && searchDimension === "workOrder" && (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
@@ -1903,13 +2260,304 @@ export function EmployeeReportDashboard() {
               </div>
             )}
 
-            {/* Tab: Sections Breakdown Table — one row per (Section, Work
-                Order) pair. A section worked by a single work order is one
-                row; a section worked by 2 work orders is 2 rows, with the
-                Section cell merged (rowSpan) across them so it reads as one
-                label rather than repeating the text. Excludes Output (Pcs)
-                and SAM Earned, matching the printed report's other tabs. */}
-            {effectiveTab === "sections" && (
+            {/* Tab: Operations Breakdown Table — nested under whichever
+                dimension the active top tab is (Employee / Work Order /
+                Section), so it reads "this <subject>'s operations". Operation
+                mode keeps the flat own-dimension table below (includes Piece
+                Rate and SAM per operation). */}
+            {effectiveTab === "operations" && searchDimension !== "operation" && (
+              <div className="flex flex-col border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          {DIMENSION_META[searchDimension].columnLabel}
+                        </th>
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          Operation
+                        </th>
+                        <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                          Piece Rate
+                        </th>
+                        <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                          SAM
+                        </th>
+                        <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                          Coupons
+                        </th>
+                        <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                          Output (Pcs)
+                        </th>
+                        <th className="py-2.5 px-3 text-right">Total Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {operationRowGroups.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={7}
+                            className="py-8 text-center text-slate-400 font-medium"
+                          >
+                            No operations recorded for this period.
+                          </td>
+                        </tr>
+                      ) : (
+                        operationRowGroups.map((g) => (
+                          <Fragment key={g.groupKey}>
+                            {g.rows.map((row, idx) => (
+                              <tr
+                                key={`${row.key}-${idx}`}
+                                className="hover:bg-slate-50/70 transition-colors"
+                              >
+                                <td className="py-2 px-3 font-mono font-bold text-slate-800 text-[11px] border-r border-slate-200 align-top">
+                                  {idx === 0 ? g.groupLabel : ""}
+                                </td>
+                                <td className="py-2 px-3 font-semibold text-slate-800 text-[11px] border-r border-slate-200">
+                                  {row.label}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
+                                  {row.rate != null
+                                    ? row.rate.toFixed(2).replace(/\.00$/, "")
+                                    : "—"}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
+                                  {row.sam != null ? row.sam.toFixed(2) : "—"}
+                                </td>
+                                <td className="py-2 px-3 text-center font-bold text-slate-800 text-[11px] border-r border-slate-200">
+                                  {row.couponCount.toLocaleString()}
+                                </td>
+                                <td className="py-2 px-3 text-center font-extrabold text-[#4f46e5] text-[11px] border-r border-slate-200">
+                                  {row.totalQty.toLocaleString()}
+                                </td>
+                                <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono text-[11px]">
+                                  {formatAmount(row.totalAmount)}
+                                </td>
+                              </tr>
+                            ))}
+                            {/* Group-wise Total row — Output (Pcs) deliberately left
+                                blank: per user request, this column isn't summed. */}
+                            <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
+                              <td
+                                colSpan={4}
+                                className="py-2 px-3 text-right border-r border-slate-200"
+                              >
+                                {DIMENSION_META[searchDimension].totalLabel} :
+                              </td>
+                              <td className="py-2 px-3 text-center border-r border-slate-200">
+                                {g.totalCoupons.toLocaleString()}
+                              </td>
+                              <td className="py-2 px-3 border-r border-slate-200" />
+                              <td className="py-2 px-3 text-right font-mono text-emerald-800">
+                                {formatAmount(g.totalAmount)}
+                              </td>
+                            </tr>
+                          </Fragment>
+                        ))
+                      )}
+                    </tbody>
+                    {operationRowGroups.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-slate-100 border-t-2 border-slate-400 font-black text-xs text-slate-900">
+                          <td
+                            colSpan={4}
+                            className="py-2.5 px-3 text-right border-r border-slate-300"
+                          >
+                            Grand Total :
+                          </td>
+                          <td className="py-2.5 px-3 text-center border-r border-slate-300">
+                            {operationRowGrandTotals.coupons.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 border-r border-slate-300" />
+                          <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
+                            Rs. {formatAmount(operationRowGrandTotals.amount)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Operations Breakdown Table (flat, Operation mode) */}
+            {effectiveTab === "operations" && searchDimension === "operation" && (
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
+                      <th className="py-2.5 px-3">Operation</th>
+                      <th className="py-2.5 px-3">Section</th>
+                      <th className="py-2.5 px-3 text-right">Piece Rate</th>
+                      <th className="py-2.5 px-3 text-right">SAM</th>
+                      <th className="py-2.5 px-3 text-center">Coupons</th>
+                      <th className="py-2.5 px-3 text-right">Total Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {summary.operations.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan={6}
+                          className="py-8 text-center text-slate-400 font-medium"
+                        >
+                          No operations recorded for this period.
+                        </td>
+                      </tr>
+                    ) : (
+                      summary.operations.map((op, idx) => (
+                        <tr
+                          key={idx}
+                          className="hover:bg-slate-50/70 transition-colors"
+                        >
+                          <td className="py-2.5 px-3">
+                            <span className="font-semibold text-slate-800">
+                              {op.operationName || op.operationCode}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-3 text-slate-600">
+                            {op.section}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-700">
+                            {op.rate != null ? `Rs. ${op.rate.toFixed(2)}` : "—"}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-700">
+                            {op.smv != null ? op.smv.toFixed(2) : "—"}
+                          </td>
+                          <td className="py-2.5 px-3 text-center font-bold text-slate-800">
+                            {op.couponCount.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
+                            Rs. {formatAmount(op.totalAmount)}
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  {summary.operations.length > 0 && (
+                    <tfoot>
+                      <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
+                        <td className="py-2.5 px-3" colSpan={4}>
+                          Total ({summary.operations.length} Operations)
+                        </td>
+                        <td className="py-2.5 px-3 text-center text-slate-900">
+                          {summary.totalCoupons.toLocaleString()}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
+                          Rs. {formatAmount(summary.totalAmount)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
+            )}
+
+            {/* Tab: Sections Breakdown Table — nested under whichever
+                dimension the active top tab is (Employee / Work Order /
+                Operation), so it reads "this <subject>'s sections". Section
+                mode keeps the flat own-dimension table below (one row per
+                (Section, Work Order) pair, Section cell merged via rowSpan). */}
+            {effectiveTab === "sections" && searchDimension !== "section" && (
+              <div className="flex flex-col border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          {DIMENSION_META[searchDimension].columnLabel}
+                        </th>
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          Section
+                        </th>
+                        <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                          Coupons
+                        </th>
+                        <th className="py-2.5 px-3 text-right">Total Amount</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {sectionRowGroups.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={4}
+                            className="py-8 text-center text-slate-400 font-medium"
+                          >
+                            No sections recorded for this period.
+                          </td>
+                        </tr>
+                      ) : (
+                        sectionRowGroups.map((g) => (
+                          <Fragment key={g.groupKey}>
+                            {g.rows.map((row, idx) => (
+                              <tr
+                                key={`${row.key}-${idx}`}
+                                className="hover:bg-slate-50/70 transition-colors"
+                              >
+                                <td className="py-2 px-3 font-mono font-bold text-slate-800 text-[11px] border-r border-slate-200 align-top">
+                                  {idx === 0 ? g.groupLabel : ""}
+                                </td>
+                                <td className="py-2 px-3 font-semibold text-slate-800 text-[11px] border-r border-slate-200">
+                                  {row.label}
+                                </td>
+                                <td className="py-2 px-3 text-center font-bold text-slate-800 text-[11px] border-r border-slate-200">
+                                  {row.couponCount.toLocaleString()}
+                                </td>
+                                <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono text-[11px]">
+                                  {formatAmount(row.totalAmount)}
+                                </td>
+                              </tr>
+                            ))}
+                            {/* Group-wise Total row */}
+                            <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
+                              <td
+                                colSpan={2}
+                                className="py-2 px-3 text-right border-r border-slate-200"
+                              >
+                                {DIMENSION_META[searchDimension].totalLabel} :
+                              </td>
+                              <td className="py-2 px-3 text-center border-r border-slate-200">
+                                {g.totalCoupons.toLocaleString()}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono text-emerald-800">
+                                {formatAmount(g.totalAmount)}
+                              </td>
+                            </tr>
+                          </Fragment>
+                        ))
+                      )}
+                    </tbody>
+                    {sectionRowGroups.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-slate-100 border-t-2 border-slate-400 font-black text-xs text-slate-900">
+                          <td
+                            colSpan={2}
+                            className="py-2.5 px-3 text-right border-r border-slate-300"
+                          >
+                            Grand Total :
+                          </td>
+                          <td className="py-2.5 px-3 text-center border-r border-slate-300">
+                            {sectionRowGrandTotals.coupons.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
+                            Rs. {formatAmount(sectionRowGrandTotals.amount)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {/* Tab: Sections Breakdown Table (flat, Section mode) — one row
+                per (Section, Work Order) pair. A section worked by a single
+                work order is one row; a section worked by 2 work orders is 2
+                rows, with the Section cell merged (rowSpan) across them so it
+                reads as one label rather than repeating the text. Excludes
+                Output (Pcs) and SAM Earned, matching the printed report's
+                other tabs. */}
+            {effectiveTab === "sections" && searchDimension === "section" && (
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs border-collapse">
                   <thead>
@@ -1969,8 +2617,170 @@ export function EmployeeReportDashboard() {
               </div>
             )}
 
-            {/* Tab: Employees Breakdown Table (Payment Verification Format matching PDF) */}
-            {effectiveTab === "employees" && (
+            {/* Tab: Employees Breakdown Table — grouped by whichever
+                dimension the active top tab (search mode) is (Work Order /
+                Operation / Section), since the tab should always read as
+                "who worked this <search subject>". Employee mode keeps the
+                employee-first grouping (Payment Verification Format matching
+                PDF) since the subject already IS the employee. */}
+            {effectiveTab === "employees" && employeeGroupDimension && (
+              <div className="flex flex-col border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead>
+                      <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          {DIMENSION_META[employeeGroupDimension].columnLabel}
+                        </th>
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          EmpCode
+                        </th>
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          Employee Name
+                        </th>
+                        {employeeGroupDimension !== "workOrder" && (
+                          <th className="py-2.5 px-3 border-r border-slate-200">
+                            W/O
+                          </th>
+                        )}
+                        <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                          Date
+                        </th>
+                        <th className="py-2.5 px-3 border-r border-slate-200">
+                          Operation
+                        </th>
+                        <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                          Rate
+                        </th>
+                        <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                          Bundle
+                        </th>
+                        <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                          Quantity
+                        </th>
+                        <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                          Total Pay
+                        </th>
+                        <th className="py-2.5 px-3 text-center w-24">
+                          Signature
+                        </th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200">
+                      {dimensionGroupedData.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={employeeGroupDimension === "workOrder" ? 10 : 11}
+                            className="py-8 text-center text-slate-400 font-medium"
+                          >
+                            No {TAB_META[
+                              employeeGroupDimension === "workOrder"
+                                ? "workOrders"
+                                : employeeGroupDimension === "section"
+                                  ? "sections"
+                                  : "employees"
+                            ].label.toLowerCase()}{" "}
+                            recorded for this period.
+                          </td>
+                        </tr>
+                      ) : (
+                        dimensionGroupedData.map((g) => (
+                          <Fragment key={g.groupKey}>
+                            {g.items.map((item, idx) => (
+                              <tr
+                                key={idx}
+                                className="hover:bg-slate-50/70 transition-colors"
+                              >
+                                <td className="py-2 px-3 font-mono font-bold text-slate-800 text-[11px] border-r border-slate-200 align-top">
+                                  {idx === 0 ? g.groupLabel : ""}
+                                </td>
+                                <td className="py-2 px-3 font-mono font-bold text-slate-700 text-[11px] border-r border-slate-200">
+                                  {item.employeeCode}
+                                </td>
+                                <td className="py-2 px-3 font-bold text-slate-900 text-[11px] border-r border-slate-200">
+                                  {item.employeeName}
+                                </td>
+                                {employeeGroupDimension !== "workOrder" && (
+                                  <td className="py-2 px-3 font-mono text-slate-700 text-[11px] border-r border-slate-200">
+                                    {item.workOrder}
+                                  </td>
+                                )}
+                                <td className="py-2 px-3 text-center text-[11px] text-slate-600 font-medium whitespace-nowrap border-r border-slate-200">
+                                  {item.date}
+                                </td>
+                                <td className="py-2 px-3 text-[11px] font-semibold text-slate-800 border-r border-slate-200">
+                                  {item.operation}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
+                                  {item.rate != null
+                                    ? item.rate.toFixed(2).replace(/\.00$/, "")
+                                    : "—"}
+                                </td>
+                                <td className="py-2 px-3 text-center font-semibold text-slate-700 text-[11px] border-r border-slate-200">
+                                  {item.bundleCount}
+                                </td>
+                                <td className="py-2 px-3 text-center font-bold text-slate-800 text-[11px] border-r border-slate-200">
+                                  {item.qty.toLocaleString()}
+                                </td>
+                                <td className="py-2 px-3 text-right font-bold text-slate-900 font-mono text-[11px] border-r border-slate-200">
+                                  {formatAmount(item.totalPay)}
+                                </td>
+                                <td className="py-2 px-3 text-center">
+                                  <div className="border border-slate-300 w-16 h-5 mx-auto rounded-sm" />
+                                </td>
+                              </tr>
+                            ))}
+                            {/* Group-wise Total row */}
+                            <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
+                              <td
+                                colSpan={employeeGroupDimension === "workOrder" ? 6 : 7}
+                                className="py-2 px-3 text-right border-r border-slate-200"
+                              >
+                                {DIMENSION_META[employeeGroupDimension].totalLabel} :
+                              </td>
+                              <td className="py-2 px-3 text-center border-r border-slate-200">
+                                {g.totalBundles.toLocaleString()}
+                              </td>
+                              <td className="py-2 px-3 text-center border-r border-slate-200">
+                                {g.totalQty.toLocaleString()}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono border-r border-slate-200 text-emerald-800">
+                                {formatAmount(g.totalPay)}
+                              </td>
+                              <td className="py-2 px-3"></td>
+                            </tr>
+                          </Fragment>
+                        ))
+                      )}
+                    </tbody>
+                    {dimensionGroupedData.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-slate-100 border-t-2 border-slate-400 font-black text-xs text-slate-900">
+                          <td
+                            colSpan={employeeGroupDimension === "workOrder" ? 6 : 7}
+                            className="py-2.5 px-3 text-right border-r border-slate-300"
+                          >
+                            Grand Total :
+                          </td>
+                          <td className="py-2.5 px-3 text-center border-r border-slate-300">
+                            {grandTotalBundles.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-center border-r border-slate-300 text-[#4f46e5]">
+                            {grandTotalQty.toLocaleString()}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300 text-emerald-700">
+                            Rs. {formatAmount(grandTotalPay)}
+                          </td>
+                          <td className="py-2.5 px-3"></td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              </div>
+            )}
+
+            {effectiveTab === "employees" && !employeeGroupDimension && (
               <div className="flex flex-col border border-slate-300 rounded-xl overflow-hidden bg-white shadow-sm">
                 {/* PDF Subheader Bar */}
 
