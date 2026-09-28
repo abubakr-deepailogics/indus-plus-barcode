@@ -520,6 +520,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       <main className="flex-1 max-w-[1400px] w-full mx-auto p-6 md:p-8 relative">
         {children}
       </main>
+
+      <style>{`
+        @media print {
+          .no-print { display: none !important; }
+          main { padding: 0 !important; margin: 0 !important; max-width: 100% !important; width: 100% !important; }
+          body { background: white !important; }
+        }
+      `}</style>
     </div>
   );
 }

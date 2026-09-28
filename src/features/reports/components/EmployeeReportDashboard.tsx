@@ -2998,8 +2998,10 @@ export function EmployeeReportDashboard() {
                         {summary.totalCoupons.toLocaleString()}
                       </div>
                       <div>
-                        <strong>{card2.title.toUpperCase()}:</strong>{" "}
-                        {card2.value}
+                        <strong>
+                          {card2?.title ? card2.title.toUpperCase() : "COVERAGE"}:
+                        </strong>{" "}
+                        {card2?.value || "—"}
                       </div>
                       <div>
                         <strong>TOTAL Qty:</strong>{" "}
@@ -3040,7 +3042,7 @@ export function EmployeeReportDashboard() {
                     {filteredCoupons.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={showEmployeeColumn ? 10 : 9}
+                          colSpan={showEmployeeColumn ? 11 : 10}
                           className="text-center"
                         >
                           No matching coupons found.
@@ -3093,209 +3095,777 @@ export function EmployeeReportDashboard() {
                       ))
                     )}
                   </tbody>
+                  {filteredCoupons.length > 0 && (
+                    <tfoot>
+                      <tr className="print-totals-row font-bold">
+                        <td colSpan={5} className="text-right">
+                          Total ({filteredCoupons.length} Coupons) :
+                        </td>
+                        <td className="text-center">
+                          {filteredCoupons
+                            .reduce((sum, c) => sum + (c.qty ?? 0), 0)
+                            .toLocaleString()}
+                        </td>
+                        <td colSpan={showEmployeeColumn ? 3 : 2}></td>
+                        <td className="text-right font-mono">
+                          Rs.{" "}
+                          {formatAmount(
+                            filteredCoupons.reduce(
+                              (sum, c) => sum + (c.value ?? 0),
+                              0,
+                            ),
+                          )}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
             ) : (
               (() => {
                 const dimension = effectiveTab as BreakdownDimension;
-                const items = summary[dimension];
-                if (!items || items.length === 0) return null;
 
+                // --- 1. WORK ORDERS BREAKDOWN ---
                 if (dimension === "workOrders") {
                   return (
                     <div key={dimension}>
                       <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
                         Work Orders Summary
                       </h3>
-                      <table className="print-ops-table">
-                        <thead>
-                          <tr>
-                            <th className="text-center w-10">#</th>
-                            <th>WORK ORDER #</th>
-                            <th className="text-center w-20">OPERATIONS</th>
-                            <th className="text-center w-20">COUPONS</th>
-                            <th className="text-center w-24">OUTPUT (PCS)</th>
-                            <th className="text-right w-28">
-                              TOTAL AMOUNT (RS.)
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {summary.workOrders.map((wo, idx) => (
-                            <tr key={idx}>
-                              <td className="text-center">{idx + 1}</td>
-                              <td className="font-mono font-bold">
-                                {wo.workOrder}
-                              </td>
-                              <td className="text-center">
-                                {wo.operationsCount}
-                              </td>
-                              <td className="text-center">
-                                {wo.couponCount.toLocaleString()}
-                              </td>
-                              <td className="text-center">
-                                {wo.totalQty.toLocaleString()}
-                              </td>
-                              <td className="text-right font-bold">
-                                Rs. {formatAmount(wo.totalAmount)}
-                              </td>
+                      {searchDimension !== "workOrder" ? (
+                        <table className="print-ops-table">
+                          <thead>
+                            <tr>
+                              <th>
+                                {DIMENSION_META[searchDimension].columnLabel}
+                              </th>
+                              <th>WORK ORDER #</th>
+                              <th className="text-center w-20">COUPONS</th>
+                              <th className="text-right w-28">
+                                TOTAL AMOUNT (RS.)
+                              </th>
                             </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                          </thead>
+                          <tbody>
+                            {workOrderRowGroups.length === 0 ? (
+                              <tr>
+                                <td colSpan={4} className="text-center">
+                                  No work orders recorded for this period.
+                                </td>
+                              </tr>
+                            ) : (
+                              workOrderRowGroups.map((g) => (
+                                <Fragment key={g.groupKey}>
+                                  {g.rows.map((row, idx) => (
+                                    <tr key={`${row.key}-${idx}`}>
+                                      <td className="font-mono font-bold align-top">
+                                        {idx === 0 ? g.groupLabel : ""}
+                                      </td>
+                                      <td className="font-mono font-bold">
+                                        {row.label}
+                                      </td>
+                                      <td className="text-center font-bold">
+                                        {row.couponCount.toLocaleString()}
+                                      </td>
+                                      <td className="text-right font-bold">
+                                        Rs. {formatAmount(row.totalAmount)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                  <tr className="print-totals-row">
+                                    <td
+                                      colSpan={2}
+                                      className="text-right font-bold"
+                                    >
+                                      {DIMENSION_META[searchDimension].totalLabel} :
+                                    </td>
+                                    <td className="text-center font-bold">
+                                      {g.totalCoupons.toLocaleString()}
+                                    </td>
+                                    <td className="text-right font-bold">
+                                      Rs. {formatAmount(g.totalAmount)}
+                                    </td>
+                                  </tr>
+                                </Fragment>
+                              ))
+                            )}
+                          </tbody>
+                          {workOrderRowGroups.length > 0 && (
+                            <tfoot>
+                              <tr className="print-totals-row font-bold">
+                                <td colSpan={2} className="text-right">
+                                  Grand Total :
+                                </td>
+                                <td className="text-center">
+                                  {workOrderRowGrandTotals.coupons.toLocaleString()}
+                                </td>
+                                <td className="text-right font-mono">
+                                  Rs.{" "}
+                                  {formatAmount(
+                                    workOrderRowGrandTotals.amount,
+                                  )}
+                                </td>
+                              </tr>
+                            </tfoot>
+                          )}
+                        </table>
+                      ) : (
+                        <table className="print-ops-table">
+                          <thead>
+                            <tr>
+                              <th>WORK ORDER #</th>
+                              <th className="text-center w-20">OPERATIONS</th>
+                              <th className="text-center w-20">COUPONS</th>
+                              <th className="text-center w-24">TOTAL QTY</th>
+                              <th className="text-right w-24">PIECE RATE</th>
+                              <th className="text-right w-24">PLAN</th>
+                              <th className="text-right w-28">
+                                TOTAL AMOUNT (RS.)
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {summary.workOrders.length === 0 ? (
+                              <tr>
+                                <td colSpan={7} className="text-center">
+                                  No work orders recorded for this period.
+                                </td>
+                              </tr>
+                            ) : (
+                              summary.workOrders.map((wo, idx) => (
+                                <tr key={idx}>
+                                  <td className="font-mono font-bold">
+                                    {wo.workOrder}
+                                  </td>
+                                  <td className="text-center">
+                                    {wo.operationsCount}
+                                  </td>
+                                  <td className="text-center font-bold">
+                                    {wo.couponCount.toLocaleString()}
+                                  </td>
+                                  <td className="text-center font-bold">
+                                    {wo.orderQty != null
+                                      ? wo.orderQty.toLocaleString()
+                                      : "—"}
+                                  </td>
+                                  <td className="text-right">
+                                    {wo.pieceRate != null
+                                      ? formatAmount(wo.pieceRate)
+                                      : "—"}
+                                  </td>
+                                  <td className="text-right">
+                                    {wo.plan != null
+                                      ? formatAmount(wo.plan)
+                                      : "—"}
+                                  </td>
+                                  <td className="text-right font-bold">
+                                    Rs. {formatAmount(wo.totalAmount)}
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                          {summary.workOrders.length > 0 && (
+                            <tfoot>
+                              <tr className="print-totals-row font-bold">
+                                <td colSpan={2}>
+                                  Total ({summary.workOrders.length} Work Orders)
+                                </td>
+                                <td className="text-center">
+                                  {summary.totalCoupons.toLocaleString()}
+                                </td>
+                                <td className="text-center">
+                                  {summary.workOrders
+                                    .reduce(
+                                      (acc, wo) => acc + (wo.orderQty ?? 0),
+                                      0,
+                                    )
+                                    .toLocaleString()}
+                                </td>
+                                <td className="text-right">—</td>
+                                <td className="text-right">
+                                  {formatAmount(
+                                    summary.workOrders.reduce(
+                                      (acc, wo) => acc + (wo.plan ?? 0),
+                                      0,
+                                    ),
+                                  )}
+                                </td>
+                                <td className="text-right">
+                                  Rs. {formatAmount(summary.totalAmount)}
+                                </td>
+                              </tr>
+                            </tfoot>
+                          )}
+                        </table>
+                      )}
                     </div>
                   );
                 }
 
+                // --- 2. OPERATIONS BREAKDOWN ---
+                if (dimension === "operations") {
+                  return (
+                    <div key={dimension}>
+                      <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
+                        Operations Summary
+                      </h3>
+                      {searchDimension !== "operation" ? (
+                        <table className="print-ops-table">
+                          <thead>
+                            <tr>
+                              <th>
+                                {DIMENSION_META[searchDimension].columnLabel}
+                              </th>
+                              <th>OPERATION</th>
+                              <th className="text-right w-20">PIECE RATE</th>
+                              <th className="text-right w-16">SAM</th>
+                              <th className="text-center w-20">COUPONS</th>
+                              <th className="text-center w-24">OUTPUT (PCS)</th>
+                              <th className="text-right w-28">
+                                TOTAL AMOUNT (RS.)
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {operationRowGroups.length === 0 ? (
+                              <tr>
+                                <td colSpan={7} className="text-center">
+                                  No operations recorded for this period.
+                                </td>
+                              </tr>
+                            ) : (
+                              operationRowGroups.map((g) => (
+                                <Fragment key={g.groupKey}>
+                                  {g.rows.map((row, idx) => (
+                                    <tr key={`${row.key}-${idx}`}>
+                                      <td className="font-mono font-bold align-top">
+                                        {idx === 0 ? g.groupLabel : ""}
+                                      </td>
+                                      <td className="font-semibold">
+                                        {row.label}
+                                      </td>
+                                      <td className="text-right font-mono">
+                                        {row.rate != null
+                                          ? row.rate
+                                              .toFixed(2)
+                                              .replace(/\.00$/, "")
+                                          : "—"}
+                                      </td>
+                                      <td className="text-right font-mono">
+                                        {row.sam != null
+                                          ? row.sam.toFixed(2)
+                                          : "—"}
+                                      </td>
+                                      <td className="text-center font-bold">
+                                        {row.couponCount.toLocaleString()}
+                                      </td>
+                                      <td className="text-center font-bold">
+                                        {row.totalQty.toLocaleString()}
+                                      </td>
+                                      <td className="text-right font-bold">
+                                        Rs. {formatAmount(row.totalAmount)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                  <tr className="print-totals-row">
+                                    <td
+                                      colSpan={4}
+                                      className="text-right font-bold"
+                                    >
+                                      {DIMENSION_META[searchDimension].totalLabel} :
+                                    </td>
+                                    <td className="text-center font-bold">
+                                      {g.totalCoupons.toLocaleString()}
+                                    </td>
+                                    <td className="text-center"></td>
+                                    <td className="text-right font-bold">
+                                      Rs. {formatAmount(g.totalAmount)}
+                                    </td>
+                                  </tr>
+                                </Fragment>
+                              ))
+                            )}
+                          </tbody>
+                          {operationRowGroups.length > 0 && (
+                            <tfoot>
+                              <tr className="print-totals-row font-bold">
+                                <td colSpan={4} className="text-right">
+                                  Grand Total :
+                                </td>
+                                <td className="text-center">
+                                  {operationRowGrandTotals.coupons.toLocaleString()}
+                                </td>
+                                <td className="text-center"></td>
+                                <td className="text-right font-mono">
+                                  Rs.{" "}
+                                  {formatAmount(
+                                    operationRowGrandTotals.amount,
+                                  )}
+                                </td>
+                              </tr>
+                            </tfoot>
+                          )}
+                        </table>
+                      ) : (
+                        <table className="print-ops-table">
+                          <thead>
+                            <tr>
+                              <th>OPERATION</th>
+                              <th>SECTION</th>
+                              <th className="text-right w-20">PIECE RATE</th>
+                              <th className="text-right w-16">SAM</th>
+                              <th className="text-center w-20">COUPONS</th>
+                              <th className="text-right w-28">
+                                TOTAL AMOUNT (RS.)
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {summary.operations.length === 0 ? (
+                              <tr>
+                                <td colSpan={6} className="text-center">
+                                  No operations recorded for this period.
+                                </td>
+                              </tr>
+                            ) : (
+                              summary.operations.map((op, idx) => (
+                                <tr key={idx}>
+                                  <td className="font-semibold">
+                                    {op.operationName || op.operationCode}
+                                  </td>
+                                  <td>{op.section}</td>
+                                  <td className="text-right font-mono">
+                                    {op.rate != null
+                                      ? `Rs. ${op.rate.toFixed(2)}`
+                                      : "—"}
+                                  </td>
+                                  <td className="text-right font-mono">
+                                    {op.smv != null
+                                      ? op.smv.toFixed(2)
+                                      : "—"}
+                                  </td>
+                                  <td className="text-center font-bold">
+                                    {op.couponCount.toLocaleString()}
+                                  </td>
+                                  <td className="text-right font-bold">
+                                    Rs. {formatAmount(op.totalAmount)}
+                                  </td>
+                                </tr>
+                              ))
+                            )}
+                          </tbody>
+                          {summary.operations.length > 0 && (
+                            <tfoot>
+                              <tr className="print-totals-row font-bold">
+                                <td colSpan={4}>
+                                  Total ({summary.operations.length} Operations)
+                                </td>
+                                <td className="text-center">
+                                  {summary.totalCoupons.toLocaleString()}
+                                </td>
+                                <td className="text-right">
+                                  Rs. {formatAmount(summary.totalAmount)}
+                                </td>
+                              </tr>
+                            </tfoot>
+                          )}
+                        </table>
+                      )}
+                    </div>
+                  );
+                }
+
+                // --- 3. SECTIONS BREAKDOWN ---
                 if (dimension === "sections") {
                   return (
                     <div key={dimension}>
                       <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
                         Sections Summary
                       </h3>
-                      <table className="print-ops-table">
-                        <thead>
-                          <tr>
-                            <th>SECTION</th>
-                            <th>WORK ORDER</th>
-                            <th className="text-center w-20">OPERATIONS</th>
-                            <th className="text-center w-20">COUPONS</th>
-                            <th className="text-right w-28">
-                              TOTAL AMOUNT (RS.)
-                            </th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {sectionGroupedData.map((group) =>
-                            group.items.map((item, idx) => (
-                              <tr key={`${group.section}-${idx}`}>
-                                <td className="font-bold align-top">
-                                  {idx === 0 ? group.section : ""}
-                                </td>
-                                <td className="font-mono font-bold">
-                                  {item.workOrder}
-                                </td>
-                                <td className="text-center">
-                                  {item.operationsCount}
-                                </td>
-                                <td className="text-center">
-                                  {item.couponCount.toLocaleString()}
-                                </td>
-                                <td className="text-right font-bold">
-                                  Rs. {formatAmount(item.totalAmount)}
+                      {searchDimension !== "section" ? (
+                        <table className="print-ops-table">
+                          <thead>
+                            <tr>
+                              <th>
+                                {DIMENSION_META[searchDimension].columnLabel}
+                              </th>
+                              <th>SECTION</th>
+                              <th className="text-center w-20">COUPONS</th>
+                              <th className="text-right w-28">
+                                TOTAL AMOUNT (RS.)
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sectionRowGroups.length === 0 ? (
+                              <tr>
+                                <td colSpan={4} className="text-center">
+                                  No sections recorded for this period.
                                 </td>
                               </tr>
-                            )),
+                            ) : (
+                              sectionRowGroups.map((g) => (
+                                <Fragment key={g.groupKey}>
+                                  {g.rows.map((row, idx) => (
+                                    <tr key={`${row.key}-${idx}`}>
+                                      <td className="font-mono font-bold align-top">
+                                        {idx === 0 ? g.groupLabel : ""}
+                                      </td>
+                                      <td className="font-semibold">
+                                        {row.label}
+                                      </td>
+                                      <td className="text-center font-bold">
+                                        {row.couponCount.toLocaleString()}
+                                      </td>
+                                      <td className="text-right font-bold">
+                                        Rs. {formatAmount(row.totalAmount)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                  <tr className="print-totals-row">
+                                    <td
+                                      colSpan={2}
+                                      className="text-right font-bold"
+                                    >
+                                      {DIMENSION_META[searchDimension].totalLabel} :
+                                    </td>
+                                    <td className="text-center font-bold">
+                                      {g.totalCoupons.toLocaleString()}
+                                    </td>
+                                    <td className="text-right font-bold">
+                                      Rs. {formatAmount(g.totalAmount)}
+                                    </td>
+                                  </tr>
+                                </Fragment>
+                              ))
+                            )}
+                          </tbody>
+                          {sectionRowGroups.length > 0 && (
+                            <tfoot>
+                              <tr className="print-totals-row font-bold">
+                                <td colSpan={2} className="text-right">
+                                  Grand Total :
+                                </td>
+                                <td className="text-center">
+                                  {sectionRowGrandTotals.coupons.toLocaleString()}
+                                </td>
+                                <td className="text-right font-mono">
+                                  Rs.{" "}
+                                  {formatAmount(sectionRowGrandTotals.amount)}
+                                </td>
+                              </tr>
+                            </tfoot>
                           )}
-                        </tbody>
-                      </table>
+                        </table>
+                      ) : (
+                        <table className="print-ops-table">
+                          <thead>
+                            <tr>
+                              <th>SECTION</th>
+                              <th>WORK ORDER</th>
+                              <th className="text-center w-20">OPERATIONS</th>
+                              <th className="text-center w-20">COUPONS</th>
+                              <th className="text-right w-28">
+                                TOTAL AMOUNT (RS.)
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {sectionGroupedData.length === 0 ? (
+                              <tr>
+                                <td colSpan={5} className="text-center">
+                                  No sections recorded for this period.
+                                </td>
+                              </tr>
+                            ) : (
+                              sectionGroupedData.map((group) =>
+                                group.items.map((item, idx) => (
+                                  <tr
+                                    key={`${group.section}-${item.workOrder}-${idx}`}
+                                  >
+                                    <td className="font-semibold align-top">
+                                      {idx === 0 ? group.section : ""}
+                                    </td>
+                                    <td className="font-mono font-bold">
+                                      {item.workOrder}
+                                    </td>
+                                    <td className="text-center">
+                                      {item.operationsCount}
+                                    </td>
+                                    <td className="text-center font-bold">
+                                      {item.couponCount.toLocaleString()}
+                                    </td>
+                                    <td className="text-right font-bold">
+                                      Rs. {formatAmount(item.totalAmount)}
+                                    </td>
+                                  </tr>
+                                )),
+                              )
+                            )}
+                          </tbody>
+                          {sectionGroupedData.length > 0 && (
+                            <tfoot>
+                              <tr className="print-totals-row font-bold">
+                                <td colSpan={3}>Grand Total :</td>
+                                <td className="text-center">
+                                  {summary.totalCoupons.toLocaleString()}
+                                </td>
+                                <td className="text-right font-mono">
+                                  Rs. {formatAmount(summary.totalAmount)}
+                                </td>
+                              </tr>
+                            </tfoot>
+                          )}
+                        </table>
+                      )}
                     </div>
                   );
                 }
 
+                // --- 4. EMPLOYEES BREAKDOWN ---
                 return (
                   <div key={dimension}>
-                    <table className="print-ops-table">
-                      <thead>
-                        <tr>
-                          <th>EMPCODE</th>
-                          <th>EMPLOYEE NAME</th>
-                          <th>W/O</th>
-                          <th className="text-center">DATE</th>
-                          <th>OPERATION</th>
-                          <th className="text-right">RATE</th>
-                          <th className="text-center">BUNDLE</th>
-                          <th className="text-center">QUANTITY</th>
-                          <th className="text-right">TOTAL PAY</th>
-                          <th className="text-center w-24">SIGNATURE</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {employeeGroupedData.length === 0 ? (
+                    <h3 className="font-bold text-xs uppercase mb-1.5 mt-2">
+                      Employees Summary
+                    </h3>
+                    {employeeGroupDimension ? (
+                      <table className="print-ops-table">
+                        <thead>
                           <tr>
-                            <td colSpan={10} className="text-center">
-                              No employees recorded for this period.
-                            </td>
+                            <th>
+                              {DIMENSION_META[employeeGroupDimension].columnLabel}
+                            </th>
+                            <th>EMPCODE</th>
+                            <th>EMPLOYEE NAME</th>
+                            {employeeGroupDimension !== "workOrder" && (
+                              <th>W/O</th>
+                            )}
+                            <th className="text-center">DATE</th>
+                            <th>OPERATION</th>
+                            <th className="text-right">RATE</th>
+                            <th className="text-center">BUNDLE</th>
+                            <th className="text-center">QUANTITY</th>
+                            <th className="text-right">TOTAL PAY</th>
+                            <th className="text-center w-20">SIGNATURE</th>
                           </tr>
-                        ) : (
-                          employeeGroupedData.map((eg) => (
-                            <Fragment key={eg.employeeCode}>
-                              {eg.items.map((item, idx) => (
-                                <tr key={idx}>
-                                  <td className="font-mono font-bold align-top">
-                                    {idx === 0 ? eg.employeeCode : ""}
-                                  </td>
-                                  <td className="font-bold align-top">
-                                    {idx === 0 ? eg.employeeName : ""}
-                                  </td>
-                                  <td className="font-mono font-bold">
-                                    {item.workOrder}
-                                  </td>
-                                  <td className="text-center whitespace-nowrap">
-                                    {item.date}
-                                  </td>
-                                  <td>{item.operation}</td>
-                                  <td className="text-right font-mono">
-                                    {item.rate != null
-                                      ? item.rate
-                                          .toFixed(2)
-                                          .replace(/\.00$/, "")
-                                      : "—"}
-                                  </td>
-                                  <td className="text-center">
-                                    {item.bundleCount}
+                        </thead>
+                        <tbody>
+                          {dimensionGroupedData.length === 0 ? (
+                            <tr>
+                              <td
+                                colSpan={
+                                  employeeGroupDimension !== "workOrder"
+                                    ? 11
+                                    : 10
+                                }
+                                className="text-center"
+                              >
+                                No employees recorded for this period.
+                              </td>
+                            </tr>
+                          ) : (
+                            dimensionGroupedData.map((group) => (
+                              <Fragment key={group.groupKey}>
+                                {group.items.map((item, idx) => (
+                                  <tr key={idx}>
+                                    <td className="font-mono font-bold align-top">
+                                      {idx === 0 ? group.groupLabel : ""}
+                                    </td>
+                                    <td className="font-mono font-bold align-top">
+                                      {item.employeeCode}
+                                    </td>
+                                    <td className="font-bold align-top">
+                                      {item.employeeName}
+                                    </td>
+                                    {employeeGroupDimension !== "workOrder" && (
+                                      <td className="font-mono font-bold">
+                                        {item.workOrder}
+                                      </td>
+                                    )}
+                                    <td className="text-center whitespace-nowrap">
+                                      {item.date}
+                                    </td>
+                                    <td>{item.operation}</td>
+                                    <td className="text-right font-mono">
+                                      {item.rate != null
+                                        ? item.rate
+                                            .toFixed(2)
+                                            .replace(/\.00$/, "")
+                                        : "—"}
+                                    </td>
+                                    <td className="text-center">
+                                      {item.bundleCount}
+                                    </td>
+                                    <td className="text-center font-bold">
+                                      {item.qty.toLocaleString()}
+                                    </td>
+                                    <td className="text-right font-bold font-mono">
+                                      {formatAmount(item.totalPay)}
+                                    </td>
+                                    <td className="text-center"></td>
+                                  </tr>
+                                ))}
+                                <tr className="print-totals-row">
+                                  <td
+                                    colSpan={
+                                      employeeGroupDimension !== "workOrder"
+                                        ? 7
+                                        : 6
+                                    }
+                                    className="text-right font-bold"
+                                  >
+                                    {
+                                      DIMENSION_META[employeeGroupDimension]
+                                        .totalLabel
+                                    } :
                                   </td>
                                   <td className="text-center font-bold">
-                                    {item.qty.toLocaleString()}
+                                    {group.totalBundles.toLocaleString()}
+                                  </td>
+                                  <td className="text-center font-bold">
+                                    {group.totalQty.toLocaleString()}
                                   </td>
                                   <td className="text-right font-bold font-mono">
-                                    {formatAmount(item.totalPay)}
+                                    {formatAmount(group.totalPay)}
                                   </td>
-                                  <td className="text-center"></td>
+                                  <td></td>
                                 </tr>
-                              ))}
-                              <tr className="print-totals-row">
-                                <td
-                                  colSpan={6}
-                                  className="text-right font-bold"
-                                >
-                                  Employee wise Total :
-                                </td>
-                                <td className="text-center font-bold">
-                                  {eg.totalBundles.toLocaleString()}
-                                </td>
-                                <td className="text-center font-bold">
-                                  {eg.totalQty.toLocaleString()}
-                                </td>
-                                <td className="text-right font-bold font-mono">
-                                  {formatAmount(eg.totalPay)}
-                                </td>
-                                <td></td>
-                              </tr>
-                            </Fragment>
-                          ))
+                              </Fragment>
+                            ))
+                          )}
+                        </tbody>
+                        {dimensionGroupedData.length > 0 && (
+                          <tfoot>
+                            <tr className="print-totals-row font-bold">
+                              <td
+                                colSpan={
+                                  employeeGroupDimension !== "workOrder"
+                                    ? 7
+                                    : 6
+                                }
+                                className="text-right"
+                              >
+                                Grand Total :
+                              </td>
+                              <td className="text-center">
+                                {grandTotalBundles.toLocaleString()}
+                              </td>
+                              <td className="text-center">
+                                {grandTotalQty.toLocaleString()}
+                              </td>
+                              <td className="text-right font-mono">
+                                {formatAmount(grandTotalPay)}
+                              </td>
+                              <td></td>
+                            </tr>
+                          </tfoot>
                         )}
-                      </tbody>
-                      {employeeGroupedData.length > 0 && (
-                        <tfoot>
-                          <tr className="print-totals-row font-bold">
-                            <td colSpan={6} className="text-right">
-                              Grand Total :
-                            </td>
-                            <td className="text-center">
-                              {grandTotalBundles.toLocaleString()}
-                            </td>
-                            <td className="text-center">
-                              {grandTotalQty.toLocaleString()}
-                            </td>
-                            <td className="text-right font-mono">
-                              {formatAmount(grandTotalPay)}
-                            </td>
-                            <td></td>
+                      </table>
+                    ) : (
+                      <table className="print-ops-table">
+                        <thead>
+                          <tr>
+                            <th>EMPCODE</th>
+                            <th>EMPLOYEE NAME</th>
+                            <th>W/O</th>
+                            <th className="text-center">DATE</th>
+                            <th>OPERATION</th>
+                            <th className="text-right">RATE</th>
+                            <th className="text-center">BUNDLE</th>
+                            <th className="text-center">QUANTITY</th>
+                            <th className="text-right">TOTAL PAY</th>
+                            <th className="text-center w-20">SIGNATURE</th>
                           </tr>
-                        </tfoot>
-                      )}
-                    </table>
+                        </thead>
+                        <tbody>
+                          {employeeGroupedData.length === 0 ? (
+                            <tr>
+                              <td colSpan={10} className="text-center">
+                                No employees recorded for this period.
+                              </td>
+                            </tr>
+                          ) : (
+                            employeeGroupedData.map((eg) => (
+                              <Fragment key={eg.employeeCode}>
+                                {eg.items.map((item, idx) => (
+                                  <tr key={idx}>
+                                    <td className="font-mono font-bold align-top">
+                                      {idx === 0 ? eg.employeeCode : ""}
+                                    </td>
+                                    <td className="font-bold align-top">
+                                      {idx === 0 ? eg.employeeName : ""}
+                                    </td>
+                                    <td className="font-mono font-bold">
+                                      {item.workOrder}
+                                    </td>
+                                    <td className="text-center whitespace-nowrap">
+                                      {item.date}
+                                    </td>
+                                    <td>{item.operation}</td>
+                                    <td className="text-right font-mono">
+                                      {item.rate != null
+                                        ? item.rate
+                                            .toFixed(2)
+                                            .replace(/\.00$/, "")
+                                        : "—"}
+                                    </td>
+                                    <td className="text-center">
+                                      {item.bundleCount}
+                                    </td>
+                                    <td className="text-center font-bold">
+                                      {item.qty.toLocaleString()}
+                                    </td>
+                                    <td className="text-right font-bold font-mono">
+                                      {formatAmount(item.totalPay)}
+                                    </td>
+                                    <td className="text-center"></td>
+                                  </tr>
+                                ))}
+                                <tr className="print-totals-row">
+                                  <td
+                                    colSpan={6}
+                                    className="text-right font-bold"
+                                  >
+                                    Employee wise Total :
+                                  </td>
+                                  <td className="text-center font-bold">
+                                    {eg.totalBundles.toLocaleString()}
+                                  </td>
+                                  <td className="text-center font-bold">
+                                    {eg.totalQty.toLocaleString()}
+                                  </td>
+                                  <td className="text-right font-bold font-mono">
+                                    {formatAmount(eg.totalPay)}
+                                  </td>
+                                  <td></td>
+                                </tr>
+                              </Fragment>
+                            ))
+                          )}
+                        </tbody>
+                        {employeeGroupedData.length > 0 && (
+                          <tfoot>
+                            <tr className="print-totals-row font-bold">
+                              <td colSpan={6} className="text-right">
+                                Grand Total :
+                              </td>
+                              <td className="text-center">
+                                {grandTotalBundles.toLocaleString()}
+                              </td>
+                              <td className="text-center">
+                                {grandTotalQty.toLocaleString()}
+                              </td>
+                              <td className="text-right font-mono">
+                                {formatAmount(grandTotalPay)}
+                              </td>
+                              <td></td>
+                            </tr>
+                          </tfoot>
+                        )}
+                      </table>
+                    )}
                   </div>
                 );
               })()

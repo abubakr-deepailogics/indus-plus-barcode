@@ -46,6 +46,31 @@ export function OrderWiseReportPage() {
     };
   }, [cycleStart]);
 
+  const totals = useMemo(() => {
+    if (!data?.rows?.length) return null;
+    return {
+      washQty: data.rows.reduce((sum, r) => sum + (r.washQty ?? 0), 0),
+      plan: data.rows.reduce((sum, r) => sum + (r.plan ?? 0), 0),
+      previousPaid: data.rows.reduce(
+        (sum, r) => sum + (r.previousPaid ?? 0),
+        0,
+      ),
+      currentClaim: data.rows.reduce(
+        (sum, r) => sum + (r.currentClaim ?? 0),
+        0,
+      ),
+      totalClaim: data.rows.reduce((sum, r) => sum + (r.totalClaim ?? 0), 0),
+      balance: data.rows.reduce((sum, r) => sum + (r.balance ?? 0), 0),
+      opInc: data.rows.reduce((sum, r) => sum + (r.opInc ?? 0), 0),
+      total: data.rows.reduce((sum, r) => sum + (r.total ?? 0), 0),
+      minutesProduced: data.rows.reduce(
+        (sum, r) => sum + (r.minutesProduced ?? 0),
+        0,
+      ),
+      qtyProduced: data.rows.reduce((sum, r) => sum + (r.qtyProduced ?? 0), 0),
+    };
+  }, [data]);
+
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6 max-w-[1400px] mx-auto w-full">
       <div className="flex items-center justify-between flex-wrap gap-2 no-print">
@@ -241,6 +266,51 @@ export function OrderWiseReportPage() {
                   </tr>
                 ))}
               </tbody>
+              {totals && (
+                <tfoot>
+                  <tr className="bg-slate-100 border-t-2 border-slate-400 font-bold text-slate-900 text-[10px]">
+                    <td className="py-2 px-2 border-r border-slate-300 font-mono">
+                      Total ({data.rows.length} W/O)
+                    </td>
+                    <td className="py-2 px-2 text-right border-r border-slate-300">
+                      —
+                    </td>
+                    <td className="py-2 px-2 text-right border-r border-slate-300">
+                      —
+                    </td>
+                    <td className="py-2 px-2 text-right border-r border-slate-300">
+                      {totals.washQty.toLocaleString()}
+                    </td>
+                    <td className="py-2 px-2 text-right border-r border-slate-300">
+                      {formatAmount(totals.plan)}
+                    </td>
+                    <td className="py-2 px-2 text-right border-r border-slate-300">
+                      {formatAmount(totals.previousPaid)}
+                    </td>
+                    <td className="py-2 px-2 text-right border-r border-slate-300 text-emerald-800">
+                      {formatAmount(totals.currentClaim)}
+                    </td>
+                    <td className="py-2 px-2 text-right border-r border-slate-300">
+                      {formatAmount(totals.totalClaim)}
+                    </td>
+                    <td className="py-2 px-2 text-right border-r border-slate-300">
+                      {formatAmount(totals.balance)}
+                    </td>
+                    <td className="py-2 px-2 text-right border-r border-slate-300">
+                      {formatAmount(totals.opInc)}
+                    </td>
+                    <td className="py-2 px-2 text-right border-r border-slate-300 text-emerald-800">
+                      {formatAmount(totals.total)}
+                    </td>
+                    <td className="py-2 px-2 text-right border-r border-slate-300">
+                      {totals.minutesProduced.toFixed(0)}
+                    </td>
+                    <td className="py-2 px-2 text-right">
+                      {totals.qtyProduced.toLocaleString()}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}
@@ -250,7 +320,11 @@ export function OrderWiseReportPage() {
         @media print {
           .no-print { display: none !important; }
           body { background: white !important; }
-          @page { size: A4 landscape; margin: 1cm; }
+          main { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
+          .overflow-x-auto { overflow: visible !important; padding: 0 !important; }
+          table { width: 100% !important; font-size: 9px !important; }
+          th, td { padding: 3px 4px !important; }
+          @page { size: A4 landscape; margin: 0.8cm; }
         }
       `}</style>
     </div>

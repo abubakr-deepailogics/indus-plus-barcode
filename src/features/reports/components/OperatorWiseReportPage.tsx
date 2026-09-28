@@ -45,6 +45,18 @@ export function OperatorWiseReportPage() {
     };
   }, [cycleStart]);
 
+  const totals = useMemo(() => {
+    if (!data?.rows?.length) return null;
+    return {
+      pieceRateTotal: data.rows.reduce(
+        (sum, r) => sum + (r.pieceRateTotal ?? 0),
+        0,
+      ),
+      opInc: data.rows.reduce((sum, r) => sum + (r.opInc ?? 0), 0),
+      total: data.rows.reduce((sum, r) => sum + (r.total ?? 0), 0),
+    };
+  }, [data]);
+
   return (
     <div className="flex flex-col gap-4 p-4 md:p-6 max-w-[1000px] mx-auto w-full">
       <div className="flex items-center justify-between flex-wrap gap-2 no-print">
@@ -189,6 +201,24 @@ export function OperatorWiseReportPage() {
                   </tr>
                 ))}
               </tbody>
+              {totals && (
+                <tfoot>
+                  <tr className="bg-slate-100 border-t-2 border-slate-400 font-bold text-slate-900 text-[10px]">
+                    <td colSpan={4} className="py-2 px-2 border-r border-slate-300">
+                      Total ({data.rows.length} Operators)
+                    </td>
+                    <td className="py-2 px-2 text-right border-r border-slate-300">
+                      {formatAmount(totals.pieceRateTotal)}
+                    </td>
+                    <td className="py-2 px-2 text-right border-r border-slate-300">
+                      {formatAmount(totals.opInc)}
+                    </td>
+                    <td className="py-2 px-2 text-right text-emerald-800">
+                      {formatAmount(totals.total)}
+                    </td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           </div>
         )}
@@ -198,7 +228,10 @@ export function OperatorWiseReportPage() {
         @media print {
           .no-print { display: none !important; }
           body { background: white !important; }
-          @page { size: A4 portrait; margin: 1cm; }
+          main { padding: 0 !important; margin: 0 !important; max-width: 100% !important; }
+          .overflow-x-auto { overflow: visible !important; padding: 0 !important; }
+          table { width: 100% !important; }
+          @page { size: A4 portrait; margin: 0.8cm; }
         }
       `}</style>
     </div>
