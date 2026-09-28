@@ -597,7 +597,7 @@ export default function CouponTracingPage() {
   ]);
 
   return (
-    <div className="flex flex-col gap-6 max-w-[900px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
+    <div className="flex flex-col gap-6 max-w-[1100px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
       <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm">
         <div className="flex items-stretch gap-3">
           <button
@@ -686,147 +686,152 @@ export default function CouponTracingPage() {
               </button>
             </div>
           </div>
-          <table className="w-full text-left border-collapse">
-            <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
-              <tr>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
-                  <input
-                    type="checkbox"
-                    checked={
-                      coupons.length > 0 &&
-                      coupons.every((c) => selectedCoupons.has(c.CouponCode))
-                    }
-                    onChange={toggleSelectAllOnPage}
-                    aria-label="Select all coupons on this page"
-                    className="w-3.5 h-3.5 rounded border-slate-300 accent-[#4f46e5] cursor-pointer"
-                  />
-                </th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
-                  Cut No
-                </th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
-                  Bundle No
-                </th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
-                  Section
-                </th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
-                  Operation Name
-                </th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
-                  Emp Code
-                </th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
-                  Emp Name
-                </th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
-                  Scanned
-                </th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
-                  Scan By
-                </th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
-                  Scan Date
-                </th>
-                <th className="px-4 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
-                  Created At
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {couponsLoading ? (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
                 <tr>
-                  <td
-                    colSpan={11}
-                    className="px-4 py-6 text-center text-[#94a3b8]"
-                  >
-                    Loading…
-                  </td>
+                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center w-8">
+                    <input
+                      type="checkbox"
+                      checked={
+                        coupons.length > 0 &&
+                        coupons.every((c) => selectedCoupons.has(c.CouponCode))
+                      }
+                      onChange={toggleSelectAllOnPage}
+                      aria-label="Select all coupons on this page"
+                      className="w-3.5 h-3.5 rounded border-slate-300 accent-[#4f46e5] cursor-pointer"
+                    />
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center whitespace-nowrap">
+                    Cut No
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center whitespace-nowrap">
+                    Bundle No
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+                    Section
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+                    Operation Name
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left whitespace-nowrap">
+                    Emp Code
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+                    Emp Name
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+                    Scanned
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left w-28 min-w-[100px] max-w-[120px]">
+                    Scan By
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left whitespace-nowrap">
+                    Scan Date
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left whitespace-nowrap">
+                    Created At
+                  </th>
                 </tr>
-              ) : coupons.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={11}
-                    className="px-4 py-6 text-center text-[#94a3b8]"
-                  >
-                    No coupons match
-                    {fromBundleFilter ||
-                    toBundleFilter ||
-                    opFilter ||
-                    sectionFilter ||
-                    scannedFilter ||
-                    employeeFilter
-                      ? " these filters"
-                      : " this work order yet"}
-                    .
-                  </td>
-                </tr>
-              ) : (
-                coupons.map((c) => (
-                  <tr
-                    key={c.CouponCode}
-                    className="border-b border-[#f1f5f9] last:border-0 hover:bg-[#f8fafc] transition-colors"
-                  >
-                    <td className="px-4 py-3 text-center">
-                      <input
-                        type="checkbox"
-                        checked={selectedCoupons.has(c.CouponCode)}
-                        onChange={() => toggleCouponSelection(c.CouponCode)}
-                        aria-label={`Select coupon ${c.CouponCode}`}
-                        className="w-3.5 h-3.5 rounded border-slate-300 accent-[#4f46e5] cursor-pointer"
-                      />
-                    </td>
-                    <td className="px-4 py-3 text-[#334155] text-center font-bold text-indigo-600">
-                      {c.CutNo || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-[#334155] text-center font-mono">
-                      {c.BundleNo}
-                    </td>
-                    <td className="px-4 py-3 text-[#334155] text-left">
-                      {c.Section || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-[#334155] text-left font-medium">
-                      {c.OpName || c.OpNo}
-                    </td>
-                    <td className="px-4 py-3 text-[#334155] text-left font-mono">
-                      {c.EmployeeCode || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-[#334155] text-left font-medium">
-                      {c.EmployeeName || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-left">
-                      {c.IsScanned ? (
-                        <span
-                          className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700"
-                          title="Scanned"
-                        >
-                          <Check className="w-4 h-4 stroke-[2.5]" />
-                        </span>
-                      ) : (
-                        <span
-                          className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-slate-400"
-                          title="Not scanned"
-                        >
-                          <X className="w-4 h-4 stroke-[2.5]" />
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-[#334155] text-left font-medium">
-                      {c.ScanBy || "—"}
-                    </td>
-                    <td className="px-4 py-3 text-[#334155] text-left">
-                      {c.ScannedAt
-                        ? format(new Date(c.ScannedAt), "dd/MM/yyyy")
-                        : "—"}
-                    </td>
-                    <td className="px-4 py-3 text-[#334155] text-left">
-                      {format(new Date(c.InsertedAt), "dd/MM/yyyy")}
+              </thead>
+              <tbody>
+                {couponsLoading ? (
+                  <tr>
+                    <td
+                      colSpan={11}
+                      className="px-4 py-6 text-center text-[#94a3b8]"
+                    >
+                      Loading…
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+                ) : coupons.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={11}
+                      className="px-4 py-6 text-center text-[#94a3b8]"
+                    >
+                      No coupons match
+                      {fromBundleFilter ||
+                      toBundleFilter ||
+                      opFilter ||
+                      sectionFilter ||
+                      scannedFilter ||
+                      employeeFilter
+                        ? " these filters"
+                        : " this work order yet"}
+                      .
+                    </td>
+                  </tr>
+                ) : (
+                  coupons.map((c) => (
+                    <tr
+                      key={c.CouponCode}
+                      className="border-b border-[#f1f5f9] last:border-0 hover:bg-[#f8fafc] transition-colors"
+                    >
+                      <td className="px-3 py-2.5 text-center">
+                        <input
+                          type="checkbox"
+                          checked={selectedCoupons.has(c.CouponCode)}
+                          onChange={() => toggleCouponSelection(c.CouponCode)}
+                          aria-label={`Select coupon ${c.CouponCode}`}
+                          className="w-3.5 h-3.5 rounded border-slate-300 accent-[#4f46e5] cursor-pointer"
+                        />
+                      </td>
+                      <td className="px-3 py-2.5 text-[#334155] text-center font-bold text-indigo-600 whitespace-nowrap">
+                        {c.CutNo || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-[#334155] text-center font-mono whitespace-nowrap">
+                        {c.BundleNo}
+                      </td>
+                      <td className="px-3 py-2.5 text-[#334155] text-left">
+                        {c.Section || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-[#334155] text-left font-medium">
+                        {c.OpName || c.OpNo}
+                      </td>
+                      <td className="px-3 py-2.5 text-[#334155] text-left font-mono whitespace-nowrap">
+                        {c.EmployeeCode || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-[#334155] text-left font-medium">
+                        {c.EmployeeName || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {c.IsScanned ? (
+                          <span
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700"
+                            title="Scanned"
+                          >
+                            <Check className="w-4 h-4 stroke-[2.5]" />
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-slate-400"
+                            title="Not scanned"
+                          >
+                            <X className="w-4 h-4 stroke-[2.5]" />
+                          </span>
+                        )}
+                      </td>
+                      <td
+                        className="px-3 py-2.5 text-[#334155] text-left font-medium w-28 min-w-[100px] max-w-[120px] break-all leading-tight text-[11px]"
+                        title={c.ScanBy || undefined}
+                      >
+                        {c.ScanBy || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-[#334155] text-left whitespace-nowrap">
+                        {c.ScannedAt
+                          ? format(new Date(c.ScannedAt), "dd/MM/yyyy")
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-[#334155] text-left whitespace-nowrap">
+                        {format(new Date(c.InsertedAt), "dd/MM/yyyy")}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
+          </div>
           {couponTotal > 0 && (
             <div className="flex items-center justify-between px-5 py-3 border-t border-[#e2e8f0] bg-[#fafafa]">
               <span className="text-[11px] font-semibold text-[#64748b]">
