@@ -4,6 +4,7 @@ import "./globals.css";
 import { AuthProvider } from "@/features/auth/context/auth-context";
 import { AuthGuard } from "@/features/auth/components/AuthGuard";
 import { WorkOrderProvider } from "@/lib/work-order-context";
+import { DepartmentProvider } from "@/lib/department-context";
 
 const plusJakartaSans = Plus_Jakarta_Sans({
   variable: "--font-sans",
@@ -33,9 +34,11 @@ export default function RootLayout({
     >
       <body className="min-h-full flex flex-col bg-[#f8fafc]">
         <AuthProvider>
-          <WorkOrderProvider>
-            <AuthGuard>{children}</AuthGuard>
-          </WorkOrderProvider>
+          <DepartmentProvider>
+            <WorkOrderProvider>
+              <AuthGuard>{children}</AuthGuard>
+            </WorkOrderProvider>
+          </DepartmentProvider>
         </AuthProvider>
       </body>
     </html>
