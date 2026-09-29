@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/context/auth-context";
+import { useDepartment, type DepartmentKey } from "@/lib/department-context";
 import {
   ChevronDown,
   Scissors,
@@ -68,6 +69,29 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const router = useRouter();
+  const { department, setDepartment, departments } = useDepartment();
+
+  // Sync route with active department
+  useEffect(() => {
+    if (pathname.startsWith("/washing") && department !== "washing") {
+      setDepartment("washing");
+    } else if (
+      (pathname.startsWith("/industrial-engineering") || pathname === "/manage-users") &&
+      department !== "sewing"
+    ) {
+      setDepartment("sewing");
+    }
+  }, [pathname, department, setDepartment]);
+
+  const handleDepartmentSwitch = (deptId: DepartmentKey) => {
+    setDepartment(deptId);
+    if (deptId === "washing") {
+      router.push("/washing/cut-report");
+    } else if (deptId === "sewing" && pathname.startsWith("/washing")) {
+      router.push("/industrial-engineering/cut-report");
+    }
+  };
 
   const displayName = user?.displayName || user?.email?.split("@")[0] || "User";
   const initials = displayName.slice(0, 2).toUpperCase();
@@ -88,16 +112,26 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       : []),
   ];
 
+  const currentNavTabs = useMemo(() => {
+    if (department === "washing") {
+      return [{ label: "Cut Report", href: "/washing/cut-report", hasDropdown: false }];
+    }
+    if (department === "sewing") {
+      return navTabs;
+    }
+    return [];
+  }, [department, navTabs]);
+
   return (
     <div className="min-h-screen bg-[#f8fafc] text-[#1e293b] flex flex-col font-sans selection:bg-indigo-100 selection:text-indigo-900">
       {/* Primary Header */}
-      <header className="no-print sticky top-0 z-50 bg-white border-b border-[#f1f5f9] px-6 py-3 flex items-center justify-between shadow-sm">
+      <header className="no-print sticky top-0 z-50 bg-white border-b border-[#f1f5f9] px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between shadow-xs gap-3">
         {/* Logo block */}
-        <Link href="/" className="flex items-center gap-3 group">
+        <Link href="/" className="flex items-center gap-3 group shrink-0">
           <img
             src="/logo.png"
             alt="Indus Plus Logo"
-            className="w-10 h-10 object-contain group-hover:scale-105 transition-transform duration-200"
+            className="w-9 h-9 sm:w-10 sm:h-10 object-contain group-hover:scale-105 transition-transform duration-200"
           />
           <div className="flex flex-col">
             <span className="text-sm font-bold text-[#0f172a] leading-tight tracking-tight">Indus Plus Ltd</span>
@@ -105,28 +139,34 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           </div>
         </Link>
 
-        {/* Search and Action Bar */}
-        <div className="flex items-center gap-6">
-          {/* Search box */}
-          {/* <div className="relative hidden md:flex items-center">
-            <Search className="absolute left-3 w-4 h-4 text-[#94a3b8]" />
-            <input
-              type="text"
-              placeholder="Search..."
-              className="pl-9 pr-14 py-1.5 w-64 rounded-full border border-[#e2e8f0] text-xs bg-[#f8fafc] text-[#334155] focus:outline-none focus:ring-2 focus:ring-[#6366f1]/20 focus:border-[#6366f1] transition-all"
-            />
-            <span className="absolute right-3 text-[10px] font-medium text-[#94a3b8] bg-white border border-[#e2e8f0] px-1.5 py-0.5 rounded shadow-sm pointer-events-none">
-              Ctrl + K
-            </span>
-          </div> */}
-
-          {/* Quick controls */}
-          <div className="flex items-center gap-3">
-            {/* Theme Toggle */}
+        {/* Center: Manufacturing Department Items (Sewing, Washing, Finishing, GDP) */}
+        <nav aria-label="Department Navigation" className="hidden md:flex items-center justify-center flex-1 max-w-xl mx-2">
+          <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 gap-1 shadow-xs">
+            {departments.map((dept) => {
+              const isActive = department === dept.id;
+              return (
+                <button
+                  key={dept.id}
+                  type="button"
+                  onClick={() => handleDepartmentSwitch(dept.id)}
+                  className={`px-3.5 lg:px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                    isActive
+                      ? "bg-white text-[#4f46e5] shadow-xs"
+                      : "text-[#64748b] hover:text-[#0f172a] hover:bg-slate-200/50"
+                  }`}
+                  title={dept.description}
+                >
+                  {dept.label}
+                </button>
+              );
+            })}
           </div>
+        </nav>
 
+        {/* User Profile and Action Bar */}
+        <div className="flex items-center gap-3 sm:gap-6 shrink-0">
           {/* User Profile */}
-          <div className="flex items-center gap-3 border-l border-[#f1f5f9] pl-6">
+          <div className="flex items-center gap-3 border-l border-[#f1f5f9] pl-4 sm:pl-6">
             <div className="w-9 h-9 rounded-full bg-[#1e293b] flex items-center justify-center font-semibold text-white text-xs shadow-inner">
               {initials}
             </div>
@@ -136,7 +176,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </div>
             <button
               onClick={() => logout()}
-              className="text-xs font-semibold text-[#64748b] hover:text-[#0f172a] transition-colors"
+              className="text-xs font-semibold text-[#64748b] hover:text-[#0f172a] transition-colors cursor-pointer"
             >
               Logout
             </button>
@@ -145,64 +185,127 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           {/* Mobile menu trigger */}
           <button
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className="p-2 text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] rounded-lg md:hidden transition-colors"
+            className="p-2 text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] rounded-lg md:hidden transition-colors cursor-pointer"
+            aria-label="Toggle Menu"
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
       </header>
 
-      {/* Secondary Top Tab Navigation */}
-      <nav className="no-print bg-white border-b border-[#e2e8f0] px-6 py-2.5 relative z-40">
-        <div className="max-w-[1400px] mx-auto overflow-x-auto scrollbar-none">
-          <div className="flex items-center gap-1.5 min-w-max">
-            {navTabs.map((tab, idx) => {
-              const isTabActive = tab.href !== "#"
-                ? pathname === tab.href
-                : (tab.label === "Industrial Engineering" && isIeOpen);
-
-              const content = (
-                <>
-                  {tab.label}
-                  {tab.hasDropdown && (
-                    <ChevronDown
-                      className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                        isTabActive && isIeOpen ? "rotate-180 text-[#4f46e5]" : "text-[#94a3b8]"
-                      }`}
-                    />
-                  )}
-                </>
-              );
-
-              const className = `px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
-                isTabActive
-                  ? "bg-[#e0e7ff] text-[#4f46e5] shadow-sm font-bold"
-                  : "text-[#475569] hover:bg-[#f8fafc] hover:text-[#0f172a]"
-              }`;
-
-              return (
-                <div key={idx} className="relative">
-                  {tab.href !== "#" ? (
-                    <Link href={tab.href} className={className}>
-                      {content}
-                    </Link>
-                  ) : (
-                    <button
-                      ref={tab.label === "Industrial Engineering" ? triggerRef : undefined}
-                      onClick={() => {
-                        if (tab.label === "Industrial Engineering") {
-                          setIsIeOpen(!isIeOpen);
-                        }
-                      }}
-                      className={className}
-                    >
-                      {content}
-                    </button>
-                  )}
-                </div>
-              );
-            })}
+      {/* Mobile Menu Drawer */}
+      {mobileMenuOpen && (
+        <div className="md:hidden no-print bg-white border-b border-slate-200 shadow-md px-4 py-3 flex flex-col gap-3 z-50">
+          <div>
+            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
+              Manufacturing Department
+            </span>
+            <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+              {departments.map((dept) => {
+                const isActive = department === dept.id;
+                return (
+                  <button
+                    key={dept.id}
+                    type="button"
+                    onClick={() => {
+                      handleDepartmentSwitch(dept.id);
+                      setMobileMenuOpen(false);
+                    }}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
+                      isActive
+                        ? "bg-white text-[#4f46e5] shadow-xs"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    <span>{dept.label}</span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
+
+          {currentNavTabs.length > 0 && (
+            <div className="pt-2 border-t border-slate-100">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 capitalize">
+                {department} Navigation
+              </span>
+              <div className="flex flex-col gap-0.5 max-h-60 overflow-y-auto">
+                {currentNavTabs.map((tab, idx) => (
+                  <Link
+                    key={idx}
+                    href={tab.href}
+                    onClick={() => setMobileMenuOpen(false)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between ${
+                      pathname === tab.href
+                        ? "bg-indigo-50 text-[#4f46e5] font-bold"
+                        : "text-slate-700 hover:bg-slate-50"
+                    }`}
+                  >
+                    <span>{tab.label}</span>
+                    <ChevronRight className="w-3.5 h-3.5 text-slate-400" />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Secondary Top Tab Navigation */}
+      <nav className="no-print bg-white border-b border-[#e2e8f0] px-4 sm:px-6 py-2.5 relative z-40">
+        <div className="max-w-[1400px] mx-auto overflow-x-auto scrollbar-none">
+          {currentNavTabs.length > 0 ? (
+            <div className="flex items-center gap-1.5 min-w-max">
+              {currentNavTabs.map((tab, idx) => {
+                const isTabActive = tab.href !== "#"
+                  ? pathname === tab.href
+                  : (tab.label === "Industrial Engineering" && isIeOpen);
+
+                const content = (
+                  <>
+                    {tab.label}
+                    {tab.hasDropdown && (
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 transition-transform duration-200 ${
+                          isTabActive && isIeOpen ? "rotate-180 text-[#4f46e5]" : "text-[#94a3b8]"
+                        }`}
+                      />
+                    )}
+                  </>
+                );
+
+                const className = `px-4 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1 transition-all ${
+                  isTabActive
+                    ? "bg-[#e0e7ff] text-[#4f46e5] shadow-xs font-bold"
+                    : "text-[#475569] hover:bg-[#f8fafc] hover:text-[#0f172a]"
+                }`;
+
+                return (
+                  <div key={idx} className="relative">
+                    {tab.href !== "#" ? (
+                      <Link href={tab.href} className={className}>
+                        {content}
+                      </Link>
+                    ) : (
+                      <button
+                        ref={tab.label === "Industrial Engineering" ? triggerRef : undefined}
+                        onClick={() => {
+                          if (tab.label === "Industrial Engineering") {
+                            setIsIeOpen(!isIeOpen);
+                          }
+                        }}
+                        className={className}
+                      >
+                        {content}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div className="h-7" />
+          )}
         </div>
 
         {/* Industrial Engineering Dropdown Menu Overlay - Positioned outside overflow wrapper */}
@@ -518,7 +621,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-[1400px] w-full mx-auto p-6 md:p-8 relative">
-        {children}
+        {department === "sewing" || department === "washing" ? (
+          children
+        ) : (
+          <div className="flex flex-col items-center justify-center min-h-[380px] text-center p-8 bg-white rounded-2xl border border-dashed border-slate-200 shadow-xs">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-[#4f46e5] flex items-center justify-center mb-3 text-sm font-bold uppercase tracking-wider">
+              {department}
+            </div>
+            <h3 className="text-base font-bold text-slate-900 capitalize mb-1">
+              {department} Department
+            </h3>
+            <p className="text-xs text-slate-500 max-w-sm">
+              Module navigation is ready. Forms and reports for {department} will be added here as needed.
+            </p>
+          </div>
+        )}
       </main>
 
       <style>{`

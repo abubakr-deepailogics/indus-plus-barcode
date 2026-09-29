@@ -133,9 +133,9 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-center font-semibold text-indigo-600">
+          <span className="font-semibold text-indigo-600">
             {row.original.Cut}
-          </div>
+          </span>
         ),
         footer: ({ table }) => {
           const uniqueCuts = new Set(
@@ -145,14 +145,14 @@ export default function OpenOrderPage() {
               .filter((cut) => cut !== undefined && cut !== null),
           );
           return (
-            <div className="text-center text-indigo-600">
+            <div className="text-indigo-600">
               Total: {uniqueCuts.size}
             </div>
           );
         },
         size: 70,
       },
-       {
+      {
         accessorKey: "Bundle_Id",
         header: ({ column }) => (
           <DataTableColumnHeader
@@ -162,9 +162,9 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-center font-mono">{row.original.Bundle_Id}</div>
+          <span className="font-mono">{row.original.Bundle_Id}</span>
         ),
-        size: 100,
+        size: 110,
       },
       {
         accessorKey: "Bundle_Qty",
@@ -176,13 +176,13 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-right font-bold">{row.original.Bundle_Qty}</div>
+          <span className="font-bold text-slate-800">{row.original.Bundle_Qty}</span>
         ),
         footer: ({ table }) => {
           const total = table.getFilteredRowModel().rows.reduce((sum, row) => {
             return sum + (row.original.Bundle_Qty ?? 0);
           }, 0);
-          return <div className="text-right text-slate-800">Total: {total}</div>;
+          return <div className="text-slate-800">Total: {total}</div>;
         },
         size: 90,
       },
@@ -196,7 +196,7 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-center">{row.original.Inseam}</div>
+          <span>{row.original.Inseam}</span>
         ),
         size: 70,
       },
@@ -210,7 +210,7 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-center font-bold">{row.original.Size}</div>
+          <span className="font-bold">{row.original.Size}</span>
         ),
         size: 70,
       },
@@ -222,6 +222,9 @@ export default function OpenOrderPage() {
             title="Color"
             onFilterClick={() => {}}
           />
+        ),
+        cell: ({ row }) => (
+          <span className="text-slate-700">{row.original.Color}</span>
         ),
         size: 100,
       },
@@ -235,9 +238,9 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-center font-bold text-indigo-600">
+          <span className="font-bold text-indigo-600">
             {row.original.Shade}
-          </div>
+          </span>
         ),
         size: 70,
       },
@@ -251,7 +254,7 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-center font-mono">{row.original.Shrinkage}</div>
+          <span className="font-mono">{row.original.Shrinkage}</span>
         ),
         size: 80,
       },
