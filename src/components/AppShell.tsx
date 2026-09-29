@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/context/auth-context";
-import { useDepartment } from "@/lib/department-context";
+import { useDepartment, type DepartmentKey } from "@/lib/department-context";
 import {
   ChevronDown,
   Scissors,
@@ -69,7 +69,29 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
   const { user, logout } = useAuth();
+  const router = useRouter();
   const { department, setDepartment, departments } = useDepartment();
+
+  // Sync route with active department
+  useEffect(() => {
+    if (pathname.startsWith("/washing") && department !== "washing") {
+      setDepartment("washing");
+    } else if (
+      (pathname.startsWith("/industrial-engineering") || pathname === "/manage-users") &&
+      department !== "sewing"
+    ) {
+      setDepartment("sewing");
+    }
+  }, [pathname, department, setDepartment]);
+
+  const handleDepartmentSwitch = (deptId: DepartmentKey) => {
+    setDepartment(deptId);
+    if (deptId === "washing") {
+      router.push("/washing/cut-report");
+    } else if (deptId === "sewing" && pathname.startsWith("/washing")) {
+      router.push("/industrial-engineering/cut-report");
+    }
+  };
 
   const displayName = user?.displayName || user?.email?.split("@")[0] || "User";
   const initials = displayName.slice(0, 2).toUpperCase();
@@ -89,6 +111,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       ? [{ label: "Manage Users", href: "/manage-users", hasDropdown: false }]
       : []),
   ];
+
+  const currentNavTabs = useMemo(() => {
+    if (department === "washing") {
+      return [{ label: "Cut Report", href: "/washing/cut-report", hasDropdown: false }];
+    }
+    if (department === "sewing") {
+      return navTabs;
+    }
+    return [];
+  }, [department, navTabs]);
 
   return (
     <div className="min-h-screen bg-[#f8fafc] text-[#1e293b] flex flex-col font-sans selection:bg-indigo-100 selection:text-indigo-900">
@@ -116,7 +148,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <button
                   key={dept.id}
                   type="button"
-                  onClick={() => setDepartment(dept.id)}
+                  onClick={() => handleDepartmentSwitch(dept.id)}
                   className={`px-3.5 lg:px-4 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                     isActive
                       ? "bg-white text-[#4f46e5] shadow-xs"
@@ -176,7 +208,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     key={dept.id}
                     type="button"
                     onClick={() => {
-                      setDepartment(dept.id);
+                      handleDepartmentSwitch(dept.id);
                       setMobileMenuOpen(false);
                     }}
                     className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all cursor-pointer ${
@@ -192,13 +224,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </div>
           </div>
 
-          {department === "sewing" && (
+          {currentNavTabs.length > 0 && (
             <div className="pt-2 border-t border-slate-100">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5">
-                Sewing Navigation
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1.5 capitalize">
+                {department} Navigation
               </span>
               <div className="flex flex-col gap-0.5 max-h-60 overflow-y-auto">
-                {navTabs.map((tab, idx) => (
+                {currentNavTabs.map((tab, idx) => (
                   <Link
                     key={idx}
                     href={tab.href}
@@ -222,9 +254,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       {/* Secondary Top Tab Navigation */}
       <nav className="no-print bg-white border-b border-[#e2e8f0] px-4 sm:px-6 py-2.5 relative z-40">
         <div className="max-w-[1400px] mx-auto overflow-x-auto scrollbar-none">
-          {department === "sewing" ? (
+          {currentNavTabs.length > 0 ? (
             <div className="flex items-center gap-1.5 min-w-max">
-              {navTabs.map((tab, idx) => {
+              {currentNavTabs.map((tab, idx) => {
                 const isTabActive = tab.href !== "#"
                   ? pathname === tab.href
                   : (tab.label === "Industrial Engineering" && isIeOpen);
@@ -589,7 +621,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-[1400px] w-full mx-auto p-6 md:p-8 relative">
-        {department === "sewing" ? children : null}
+        {department === "sewing" || department === "washing" ? (
+          children
+        ) : (
+          <div className="flex flex-col items-center justify-center min-h-[380px] text-center p-8 bg-white rounded-2xl border border-dashed border-slate-200 shadow-xs">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-[#4f46e5] flex items-center justify-center mb-3 text-sm font-bold uppercase tracking-wider">
+              {department}
+            </div>
+            <h3 className="text-base font-bold text-slate-900 capitalize mb-1">
+              {department} Department
+            </h3>
+            <p className="text-xs text-slate-500 max-w-sm">
+              Module navigation is ready. Forms and reports for {department} will be added here as needed.
+            </p>
+          </div>
+        )}
       </main>
 
       <style>{`
