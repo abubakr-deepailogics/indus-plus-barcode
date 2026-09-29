@@ -1,5 +1,7 @@
 export interface WashingCutRow {
   id: number;
+  /** Database primary key after the row has been saved. */
+  recordId?: number;
   /** Generated on "Generate Coupon(s)" click matching sewing pattern (e.g. 0067610001); empty before generation */
   bundleId: string;
   /** Cut number — manually entered, required */
@@ -22,6 +24,7 @@ export interface WashingOrderMetadata {
 }
 
 export interface SavedWashingCutRecord {
+  Id: number;
   Cut: string;
   Bundle_Id: string;
   Bundle_Qty: number;

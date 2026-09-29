@@ -43,6 +43,7 @@ export function WashingCutReportView() {
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [deletingRowIds, setDeletingRowIds] = useState<Set<number>>(new Set());
   const [errorMsg, setErrorMsg] = useState("");
   const [successMsg, setSuccessMsg] = useState("");
 
@@ -146,6 +147,7 @@ export function WashingCutReportView() {
           setRows(
             savedCuts.map((item) => ({
               id: nextRowId.current++,
+              recordId: item.Id,
               bundleId: item.Bundle_Id || "",
               cut: item.Cut,
               bundleQty: String(item.Bundle_Qty || ""),
@@ -217,7 +219,7 @@ export function WashingCutReportView() {
   };
 
 
-  const removeRow = (id: number) => {
+  const removeRowLocally = (id: number) => {
     setRows((prev) => {
       if (prev.length <= 1) {
         return [
@@ -233,6 +235,46 @@ export function WashingCutReportView() {
       }
       return prev.filter((r) => r.id !== id);
     });
+  };
+
+  const removeRow = async (row: WashingCutRow) => {
+    if (!row.recordId) {
+      removeRowLocally(row.id);
+      return;
+    }
+
+    const workOrder = (metadata.workOrder || activeSearchQuery).trim();
+    if (!workOrder) {
+      setErrorMsg("Work Order is required to delete a saved cut row.");
+      return;
+    }
+
+    setDeletingRowIds((prev) => new Set(prev).add(row.id));
+    setErrorMsg("");
+    setSuccessMsg("");
+
+    try {
+      const response = await fetch("/api/washing/cut-report", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: row.recordId, workOrder }),
+      });
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to delete washing cut row.");
+      }
+
+      removeRowLocally(row.id);
+      setSuccessMsg("Washing cut row deleted successfully.");
+    } catch (err: unknown) {
+      setErrorMsg(err instanceof Error ? err.message : "Failed to delete washing cut row.");
+    } finally {
+      setDeletingRowIds((prev) => {
+        const next = new Set(prev);
+        next.delete(row.id);
+        return next;
+      });
+    }
   };
 
   const clearAllRows = () => {
@@ -368,6 +410,12 @@ export function WashingCutReportView() {
       // Assign generated bundle IDs to the new rows in state
       setRows((prev) => {
         let newIdx = 0;
+        const savedRecordIds = new Map<string, number>(
+          (resData.insertedRows || []).map((item: { id: number; bundleId: string }) => [
+            item.bundleId,
+            item.id,
+          ]),
+        );
         return prev.map((r) => {
           // Only update rows that were in newRows (no bundleId and populated)
           const isNew =
@@ -376,7 +424,11 @@ export function WashingCutReportView() {
           if (isNew) {
             const assignedBundleId = cutsPayload[newIdx]?.bundleId || "";
             newIdx++;
-            return { ...r, bundleId: assignedBundleId };
+            return {
+              ...r,
+              bundleId: assignedBundleId,
+              recordId: savedRecordIds.get(assignedBundleId),
+            };
           }
           return r;
         });
@@ -710,8 +762,9 @@ export function WashingCutReportView() {
                         <td className="py-1 px-2 text-center">
                           <button
                             type="button"
-                            onClick={() => removeRow(row.id)}
-                            className="p-1 text-slate-300 hover:text-red-500 rounded-md transition-colors cursor-pointer"
+                            onClick={() => removeRow(row)}
+                            disabled={deletingRowIds.has(row.id)}
+                            className="p-1 text-slate-300 hover:text-red-500 rounded-md transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                             title="Delete row"
                           >
                             <Trash2 className="w-3.5 h-3.5" />

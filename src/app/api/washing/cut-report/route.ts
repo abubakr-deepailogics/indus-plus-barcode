@@ -2,6 +2,7 @@
 import {
   getWashingCutReport,
   saveWashingCutReport,
+  softDeleteWashingCutReportRow,
 } from "@/features/washing/services/washing-cut-report-service";
 import type { SaveWashingCutReportPayload } from "@/features/washing/types";
 
@@ -51,11 +52,37 @@ export async function POST(request: Request) {
     return Response.json({
       success: true,
       insertedCount: result.insertedCount,
+      insertedRows: result.insertedRows,
       message: `Successfully saved ${result.insertedCount} washing cut detail row(s).`,
     });
   } catch (err: unknown) {
     console.error("Washing Cut Report POST error:", err);
     const message = err instanceof Error ? err.message : "Failed to save washing cut details.";
+    return Response.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const body = (await request.json()) as { id?: unknown; workOrder?: unknown };
+    const recordId = Number(body?.id);
+    const workOrder = typeof body?.workOrder === "string" ? body.workOrder : "";
+
+    if (!Number.isSafeInteger(recordId) || recordId <= 0) {
+      return Response.json(
+        { error: "A valid cut report record ID is required." },
+        { status: 400 },
+      );
+    }
+    if (!workOrder.trim()) {
+      return Response.json({ error: "Work Order is required." }, { status: 400 });
+    }
+
+    await softDeleteWashingCutReportRow(recordId, workOrder, "system");
+    return Response.json({ success: true });
+  } catch (err: unknown) {
+    console.error("Washing Cut Report DELETE error:", err);
+    const message = err instanceof Error ? err.message : "Failed to delete washing cut detail.";
     return Response.json({ error: message }, { status: 500 });
   }
 }

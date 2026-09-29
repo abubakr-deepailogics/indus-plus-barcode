@@ -75,6 +75,7 @@ export async function getWashingCutReport(workOrder: string): Promise<{
     .input("wo", sql.NVarChar, trimmedWo)
     .query(`
       SELECT
+        [Id]        AS Id,
         [Cut]       AS Cut,
         [BundleId]  AS Bundle_Id,
         [BundleQty] AS Bundle_Qty,
@@ -90,6 +91,7 @@ export async function getWashingCutReport(workOrder: string): Promise<{
     `);
 
   const cuts: SavedWashingCutRecord[] = savedCutsResult.recordset.map((row) => ({
+    Id: Number(row.Id),
     Cut: String(row.Cut ?? ""),
     Bundle_Id: String(row.Bundle_Id ?? ""),
     Bundle_Qty: Number(row.Bundle_Qty) || 0,
@@ -140,7 +142,10 @@ export async function getWashingCutReport(workOrder: string): Promise<{
 export async function saveWashingCutReport(
   payload: SaveWashingCutReportPayload,
   userEmail: string,
-): Promise<{ insertedCount: number }> {
+): Promise<{
+  insertedCount: number;
+  insertedRows: Array<{ id: number; bundleId: string }>;
+}> {
   const { workOrder, saleOrderNo, customerName, orderQty, fabricCode, wash, cuts } = payload;
 
   const trimmedWo = workOrder?.trim();
@@ -197,6 +202,7 @@ export async function saveWashingCutReport(
 
     // 1. Insert new cut rows in chunks into dbo.CutReport (always append — never delete existing rows)
     let insertedCount = 0;
+    const insertedRows: Array<{ id: number; bundleId: string }> = [];
     const batches = chunk(cuts, ROWS_PER_CHUNK);
 
     for (const batch of batches) {
@@ -238,7 +244,7 @@ export async function saveWashingCutReport(
         )`;
       });
 
-      await req.query(`
+      const insertResult = await req.query(`
         INSERT INTO dbo.CutReport (
           [WorkOrder],
           [SaleOrderNo],
@@ -255,16 +261,59 @@ export async function saveWashingCutReport(
           [InsertedAt],
           [InsertedBy],
           [IsDeleted]
-        ) VALUES ${valueClauses.join(", ")}
+        )
+        OUTPUT INSERTED.[Id] AS id, INSERTED.[BundleId] AS bundleId
+        VALUES ${valueClauses.join(", ")}
       `);
+
+      insertedRows.push(
+        ...insertResult.recordset.map((row) => ({
+          id: Number(row.id),
+          bundleId: String(row.bundleId),
+        })),
+      );
 
       insertedCount += batch.length;
     }
 
     await transaction.commit();
-    return { insertedCount };
+    return { insertedCount, insertedRows };
   } catch (err) {
     await transaction.rollback();
     throw err;
+  }
+}
+
+/** Marks one saved washing cut row as deleted without removing its audit history. */
+export async function softDeleteWashingCutReportRow(
+  recordId: number,
+  workOrder: string,
+  userEmail: string,
+): Promise<void> {
+  const trimmedWo = workOrder.trim();
+  if (!Number.isSafeInteger(recordId) || recordId <= 0) {
+    throw new Error("A valid cut report record ID is required.");
+  }
+  if (!trimmedWo) throw new Error("Work Order is required.");
+
+  const pool = await getPool("pitSystem");
+  const result = await pool
+    .request()
+    .input("id", sql.BigInt, recordId)
+    .input("wo", sql.NVarChar, trimmedWo)
+    .input("deletedBy", sql.NVarChar, userEmail.trim() || "system")
+    .query(`
+      UPDATE dbo.CutReport
+      SET [IsDeleted] = 1,
+          [DeletedAt] = SYSUTCDATETIME(),
+          [DeletedBy] = @deletedBy
+      WHERE [Id] = @id
+        AND [WorkOrder] = @wo
+        AND [Department] = 'washing'
+        AND [IsDeleted] = 0
+    `);
+
+  if ((result.rowsAffected[0] ?? 0) === 0) {
+    throw new Error("The washing cut row was not found or was already deleted.");
   }
 }
