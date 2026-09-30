@@ -35,6 +35,7 @@ import type { PageSetupConfig } from "@/features/qr-code-generation/types";
 import { DEFAULT_MARGINS } from "@/features/qr-code-generation/types";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { useAuth } from "@/features/auth/context/auth-context";
+import { RequirePermission } from "@/features/auth/components/RequirePermission";
 
 interface CouponRow {
   Id: string | null;
@@ -110,7 +111,7 @@ export default function CouponTracingPage() {
     new Set(),
   );
   const [generatingPdf, setGeneratingPdf] = useState(false);
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const [pageSetup, setPageSetup] = useState<PageSetupConfig>({
     size: "Legal",
     source: "Automatically Select",
@@ -597,6 +598,7 @@ export default function CouponTracingPage() {
   ]);
 
   return (
+    <RequirePermission pageKey="coupon-tracing">
     <div className="flex flex-col gap-6 max-w-[1100px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
       <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm">
         <div className="flex items-stretch gap-3">
@@ -667,23 +669,25 @@ export default function CouponTracingPage() {
                   </span>
                 )}
               </button>
-              <button
-                onClick={() => setShowDeleteModal(true)}
-                title={
-                  selectedCoupons.size > 0
-                    ? "Unscan or delete the selected coupons"
-                    : "Unscan or delete coupons matching the active filters"
-                }
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100 transition-all"
-              >
-                <Eraser className="w-3.5 h-3.5" />
-                Unscan / Delete
-                {selectedCoupons.size > 0 && (
-                  <span className="ml-0.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-amber-600 px-1 text-[9px] font-black text-white">
-                    {selectedCoupons.size}
-                  </span>
-                )}
-              </button>
+              {can("coupon-tracing-unscan", "create") && can("coupon-tracing", "delete") && (
+                <button
+                  onClick={() => setShowDeleteModal(true)}
+                  title={
+                    selectedCoupons.size > 0
+                      ? "Unscan or delete the selected coupons"
+                      : "Unscan or delete coupons matching the active filters"
+                  }
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100 transition-all"
+                >
+                  <Eraser className="w-3.5 h-3.5" />
+                  Unscan / Delete
+                  {selectedCoupons.size > 0 && (
+                    <span className="ml-0.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-amber-600 px-1 text-[9px] font-black text-white">
+                      {selectedCoupons.size}
+                    </span>
+                  )}
+                </button>
+              )}
             </div>
           </div>
           <div className="overflow-x-auto">
@@ -1204,5 +1208,6 @@ export default function CouponTracingPage() {
         </div>
       )}
     </div>
+    </RequirePermission>
   );
 }

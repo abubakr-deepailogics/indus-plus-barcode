@@ -59,6 +59,7 @@ export function QrCodeGenerationView() {
           onOpenPageSetupModal={() => facade.setShowCodeTypeModal(true)}
           onGenerateCoupons={facade.handleGenerateCoupons}
           generatingCoupons={facade.generatingCoupons}
+          canGenerate={facade.canGenerate}
           customersList={facade.customersList}
           workersList={facade.workersList}
           isSelectionGenerated={facade.isSelectionGenerated}

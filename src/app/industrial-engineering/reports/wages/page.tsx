@@ -1,4 +1,5 @@
 import { WagesPage } from "@/features/wages/components/WagesPage";
+import { RequirePermission } from "@/features/auth/components/RequirePermission";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function WagesRoute() {
-  return <WagesPage />;
+  return (
+    <RequirePermission pageKey="reports">
+      <WagesPage />
+    </RequirePermission>
+  );
 }

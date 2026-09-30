@@ -3,6 +3,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { Barcode, Loader2, Trash2, AlertTriangle, Printer } from "lucide-react";
 import { useAuth } from "@/features/auth/context/auth-context";
+import { RequirePermission } from "@/features/auth/components/RequirePermission";
 import type {
   QrCodeStyleData,
   BundleDetailRow,
@@ -62,7 +63,7 @@ const cellInputClassName =
   "w-full h-full px-2 py-2 text-center bg-transparent text-slate-800 font-semibold focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:bg-white rounded-lg";
 
 export default function ReworkCouponPage() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
 
   // Modal states
   const [isOpenLookup, setIsOpenLookup] = useState(false);
@@ -543,7 +544,7 @@ export default function ReworkCouponPage() {
   const isBusy = isSaving || generatingPdf;
 
   return (
-    <>
+    <RequirePermission pageKey="rework-coupon">
       <div className="no-print flex flex-col gap-6 max-w-[1450px] mx-auto text-xs text-[#334155] animate-fade-in pb-16 px-4">
         {/* Top Breadcrumb */}
         <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-3">
@@ -631,7 +632,8 @@ export default function ReworkCouponPage() {
                 <button
                   type="button"
                   onClick={() => handleGenerateAndSave()}
-                  disabled={!activeStyle || isBusy || !hasCouponsGenerated}
+                  disabled={!activeStyle || isBusy || !hasCouponsGenerated || !can("rework-coupon", "create")}
+                  title={!can("rework-coupon", "create") ? "You don't have permission to generate coupons." : undefined}
                   className="w-full flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md cursor-pointer text-xs"
                 >
                   {isSaving ? (
@@ -899,6 +901,6 @@ export default function ReworkCouponPage() {
           onConfirm={() => setGenerateResult(null)}
         />
       )}
-    </>
+    </RequirePermission>
   );
 }

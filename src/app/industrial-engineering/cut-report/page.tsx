@@ -22,6 +22,7 @@ import { PageSetupModal } from "@/features/qr-code-generation/components/PageSet
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { classifyDepartment } from "@/lib/department-classification";
 import { WorkOrderSearchModal, type WorkOrderSearchRow } from "@/components/work-order-search-modal";
+import { RequirePermission } from "@/features/auth/components/RequirePermission";
 
 interface CutDetailRow {
   RowId: number;
@@ -874,7 +875,7 @@ export default function OpenOrderPage() {
   };
 
   return (
-    <>
+    <RequirePermission pageKey="cut-report">
       <div className="no-print flex flex-col gap-6 max-w-[1400px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
 
         {/* Dynamic Metadata Cards Row */}
@@ -1299,6 +1300,6 @@ export default function OpenOrderPage() {
           </tbody>
         </table>
       </div>
-    </>
+    </RequirePermission>
   );
 }

@@ -32,7 +32,20 @@ export type UpdateUserInput = {
 
 export type PageOperation = "create" | "read" | "update" | "delete";
 
+export type PageKey =
+  | "cut-report"
+  | "washing-cut-report"
+  | "style-bulletin"
+  | "style-bulletin-attachments"
+  | "coupon-generation"
+  | "coupon-scanning"
+  | "coupon-tracing"
+  | "coupon-tracing-unscan"
+  | "rework-coupon"
+  | "reports"
+  | "manage-users";
+
 export type UserPermission = {
-  pageKey: string;
+  pageKey: PageKey;
   operation: PageOperation;
 };

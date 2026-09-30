@@ -18,6 +18,7 @@ import {
 } from "@/components/work-order-search-modal";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
+import { useAuth } from "@/features/auth/context/auth-context";
 import type {
   WashingCutRow,
   WashingOrderMetadata,
@@ -39,6 +40,7 @@ function formatSewingBundleId(workOrder: string, sequenceNumber: number): string
 }
 
 export function WashingCutReportView() {
+  const { can } = useAuth();
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -652,7 +654,12 @@ export function WashingCutReportView() {
                 <button
                   type="button"
                   onClick={handleGenerateCoupons}
-                  disabled={isGenerating || populatedRows.length === 0 || isTotalExceeding}
+                  disabled={
+                    isGenerating ||
+                    populatedRows.length === 0 ||
+                    isTotalExceeding ||
+                    !can("washing-cut-report", "create")
+                  }
                   className="px-4 py-1.5 rounded-xl bg-[#4f46e5] hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white text-xs font-bold shadow-sm transition-all flex items-center gap-1.5 cursor-pointer"
                 >
                   {isGenerating ? (
@@ -760,15 +767,17 @@ export function WashingCutReportView() {
                           />
                         </td>
                         <td className="py-1 px-2 text-center">
-                          <button
-                            type="button"
-                            onClick={() => removeRow(row)}
-                            disabled={deletingRowIds.has(row.id)}
-                            className="p-1 text-slate-300 hover:text-red-500 rounded-md transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
-                            title="Delete row"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          {(!row.recordId || can("washing-cut-report", "delete")) && (
+                            <button
+                              type="button"
+                              onClick={() => removeRow(row)}
+                              disabled={deletingRowIds.has(row.id)}
+                              className="p-1 text-slate-300 hover:text-red-500 rounded-md transition-colors cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
+                              title="Delete row"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
                         </td>
                       </tr>
                     );

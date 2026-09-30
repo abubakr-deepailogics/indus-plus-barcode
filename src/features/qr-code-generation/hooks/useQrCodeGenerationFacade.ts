@@ -48,6 +48,7 @@ interface QrCodeGenerationFacade {
   generatingPdf: boolean;
   handleGenerateCoupons: () => Promise<void>;
   generatingCoupons: boolean;
+  canGenerate: boolean;
   customersList: string[];
   workersList: WorkerItem[];
 
@@ -90,7 +91,8 @@ const emptyStyle: QrCodeStyleData = {
 };
 
 export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
+  const canGenerate = can("coupon-generation", "create");
   const [activeStyle, setActiveStyle] = useState<QrCodeStyleData>(emptyStyle);
   const [isLoadingWorkOrder, setIsLoadingWorkOrder] = useState(false);
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
@@ -648,6 +650,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     generatingPdf,
     handleGenerateCoupons,
     generatingCoupons,
+    canGenerate,
     customersList,
     workersList,
 

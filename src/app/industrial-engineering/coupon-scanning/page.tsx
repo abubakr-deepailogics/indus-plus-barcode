@@ -1,4 +1,5 @@
 import { CouponScanningDashboard } from "@/features/coupon-scanning/components/CouponScanningDashboard";
+import { RequirePermission } from "@/features/auth/components/RequirePermission";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function CouponScanningPage() {
-  return <CouponScanningDashboard />;
+  return (
+    <RequirePermission pageKey="coupon-scanning">
+      <CouponScanningDashboard />
+    </RequirePermission>
+  );
 }
