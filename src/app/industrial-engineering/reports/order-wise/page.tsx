@@ -1,4 +1,5 @@
 import { OrderWiseReportPage } from "@/features/reports/components/OrderWiseReportPage";
+import { RequirePermission } from "@/features/auth/components/RequirePermission";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -7,5 +8,9 @@ export const metadata: Metadata = {
 };
 
 export default function OrderWiseReportRoute() {
-  return <OrderWiseReportPage />;
+  return (
+    <RequirePermission pageKey="reports">
+      <OrderWiseReportPage />
+    </RequirePermission>
+  );
 }

@@ -1,4 +1,4 @@
-import type { CreateUserInput, ManagedUser, UpdateUserInput } from "@/features/auth/types";
+import type { CreateUserInput, ManagedUser, UpdateUserInput, UserPermission } from "@/features/auth/types";
 
 async function parseJsonOrThrow(res: Response) {
   const data = await res.json().catch(() => ({}));
@@ -38,5 +38,22 @@ export async function resetUserPasswordRequest(userId: number): Promise<{ tempor
 
 export async function deleteUserRequest(userId: number): Promise<void> {
   const res = await fetch(`/api/users/${userId}`, { method: "DELETE" });
+  await parseJsonOrThrow(res);
+}
+
+export async function fetchUserPermissions(userId: number): Promise<UserPermission[]> {
+  const res = await fetch(`/api/users/${userId}/permissions`, { cache: "no-store" });
+  return parseJsonOrThrow(res);
+}
+
+export async function saveUserPermissionsRequest(
+  userId: number,
+  permissions: UserPermission[],
+): Promise<void> {
+  const res = await fetch(`/api/users/${userId}/permissions`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ permissions }),
+  });
   await parseJsonOrThrow(res);
 }

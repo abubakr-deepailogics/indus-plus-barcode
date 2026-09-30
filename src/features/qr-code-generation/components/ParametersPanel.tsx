@@ -14,6 +14,7 @@ interface ParametersPanelProps {
   onOpenPageSetupModal: () => void;
   onGenerateCoupons: () => void;
   generatingCoupons?: boolean;
+  canGenerate?: boolean;
   customersList: string[];
   workersList: WorkerItem[];
   isSelectionGenerated: boolean;
@@ -24,6 +25,7 @@ export function ParametersPanel({
   onOpenPageSetupModal,
   onGenerateCoupons,
   generatingCoupons = false,
+  canGenerate = true,
   customersList = [],
   workersList = [],
   isSelectionGenerated,
@@ -104,7 +106,7 @@ export function ParametersPanel({
         {(() => {
           const isWorkOrderEntered = activeStyle.workOrder && activeStyle.workOrder.trim() !== "";
           const isGenerateDisabled =
-            !isWorkOrderEntered || generatingCoupons || isSelectionGenerated;
+            !isWorkOrderEntered || generatingCoupons || isSelectionGenerated || !canGenerate;
           const isPrintDisabled = !isWorkOrderEntered || !isSelectionGenerated;
 
           return (
@@ -114,9 +116,11 @@ export function ParametersPanel({
                   onClick={onGenerateCoupons}
                   disabled={isGenerateDisabled}
                   title={
-                    isSelectionGenerated && isWorkOrderEntered && !generatingCoupons
-                      ? "Every selected bundle/operation already has a coupon generated."
-                      : undefined
+                    !canGenerate
+                      ? "You don't have permission to generate coupons."
+                      : isSelectionGenerated && isWorkOrderEntered && !generatingCoupons
+                        ? "Every selected bundle/operation already has a coupon generated."
+                        : undefined
                   }
                   className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed disabled:pointer-events-none py-1.5 px-2 rounded-xl text-[11px] font-bold transition-all shadow-sm flex items-center justify-center text-center cursor-pointer"
                 >

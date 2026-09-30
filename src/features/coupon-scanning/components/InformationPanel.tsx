@@ -15,7 +15,7 @@ import { fetchLockedWageRanges } from "@/features/wages/services/wages.service";
 import type { LockedRange } from "@/features/wages/types";
 import type { useCouponScanning } from "../hooks/useCouponScanning";
 
-type Facade = ReturnType<typeof useCouponScanning>;
+type Facade = ReturnType<typeof useCouponScanning> & { canScan: boolean };
 
 function parseDateString(str: string): Date | null {
   const trimmed = str.trim();
@@ -109,6 +109,7 @@ export function InformationPanel(props: Facade) {
     handleEmployeeCodeKeyDown,
     handleFetchAndScan,
     clearForm,
+    canScan,
   } = props;
 
   const [prevDated, setPrevDated] = useState(dated);
@@ -656,7 +657,8 @@ export function InformationPanel(props: Facade) {
                 <button
                   type="button"
                   onClick={() => handleFetchAndScan()}
-                  disabled={isScanning}
+                  disabled={isScanning || !canScan}
+                  title={!canScan ? "You don't have permission to scan coupons." : undefined}
                   className="flex-1 bg-[#4f46e5] hover:bg-[#4338ca] text-white font-bold py-1 rounded-lg text-xs shadow-sm transition-all flex items-center justify-center gap-1 cursor-pointer hover:shadow-md active:scale-[0.98] border border-transparent h-[26px] whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <span>🔍 Scan</span>

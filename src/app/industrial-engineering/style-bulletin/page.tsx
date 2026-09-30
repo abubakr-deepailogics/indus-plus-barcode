@@ -19,6 +19,7 @@ import {
   Printer,
 } from "lucide-react";
 import { useAuth } from "@/features/auth/context/auth-context";
+import { RequirePermission } from "@/features/auth/components/RequirePermission";
 // import type { PageSetupConfig } from "@/features/barcode-generation/types";
 // import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
 import { ColumnDef } from "@tanstack/react-table";
@@ -129,7 +130,7 @@ function TableSkeleton({ columnsCount }: { columnsCount: number }) {
 }
 
 export default function OpenOrderPage() {
-  const { user } = useAuth();
+  const { user, can } = useAuth();
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
   const activeTab = "style_bulletin";
@@ -870,7 +871,7 @@ export default function OpenOrderPage() {
   };
 
   return (
-    <>
+    <RequirePermission pageKey="style-bulletin">
       <div className="no-print flex flex-col gap-6 max-w-[1400px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
         {/* Dynamic Metadata Cards Row */}
 
@@ -1364,24 +1365,26 @@ export default function OpenOrderPage() {
         )}
 
         {/* Style Bulletin Attachments */}
-        {hasSearched && (
+        {hasSearched && can("style-bulletin-attachments", "read") && (
           <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3 animate-fade-in">
             <div className="flex items-center justify-between">
               <h2 className="font-bold text-[#0f172a] text-sm">Attachments</h2>
-              <label className="flex items-center gap-1.5 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer">
-                <Plus className="w-3.5 h-3.5" />
-                Add Attachment
-                <input
-                  type="file"
-                  accept="application/pdf,image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0];
-                    if (file) handleUploadBulletinAttachment(file);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
+              {can("style-bulletin-attachments", "create") && (
+                <label className="flex items-center gap-1.5 bg-[#4f46e5] hover:bg-[#4338ca] text-white px-4 py-2 rounded-xl font-bold transition-all shadow-sm cursor-pointer">
+                  <Plus className="w-3.5 h-3.5" />
+                  Add Attachment
+                  <input
+                    type="file"
+                    accept="application/pdf,image/*"
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (file) handleUploadBulletinAttachment(file);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+              )}
             </div>
 
             {bulletinAttachmentError && (
@@ -1424,13 +1427,15 @@ export default function OpenOrderPage() {
                         </span>
                       </span>
                     </a>
-                    <button
-                      onClick={() => handleDeleteBulletinAttachment(a.Id)}
-                      className="text-[#94a3b8] hover:text-red-500 p-1 shrink-0"
-                      title="Delete attachment"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    {can("style-bulletin-attachments", "delete") && (
+                      <button
+                        onClick={() => handleDeleteBulletinAttachment(a.Id)}
+                        className="text-[#94a3b8] hover:text-red-500 p-1 shrink-0"
+                        title="Delete attachment"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -1810,6 +1815,6 @@ export default function OpenOrderPage() {
           );
         })}
       </div>
-    </>
+    </RequirePermission>
   );
 }

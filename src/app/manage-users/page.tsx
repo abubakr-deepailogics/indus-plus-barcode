@@ -6,6 +6,7 @@ import { useAuth } from "@/features/auth/context/auth-context";
 import { useManageUsersFacade } from "@/features/auth/hooks/useManageUsersFacade";
 import { CreateUserDialog } from "@/features/auth/components/CreateUserDialog";
 import { ResetPasswordResultDialog } from "@/features/auth/components/ResetPasswordResultDialog";
+import { UserPermissionsDialog } from "@/features/auth/components/UserPermissionsDialog";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +32,7 @@ export default function ManageUsersPage() {
   const [resettingPassword, setResettingPassword] = useState(false);
   const [deleteConfirmUser, setDeleteConfirmUser] = useState<ManagedUser | null>(null);
   const [deletingUser, setDeletingUser] = useState(false);
+  const [permissionsUser, setPermissionsUser] = useState<ManagedUser | null>(null);
 
   const columns = useMemo<ColumnDef<ManagedUser>[]>(
     () => [
@@ -74,7 +76,7 @@ export default function ManageUsersPage() {
       {
         id: "actions",
         header: "Actions",
-        size: 420,
+        size: 520,
         cell: ({ row }) => {
           const u = row.original;
           const isSelf = u.id === currentUser?.id;
@@ -127,6 +129,18 @@ export default function ManageUsersPage() {
                 }}
               >
                 Reset password
+              </button>
+              <button
+                type="button"
+                className={`${pillButtonClassName} bg-indigo-50 text-indigo-700 hover:bg-indigo-100 hover:text-indigo-800`}
+                disabled={u.isAdmin}
+                title={u.isAdmin ? "Admins have full access to every page." : undefined}
+                onClick={() => {
+                  setActionError(null);
+                  setPermissionsUser(u);
+                }}
+              >
+                Permissions
               </button>
               <button
                 type="button"
@@ -195,6 +209,10 @@ export default function ManageUsersPage() {
       {error && <p className="text-sm text-destructive">{error}</p>}
       {actionError && <p className="text-sm text-destructive">{actionError}</p>}
       <DataTable columns={columns} data={users} isLoading={loading} />
+      <UserPermissionsDialog
+        user={permissionsUser}
+        onOpenChange={(open) => !open && setPermissionsUser(null)}
+      />
       <ResetPasswordResultDialog
         temporaryPassword={temporaryPassword}
         onClose={() => setTemporaryPassword(null)}

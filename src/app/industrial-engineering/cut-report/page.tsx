@@ -1,12 +1,19 @@
 "use client";
 
-import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
+import React, {
+  useState,
+  useEffect,
+  useRef,
+  useMemo,
+  useCallback,
+} from "react";
 import {
-  Search, AlertCircle,
+  Search,
+  AlertCircle,
   Info,
   Database,
   Paperclip,
-  Printer
+  Printer,
 } from "lucide-react";
 // import type { PageSetupConfig } from "@/features/barcode-generation/types";
 // import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
@@ -21,7 +28,11 @@ import { useGenerateCouponPdf } from "@/features/qr-code-generation/hooks/useGen
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { classifyDepartment } from "@/lib/department-classification";
-import { WorkOrderSearchModal, type WorkOrderSearchRow } from "@/components/work-order-search-modal";
+import {
+  WorkOrderSearchModal,
+  type WorkOrderSearchRow,
+} from "@/components/work-order-search-modal";
+import { RequirePermission } from "@/features/auth/components/RequirePermission";
 
 interface CutDetailRow {
   RowId: number;
@@ -135,9 +146,9 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-center font-semibold text-indigo-600">
+          <span className="font-semibold text-indigo-600">
             {row.original.Cut}
-          </div>
+          </span>
         ),
         footer: ({ table }) => {
           const uniqueCuts = new Set(
@@ -147,14 +158,12 @@ export default function OpenOrderPage() {
               .filter((cut) => cut !== undefined && cut !== null),
           );
           return (
-            <div className="text-center text-indigo-600">
-              Total: {uniqueCuts.size}
-            </div>
+            <div className="text-indigo-600">Total: {uniqueCuts.size}</div>
           );
         },
         size: 70,
       },
-       {
+      {
         accessorKey: "Bundle_Id",
         meta: { align: "center" },
         header: ({ column }) => (
@@ -165,9 +174,9 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-center font-mono">{row.original.Bundle_Id}</div>
+          <span className="font-mono">{row.original.Bundle_Id}</span>
         ),
-        size: 100,
+        size: 110,
       },
       {
         accessorKey: "Bundle_Qty",
@@ -186,7 +195,9 @@ export default function OpenOrderPage() {
           const total = table.getFilteredRowModel().rows.reduce((sum, row) => {
             return sum + (row.original.Bundle_Qty ?? 0);
           }, 0);
-          return <div className="text-center text-slate-800">Total: {total}</div>;
+          return (
+            <div className="text-center text-slate-800">Total: {total}</div>
+          );
         },
         size: 90,
       },
@@ -200,9 +211,7 @@ export default function OpenOrderPage() {
             onFilterClick={() => {}}
           />
         ),
-        cell: ({ row }) => (
-          <div className="text-center">{row.original.Inseam}</div>
-        ),
+        cell: ({ row }) => <span>{row.original.Inseam}</span>,
         size: 70,
       },
       {
@@ -216,7 +225,7 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-center font-bold">{row.original.Size}</div>
+          <span className="font-bold">{row.original.Size}</span>
         ),
         size: 70,
       },
@@ -228,6 +237,9 @@ export default function OpenOrderPage() {
             title="Color"
             onFilterClick={() => {}}
           />
+        ),
+        cell: ({ row }) => (
+          <span className="text-slate-700">{row.original.Color}</span>
         ),
         size: 100,
       },
@@ -242,9 +254,9 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-center font-bold text-indigo-600">
+          <span className="font-bold text-indigo-600">
             {row.original.Shade}
-          </div>
+          </span>
         ),
         size: 70,
       },
@@ -259,7 +271,7 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-center font-mono">{row.original.Shrinkage}</div>
+          <span className="font-mono">{row.original.Shrinkage}</span>
         ),
         size: 80,
       },
@@ -287,12 +299,18 @@ export default function OpenOrderPage() {
     [setWorkOrder],
   );
   const fetchWorkOrderRows = useCallback(
-    async (filters: { workOrder: string; customer: string; saleOrderNo: string }): Promise<WorkOrderSearchRow[]> => {
+    async (filters: {
+      workOrder: string;
+      customer: string;
+      saleOrderNo: string;
+    }): Promise<WorkOrderSearchRow[]> => {
       const params = new URLSearchParams();
       if (filters.workOrder) params.set("work_order", filters.workOrder);
       if (filters.customer) params.set("customer", filters.customer);
       if (filters.saleOrderNo) params.set("sale_order_no", filters.saleOrderNo);
-      const res = await fetch(`/api/open-order/work-orders?${params.toString()}`);
+      const res = await fetch(
+        `/api/open-order/work-orders?${params.toString()}`,
+      );
       return res.ok ? res.json() : [];
     },
     [],
@@ -303,8 +321,12 @@ export default function OpenOrderPage() {
   // whenever a fresh style bulletin loads, see the fetch effect below) so
   // existing behavior (generate for every operation) is unchanged unless
   // the user deliberately unchecks some.
-  const [selectedOpRowIds, setSelectedOpRowIds] = useState<Set<number>>(new Set());
-  const [selectedDeptFilter, setSelectedDeptFilter] = useState<"all" | "cutting" | "washing" | "sewing" | "finishing">("all");
+  const [selectedOpRowIds, setSelectedOpRowIds] = useState<Set<number>>(
+    new Set(),
+  );
+  const [selectedDeptFilter, setSelectedDeptFilter] = useState<
+    "all" | "cutting" | "washing" | "sewing" | "finishing"
+  >("all");
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
   const [selectedMachines, setSelectedMachines] = useState<string[]>([]);
   const [sectionDropdownOpen, setSectionDropdownOpen] = useState(false);
@@ -315,10 +337,16 @@ export default function OpenOrderPage() {
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (sectionRef.current && !sectionRef.current.contains(event.target as Node)) {
+      if (
+        sectionRef.current &&
+        !sectionRef.current.contains(event.target as Node)
+      ) {
         setSectionDropdownOpen(false);
       }
-      if (machineRef.current && !machineRef.current.contains(event.target as Node)) {
+      if (
+        machineRef.current &&
+        !machineRef.current.contains(event.target as Node)
+      ) {
         setMachineDropdownOpen(false);
       }
     }
@@ -331,12 +359,16 @@ export default function OpenOrderPage() {
   const getDepartment = (row: StyleBulletinRow) => classifyDepartment(row);
 
   const uniqueSections = useMemo(() => {
-    const sections = styleBulletins.map((row) => row.Section).filter(Boolean) as string[];
+    const sections = styleBulletins
+      .map((row) => row.Section)
+      .filter(Boolean) as string[];
     return Array.from(new Set(sections));
   }, [styleBulletins]);
 
   const uniqueMachines = useMemo(() => {
-    const machines = styleBulletins.map((row) => row.Machine_Type).filter(Boolean) as string[];
+    const machines = styleBulletins
+      .map((row) => row.Machine_Type)
+      .filter(Boolean) as string[];
     return Array.from(new Set(machines));
   }, [styleBulletins]);
 
@@ -344,15 +376,22 @@ export default function OpenOrderPage() {
     let result = styleBulletins;
 
     if (selectedDeptFilter !== "all") {
-      result = result.filter((row) => getDepartment(row) === selectedDeptFilter);
+      result = result.filter(
+        (row) => getDepartment(row) === selectedDeptFilter,
+      );
     }
 
     if (selectedSections.length > 0) {
-      result = result.filter((row) => row.Section && selectedSections.includes(row.Section));
+      result = result.filter(
+        (row) => row.Section && selectedSections.includes(row.Section),
+      );
     }
 
     if (selectedMachines.length > 0) {
-      result = result.filter((row) => row.Machine_Type && selectedMachines.includes(row.Machine_Type));
+      result = result.filter(
+        (row) =>
+          row.Machine_Type && selectedMachines.includes(row.Machine_Type),
+      );
     }
 
     return result;
@@ -398,7 +437,9 @@ export default function OpenOrderPage() {
   const [rowAttachments, setRowAttachments] = useState<
     Record<number, { name: string; url: string; type: string }>
   >({});
-  const [activeRowIdForUpload, setActiveRowIdForUpload] = useState<number | null>(null);
+  const [activeRowIdForUpload, setActiveRowIdForUpload] = useState<
+    number | null
+  >(null);
   const [previewFile, setPreviewFile] = useState<{
     name: string;
     url: string;
@@ -429,7 +470,9 @@ export default function OpenOrderPage() {
             type="checkbox"
             checked={
               filteredStyleBulletins.length > 0 &&
-              filteredStyleBulletins.every((row) => selectedOpRowIds.has(row.RowId))
+              filteredStyleBulletins.every((row) =>
+                selectedOpRowIds.has(row.RowId),
+              )
             }
             onChange={(e) => {
               setSelectedOpRowIds((prev) => {
@@ -590,7 +633,11 @@ export default function OpenOrderPage() {
             const val = row.original.Piece_Rate;
             return sum + (val ?? 0);
           }, 0);
-          return <div className="text-right font-bold text-slate-700">{total.toFixed(4)}</div>;
+          return (
+            <div className="text-right font-bold text-slate-700">
+              {total.toFixed(4)}
+            </div>
+          );
         },
         size: 90,
       },
@@ -613,11 +660,14 @@ export default function OpenOrderPage() {
             const val = row.original.Smv_Sam;
             return sum + (val ?? 0);
           }, 0);
-          return <div className="text-right font-bold text-purple-600">{total.toFixed(2)}</div>;
+          return (
+            <div className="text-right font-bold text-purple-600">
+              {total.toFixed(2)}
+            </div>
+          );
         },
         size: 90,
       },
-
     ],
     [rowAttachments, selectedOpRowIds, filteredStyleBulletins],
   );
@@ -653,11 +703,11 @@ export default function OpenOrderPage() {
       setSaveErrorMsg("No active Work Order to save.");
       return;
     }
-    
+
     setIsSaving(true);
     setSaveSuccessMsg("");
     setSaveErrorMsg("");
-    
+
     try {
       const response = await fetch("/api/open-order", {
         method: "POST",
@@ -682,12 +732,12 @@ export default function OpenOrderPage() {
           status,
         }),
       });
-      
+
       const data = await response.json();
       if (!response.ok) {
         throw new Error(data.error || "Failed to save bulletin details.");
       }
-      
+
       setSaveSuccessMsg("Bulletin details saved successfully.");
       setTimeout(() => setSaveSuccessMsg(""), 4000);
     } catch (err: any) {
@@ -755,8 +805,14 @@ export default function OpenOrderPage() {
         setSelectedOpRowIds(new Set());
 
         // Compute and set totalSam & totalRate
-        const computedSam = (data.styleBulletins || []).reduce((acc: number, curr: any) => acc + (curr.Smv_Sam ?? 0), 0);
-        const computedRate = (data.styleBulletins || []).reduce((acc: number, curr: any) => acc + (curr.Piece_Rate ?? 0), 0);
+        const computedSam = (data.styleBulletins || []).reduce(
+          (acc: number, curr: any) => acc + (curr.Smv_Sam ?? 0),
+          0,
+        );
+        const computedRate = (data.styleBulletins || []).reduce(
+          (acc: number, curr: any) => acc + (curr.Piece_Rate ?? 0),
+          0,
+        );
         setTotalSam(computedSam.toFixed(2));
         setTotalRate(computedRate.toFixed(4));
 
@@ -789,14 +845,14 @@ export default function OpenOrderPage() {
     fetchData();
   }, [activeSearchQuery]);
 
-
-
   const activeRecordsCount =
     activeTab === "cut_report" ? cutDetails.length : styleBulletins.length;
 
   // Dynamically derive style bulletin metadata from fetched style bulletins and cut details
   const styleBulletinMetadata = useMemo(() => {
-    const planQty = cutDetails[0]?.Order_Qty_After_Add ?? cutDetails.reduce((acc, curr) => acc + (curr.Bundle_Qty ?? 0), 0);
+    const planQty =
+      cutDetails[0]?.Order_Qty_After_Add ??
+      cutDetails.reduce((acc, curr) => acc + (curr.Bundle_Qty ?? 0), 0);
 
     return {
       amNo: cutDetails[0]?.Work_Order || activeSearchQuery || "",
@@ -830,9 +886,7 @@ export default function OpenOrderPage() {
     const operations = styleBulletins
       .filter((row) => selectedOpRowIds.has(row.RowId))
       .slice()
-      .sort(
-        (a, b) => (a.Operation_Sequence ?? 0) - (b.Operation_Sequence ?? 0),
-      )
+      .sort((a, b) => (a.Operation_Sequence ?? 0) - (b.Operation_Sequence ?? 0))
       .map((row) => ({
         id: row.RowId,
         section: row.Section ?? "",
@@ -869,26 +923,37 @@ export default function OpenOrderPage() {
     };
   }, [activeSearchQuery, cutDetails, styleBulletins, selectedOpRowIds]);
 
-  const { handleGenerateCoupons, generatingCoupons, handleDownloadPdf: downloadPdf, generatingPdf, couponCount } =
-    useGenerateCouponPdf(
-      activeStyle ?? { workOrder: "", saleOrderNo: "", styleCode: "", bundles: [], operations: [] },
-    );
+  const {
+    handleGenerateCoupons,
+    generatingCoupons,
+    handleDownloadPdf: downloadPdf,
+    generatingPdf,
+    couponCount,
+  } = useGenerateCouponPdf(
+    activeStyle ?? {
+      workOrder: "",
+      saleOrderNo: "",
+      styleCode: "",
+      bundles: [],
+      operations: [],
+    },
+  );
   const handleGeneratePdf = async () => {
     await downloadPdf(pageSetup.layout);
     setShowPageSetupModal(false);
   };
 
   return (
-    <>
+    <RequirePermission pageKey="cut-report">
       <div className="no-print flex flex-col gap-6 max-w-[1400px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
-
         {/* Dynamic Metadata Cards Row */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
           {/* Card 1: Order Info */}
           <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
-          
             <div>
-              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Work Order</span>
+              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">
+                Work Order
+              </span>
               <button
                 type="button"
                 onClick={() => setShowWorkOrderModal(true)}
@@ -896,12 +961,16 @@ export default function OpenOrderPage() {
               >
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94a3b8]" />
                 <span className="block w-full pl-9 pr-3 py-1 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 hover:border-[#4f46e5] transition-all truncate">
-                  {cutDetails[0]?.Work_Order || activeSearchQuery || "Search W/O..."}
+                  {cutDetails[0]?.Work_Order ||
+                    activeSearchQuery ||
+                    "Search W/O..."}
                 </span>
               </button>
             </div>
-              <div>
-              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Sale Order No</span>
+            <div>
+              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">
+                Sale Order No
+              </span>
               <input
                 type="text"
                 readOnly
@@ -914,7 +983,9 @@ export default function OpenOrderPage() {
           {/* Card 2: Customer & Qty */}
           <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
             <div>
-              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Customer</span>
+              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">
+                Customer
+              </span>
               <input
                 type="text"
                 readOnly
@@ -923,7 +994,9 @@ export default function OpenOrderPage() {
               />
             </div>
             <div>
-              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Order Qty</span>
+              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">
+                Order Qty
+              </span>
               <input
                 type="text"
                 readOnly
@@ -936,7 +1009,9 @@ export default function OpenOrderPage() {
           {/* Card 3: Specifications */}
           <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
             <div>
-              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Fabric Code</span>
+              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">
+                Fabric Code
+              </span>
               <input
                 type="text"
                 readOnly
@@ -945,7 +1020,9 @@ export default function OpenOrderPage() {
               />
             </div>
             <div>
-              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">Wash</span>
+              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">
+                Wash
+              </span>
               <input
                 type="text"
                 readOnly
@@ -977,7 +1054,8 @@ export default function OpenOrderPage() {
                 Ready to Search
               </h3>
               <p className="text-xs text-[#64748b] mt-1">
-                Please enter a Work Order number in the W/O field above (for example,{" "}
+                Please enter a Work Order number in the W/O field above (for
+                example,{" "}
                 <code className="bg-[#f1f5f9] px-1.5 py-0.5 rounded font-mono text-[#4f46e5]">
                   W/O-003355
                 </code>
@@ -996,7 +1074,9 @@ export default function OpenOrderPage() {
               </h3>
               <p className="text-xs text-[#64748b] mt-1">
                 We couldn&apos;t find any records for work order{" "}
-                <strong className="text-slate-800">`{activeSearchQuery}`</strong>{" "}
+                <strong className="text-slate-800">
+                  `{activeSearchQuery}`
+                </strong>{" "}
                 in the Cut Detail table.
               </p>
             </div>
@@ -1240,26 +1320,43 @@ export default function OpenOrderPage() {
         <h2 className="text-center font-extrabold text-sm uppercase tracking-wide mb-3 border-b-2 border-black pb-2">
           Cut Report Preview for Indus Plus Pvt Limited
         </h2>
-        
+
         <table className="print-header-table">
           <tbody>
             <tr>
               <td style={{ width: "35%" }}>
                 <div className="flex flex-col gap-1">
-                  <div><strong>WORK ORDER:</strong> {cutDetails[0]?.Work_Order || activeSearchQuery || ""}</div>
-                  <div><strong>SALE ORDER NO:</strong> {cutDetails[0]?.Sale_Order_No || ""}</div>
+                  <div>
+                    <strong>WORK ORDER:</strong>{" "}
+                    {cutDetails[0]?.Work_Order || activeSearchQuery || ""}
+                  </div>
+                  <div>
+                    <strong>SALE ORDER NO:</strong>{" "}
+                    {cutDetails[0]?.Sale_Order_No || ""}
+                  </div>
                 </div>
               </td>
               <td style={{ width: "30%" }}>
                 <div className="flex flex-col gap-1">
-                  <div><strong>CUSTOMER:</strong> {cutDetails[0]?.Customer_Name || ""}</div>
-                  <div><strong>ORDER QTY:</strong> {cutDetails[0]?.Order_Qty_After_Add || ""}</div>
+                  <div>
+                    <strong>CUSTOMER:</strong>{" "}
+                    {cutDetails[0]?.Customer_Name || ""}
+                  </div>
+                  <div>
+                    <strong>ORDER QTY:</strong>{" "}
+                    {cutDetails[0]?.Order_Qty_After_Add || ""}
+                  </div>
                 </div>
               </td>
               <td style={{ width: "35%" }}>
                 <div className="flex flex-col gap-1">
-                  <div><strong>FABRIC CODE:</strong> {cutDetails[0]?.Fabric_Code_Main_Body || ""}</div>
-                  <div><strong>WASH:</strong> {cutDetails[0]?.Wash || ""}</div>
+                  <div>
+                    <strong>FABRIC CODE:</strong>{" "}
+                    {cutDetails[0]?.Fabric_Code_Main_Body || ""}
+                  </div>
+                  <div>
+                    <strong>WASH:</strong> {cutDetails[0]?.Wash || ""}
+                  </div>
                 </div>
               </td>
             </tr>
@@ -1295,15 +1392,20 @@ export default function OpenOrderPage() {
               </tr>
             ))}
             <tr className="print-totals-row">
-              <td colSpan={3} className="text-right uppercase">Total Qty</td>
+              <td colSpan={3} className="text-right uppercase">
+                Total Qty
+              </td>
               <td className="text-right">
-                {cutDetails.reduce((sum, row) => sum + (row.Bundle_Qty ?? 0), 0)}
+                {cutDetails.reduce(
+                  (sum, row) => sum + (row.Bundle_Qty ?? 0),
+                  0,
+                )}
               </td>
               <td colSpan={5}></td>
             </tr>
           </tbody>
         </table>
       </div>
-    </>
+    </RequirePermission>
   );
 }

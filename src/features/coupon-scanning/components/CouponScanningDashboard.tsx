@@ -6,10 +6,13 @@ import { InformationPanel } from "@/features/coupon-scanning/components/Informat
 import { ScanningDetailsTable } from "@/features/coupon-scanning/components/ScanningDetailsTable";
 import { ScanModals } from "@/features/coupon-scanning/components/ScanModals";
 import { useConfirmNavigation } from "@/lib/use-confirm-navigation";
+import { useAuth } from "@/features/auth/context/auth-context";
 import { format } from "date-fns";
 
 export function CouponScanningDashboard() {
   const couponScanning = useCouponScanning();
+  const { can } = useAuth();
+  const canScan = can("coupon-scanning", "create");
 
   useConfirmNavigation(
     true,
@@ -47,7 +50,7 @@ export function CouponScanningDashboard() {
   return (
     <>
       <div className="flex flex-col gap-6 w-full text-xs text-[#334155] animate-fade-in pb-16 px-4 max-w-350 mx-auto no-print">
-        <InformationPanel {...couponScanning} />
+        <InformationPanel {...couponScanning} canScan={canScan} />
         <ScanningDetailsTable {...couponScanning} />
         <ScanModals {...couponScanning} />
       </div>
