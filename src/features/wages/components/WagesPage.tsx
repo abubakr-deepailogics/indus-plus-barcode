@@ -92,7 +92,10 @@ export function WagesPage() {
   const [hasSearched, setHasSearched] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState<number | null>(null);
-  const [msg, setMsg] = useState<{ type: "success" | "error"; message: string } | null>(null);
+  const [msg, setMsg] = useState<{
+    type: "success" | "error";
+    message: string;
+  } | null>(null);
   // Which of several matching wages the user picked to view in full — only
   // meaningful when a tenure search matches more than one wage (e.g. a
   // range spanning two separately-titled batches). Reset on every new
@@ -124,9 +127,7 @@ export function WagesPage() {
       setMsg(null);
       setSelectedWageId(null);
       const trimmedTitle = searchTitle.trim();
-      setLastSearchWasFiltered(
-        Boolean(trimmedTitle || searchFrom || searchTo),
-      );
+      setLastSearchWasFiltered(Boolean(trimmedTitle || searchFrom || searchTo));
       const res = await fetchWages({
         title: trimmedTitle || undefined,
         from: searchFrom || undefined,
@@ -162,19 +163,22 @@ export function WagesPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleDelete = useCallback(async (wageId: number) => {
-    if (isDeleting) return;
-    setIsDeleting(wageId);
-    setMsg(null);
-    const res = await deleteWages({ wageId });
-    if (!res.ok) {
-      setMsg({ type: "error", message: res.error });
-    } else {
-      setMsg({ type: "success", message: res.message });
-      setBatches((prev) => prev.filter((b) => b.WageId !== wageId));
-    }
-    setIsDeleting(null);
-  }, [isDeleting]);
+  const handleDelete = useCallback(
+    async (wageId: number) => {
+      if (isDeleting) return;
+      setIsDeleting(wageId);
+      setMsg(null);
+      const res = await deleteWages({ wageId });
+      if (!res.ok) {
+        setMsg({ type: "error", message: res.error });
+      } else {
+        setMsg({ type: "success", message: res.message });
+        setBatches((prev) => prev.filter((b) => b.WageId !== wageId));
+      }
+      setIsDeleting(null);
+    },
+    [isDeleting],
+  );
 
   return (
     <div className="flex flex-col gap-6 [&_thead_th]:border-b [&_thead_th]:border-slate-200 [&_thead_th]:bg-slate-50 [&_thead_th]:py-3 [&_thead_th]:text-[10px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-wide [&_thead_th]:text-slate-500 [&_tbody_td]:py-2.5 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-emerald-50/30 [&_tfoot_tr]:border-t-2 [&_tfoot_tr]:border-slate-300 [&_tfoot_tr]:bg-slate-100 [&_tfoot_tr]:font-semibold [&_tfoot_tr]:text-slate-900">
@@ -235,9 +239,7 @@ export function WagesPage() {
             />
           </div>
           <div className="flex flex-col gap-1.5">
-            <span className="text-[11px] font-semibold text-slate-700">
-              To
-            </span>
+            <span className="text-[11px] font-semibold text-slate-700">To</span>
             <div className="flex gap-2">
               <input
                 type="date"
@@ -252,7 +254,11 @@ export function WagesPage() {
                 }}
                 className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm font-medium text-slate-800 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
               />
-              <Button onClick={() => runSearch()} disabled={loading} className="h-10 shrink-0 rounded-lg bg-slate-900 px-3 text-white hover:bg-slate-700">
+              <Button
+                onClick={() => runSearch()}
+                disabled={loading}
+                className="h-10 shrink-0 rounded-lg bg-slate-900 px-3 text-white hover:bg-slate-700"
+              >
                 {loading ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
@@ -389,18 +395,19 @@ export function WagesPage() {
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-4 py-3">
           <div className="flex items-center gap-3 text-xs text-slate-600 flex-wrap">
-              <span className="font-semibold text-slate-900">
+            <span className="font-semibold text-slate-900">
               {batch.Title || `Batch #${batch.WageId}`}
             </span>
-              <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] tabular-nums text-slate-600">
-              {batch.FromDate?.slice(0, 10)} → {batch.ToDate?.slice(0, 10) ?? "—"}
+            <span className="rounded-md border border-slate-200 bg-white px-2 py-1 text-[11px] tabular-nums text-slate-600">
+              {batch.FromDate?.slice(0, 10)} →{" "}
+              {batch.ToDate?.slice(0, 10) ?? "—"}
             </span>
             {batch.CreatedBy && (
               <span className="rounded-md bg-slate-100 px-2 py-1 text-[11px] font-medium text-slate-600">
                 {batch.CreatedBy}
               </span>
             )}
-              <span className="font-semibold tabular-nums text-emerald-800">
+            <span className="font-semibold tabular-nums text-emerald-800">
               Rs. {formatAmount(Number(batch.TotalAmount))}
             </span>
           </div>
@@ -423,15 +430,31 @@ export function WagesPage() {
           <table className="w-full min-w-[1100px] border-collapse text-left text-xs">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-100 text-[9px] font-semibold uppercase tracking-wide text-slate-600">
-                <th className="py-2.5 px-3 border-r border-slate-200">EmpCode</th>
-                <th className="py-2.5 px-3 border-r border-slate-200">Employee Name</th>
+                <th className="py-2.5 px-3 border-r border-slate-200">
+                  EmpCode
+                </th>
+                <th className="py-2.5 px-3 border-r border-slate-200">
+                  Employee Name
+                </th>
                 <th className="py-2.5 px-3 border-r border-slate-200">W/O</th>
-                <th className="py-2.5 px-3 text-center border-r border-slate-200">Date</th>
-                <th className="py-2.5 px-3 border-r border-slate-200">Operation</th>
-                <th className="py-2.5 px-3 text-right border-r border-slate-200">Rate</th>
-                <th className="py-2.5 px-3 text-center border-r border-slate-200">Bundle</th>
-                <th className="py-2.5 px-3 text-center border-r border-slate-200">Quantity</th>
-                <th className="py-2.5 px-3 text-right border-r border-slate-200">Total Pay</th>
+                <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                  Date
+                </th>
+                <th className="py-2.5 px-3 border-r border-slate-200">
+                  Operation
+                </th>
+                <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                  Rate
+                </th>
+                <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                  Bundle
+                </th>
+                <th className="py-2.5 px-3 text-center border-r border-slate-200">
+                  Quantity
+                </th>
+                <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                  Total Pay
+                </th>
                 <th className="py-2.5 px-3 text-center w-20">Signature</th>
               </tr>
             </thead>
@@ -439,7 +462,10 @@ export function WagesPage() {
               {groups.map((g) => (
                 <Fragment key={g.employeeCode}>
                   {g.items.map((item, idx) => (
-                    <tr key={idx} className="transition-colors odd:bg-slate-50/30 hover:bg-emerald-50/40">
+                    <tr
+                      key={idx}
+                      className="transition-colors odd:bg-slate-50/30 hover:bg-emerald-50/40"
+                    >
                       <td className="py-2 px-3 font-mono font-bold border-r border-slate-100 align-top">
                         {idx === 0 ? g.employeeCode : ""}
                       </td>
@@ -471,7 +497,10 @@ export function WagesPage() {
                     </tr>
                   ))}
                   <tr className="bg-slate-50/60 font-bold text-slate-800">
-                    <td className="py-2 px-3 border-r border-slate-100" colSpan={6}>
+                    <td
+                      className="py-2 px-3 border-r border-slate-100"
+                      colSpan={6}
+                    >
                       Employee wise Total :
                     </td>
                     <td className="py-2 px-3 text-center border-r border-slate-100">
@@ -489,8 +518,8 @@ export function WagesPage() {
               ))}
             </tbody>
             <tfoot>
-                <tr className="border-t-2 border-slate-300 bg-slate-900 font-semibold text-white">
-                  <td className="border-r border-white/10 px-3 py-3" colSpan={6}>
+              <tr className="border-t-2 border-slate-300 bg-slate-900 font-semibold text-white">
+                <td className="border-r border-white/10 px-3 py-3" colSpan={6}>
                   Grand Total :
                 </td>
                 <td className="py-2.5 px-3 text-center border-r border-slate-200">

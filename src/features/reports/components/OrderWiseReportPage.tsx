@@ -170,7 +170,10 @@ export function OrderWiseReportPage() {
         )}
 
         {error && (
-          <div role="alert" className="mx-4 my-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
+          <div
+            role="alert"
+            className="mx-4 my-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800"
+          >
             {error}
           </div>
         )}

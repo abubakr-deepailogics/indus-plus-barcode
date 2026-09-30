@@ -145,7 +145,10 @@ export function OperatorWiseReportPage() {
         )}
 
         {error && (
-          <div role="alert" className="mx-4 my-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
+          <div
+            role="alert"
+            className="mx-4 my-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800"
+          >
             {error}
           </div>
         )}
@@ -206,7 +209,10 @@ export function OperatorWiseReportPage() {
               {totals && (
                 <tfoot>
                   <tr className="bg-slate-100 border-t-2 border-slate-400 font-bold text-slate-900 text-[10px]">
-                    <td colSpan={4} className="py-2 px-2 border-r border-slate-300">
+                    <td
+                      colSpan={4}
+                      className="py-2 px-2 border-r border-slate-300"
+                    >
                       Total ({data.rows.length} Operators)
                     </td>
                     <td className="py-2 px-2 text-right border-r border-slate-300">

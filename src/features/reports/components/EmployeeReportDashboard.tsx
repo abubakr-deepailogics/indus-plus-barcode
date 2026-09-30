@@ -1018,7 +1018,8 @@ export function EmployeeReportDashboard() {
         </p>
         <h1 className="mt-1 text-2xl font-semibold text-slate-950">Reports</h1>
         <p className="mt-1 text-sm text-slate-500">
-          Explore production output and earnings by employee, order, operation, or section.
+          Explore production output and earnings by employee, order, operation,
+          or section.
         </p>
       </header>
       {/* Search Bar */}
@@ -1174,7 +1175,10 @@ export function EmployeeReportDashboard() {
         </div>
 
         {error && (
-          <p role="alert" className="mx-4 mb-4 mt-0 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-800 md:mx-5">
+          <p
+            role="alert"
+            className="mx-4 mb-4 mt-0 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-800 md:mx-5"
+          >
             {error}
           </p>
         )}
@@ -1623,7 +1627,7 @@ export function EmployeeReportDashboard() {
                       className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         effectiveTab === tab
                           ? "bg-slate-900 text-white shadow-sm"
-                            : "text-slate-600 hover:bg-white hover:text-slate-900"
+                          : "text-slate-600 hover:bg-white hover:text-slate-900"
                       }`}
                     >
                       <Icon className="w-3.5 h-3.5" />
@@ -3012,7 +3016,10 @@ export function EmployeeReportDashboard() {
                       </div>
                       <div>
                         <strong>
-                          {card2?.title ? card2.title.toUpperCase() : "COVERAGE"}:
+                          {card2?.title
+                            ? card2.title.toUpperCase()
+                            : "COVERAGE"}
+                          :
                         </strong>{" "}
                         {card2?.value || "—"}
                       </div>
@@ -3191,7 +3198,11 @@ export function EmployeeReportDashboard() {
                                       colSpan={2}
                                       className="text-right font-bold"
                                     >
-                                      {DIMENSION_META[searchDimension].totalLabel} :
+                                      {
+                                        DIMENSION_META[searchDimension]
+                                          .totalLabel
+                                      }{" "}
+                                      :
                                     </td>
                                     <td className="text-center font-bold">
                                       {g.totalCoupons.toLocaleString()}
@@ -3215,9 +3226,7 @@ export function EmployeeReportDashboard() {
                                 </td>
                                 <td className="text-right font-mono">
                                   Rs.{" "}
-                                  {formatAmount(
-                                    workOrderRowGrandTotals.amount,
-                                  )}
+                                  {formatAmount(workOrderRowGrandTotals.amount)}
                                 </td>
                               </tr>
                             </tfoot>
@@ -3283,7 +3292,8 @@ export function EmployeeReportDashboard() {
                             <tfoot>
                               <tr className="print-totals-row font-bold">
                                 <td colSpan={2}>
-                                  Total ({summary.workOrders.length} Work Orders)
+                                  Total ({summary.workOrders.length} Work
+                                  Orders)
                                 </td>
                                 <td className="text-center">
                                   {summary.totalCoupons.toLocaleString()}
@@ -3387,7 +3397,11 @@ export function EmployeeReportDashboard() {
                                       colSpan={4}
                                       className="text-right font-bold"
                                     >
-                                      {DIMENSION_META[searchDimension].totalLabel} :
+                                      {
+                                        DIMENSION_META[searchDimension]
+                                          .totalLabel
+                                      }{" "}
+                                      :
                                     </td>
                                     <td className="text-center font-bold">
                                       {g.totalCoupons.toLocaleString()}
@@ -3413,9 +3427,7 @@ export function EmployeeReportDashboard() {
                                 <td className="text-center"></td>
                                 <td className="text-right font-mono">
                                   Rs.{" "}
-                                  {formatAmount(
-                                    operationRowGrandTotals.amount,
-                                  )}
+                                  {formatAmount(operationRowGrandTotals.amount)}
                                 </td>
                               </tr>
                             </tfoot>
@@ -3455,9 +3467,7 @@ export function EmployeeReportDashboard() {
                                       : "—"}
                                   </td>
                                   <td className="text-right font-mono">
-                                    {op.smv != null
-                                      ? op.smv.toFixed(2)
-                                      : "—"}
+                                    {op.smv != null ? op.smv.toFixed(2) : "—"}
                                   </td>
                                   <td className="text-center font-bold">
                                     {op.couponCount.toLocaleString()}
@@ -3542,7 +3552,11 @@ export function EmployeeReportDashboard() {
                                       colSpan={2}
                                       className="text-right font-bold"
                                     >
-                                      {DIMENSION_META[searchDimension].totalLabel} :
+                                      {
+                                        DIMENSION_META[searchDimension]
+                                          .totalLabel
+                                      }{" "}
+                                      :
                                     </td>
                                     <td className="text-center font-bold">
                                       {g.totalCoupons.toLocaleString()}
@@ -3648,7 +3662,10 @@ export function EmployeeReportDashboard() {
                         <thead>
                           <tr>
                             <th>
-                              {DIMENSION_META[employeeGroupDimension].columnLabel}
+                              {
+                                DIMENSION_META[employeeGroupDimension]
+                                  .columnLabel
+                              }
                             </th>
                             <th>EMPCODE</th>
                             <th>EMPLOYEE NAME</th>
@@ -3732,7 +3749,8 @@ export function EmployeeReportDashboard() {
                                     {
                                       DIMENSION_META[employeeGroupDimension]
                                         .totalLabel
-                                    } :
+                                    }{" "}
+                                    :
                                   </td>
                                   <td className="text-center font-bold">
                                     {group.totalBundles.toLocaleString()}
@@ -3754,9 +3772,7 @@ export function EmployeeReportDashboard() {
                             <tr className="print-totals-row font-bold">
                               <td
                                 colSpan={
-                                  employeeGroupDimension !== "workOrder"
-                                    ? 7
-                                    : 6
+                                  employeeGroupDimension !== "workOrder" ? 7 : 6
                                 }
                                 className="text-right"
                               >
