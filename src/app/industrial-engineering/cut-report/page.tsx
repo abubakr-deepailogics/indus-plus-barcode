@@ -104,6 +104,7 @@ export default function OpenOrderPage() {
     () => [
       {
         accessorKey: "RowId",
+        meta: { align: "center" },
         header: ({ column }) => (
           <DataTableColumnHeader
             column={column}
@@ -112,12 +113,12 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <span className="font-semibold text-slate-900">
+          <div className="text-center font-semibold text-slate-900">
             {row.original.RowId}
-          </span>
+          </div>
         ),
         footer: ({ table }) => (
-          <div className="text-slate-800">
+          <div className="text-center text-slate-800">
             Total: {table.getFilteredRowModel().rows.length}
           </div>
         ),
@@ -125,6 +126,7 @@ export default function OpenOrderPage() {
       },
       {
         accessorKey: "Cut",
+        meta: { align: "center" },
         header: ({ column }) => (
           <DataTableColumnHeader
             column={column}
@@ -154,6 +156,7 @@ export default function OpenOrderPage() {
       },
        {
         accessorKey: "Bundle_Id",
+        meta: { align: "center" },
         header: ({ column }) => (
           <DataTableColumnHeader
             column={column}
@@ -168,6 +171,7 @@ export default function OpenOrderPage() {
       },
       {
         accessorKey: "Bundle_Qty",
+        meta: { align: "center" },
         header: ({ column }) => (
           <DataTableColumnHeader
             column={column}
@@ -176,18 +180,19 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-right font-bold">{row.original.Bundle_Qty}</div>
+          <div className="text-center font-bold">{row.original.Bundle_Qty}</div>
         ),
         footer: ({ table }) => {
           const total = table.getFilteredRowModel().rows.reduce((sum, row) => {
             return sum + (row.original.Bundle_Qty ?? 0);
           }, 0);
-          return <div className="text-right text-slate-800">Total: {total}</div>;
+          return <div className="text-center text-slate-800">Total: {total}</div>;
         },
         size: 90,
       },
       {
         accessorKey: "Inseam",
+        meta: { align: "center" },
         header: ({ column }) => (
           <DataTableColumnHeader
             column={column}
@@ -202,6 +207,7 @@ export default function OpenOrderPage() {
       },
       {
         accessorKey: "Size",
+        meta: { align: "center" },
         header: ({ column }) => (
           <DataTableColumnHeader
             column={column}
@@ -227,6 +233,7 @@ export default function OpenOrderPage() {
       },
       {
         accessorKey: "Shade",
+        meta: { align: "center" },
         header: ({ column }) => (
           <DataTableColumnHeader
             column={column}
@@ -243,6 +250,7 @@ export default function OpenOrderPage() {
       },
       {
         accessorKey: "Shrinkage",
+        meta: { align: "center" },
         header: ({ column }) => (
           <DataTableColumnHeader
             column={column}
