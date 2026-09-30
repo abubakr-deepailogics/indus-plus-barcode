@@ -96,9 +96,10 @@ const OPERATION_DESCRIPTIONS: Record<PageOperation, string> = {
   delete: "Remove records from this area.",
 };
 
-const ALL_PERMISSION_KEYS = Object.entries(ALLOWED_OPERATIONS_BY_PAGE_KEY).flatMap(
-  ([pageKey, operations]) =>
-    (operations ?? []).map((operation) => `${pageKey}:${operation}`),
+const ALL_PERMISSION_KEYS = Object.entries(
+  ALLOWED_OPERATIONS_BY_PAGE_KEY,
+).flatMap(([pageKey, operations]) =>
+  (operations ?? []).map((operation) => `${pageKey}:${operation}`),
 );
 const ALL_PERMISSION_SET = new Set(ALL_PERMISSION_KEYS);
 
@@ -231,7 +232,8 @@ export function UserPermissionsDialog({
 
   const isLoading =
     userId != null &&
-    (loadedRequest?.userId !== userId || loadedRequest.version !== reloadVersion);
+    (loadedRequest?.userId !== userId ||
+      loadedRequest.version !== reloadVersion);
   const currentLoadError =
     loadError?.userId === userId && loadError?.version === reloadVersion
       ? loadError.message
@@ -255,10 +257,8 @@ export function UserPermissionsDialog({
   ).length;
   const activePageAllGranted =
     activePageKeys.length > 0 && activePageGranted === activePageKeys.length;
-  const activePageSomeGranted =
-    activePageGranted > 0 && !activePageAllGranted;
-  const controlsDisabled =
-    isLoading || !!currentLoadError || saving || isAdmin;
+  const activePageSomeGranted = activePageGranted > 0 && !activePageAllGranted;
+  const controlsDisabled = isLoading || !!currentLoadError || saving || isAdmin;
 
   function setPermission(
     pageKey: PageKey,
@@ -377,7 +377,11 @@ export function UserPermissionsDialog({
                         : "bg-slate-100 text-slate-600 ring-1 ring-slate-200"
                   }`}
                 >
-                  {isAdmin ? "Administrator" : user.isActive ? "Active" : "Disabled"}
+                  {isAdmin
+                    ? "Administrator"
+                    : user.isActive
+                      ? "Active"
+                      : "Disabled"}
                 </span>
               </div>
             )}
@@ -426,7 +430,9 @@ export function UserPermissionsDialog({
                 const page = PAGE_PERMISSION_SCHEMA[pageKey];
                 if (!page) return null;
                 const keys = allKeysForPage(pageKey);
-                const count = keys.filter((key) => effectiveGranted.has(key)).length;
+                const count = keys.filter((key) =>
+                  effectiveGranted.has(key),
+                ).length;
                 const selected = activePageKey === pageKey;
                 const Icon = PAGE_ICONS[pageKey];
                 return (
@@ -471,7 +477,8 @@ export function UserPermissionsDialog({
             </nav>
 
             <div className="hidden border-t border-slate-200 p-3 text-[10px] leading-relaxed text-slate-500 md:block">
-              Administrators inherit full access. Individual page permissions apply to standard accounts.
+              Administrators inherit full access. Individual page permissions
+              apply to standard accounts.
             </div>
           </aside>
 
@@ -521,8 +528,11 @@ export function UserPermissionsDialog({
                     <div className="mb-4 flex items-start gap-2.5 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-xs text-amber-950">
                       <ShieldCheck className="mt-0.5 size-4 shrink-0 text-amber-700" />
                       <p>
-                        <strong>Administrator accounts have full access.</strong>{" "}
-                        Individual permissions are shown as inherited and cannot be changed here.
+                        <strong>
+                          Administrator accounts have full access.
+                        </strong>{" "}
+                        Individual permissions are shown as inherited and cannot
+                        be changed here.
                       </p>
                     </div>
                   )}
@@ -651,11 +661,7 @@ export function UserPermissionsDialog({
             <Button
               type="button"
               disabled={
-                saving ||
-                isLoading ||
-                !!currentLoadError ||
-                !isDirty ||
-                isAdmin
+                saving || isLoading || !!currentLoadError || !isDirty || isAdmin
               }
               onClick={savePermissions}
               className="min-w-[124px]"
@@ -701,7 +707,11 @@ function PermissionGroup({
   operations: { key: PageOperation; label: string }[];
   granted: Set<string>;
   disabled: boolean;
-  onChange: (pageKey: PageKey, operation: PageOperation, checked: boolean) => void;
+  onChange: (
+    pageKey: PageKey,
+    operation: PageOperation,
+    checked: boolean,
+  ) => void;
   nested?: boolean;
 }) {
   if (operations.length === 0) return null;
@@ -769,7 +779,9 @@ function PermissionOption({
       />
       <span
         className={`flex size-8 shrink-0 items-center justify-center rounded-md ${
-          checked ? "bg-indigo-100 text-indigo-700" : "bg-slate-100 text-slate-500"
+          checked
+            ? "bg-indigo-100 text-indigo-700"
+            : "bg-slate-100 text-slate-500"
         }`}
       >
         <Icon className="size-4" />
