@@ -1011,7 +1011,7 @@ export function EmployeeReportDashboard() {
   ]);
 
   return (
-    <div className="flex flex-col gap-5 [&_thead_th]:border-b [&_thead_th]:border-slate-200 [&_thead_th]:bg-slate-50 [&_thead_th]:py-3 [&_thead_th]:text-[10px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-wide [&_thead_th]:text-slate-500 [&_tbody_td]:py-2.5 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-emerald-50/30 [&_tfoot_tr]:border-t-2 [&_tfoot_tr]:border-slate-300 [&_tfoot_tr]:bg-slate-100 [&_tfoot_tr]:font-semibold [&_tfoot_tr]:text-slate-900">
+    <div data-client-brand className="flex flex-col gap-5 [&_thead_th]:border-b [&_thead_th]:border-slate-200 [&_thead_th]:bg-slate-50 [&_thead_th]:py-3 [&_thead_th]:text-[10px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-wide [&_thead_th]:text-slate-500 [&_tbody_td]:py-2.5 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-emerald-50/30 [&_tfoot_tr]:border-t-2 [&_tfoot_tr]:border-slate-300 [&_tfoot_tr]:bg-slate-100 [&_tfoot_tr]:font-semibold [&_tfoot_tr]:text-slate-900">
       <header className="border-b border-slate-200 pb-5">
         <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-800">
           Production / Finance
@@ -1043,7 +1043,7 @@ export function EmployeeReportDashboard() {
                 onClick={() => changeMode(key)}
                 className={`shrink-0 rounded-md px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
                   mode === key
-                    ? "bg-slate-900 text-white shadow-sm"
+                    ? "bg-indigo-700 text-white shadow-sm hover:bg-indigo-800"
                     : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
                 }`}
               >
@@ -1097,7 +1097,7 @@ export function EmployeeReportDashboard() {
                   title={`View a combined report across every ${modeConfig.label.toLowerCase()}, without picking one`}
                   className={`h-10 rounded-lg border px-3.5 text-[10px] font-semibold uppercase tracking-wider transition-colors whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 ${
                     isAllMode
-                      ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                      ? "border-indigo-700 bg-indigo-700 text-white shadow-sm hover:bg-indigo-800"
                       : "border-slate-200 bg-white text-slate-700 hover:border-emerald-300 hover:bg-emerald-50"
                   }`}
                 >
@@ -1167,7 +1167,7 @@ export function EmployeeReportDashboard() {
                 ? `Enter a ${modeConfig.label.toLowerCase()} to search, or use "All ${modeConfig.label}s" instead`
                 : undefined
             }
-            className="flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto"
+            className="flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-indigo-700 px-5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-indigo-800 disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto"
           >
             <Search className="w-3.5 h-3.5" />
             {isLoading ? "Searching…" : "Search"}
@@ -1626,7 +1626,7 @@ export function EmployeeReportDashboard() {
                       onClick={() => setActiveTab(tab)}
                       className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         effectiveTab === tab
-                          ? "bg-slate-900 text-white shadow-sm"
+                          ? "bg-indigo-700 text-white shadow-sm hover:bg-indigo-800"
                           : "text-slate-600 hover:bg-white hover:text-slate-900"
                       }`}
                     >

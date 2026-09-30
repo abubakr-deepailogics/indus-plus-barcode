@@ -72,7 +72,7 @@ export function OrderWiseReportPage() {
   }, [data]);
 
   return (
-    <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 py-5 md:px-7 md:py-7 [&_thead_th]:border-b [&_thead_th]:border-slate-200 [&_thead_th]:bg-slate-50 [&_thead_th]:py-3 [&_thead_th]:text-[10px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-wide [&_thead_th]:text-slate-500 [&_tbody_td]:py-2.5 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-emerald-50/30 [&_tfoot_tr]:border-t-2 [&_tfoot_tr]:border-slate-300 [&_tfoot_tr]:bg-slate-100 [&_tfoot_tr]:font-semibold [&_tfoot_tr]:text-slate-900">
+    <div data-client-brand className="mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 py-5 md:px-7 md:py-7 [&_thead_th]:border-b [&_thead_th]:border-slate-200 [&_thead_th]:bg-slate-50 [&_thead_th]:py-3 [&_thead_th]:text-[10px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-wide [&_thead_th]:text-slate-500 [&_tbody_td]:py-2.5 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-emerald-50/30 [&_tfoot_tr]:border-t-2 [&_tfoot_tr]:border-slate-300 [&_tfoot_tr]:bg-slate-100 [&_tfoot_tr]:font-semibold [&_tfoot_tr]:text-slate-900">
       <div className="no-print flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
         <div className="flex items-center gap-2">
           <button
@@ -136,7 +136,7 @@ export function OrderWiseReportPage() {
             <button
               type="button"
               onClick={() => window.print()}
-              className="flex h-9 items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 text-xs font-semibold text-white transition-colors hover:bg-slate-700"
+              className="flex h-9 items-center gap-1.5 rounded-lg bg-indigo-700 px-3.5 text-xs font-semibold text-white transition-colors hover:bg-indigo-800"
             >
               <Printer className="w-4 h-4" />
               Print
@@ -188,7 +188,7 @@ export function OrderWiseReportPage() {
           <div className="overflow-x-auto">
             <table className="w-full min-w-[1120px] border-collapse text-left text-[11px]">
               <thead>
-                <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[9.5px] uppercase tracking-wider">
+                <tr className="bg-slate-50 border-b border-slate-200 text-slate-500 font-semibold text-[10px] uppercase tracking-wider">
                   <th className="py-2 px-2 border-r border-slate-200">W/O</th>
                   <th className="py-2 px-2 text-right border-r border-slate-200">
                     Total SAM
@@ -229,7 +229,7 @@ export function OrderWiseReportPage() {
               <tbody className="divide-y divide-slate-100">
                 {data.rows.map((r) => (
                   <tr key={r.workOrder} className="hover:bg-slate-50/60">
-                    <td className="py-1.5 px-2 border-r border-slate-100 font-mono font-bold text-[#4f46e5]">
+                    <td className="py-1.5 px-2 border-r border-slate-100 font-mono font-bold text-indigo-700">
                       {r.workOrder}
                     </td>
                     <td className="py-1.5 px-2 text-right border-r border-slate-100">

@@ -8,6 +8,8 @@ import { ScanModals } from "@/features/coupon-scanning/components/ScanModals";
 import { useConfirmNavigation } from "@/lib/use-confirm-navigation";
 import { useAuth } from "@/features/auth/context/auth-context";
 import { format } from "date-fns";
+import { ScanLine } from "lucide-react";
+import { ModulePageHeader } from "@/components/ModulePageHeader";
 
 export function CouponScanningDashboard() {
   const couponScanning = useCouponScanning();
@@ -49,7 +51,14 @@ export function CouponScanningDashboard() {
 
   return (
     <>
-      <div className="flex flex-col gap-6 w-full text-xs text-[#334155] animate-fade-in pb-16 px-4 max-w-350 mx-auto no-print">
+      <div className="mx-auto no-print flex w-full max-w-[1450px] flex-col gap-6 rounded-[1.75rem] border border-slate-200/80 bg-[radial-gradient(circle_at_top,#f8fafc_0%,#ffffff_38%,#f8fafc_100%)] px-4 pb-16 pt-4 text-xs text-[#334155] shadow-[0_18px_45px_rgba(15,23,42,0.05)] animate-fade-in sm:px-5">
+        <ModulePageHeader
+          eyebrow="Production Floor / Capture"
+          title="Coupon Scanning"
+          detail="Employee production entries and scan totals"
+          icon={ScanLine}
+          accent="indigo"
+        />
         <InformationPanel {...couponScanning} canScan={canScan} />
         <ScanningDetailsTable {...couponScanning} />
         <ScanModals {...couponScanning} />

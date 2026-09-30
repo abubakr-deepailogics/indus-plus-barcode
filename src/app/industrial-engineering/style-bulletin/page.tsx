@@ -25,6 +25,7 @@ import { RequirePermission } from "@/features/auth/components/RequirePermission"
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { DataTableColumnHeader } from "@/components/ui/data-table/column-header";
+import { ModulePageHeader } from "@/components/ModulePageHeader";
 import { QrCode } from "lucide-react";
 import type {
   PageSetupConfig,
@@ -433,7 +434,7 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-right font-semibold text-purple-600">
+          <div className="text-right font-semibold text-slate-700">
             {row.original.Smv_Sam}
           </div>
         ),
@@ -875,12 +876,20 @@ export default function OpenOrderPage() {
       <div className="no-print flex flex-col gap-6 max-w-[1400px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
         {/* Dynamic Metadata Cards Row */}
 
+        <ModulePageHeader
+          eyebrow="Engineering / Operations"
+          title="Style Bulletin"
+          detail="Order operations, production targets and approvals"
+          icon={FileText}
+          accent="indigo"
+        />
+
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 animate-fade-in">
           {/* Left Form Panel: Basic Style Details */}
-          <div className="lg:col-span-3 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-3">
+          <div className="lg:col-span-3 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm flex flex-col gap-3">
             {/* Row 1: W/O # & Customer */}
             <div className="flex flex-col gap-1.5">
-              <label className="font-bold text-[#475569] text-[10px] uppercase">
+              <label className="font-semibold text-slate-500 text-[10px] uppercase tracking-wider">
                 W/O # &amp; Customer
               </label>
               <button
@@ -888,8 +897,8 @@ export default function OpenOrderPage() {
                 onClick={() => setShowWorkOrderModal(true)}
                 className="relative w-full text-left cursor-pointer"
               >
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94a3b8]" />
-                <span className="block w-full pl-9 pr-3 py-1 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 hover:border-[#4f46e5] transition-all truncate">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <span className="block w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 hover:border-indigo-500 transition-all truncate shadow-2xs">
                   {styleBulletinMetadata.amNo
                     ? `${styleBulletinMetadata.amNo}${
                         styleBulletinMetadata.customer
@@ -903,39 +912,39 @@ export default function OpenOrderPage() {
             {/* Row 2: Sale Order No & Order Qty */}
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
-                <label className="font-bold text-[#475569] text-[10px] uppercase">
+                <label className="font-semibold text-slate-500 text-[10px] uppercase tracking-wider">
                   Sale Order No
                 </label>
                 <input
                   type="text"
                   readOnly
                   value={styleBulletinMetadata.styleCode}
-                  className="px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 font-semibold focus:outline-none w-full"
+                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-slate-50 font-semibold text-slate-700 focus:outline-none w-full"
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <label className="font-bold text-[#475569] text-[10px] uppercase">
+                <label className="font-semibold text-slate-500 text-[10px] uppercase tracking-wider">
                   Order Qty
                 </label>
                 <input
                   type="text"
                   readOnly
                   value={styleBulletinMetadata.planQty}
-                  className="px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold w-full"
+                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-slate-50 focus:outline-none font-bold text-indigo-700 w-full"
                 />
               </div>
             </div>
             {/* Row 3: Fabric Code & Wash */}
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
-                <label className="font-bold text-[#475569] text-[10px] uppercase">
+                <label className="font-semibold text-slate-500 text-[10px] uppercase tracking-wider">
                   Fabric Code
                 </label>
                 <input
                   type="text"
                   readOnly
                   value={cutDetails[0]?.Fabric_Code_Main_Body || ""}
-                  className="px-3 py-1 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 focus:outline-none font-semibold w-full"
+                  className="px-3 py-2 rounded-xl border border-slate-200 text-xs bg-slate-50 focus:outline-none font-semibold text-slate-700 w-full"
                 />
               </div>
               <div className="flex flex-col gap-1.5">

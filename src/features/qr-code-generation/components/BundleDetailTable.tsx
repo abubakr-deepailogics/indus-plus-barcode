@@ -22,12 +22,12 @@ interface BundleDetailTableProps {
 
 export function BundleDetailTable({
   bundles,
-  reworkQtyBundle,
+  reworkQtyBundle: _reworkQtyBundle,
   subTotal,
   total,
   onBundleSelChange,
   onAllBundlesSelChange,
-  onReworkQtyBundleChange,
+  onReworkQtyBundleChange: _onReworkQtyBundleChange,
   onCutNoChange,
 }: BundleDetailTableProps) {
   const [isCutWise, setIsCutWise] = useState(false);
@@ -63,12 +63,12 @@ export function BundleDetailTable({
   }
 
   return (
-    <div className="lg:col-span-6 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
-      <div className="flex items-center justify-between border-b border-[#f1f5f9] pb-2">
-        <h3 className="text-sm font-extrabold text-[#4f46e5]">Cutting Detail</h3>
+    <div className="lg:col-span-6 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm flex flex-col gap-4">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+        <h3 className="text-sm font-extrabold text-indigo-700">Cutting Detail</h3>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-bold text-[#64748b]">
+            <span className="text-[11px] font-bold text-slate-500">
               Complete selection
             </span>
             <input
@@ -76,11 +76,11 @@ export function BundleDetailTable({
               onChange={(e) => {
                 onAllBundlesSelChange(e.target.checked);
               }}
-              className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
+              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer w-3.5 h-3.5"
             />
           </div>
           <div className="relative flex items-center gap-1.5" ref={cutDropdownRef}>
-            <span className="text-[11px] font-bold text-[#64748b]">
+            <span className="text-[11px] font-bold text-slate-500">
               Cut Wise selection
             </span>
             <input
@@ -90,18 +90,18 @@ export function BundleDetailTable({
                 setIsCutWise(e.target.checked);
                 if (e.target.checked) setIsSizeWise(false);
               }}
-              className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
+              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer w-3.5 h-3.5"
             />
             <button
               type="button"
               onClick={() => setOpenDropdown((prev) => (prev === "cut" ? null : "cut"))}
-              className="text-[#64748b] hover:text-[#4f46e5] cursor-pointer"
+              className="text-slate-500 hover:text-indigo-700 cursor-pointer"
               aria-label="Select bundles by Cut #"
             >
               <ChevronDown className="w-3 h-3" />
             </button>
             {openDropdown === "cut" && (
-              <div className="absolute right-0 top-full mt-1 min-w-[130px] max-h-56 overflow-y-auto bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 p-1.5 flex flex-col gap-0.5">
+              <div className="absolute right-0 top-full mt-1 min-w-[130px] max-h-56 overflow-y-auto bg-white border border-slate-200/80 rounded-xl shadow-xl z-50 p-1.5 flex flex-col gap-0.5">
                 {uniqueCuts.length === 0 ? (
                   <span className="px-2.5 py-1.5 text-[11px] text-slate-400">No cuts</span>
                 ) : (
@@ -117,7 +117,7 @@ export function BundleDetailTable({
                           type="checkbox"
                           checked={checked}
                           onChange={(e) => toggleGroupSelection(matching, e.target.checked)}
-                          className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer w-3.5 h-3.5"
                         />
                         <span>Cut {cutNo}</span>
                       </label>
@@ -128,7 +128,7 @@ export function BundleDetailTable({
             )}
           </div>
           <div className="relative flex items-center gap-1.5" ref={sizeDropdownRef}>
-            <span className="text-[11px] font-bold text-[#64748b]">
+            <span className="text-[11px] font-bold text-slate-500">
               Size Wise selection
             </span>
             <input
@@ -138,18 +138,18 @@ export function BundleDetailTable({
                 setIsSizeWise(e.target.checked);
                 if (e.target.checked) setIsCutWise(false);
               }}
-              className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
+              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer w-3.5 h-3.5"
             />
             <button
               type="button"
               onClick={() => setOpenDropdown((prev) => (prev === "size" ? null : "size"))}
-              className="text-[#64748b] hover:text-[#4f46e5] cursor-pointer"
+              className="text-slate-500 hover:text-indigo-700 cursor-pointer"
               aria-label="Select bundles by Size #"
             >
               <ChevronDown className="w-3 h-3" />
             </button>
             {openDropdown === "size" && (
-              <div className="absolute right-0 top-full mt-1 min-w-[130px] max-h-56 overflow-y-auto bg-white border border-[#e2e8f0] rounded-xl shadow-xl z-50 p-1.5 flex flex-col gap-0.5">
+              <div className="absolute right-0 top-full mt-1 min-w-[130px] max-h-56 overflow-y-auto bg-white border border-slate-200/80 rounded-xl shadow-xl z-50 p-1.5 flex flex-col gap-0.5">
                 {uniqueSizes.length === 0 ? (
                   <span className="px-2.5 py-1.5 text-[11px] text-slate-400">No sizes</span>
                 ) : (
@@ -165,7 +165,7 @@ export function BundleDetailTable({
                           type="checkbox"
                           checked={checked}
                           onChange={(e) => toggleGroupSelection(matching, e.target.checked)}
-                          className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
+                          className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer w-3.5 h-3.5"
                         />
                         <span>Size {size}</span>
                       </label>
@@ -178,44 +178,44 @@ export function BundleDetailTable({
         </div>
       </div>
 
-      <div className="overflow-auto max-h-[420px] border border-[#f1f5f9] rounded-xl">
+      <div className="overflow-auto max-h-[420px] border border-slate-200/80 rounded-xl">
         <table className="w-full text-left border-collapse min-w-[500px]">
           <thead>
-            <tr className="border-b border-[#e2e8f0]">
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+            <tr className="border-b border-slate-200 bg-slate-50/80">
+              <th className="py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center sticky top-0 z-10 bg-slate-50">
                 Cut #
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+              <th className="py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center sticky top-0 z-10 bg-slate-50">
                 Char
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+              <th className="py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center sticky top-0 z-10 bg-slate-50">
                 Bundle #
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+              <th className="py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center sticky top-0 z-10 bg-slate-50">
                 Inseam
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+              <th className="py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center sticky top-0 z-10 bg-slate-50">
                 Size #
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+              <th className="py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center sticky top-0 z-10 bg-slate-50">
                 Pcs
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+              <th className="py-2.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center sticky top-0 z-10 bg-slate-50">
                 Sel
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#f1f5f9]">
+          <tbody className="divide-y divide-slate-100">
             {bundles.map((bd) => (
-              <tr key={bd.id} className="hover:bg-[#f8fafc] border-b border-[#f1f5f9] transition-colors text-[11px] font-semibold text-slate-700">
-                <td className="py-2.5 text-center text-[#4f46e5] font-bold">
+              <tr key={bd.id} className="hover:bg-slate-50/60 border-b border-slate-100 transition-colors text-[11px] font-semibold text-slate-700">
+                <td className="py-2.5 text-center text-indigo-700 font-bold">
                   {onCutNoChange ? (
                     <input
                       type="text"
                       value={bd.cutNo}
                       onChange={(e) => onCutNoChange(bd.id, e.target.value)}
                       placeholder="Cut #"
-                      className="w-16 px-1.5 py-1 rounded-lg border border-[#e2e8f0] bg-white text-center text-[11px] font-bold text-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
+                      className="w-16 px-1.5 py-1 rounded-lg border border-slate-200 bg-white text-center text-[11px] font-bold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                     />
                   ) : (
                     bd.cutNo
@@ -224,10 +224,10 @@ export function BundleDetailTable({
                 <td className="py-2.5 text-center text-slate-500 font-bold uppercase">
                   {bd.char}
                 </td>
-                <td className="py-2.5 text-center text-purple-600 font-bold font-mono">
+                <td className="py-2.5 text-center text-indigo-900 font-bold font-mono">
                   {bundleDisplayNos.get(bd.id) ?? bd.bundleNo}
                 </td>
-                <td className="py-2.5 text-center text-[#64748b] font-medium">
+                <td className="py-2.5 text-center text-slate-500 font-medium">
                   {bd.inseam}
                 </td>
                 <td className="py-2.5 text-center text-slate-700 font-semibold">
@@ -256,7 +256,7 @@ export function BundleDetailTable({
                         onBundleSelChange(bd.id, isChecked);
                       }
                     }}
-                    className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer w-3.5 h-3.5"
                   />
                 </td>
               </tr>
@@ -265,23 +265,23 @@ export function BundleDetailTable({
         </table>
       </div>
 
-      <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-[#f1f5f9] items-end">
+      <div className="flex flex-col gap-2 mt-4 pt-4 border-t border-slate-100 items-end">
         <div className="flex items-center gap-3">
-          <span className="font-bold text-[#64748b]">Sub Total</span>
+          <span className="font-bold text-slate-500 text-xs">Sub Total</span>
           <input
             type="text"
             value={subTotal}
             readOnly
-            className="w-36 px-3 py-2 border border-[#e2e8f0] rounded-xl bg-[#f8fafc] text-xs font-bold text-right"
+            className="w-36 px-3 py-2 border border-slate-200 rounded-xl bg-slate-50 text-xs font-bold text-right text-slate-800"
           />
         </div>
         <div className="flex items-center gap-3">
-          <span className="font-bold text-[#64748b]">Total</span>
+          <span className="font-bold text-slate-500 text-xs">Total</span>
           <input
             type="text"
             value={total}
             readOnly
-            className="w-36 px-3 py-2 border border-[#e2e8f0] rounded-xl bg-[#f8fafc] text-xs font-bold text-right text-indigo-700 bg-indigo-50/20 border-indigo-100"
+            className="w-36 px-3 py-2 border border-slate-200 rounded-xl bg-white text-xs font-bold text-right text-slate-800"
           />
         </div>
       </div>

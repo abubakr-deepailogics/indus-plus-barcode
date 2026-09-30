@@ -20,6 +20,7 @@ import {
 import { ColumnDef } from "@tanstack/react-table";
 import { DataTable } from "@/components/ui/data-table/data-table";
 import { DataTableColumnHeader } from "@/components/ui/data-table/column-header";
+import { ModulePageHeader } from "@/components/ModulePageHeader";
 import type {
   PageSetupConfig,
   QrCodeStyleData,
@@ -945,13 +946,20 @@ export default function OpenOrderPage() {
 
   return (
     <RequirePermission pageKey="cut-report">
-      <div className="no-print flex flex-col gap-6 max-w-[1400px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
+      <div className="no-print mx-auto flex w-full max-w-[1500px] flex-col gap-5 text-xs text-slate-700 animate-fade-in pb-16">
+        <ModulePageHeader
+          eyebrow="Production / Cutting"
+          title="Cut Report"
+          detail="Work-order specifications and bundle output"
+          icon={Database}
+          accent="indigo"
+        />
         {/* Dynamic Metadata Cards Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-fade-in">
+        <div className="grid grid-cols-1 gap-4 animate-fade-in md:grid-cols-3">
           {/* Card 1: Order Info */}
-          <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
+          <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
             <div>
-              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">
+              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
                 Work Order
               </span>
               <button
@@ -959,8 +967,8 @@ export default function OpenOrderPage() {
                 onClick={() => setShowWorkOrderModal(true)}
                 className="relative mt-1.5 w-full text-left cursor-pointer"
               >
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94a3b8]" />
-                <span className="block w-full pl-9 pr-3 py-1 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 hover:border-[#4f46e5] transition-all truncate">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+                <span className="block w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 hover:border-indigo-500 transition-all truncate shadow-2xs">
                   {cutDetails[0]?.Work_Order ||
                     activeSearchQuery ||
                     "Search W/O..."}
@@ -968,66 +976,66 @@ export default function OpenOrderPage() {
               </button>
             </div>
             <div>
-              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">
+              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
                 Sale Order No
               </span>
               <input
                 type="text"
                 readOnly
                 value={cutDetails[0]?.Sale_Order_No || ""}
-                className="mt-1.5 w-full px-3 py-1 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
+                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:outline-none"
               />
             </div>
           </div>
 
           {/* Card 2: Customer & Qty */}
-          <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
+          <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
             <div>
-              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">
+              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
                 Customer
               </span>
               <input
                 type="text"
                 readOnly
                 value={cutDetails[0]?.Customer_Name || ""}
-                className="mt-1.5 w-full px-3 py-1 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
+                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:outline-none"
               />
             </div>
             <div>
-              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">
+              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
                 Order Qty
               </span>
               <input
                 type="text"
                 readOnly
                 value={cutDetails[0]?.Order_Qty_After_Add || ""}
-                className="mt-1.5 w-full px-3 py-1 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
+                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-indigo-700 focus:outline-none"
               />
             </div>
           </div>
 
           {/* Card 3: Specifications */}
-          <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
+          <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
             <div>
-              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">
+              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
                 Fabric Code
               </span>
               <input
                 type="text"
                 readOnly
                 value={cutDetails[0]?.Fabric_Code_Main_Body || ""}
-                className="mt-1.5 w-full px-3 py-1 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
+                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:outline-none"
               />
             </div>
             <div>
-              <span className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider block">
+              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
                 Wash
               </span>
               <input
                 type="text"
                 readOnly
                 value={cutDetails[0]?.Wash || ""}
-                className="mt-1.5 w-full px-3 py-1 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
+                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:outline-none"
               />
             </div>
           </div>
@@ -1035,7 +1043,7 @@ export default function OpenOrderPage() {
 
         {/* Main Results / Table Block */}
         {errorMsg ? (
-          <div className="bg-red-50 border border-red-200 text-red-800 rounded-2xl p-5 flex items-start gap-3 animate-fade-in">
+          <div className="flex items-start gap-3 rounded-lg border border-rose-200 border-l-4 border-l-rose-500 bg-rose-50 p-5 text-rose-900 animate-fade-in">
             <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
             <div>
               <h4 className="font-bold text-sm">Database Error</h4>
@@ -1045,8 +1053,8 @@ export default function OpenOrderPage() {
         ) : isSkeletonActive ? (
           <TableSkeleton columnsCount={15} />
         ) : !hasSearched ? (
-          <div className="bg-white border border-[#e2e8f0] rounded-2xl p-12 text-center flex flex-col items-center justify-center gap-4 shadow-sm animate-fade-in">
-            <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner">
+          <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-slate-300 bg-white p-12 text-center shadow-sm animate-fade-in">
+            <div className="flex size-12 items-center justify-center rounded-lg bg-blue-50 text-blue-700">
               <Database className="w-6 h-6" />
             </div>
             <div className="max-w-md">
@@ -1064,8 +1072,8 @@ export default function OpenOrderPage() {
             </div>
           </div>
         ) : activeRecordsCount === 0 ? (
-          <div className="bg-white border border-[#e2e8f0] rounded-2xl p-12 text-center flex flex-col items-center justify-center gap-4 shadow-sm animate-fade-in">
-            <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center shadow-inner">
+          <div className="flex flex-col items-center justify-center gap-4 rounded-lg border border-dashed border-slate-300 bg-white p-12 text-center shadow-sm animate-fade-in">
+            <div className="flex size-12 items-center justify-center rounded-lg bg-amber-50 text-amber-700">
               <Info className="w-6 h-6" />
             </div>
             <div className="max-w-md">

@@ -36,6 +36,7 @@ import { DEFAULT_MARGINS } from "@/features/qr-code-generation/types";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { useAuth } from "@/features/auth/context/auth-context";
 import { RequirePermission } from "@/features/auth/components/RequirePermission";
+import { ModulePageHeader } from "@/components/ModulePageHeader";
 
 interface CouponRow {
   Id: string | null;
@@ -599,16 +600,23 @@ export default function CouponTracingPage() {
 
   return (
     <RequirePermission pageKey="coupon-tracing">
-    <div className="flex flex-col gap-6 max-w-[1100px] mx-auto text-xs text-[#334155] animate-fade-in pb-16">
-      <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm">
+    <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-5 text-xs text-slate-700 animate-fade-in pb-16">
+      <ModulePageHeader
+        eyebrow="Production Records / Lookup"
+        title="Coupon Tracing"
+        detail="Work-order history, scan status and coupon actions"
+        icon={Search}
+        accent="indigo"
+      />
+      <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm md:p-5">
         <div className="flex items-stretch gap-3">
           <button
             type="button"
             onClick={() => setShowWorkOrderModal(true)}
             className="relative flex-grow text-left cursor-pointer"
           >
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#94a3b8]" />
-            <span className="block w-full pl-9 pr-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-[#f8fafc] text-xs font-semibold text-slate-800 hover:border-[#4f46e5] transition-all truncate">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
+            <span className="block w-full truncate rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-xs font-semibold text-slate-800 transition-colors hover:border-indigo-500">
               {tracedWorkOrder || "Search Work Order..."}
             </span>
           </button>
@@ -626,22 +634,22 @@ export default function CouponTracingPage() {
           a work order with thousands of coupons never loads them all at
           once. */}
       {tracedWorkOrder && (
-        <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden">
-          <div className="border-b border-[#e2e8f0] px-5 py-4 bg-[#fafafa] flex items-center justify-between">
-            <h3 className="text-sm font-bold text-[#0f172a]">
+        <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-4 py-3.5 md:px-5">
+            <h3 className="text-sm font-semibold text-slate-900">
               Coupons for {tracedWorkOrder}
             </h3>
             <div className="flex items-center gap-3">
-              <span className="text-[11px] font-semibold text-[#64748b]">
+              <span className="text-[11px] font-semibold text-slate-500">
                 {couponTotal.toLocaleString()} total
               </span>
               <button
                 onClick={() => setShowCodeTypeModal(true)}
                 disabled={couponTotal === 0}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs transition-all ${
+                className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl font-semibold text-xs transition-all ${
                   couponTotal === 0
                     ? "bg-slate-100 text-slate-400 cursor-not-allowed"
-                    : "bg-[#4f46e5] text-white hover:bg-[#4338ca] shadow-sm"
+                    : "bg-slate-900 text-white hover:bg-slate-800 shadow-xs"
                 }`}
               >
                 <Download className="w-3.5 h-3.5" />
@@ -655,16 +663,16 @@ export default function CouponTracingPage() {
                 type="button"
                 onClick={openFiltersModal}
                 title="Show coupon filters"
-                className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs border transition-all ${
+                className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold text-xs border transition-all ${
                   activeFilterCount > 0
-                    ? "bg-indigo-50 text-[#4f46e5] border-indigo-100 hover:bg-indigo-100"
-                    : "bg-white text-slate-700 border-[#e2e8f0] hover:bg-slate-50"
+                    ? "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                 }`}
               >
                 <SlidersHorizontal className="w-3.5 h-3.5" />
                 Filter
                 {activeFilterCount > 0 && (
-                  <span className="ml-0.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-[#4f46e5] px-1 text-[9px] font-black text-white">
+                  <span className="ml-0.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-indigo-600 px-1 text-[9px] font-black text-white">
                     {activeFilterCount}
                   </span>
                 )}
@@ -677,7 +685,7 @@ export default function CouponTracingPage() {
                       ? "Unscan or delete the selected coupons"
                       : "Unscan or delete coupons matching the active filters"
                   }
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-bold text-xs bg-amber-50 text-amber-700 hover:bg-amber-100 border border-amber-100 transition-all"
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold text-xs bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 transition-all"
                 >
                   <Eraser className="w-3.5 h-3.5" />
                   Unscan / Delete
@@ -692,9 +700,9 @@ export default function CouponTracingPage() {
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
-              <thead className="bg-[#f8fafc] border-b border-[#e2e8f0]">
+              <thead className="bg-slate-50/80 border-b border-slate-200">
                 <tr>
-                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center w-8">
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center w-8">
                     <input
                       type="checkbox"
                       checked={
@@ -703,37 +711,37 @@ export default function CouponTracingPage() {
                       }
                       onChange={toggleSelectAllOnPage}
                       aria-label="Select all coupons on this page"
-                      className="w-3.5 h-3.5 rounded border-slate-300 accent-[#4f46e5] cursor-pointer"
+                      className="w-3.5 h-3.5 rounded border-slate-300 accent-indigo-600 cursor-pointer"
                     />
                   </th>
-                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center whitespace-nowrap">
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">
                     Cut No
                   </th>
-                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center whitespace-nowrap">
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">
                     Bundle No
                   </th>
-                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left">
                     Section
                   </th>
-                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left">
                     Operation Name
                   </th>
-                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left whitespace-nowrap">
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left whitespace-nowrap">
                     Emp Code
                   </th>
-                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left">
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left">
                     Emp Name
                   </th>
-                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center">
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center">
                     Scanned
                   </th>
-                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left w-28 min-w-[100px] max-w-[120px]">
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left w-28 min-w-[100px] max-w-[120px]">
                     Scan By
                   </th>
-                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left whitespace-nowrap">
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left whitespace-nowrap">
                     Scan Date
                   </th>
-                  <th className="px-3 py-3 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-left whitespace-nowrap">
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left whitespace-nowrap">
                     Created At
                   </th>
                 </tr>
@@ -743,7 +751,7 @@ export default function CouponTracingPage() {
                   <tr>
                     <td
                       colSpan={11}
-                      className="px-4 py-6 text-center text-[#94a3b8]"
+                      className="px-4 py-6 text-center text-slate-400 font-semibold"
                     >
                       Loading…
                     </td>
@@ -752,7 +760,7 @@ export default function CouponTracingPage() {
                   <tr>
                     <td
                       colSpan={11}
-                      className="px-4 py-6 text-center text-[#94a3b8]"
+                      className="px-4 py-6 text-center text-slate-400 font-semibold"
                     >
                       No coupons match
                       {fromBundleFilter ||
@@ -770,7 +778,7 @@ export default function CouponTracingPage() {
                   coupons.map((c) => (
                     <tr
                       key={c.CouponCode}
-                      className="border-b border-[#f1f5f9] last:border-0 hover:bg-[#f8fafc] transition-colors"
+                      className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
                     >
                       <td className="px-3 py-2.5 text-center">
                         <input
@@ -778,25 +786,25 @@ export default function CouponTracingPage() {
                           checked={selectedCoupons.has(c.CouponCode)}
                           onChange={() => toggleCouponSelection(c.CouponCode)}
                           aria-label={`Select coupon ${c.CouponCode}`}
-                          className="w-3.5 h-3.5 rounded border-slate-300 accent-[#4f46e5] cursor-pointer"
+                          className="w-3.5 h-3.5 rounded border-slate-300 accent-indigo-600 cursor-pointer"
                         />
                       </td>
-                      <td className="px-3 py-2.5 text-[#334155] text-center font-bold text-indigo-600 whitespace-nowrap">
+                      <td className="px-3 py-2.5 text-slate-800 text-center font-bold text-indigo-700 whitespace-nowrap">
                         {c.CutNo || "—"}
                       </td>
-                      <td className="px-3 py-2.5 text-[#334155] text-center font-mono whitespace-nowrap">
+                      <td className="px-3 py-2.5 text-slate-800 text-center font-mono whitespace-nowrap">
                         {c.BundleNo}
                       </td>
-                      <td className="px-3 py-2.5 text-[#334155] text-left">
+                      <td className="px-3 py-2.5 text-slate-800 text-left">
                         {c.Section || "—"}
                       </td>
-                      <td className="px-3 py-2.5 text-[#334155] text-left font-medium">
+                      <td className="px-3 py-2.5 text-slate-800 text-left font-medium">
                         {c.OpName || c.OpNo}
                       </td>
-                      <td className="px-3 py-2.5 text-[#334155] text-left font-mono whitespace-nowrap">
+                      <td className="px-3 py-2.5 text-slate-800 text-left font-mono whitespace-nowrap">
                         {c.EmployeeCode || "—"}
                       </td>
-                      <td className="px-3 py-2.5 text-[#334155] text-left font-medium">
+                      <td className="px-3 py-2.5 text-slate-800 text-left font-medium">
                         {c.EmployeeName || "—"}
                       </td>
                       <td className="px-3 py-2.5 text-center">
@@ -817,17 +825,17 @@ export default function CouponTracingPage() {
                         )}
                       </td>
                       <td
-                        className="px-3 py-2.5 text-[#334155] text-left font-medium w-28 min-w-[100px] max-w-[120px] break-all leading-tight text-[11px]"
+                        className="px-3 py-2.5 text-slate-800 text-left font-medium w-28 min-w-[100px] max-w-[120px] break-all leading-tight text-[11px]"
                         title={c.ScanBy || undefined}
                       >
                         {c.ScanBy || "—"}
                       </td>
-                      <td className="px-3 py-2.5 text-[#334155] text-left whitespace-nowrap">
+                      <td className="px-3 py-2.5 text-slate-800 text-left whitespace-nowrap">
                         {c.ScannedAt
                           ? format(new Date(c.ScannedAt), "dd/MM/yyyy")
                           : "—"}
                       </td>
-                      <td className="px-3 py-2.5 text-[#334155] text-left whitespace-nowrap">
+                      <td className="px-3 py-2.5 text-slate-800 text-left whitespace-nowrap">
                         {format(new Date(c.InsertedAt), "dd/MM/yyyy")}
                       </td>
                     </tr>
@@ -837,15 +845,15 @@ export default function CouponTracingPage() {
             </table>
           </div>
           {couponTotal > 0 && (
-            <div className="flex items-center justify-between px-5 py-3 border-t border-[#e2e8f0] bg-[#fafafa]">
-              <span className="text-[11px] font-semibold text-[#64748b]">
+            <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 bg-slate-50/70">
+              <span className="text-[11px] font-semibold text-slate-500">
                 Page {couponPage} of {couponPageCount}
               </span>
               <div className="flex items-center gap-2">
                 <button
                   onClick={() => goToCouponPage(couponPage - 1)}
                   disabled={couponPage <= 1 || couponsLoading}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-[#475569] font-bold text-xs hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" />
                   Prev
@@ -853,7 +861,7 @@ export default function CouponTracingPage() {
                 <button
                   onClick={() => goToCouponPage(couponPage + 1)}
                   disabled={couponPage >= couponPageCount || couponsLoading}
-                  className="flex items-center gap-1 px-3 py-1.5 rounded-lg border border-[#e2e8f0] text-[#475569] font-bold text-xs hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
                 >
                   Next
                   <ChevronRight className="w-3.5 h-3.5" />
@@ -865,15 +873,15 @@ export default function CouponTracingPage() {
       )}
 
       {showFilters && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#0f172a]/45 p-4 backdrop-blur-sm animate-fade-in">
-          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-[#e2e8f0] bg-white shadow-2xl animate-scale-up">
-            <div className="flex items-start justify-between gap-4 border-b border-[#e2e8f0] bg-[#f8fafc] px-5 py-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm animate-fade-in">
+          <div className="w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-2xl animate-scale-up">
+            <div className="flex items-start justify-between gap-4 border-b border-slate-200 bg-slate-50/80 px-5 py-4">
               <div className="flex items-start gap-3">
-                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-[#4f46e5]">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm">
                   <SlidersHorizontal className="h-5 w-5" />
                 </div>
                 <div>
-                  <h3 className="text-sm font-black text-[#0f172a]">
+                  <h3 className="text-sm font-semibold text-slate-950">
                     Coupon Filters
                   </h3>
                   <p className="mt-1 text-[11px] font-semibold text-slate-500">
@@ -885,7 +893,7 @@ export default function CouponTracingPage() {
               <button
                 type="button"
                 onClick={() => setShowFilters(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#e2e8f0] bg-white text-slate-500 transition-all hover:bg-slate-50 hover:text-slate-800"
+                className="flex h-8 w-8 items-center justify-center rounded-xl border border-slate-200 bg-white text-slate-500 transition-all hover:bg-slate-50 hover:text-slate-800"
                 aria-label="Close filters"
               >
                 <X className="h-4 w-4" />
@@ -893,9 +901,9 @@ export default function CouponTracingPage() {
             </div>
 
             <div className="max-h-[70vh] overflow-y-auto px-5 py-5">
-              <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-indigo-100 bg-indigo-50/70 px-4 py-3">
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
                 <div>
-                  <div className="text-[10px] font-black uppercase tracking-wider text-[#4f46e5]">
+                  <div className="text-[10px] font-black uppercase tracking-wider text-slate-500">
                     Active Scope
                   </div>
                   <div className="mt-0.5 text-[11px] font-semibold text-slate-600">

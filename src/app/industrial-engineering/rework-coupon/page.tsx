@@ -17,6 +17,7 @@ import {
   type WorkOrderSearchRow,
 } from "@/components/work-order-search-modal";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
+import { ModulePageHeader } from "@/components/ModulePageHeader";
 
 interface CutDetailRow {
   RowId: number;
@@ -546,23 +547,22 @@ export default function ReworkCouponPage() {
   return (
     <RequirePermission pageKey="rework-coupon">
       <div className="no-print flex flex-col gap-6 max-w-[1450px] mx-auto text-xs text-[#334155] animate-fade-in pb-16 px-4">
-        {/* Top Breadcrumb */}
-        <div className="flex items-center justify-between border-b border-[#e2e8f0] pb-3">
-          <div className="flex items-center gap-2 text-xs font-semibold text-[#64748b]">
-            <span>Industrial Engineering</span>
-            <span className="text-[#94a3b8] font-light">/</span>
-            <span className="text-[#4f46e5] font-bold">Rework Coupon</span>
-          </div>
-        </div>
+        <ModulePageHeader
+          eyebrow="Production / Rework"
+          title="Rework Coupon"
+          detail="Rework quantities, cutting entries and operation setup"
+          icon={Barcode}
+          accent="indigo"
+        />
 
         {/* 1. Barcode / Style Information */}
-        <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-xs">
-          <h2 className="text-sm font-bold text-[#4f46e5] mb-4">
+        <div className="bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm">
+          <h2 className="text-sm font-semibold text-slate-900 mb-4">
             Style Information
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 items-stretch">
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-bold text-slate-500">
+              <span className="text-[11px] font-semibold text-slate-500">
                 W/O # & Customer
               </span>
               <input
@@ -575,36 +575,36 @@ export default function ReworkCouponPage() {
                 }
                 placeholder="Select from Lookup..."
                 onClick={() => setIsOpenLookup(true)}
-                className="px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none cursor-pointer"
+                className="px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none cursor-pointer hover:border-indigo-400"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-bold text-slate-500">
+              <span className="text-[11px] font-semibold text-slate-500">
                 Order Qty
               </span>
               <input
                 type="text"
                 readOnly
                 value={orderQty || ""}
-                className="px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
+                className="px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-indigo-700 focus:outline-none"
               />
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <span className="text-[11px] font-bold text-slate-500">
+              <span className="text-[11px] font-semibold text-slate-500">
                 Total SAM
               </span>
               <input
                 type="text"
                 readOnly
                 value={totalSam !== 0 ? totalSam.toFixed(2) : ""}
-                className="px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-slate-50 text-xs font-semibold text-slate-800 focus:outline-none"
+                className="px-3 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:outline-none"
               />
             </div>
 
             <div className="flex flex-col gap-1.5 items-center justify-center border-t md:border-t-0 md:border-l border-slate-100 pl-0 md:pl-4 pt-4 md:pt-0">
-              <span className="text-[11px] font-bold text-slate-600 mb-1">
+              <span className="text-[11px] font-semibold text-slate-600 mb-1">
                 Re-Work Qty
               </span>
               <input
@@ -617,14 +617,14 @@ export default function ReworkCouponPage() {
                 }
                 onWheel={(e) => e.currentTarget.blur()}
                 placeholder="e.g. 10"
-                className={`w-24 text-center px-3 py-3 rounded-xl border bg-white text-base font-extrabold text-indigo-600 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 transition-all ${
+                className={`w-24 text-center px-3 py-2.5 rounded-xl border bg-white text-base font-extrabold text-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all ${
                   reworkQtyExceedsOrder
-                    ? "border-red-300 focus:border-red-400"
-                    : "border-[#e2e8f0] focus:border-[#4f46e5]"
+                    ? "border-rose-300 focus:border-rose-400"
+                    : "border-slate-200 focus:border-indigo-500"
                 }`}
               />
               {reworkQtyExceedsOrder && (
-                <span className="text-[10px] text-red-500 font-semibold text-center mt-0.5">
+                <span className="text-[10px] text-rose-600 font-semibold text-center mt-0.5">
                   Cannot exceed Order Qty ({orderQty})
                 </span>
               )}
@@ -634,12 +634,12 @@ export default function ReworkCouponPage() {
                   onClick={() => handleGenerateAndSave()}
                   disabled={!activeStyle || isBusy || !hasCouponsGenerated || !can("rework-coupon", "create")}
                   title={!can("rework-coupon", "create") ? "You don't have permission to generate coupons." : undefined}
-                  className="w-full flex items-center justify-center gap-2 bg-[#4f46e5] hover:bg-[#4338ca] disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl font-bold transition-all shadow-md cursor-pointer text-xs"
+                  className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl font-semibold transition-all shadow-sm cursor-pointer text-xs"
                 >
                   {isSaving ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
-                    <Barcode className="w-3.5 h-3.5" />
+                    <Barcode className="w-3.5 h-3.5 text-emerald-400" />
                   )}
                   <span>{isSaving ? "Generating…" : "Generate Coupon(s)"}</span>
                 </button>
@@ -647,7 +647,7 @@ export default function ReworkCouponPage() {
                   type="button"
                   onClick={handlePrintClick}
                   disabled={!activeStyle || isBusy || !hasCouponsGenerated}
-                  className="w-full flex items-center justify-center gap-2 bg-white border border-[#4f46e5] text-[#4f46e5] hover:bg-indigo-50/80 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 rounded-xl font-bold transition-all text-xs cursor-pointer"
+                  className="w-full flex items-center justify-center gap-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2.5 rounded-xl font-semibold transition-all text-xs cursor-pointer shadow-2xs"
                 >
                   {generatingPdf ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -667,7 +667,7 @@ export default function ReworkCouponPage() {
             </div>
           </div>
           {errorMsg && (
-            <p className="mt-3 text-[11px] text-red-500 font-semibold">
+            <p className="mt-3 text-[11px] text-rose-600 font-semibold">
               {errorMsg}
             </p>
           )}

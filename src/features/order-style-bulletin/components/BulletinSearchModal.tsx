@@ -75,8 +75,8 @@ export function BulletinSearchModal({
                 <tr
                   key={style.styleCode}
                   onClick={() => onSelectIndex(allStyles.indexOf(style))}
-                  className={`hover:bg-indigo-50/30 cursor-pointer transition-colors ${
-                    selectedIndex === allStyles.indexOf(style) ? "bg-indigo-50/50" : ""
+                  className={`hover:bg-slate-50 cursor-pointer transition-colors ${
+                    selectedIndex === allStyles.indexOf(style) ? "bg-slate-100 font-semibold" : ""
                   }`}
                 >
                   <td className="px-4 py-3 flex items-center gap-2.5 text-xs font-semibold text-[#334155]">

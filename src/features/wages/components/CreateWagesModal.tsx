@@ -194,7 +194,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated }: P
           <div className="flex flex-col gap-1.5">
             <label
               htmlFor="wage-title"
-              className="text-[10px] font-bold uppercase text-[#475569]"
+              className="text-[10px] font-bold uppercase text-slate-500"
             >
               Wage Title
             </label>
@@ -204,13 +204,13 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated }: P
               onChange={(e) => setTitle(e.target.value)}
               maxLength={200}
               placeholder="e.g. September 2026 — 1st Half"
-              className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs font-semibold text-slate-800 placeholder-slate-400 bg-white focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all"
+              className="w-full px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-800 placeholder-slate-400 bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
             />
           </div>
 
           {/* Tenure */}
           <div className="flex flex-col gap-1.5">
-            <span className="text-[10px] font-bold uppercase text-[#475569]">
+            <span className="text-[10px] font-bold uppercase text-slate-500">
               Tenure
             </span>
             <div className="flex flex-wrap gap-1.5">
@@ -219,7 +219,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated }: P
                   key={p.label}
                   type="button"
                   onClick={() => pickRange(p.range())}
-                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-[#4f46e5] bg-indigo-50 hover:bg-indigo-100 transition-colors cursor-pointer"
+                  className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 transition-colors cursor-pointer"
                 >
                   {p.label}
                 </button>
@@ -286,7 +286,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated }: P
 
           {!previewing && preview && !preview.overlap && preview.couponCount > 0 && (
             <div className="flex gap-2 p-3 rounded-xl bg-indigo-50 border border-indigo-200">
-              <Lock className="w-4 h-4 text-[#4f46e5] shrink-0 mt-0.5" />
+              <Lock className="w-4 h-4 text-indigo-700 shrink-0 mt-0.5" />
               <div className="text-xs font-semibold text-slate-700 leading-relaxed">
                 <p>
                   This tenure has{" "}
@@ -305,7 +305,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated }: P
                   </strong>
                   .
                 </p>
-                <p className="mt-1 text-[#4f46e5]">
+                <p className="mt-1 text-indigo-700">
                   Scanning will be locked for these dates. Do you want to proceed?
                 </p>
               </div>

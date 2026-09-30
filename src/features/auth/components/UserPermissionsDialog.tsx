@@ -333,13 +333,14 @@ export function UserPermissionsDialog({
       }}
     >
       <DialogContent
+        data-client-brand
         showCloseButton={false}
         className="flex h-[88dvh] max-h-[780px] min-h-[500px] w-full max-w-[calc(100%-1.5rem)] flex-col gap-0 overflow-hidden border border-slate-200 bg-white p-0 shadow-2xl sm:max-w-[1080px]"
       >
         <DialogHeader className="shrink-0 border-b border-slate-200 px-5 py-4 sm:px-7">
           <div className="flex items-start justify-between gap-4 pr-8 sm:items-center">
             <div className="flex min-w-0 items-center gap-3">
-              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-indigo-50 text-indigo-700 ring-1 ring-indigo-100">
+              <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm">
                 <ShieldCheck className="size-5" />
               </div>
               <div className="min-w-0">
