@@ -123,7 +123,7 @@ export function OperatorWiseReportPage() {
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 px-4 py-4 md:px-5">
           <div className="flex min-w-0 items-center gap-3">
-            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-800">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white shadow-sm">
               <Users className="size-4" />
             </span>
             <h1 className="text-sm font-semibold text-slate-900 md:text-base">

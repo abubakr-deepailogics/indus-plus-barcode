@@ -1026,7 +1026,7 @@ export function EmployeeReportDashboard() {
       <div className="no-print overflow-visible rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 px-4 py-3.5 md:px-5">
           <div className="flex items-center gap-2">
-            <span className="flex size-8 items-center justify-center rounded-md bg-emerald-100 text-emerald-800">
+            <span className="flex size-8 items-center justify-center rounded-lg bg-slate-900 text-white shadow-sm">
               <UserRound className="size-4" />
             </span>
             <h2 className="text-sm font-semibold text-slate-900">
