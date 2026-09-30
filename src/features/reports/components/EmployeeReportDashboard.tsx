@@ -1011,28 +1011,39 @@ export function EmployeeReportDashboard() {
   ]);
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-5 [&_thead_th]:border-b [&_thead_th]:border-slate-200 [&_thead_th]:bg-slate-50 [&_thead_th]:py-3 [&_thead_th]:text-[10px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-wide [&_thead_th]:text-slate-500 [&_tbody_td]:py-2.5 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-emerald-50/30 [&_tfoot_tr]:border-t-2 [&_tfoot_tr]:border-slate-300 [&_tfoot_tr]:bg-slate-100 [&_tfoot_tr]:font-semibold [&_tfoot_tr]:text-slate-900">
+      <header className="border-b border-slate-200 pb-5">
+        <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-emerald-800">
+          Production / Finance
+        </p>
+        <h1 className="mt-1 text-2xl font-semibold text-slate-950">Reports</h1>
+        <p className="mt-1 text-sm text-slate-500">
+          Explore production output and earnings by employee, order, operation, or section.
+        </p>
+      </header>
       {/* Search Bar */}
-      <div className="bg-white border border-[#e2e8f0] rounded-2xl p-4 shadow-sm no-print">
-        <div className="flex items-center justify-between mb-3 border-b border-slate-100 pb-2 flex-wrap gap-2">
+      <div className="no-print overflow-visible rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 px-4 py-3.5 md:px-5">
           <div className="flex items-center gap-2">
-            <UserRound className="w-4 h-4 text-[#4f46e5]" />
-            <h2 className="font-bold text-[#4f46e5] text-xs uppercase tracking-wider">
+            <span className="flex size-8 items-center justify-center rounded-md bg-emerald-100 text-emerald-800">
+              <UserRound className="size-4" />
+            </span>
+            <h2 className="text-sm font-semibold text-slate-900">
               Search Report
             </h2>
           </div>
 
           {/* Search-by mode toggle */}
-          <div className="flex items-center gap-1 bg-slate-100 rounded-xl p-1">
+          <div className="flex max-w-full items-center gap-1 overflow-x-auto rounded-lg border border-slate-200 bg-white p-1">
             {(Object.keys(MODE_CONFIG) as ReportSearchMode[]).map((key) => (
               <button
                 key={key}
                 type="button"
                 onClick={() => changeMode(key)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer ${
+                className={`shrink-0 rounded-md px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider transition-colors ${
                   mode === key
-                    ? "bg-white text-[#4f46e5] shadow-sm"
-                    : "text-slate-500 hover:text-slate-700"
+                    ? "bg-slate-900 text-white shadow-sm"
+                    : "text-slate-500 hover:bg-slate-50 hover:text-slate-800"
                 }`}
               >
                 {MODE_CONFIG[key].label}
@@ -1041,10 +1052,10 @@ export function EmployeeReportDashboard() {
           </div>
         </div>
 
-        <div className="flex flex-col lg:flex-row lg:items-end gap-4">
+        <div className="flex flex-col gap-4 p-4 lg:flex-row lg:items-end md:p-5">
           {/* Search field + its "or All X" alternative, grouped as one unit */}
           <div className="flex flex-col gap-1 flex-1 min-w-0">
-            <span className="font-bold text-[#475569] text-[10px] uppercase">
+            <span className="text-[11px] font-semibold text-slate-700">
               {modeConfig.fieldLabel} <span className="text-red-500">*</span>
             </span>
             <div className="flex flex-col sm:flex-row sm:items-stretch gap-2">
@@ -1069,13 +1080,13 @@ export function EmployeeReportDashboard() {
                   )}
                   getSuggestionValue={(item) => item.value}
                   placeholder={modeConfig.placeholder}
-                  inputClassName="w-full h-9 px-3.5 rounded-xl border border-[#e2e8f0] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                  inputClassName="h-10 w-full rounded-lg border border-slate-200 bg-white px-3.5 text-sm font-medium text-slate-800 placeholder-slate-400 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                   onKeyDown={handleKeyDown}
                   minChars={1}
                 />
               </div>
               <div className="flex items-center gap-2 shrink-0">
-                <span className="text-[10px] font-bold text-slate-300 uppercase tracking-wider">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">
                   or
                 </span>
                 <button
@@ -1083,10 +1094,10 @@ export function EmployeeReportDashboard() {
                   onClick={() => searchAll()}
                   disabled={isLoading}
                   title={`View a combined report across every ${modeConfig.label.toLowerCase()}, without picking one`}
-                  className={`h-9 px-3.5 rounded-xl border text-[10px] font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed ${
+                  className={`h-10 rounded-lg border px-3.5 text-[10px] font-semibold uppercase tracking-wider transition-colors whitespace-nowrap disabled:cursor-not-allowed disabled:opacity-50 ${
                     isAllMode
-                      ? "bg-[#4f46e5] border-[#4f46e5] text-white shadow-sm"
-                      : "bg-indigo-50/60 border-indigo-200 text-[#4f46e5] hover:bg-indigo-100 hover:border-indigo-300"
+                      ? "border-slate-900 bg-slate-900 text-white shadow-sm"
+                      : "border-slate-200 bg-white text-slate-700 hover:border-emerald-300 hover:bg-emerald-50"
                   }`}
                 >
                   All {modeConfig.label}s
@@ -1096,15 +1107,15 @@ export function EmployeeReportDashboard() {
           </div>
 
           {/* Divider — only visible once the row has room to sit side by side */}
-          <div className="hidden lg:block w-px self-stretch bg-slate-200" />
+          <div className="hidden w-px self-stretch bg-slate-200 lg:block" />
 
           {/* Tenure / date range */}
           <div className="flex flex-col gap-1 w-full lg:w-64 shrink-0">
-            <span className="font-bold text-[#475569] text-[10px] uppercase">
+            <span className="text-[11px] font-semibold text-slate-700">
               Tenure / Scope
             </span>
             <Popover actionsRef={rangePopoverActionsRef}>
-              <PopoverTrigger className="w-full h-9 flex items-center gap-2 px-3.5 rounded-xl border border-[#e2e8f0] text-xs font-semibold text-slate-800 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white cursor-pointer">
+              <PopoverTrigger className="flex h-10 w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100">
                 <CalendarIcon className="w-4 h-4 text-slate-400 shrink-0" />
                 <span className="truncate">{formatRangeLabel(dateRange)}</span>
               </PopoverTrigger>
@@ -1119,7 +1130,7 @@ export function EmployeeReportDashboard() {
                           applyDateRange(preset.range());
                           rangePopoverActionsRef.current?.close();
                         }}
-                        className="px-2.5 py-1 rounded-lg text-[10px] font-bold text-[#4f46e5] bg-indigo-50 hover:bg-indigo-100 transition-colors cursor-pointer"
+                        className="rounded-md bg-emerald-50 px-2.5 py-1 text-[10px] font-semibold text-emerald-800 transition-colors hover:bg-emerald-100"
                       >
                         {preset.label}
                       </button>
@@ -1155,7 +1166,7 @@ export function EmployeeReportDashboard() {
                 ? `Enter a ${modeConfig.label.toLowerCase()} to search, or use "All ${modeConfig.label}s" instead`
                 : undefined
             }
-            className="flex items-center justify-center gap-2 h-9 px-5 rounded-xl bg-[#4f46e5] text-white text-xs font-bold hover:bg-[#4338ca] disabled:opacity-50 disabled:cursor-not-allowed transition-all cursor-pointer shadow-sm shrink-0 w-full lg:w-auto"
+            className="flex h-10 w-full shrink-0 items-center justify-center gap-2 rounded-lg bg-slate-900 px-5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-700 disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto"
           >
             <Search className="w-3.5 h-3.5" />
             {isLoading ? "Searching…" : "Search"}
@@ -1163,30 +1174,32 @@ export function EmployeeReportDashboard() {
         </div>
 
         {error && (
-          <p className="mt-3 text-xs font-semibold text-red-600">{error}</p>
+          <p role="alert" className="mx-4 mb-4 mt-0 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-800 md:mx-5">
+            {error}
+          </p>
         )}
       </div>
 
       {/* Loading skeleton — shown while a search/searchAll request is in flight */}
       {isLoading && (
-        <div className="flex flex-col gap-6 no-print animate-pulse">
+        <div className="no-print flex animate-pulse flex-col gap-5">
           {SHOW_SUMMARY_BANNER && (
             <>
-              <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-24" />
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
-                <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-40" />
-                <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-40" />
-                <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-40" />
+              <div className="h-24 rounded-lg border border-slate-200 bg-white p-5" />
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div className="h-40 rounded-lg border border-slate-200 bg-white p-5" />
+                <div className="h-40 rounded-lg border border-slate-200 bg-white p-5" />
+                <div className="h-40 rounded-lg border border-slate-200 bg-white p-5" />
               </div>
             </>
           )}
-          <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 h-72" />
+          <div className="h-72 rounded-lg border border-slate-200 bg-white p-5" />
         </div>
       )}
 
       {/* Idle empty state — nothing searched yet, no error, not loading */}
       {!isLoading && !summary && !error && (
-        <div className="flex flex-col items-center justify-center gap-2.5 bg-white border border-dashed border-[#e2e8f0] rounded-2xl py-16 no-print text-center">
+        <div className="no-print flex flex-col items-center justify-center gap-2.5 rounded-lg border border-dashed border-slate-300 bg-white py-16 text-center">
           <Search className="w-8 h-8 text-slate-300" />
           <p className="text-sm font-bold text-slate-500">
             Search for an employee, work order, operation, or section to view
@@ -1200,19 +1213,19 @@ export function EmployeeReportDashboard() {
 
       {SHOW_SUMMARY_BANNER && !isLoading && summary && card2 && (
         <>
-          <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4 no-print">
+          <div className="no-print flex flex-col justify-between gap-4 rounded-lg border border-slate-200 bg-white p-5 shadow-sm sm:flex-row sm:items-center">
             {/* Left: Icon/Avatar + Details */}
             <div className="flex items-center gap-3.5">
               {summary.subject.mode === "employee" && !summary.subject.all ? (
-                <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#4f46e5] to-[#6366f1] text-white font-black text-lg flex items-center justify-center shadow-md shadow-indigo-100 shrink-0">
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-lg font-bold text-white shadow-sm">
                   {getInitials(summary.subject.employee.FirstName)}
                 </div>
               ) : summary.subject.all ? (
-                <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#4f46e5] to-[#6366f1] text-white flex items-center justify-center shadow-md shadow-indigo-100 shrink-0">
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white shadow-sm">
                   <Users className="w-6 h-6" />
                 </div>
               ) : (
-                <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-[#4f46e5] to-[#6366f1] text-white flex items-center justify-center shadow-md shadow-indigo-100 shrink-0">
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-lg bg-slate-900 text-white shadow-sm">
                   {summary.subject.mode === "workOrder" ? (
                     <ClipboardList className="w-6 h-6" />
                   ) : summary.subject.mode === "section" ? (
@@ -1227,7 +1240,7 @@ export function EmployeeReportDashboard() {
                   {summary.subject.mode === "employee" &&
                     !summary.subject.all && (
                       <>
-                        <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
+                        <h1 className="text-xl font-semibold text-slate-950">
                           {summary.subject.employee.FirstName?.trim() ||
                             "Unknown Employee"}
                         </h1>
@@ -1238,14 +1251,14 @@ export function EmployeeReportDashboard() {
                     )}
                   {summary.subject.mode === "employee" &&
                     summary.subject.all && (
-                      <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
+                      <h1 className="text-xl font-semibold text-slate-950">
                         All Employees
                       </h1>
                     )}
                   {summary.subject.mode === "workOrder" &&
                     !summary.subject.all && (
                       <>
-                        <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight font-mono">
+                        <h1 className="font-mono text-xl font-semibold text-slate-950">
                           Work Order #{summary.subject.workOrder}
                         </h1>
                         {summary.subject.saleOrderNo && (
@@ -1257,14 +1270,14 @@ export function EmployeeReportDashboard() {
                     )}
                   {summary.subject.mode === "workOrder" &&
                     summary.subject.all && (
-                      <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
+                      <h1 className="text-xl font-semibold text-slate-950">
                         All Work Orders
                       </h1>
                     )}
                   {summary.subject.mode === "operation" &&
                     !summary.subject.all && (
                       <>
-                        <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
+                        <h1 className="text-xl font-semibold text-slate-950">
                           {summary.subject.operationName ||
                             summary.subject.operationCode}
                         </h1>
@@ -1275,14 +1288,14 @@ export function EmployeeReportDashboard() {
                     )}
                   {summary.subject.mode === "operation" &&
                     summary.subject.all && (
-                      <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
+                      <h1 className="text-xl font-semibold text-slate-950">
                         All Operations
                       </h1>
                     )}
                   {summary.subject.mode === "section" &&
                     !summary.subject.all && (
                       <>
-                        <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
+                        <h1 className="text-xl font-semibold text-slate-950">
                           {summary.subject.section}
                         </h1>
                         <span className="px-2.5 py-0.5 rounded-lg bg-indigo-50 text-[#4f46e5] font-black text-xs border border-indigo-100/80 font-mono">
@@ -1295,7 +1308,7 @@ export function EmployeeReportDashboard() {
                     )}
                   {summary.subject.mode === "section" &&
                     summary.subject.all && (
-                      <h1 className="text-xl font-extrabold text-[#0f172a] tracking-tight">
+                      <h1 className="text-xl font-semibold text-slate-950">
                         All Sections
                       </h1>
                     )}
@@ -1424,9 +1437,9 @@ export function EmployeeReportDashboard() {
           </div>
 
           {/* 3-Card Summary Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 no-print">
+          <div className="no-print grid grid-cols-1 gap-4 md:grid-cols-3">
             {/* Card 1: Coupons Scanned */}
-            <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+            <div className="flex flex-col justify-between rounded-lg border border-slate-200 border-t-2 border-t-teal-500 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
@@ -1477,7 +1490,7 @@ export function EmployeeReportDashboard() {
             </div>
 
             {/* Card 2: Coverage (dynamic per search mode) */}
-            <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+            <div className="flex flex-col justify-between rounded-lg border border-slate-200 border-t-2 border-t-cyan-600 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
@@ -1525,7 +1538,7 @@ export function EmployeeReportDashboard() {
             </div>
 
             {/* Card 3: Total Amount */}
-            <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm hover:shadow-md transition-all flex flex-col justify-between">
+            <div className="flex flex-col justify-between rounded-lg border border-slate-200 border-t-2 border-t-emerald-600 bg-white p-5 shadow-sm transition-shadow hover:shadow-md">
               <div>
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2.5">
@@ -1588,9 +1601,9 @@ export function EmployeeReportDashboard() {
       {!isLoading && summary && card2 && (
         <>
           {/* Deep-Dive Detailed Breakdown Section */}
-          <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden flex flex-col no-print">
+          <div className="no-print flex flex-col overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
             {/* Tab Header Navigation */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-200 px-4 pt-3 pb-0 gap-3 bg-slate-50/50">
+            <div className="flex flex-col justify-between gap-3 border-b border-slate-200 bg-slate-50/70 px-4 pt-3 sm:flex-row sm:items-center">
               <div className="flex items-center gap-2 overflow-x-auto min-w-0 pb-2 sm:pb-0">
                 {availableTabs.map((tab) => {
                   const meta =
@@ -1609,8 +1622,8 @@ export function EmployeeReportDashboard() {
                       onClick={() => setActiveTab(tab)}
                       className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer ${
                         effectiveTab === tab
-                          ? "bg-[#4f46e5] text-white shadow-sm"
-                          : "text-slate-600 hover:bg-slate-100"
+                          ? "bg-slate-900 text-white shadow-sm"
+                            : "text-slate-600 hover:bg-white hover:text-slate-900"
                       }`}
                     >
                       <Icon className="w-3.5 h-3.5" />

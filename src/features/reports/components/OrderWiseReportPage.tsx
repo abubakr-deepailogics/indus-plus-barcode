@@ -72,13 +72,13 @@ export function OrderWiseReportPage() {
   }, [data]);
 
   return (
-    <div className="flex flex-col gap-4 p-4 md:p-6 max-w-[1400px] mx-auto w-full">
-      <div className="flex items-center justify-between flex-wrap gap-2 no-print">
+    <div className="mx-auto flex w-full max-w-[1500px] flex-col gap-5 px-4 py-5 md:px-7 md:py-7 [&_thead_th]:border-b [&_thead_th]:border-slate-200 [&_thead_th]:bg-slate-50 [&_thead_th]:py-3 [&_thead_th]:text-[10px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-wide [&_thead_th]:text-slate-500 [&_tbody_td]:py-2.5 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-emerald-50/30 [&_tfoot_tr]:border-t-2 [&_tfoot_tr]:border-slate-300 [&_tfoot_tr]:bg-slate-100 [&_tfoot_tr]:font-semibold [&_tfoot_tr]:text-slate-900">
+      <div className="no-print flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 pb-4">
         <div className="flex items-center gap-2">
           <button
             type="button"
             onClick={() => router.back()}
-            className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-xs font-bold text-slate-600 bg-white border border-[#e2e8f0] hover:bg-slate-50 transition-all cursor-pointer"
+            className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-600 transition-colors hover:border-slate-300 hover:bg-slate-50"
           >
             <ArrowLeft className="w-4 h-4" />
             Back
@@ -86,7 +86,7 @@ export function OrderWiseReportPage() {
           <select
             value={cycleStart}
             onChange={(e) => setCycleStart(e.target.value)}
-            className="h-9 px-3 rounded-xl text-xs font-bold text-slate-700 bg-white border border-[#e2e8f0] hover:bg-slate-50 transition-all cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
+            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200"
             title="Pay-cycle month"
           >
             {cycleOptions.map((opt) => (
@@ -100,7 +100,7 @@ export function OrderWiseReportPage() {
           <div className="flex items-center gap-2">
             <CsvExportButton
               label="Export"
-              className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-white border border-[#e2e8f0] text-slate-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200 transition-all cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-700 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
               filename={`order-wise-report-${format(new Date(), "yyyyMMdd-HHmm")}`}
               headers={[
                 "W/O",
@@ -136,7 +136,7 @@ export function OrderWiseReportPage() {
             <button
               type="button"
               onClick={() => window.print()}
-              className="flex items-center gap-1.5 h-9 px-3.5 rounded-xl text-xs font-bold uppercase tracking-wider bg-[#4f46e5] text-white hover:bg-indigo-700 transition-all cursor-pointer"
+              className="flex h-9 items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 text-xs font-semibold text-white transition-colors hover:bg-slate-700"
             >
               <Printer className="w-4 h-4" />
               Print
@@ -145,43 +145,45 @@ export function OrderWiseReportPage() {
         )}
       </div>
 
-      <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden">
-        <div className="flex items-center justify-between px-4 py-3 border-b border-slate-100 bg-slate-50/50 flex-wrap gap-2">
-          <div className="flex items-center gap-2">
-            <ClipboardList className="w-4 h-4 text-[#4f46e5]" />
-            <h1 className="font-bold text-[#4f46e5] text-sm uppercase tracking-wider">
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 px-4 py-4 md:px-5">
+          <div className="flex min-w-0 items-center gap-3">
+            <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-emerald-100 text-emerald-800">
+              <ClipboardList className="size-4" />
+            </span>
+            <h1 className="text-sm font-semibold text-slate-900 md:text-base">
               Order Wise Report (Sewing Department)
             </h1>
           </div>
           {data && (
-            <span className="text-[11px] font-semibold text-slate-500">
+            <span className="rounded-md border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium tabular-nums text-slate-600">
               {data.period.from} → {data.period.to}
             </span>
           )}
         </div>
 
         {loading && (
-          <div className="flex items-center justify-center gap-2 py-16 text-sm font-semibold text-slate-500">
+          <div className="flex min-h-56 items-center justify-center gap-2 text-sm font-medium text-slate-500">
             <Loader2 className="w-5 h-5 animate-spin" />
             Loading order-wise report…
           </div>
         )}
 
         {error && (
-          <div className="mx-4 my-3 p-3 rounded-xl border border-rose-200 bg-rose-50 text-sm font-semibold text-rose-800">
+          <div role="alert" className="mx-4 my-3 rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-800">
             {error}
           </div>
         )}
 
         {data && !loading && data.rows.length === 0 && (
-          <div className="py-16 text-center text-sm font-semibold text-slate-400">
+          <div className="flex min-h-56 items-center justify-center px-5 text-center text-sm font-medium text-slate-500">
             No Sewing coupons scanned in this pay-cycle month.
           </div>
         )}
 
         {data && data.rows.length > 0 && (
-          <div className="overflow-x-auto p-4">
-            <table className="w-full text-left text-[11px] border-collapse">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1120px] border-collapse text-left text-[11px]">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[9.5px] uppercase tracking-wider">
                   <th className="py-2 px-2 border-r border-slate-200">W/O</th>
