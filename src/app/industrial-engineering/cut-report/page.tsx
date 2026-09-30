@@ -124,12 +124,12 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-center font-semibold text-slate-900">
+          <span className="font-semibold text-slate-900">
             {row.original.RowId}
-          </div>
+          </span>
         ),
         footer: ({ table }) => (
-          <div className="text-center text-slate-800">
+          <div className="text-slate-800">
             Total: {table.getFilteredRowModel().rows.length}
           </div>
         ),
@@ -189,14 +189,14 @@ export default function OpenOrderPage() {
           />
         ),
         cell: ({ row }) => (
-          <div className="text-center font-bold">{row.original.Bundle_Qty}</div>
+          <span className="font-bold">{row.original.Bundle_Qty}</span>
         ),
         footer: ({ table }) => {
           const total = table.getFilteredRowModel().rows.reduce((sum, row) => {
             return sum + (row.original.Bundle_Qty ?? 0);
           }, 0);
           return (
-            <div className="text-center text-slate-800">Total: {total}</div>
+            <div className="text-slate-800">Total: {total}</div>
           );
         },
         size: 90,

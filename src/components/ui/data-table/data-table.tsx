@@ -278,11 +278,19 @@ export function DataTable<TData, TValue>({
               {table.getHeaderGroups().map((headerGroup) => (
                 <tr key={headerGroup.id} className="border-b border-[#e2e8f0]">
                   {headerGroup.headers.map((header) => {
-                    const hasBorderRight = (header.column.columnDef.meta as any)?.borderRight;
+                    const meta = header.column.columnDef.meta as any;
+                    const hasBorderRight = meta?.borderRight;
+                    const align = meta?.align || "left";
+                    const alignClass =
+                      align === "center"
+                        ? "text-center"
+                        : align === "right"
+                        ? "text-right"
+                        : "text-left";
                     return (
                       <th
                         key={header.id}
-                        className={`px-4 py-1.5 h-auto font-bold text-[#64748b] bg-[#f8fafc] sticky top-0 z-10 border-b border-[#e2e8f0] shadow-[0_1px_0_0_#e2e8f0] text-left align-middle whitespace-normal break-words relative group/header ${
+                        className={`px-4 py-1.5 h-auto font-bold text-[#64748b] bg-[#f8fafc] sticky top-0 z-10 border-b border-[#e2e8f0] shadow-[0_1px_0_0_#e2e8f0] ${alignClass} align-middle whitespace-normal break-words relative group/header ${
                           hasBorderRight ? "border-r-3 border-r-[#e2e8f0]" : ""
                         }`}
                         style={{ width: header.column.getSize() }}
@@ -315,11 +323,19 @@ export function DataTable<TData, TValue>({
                     className="hover:bg-slate-50 transition-colors border-b border-[#f1f5f9]"
                   >
                     {row.getVisibleCells().map((cell) => {
-                      const hasBorderRight = (cell.column.columnDef.meta as any)?.borderRight;
+                      const meta = cell.column.columnDef.meta as any;
+                      const hasBorderRight = meta?.borderRight;
+                      const align = meta?.align || "left";
+                      const alignClass =
+                        align === "center"
+                          ? "text-center"
+                          : align === "right"
+                          ? "text-right"
+                          : "text-left";
                       return (
                         <td 
                           key={cell.id} 
-                          className={`px-4 py-1 align-middle whitespace-nowrap overflow-hidden text-ellipsis ${
+                          className={`px-4 py-1 align-middle whitespace-nowrap overflow-hidden text-ellipsis ${alignClass} ${
                             hasBorderRight ? "border-r-3 border-r-[#e2e8f0]" : ""
                           }`}
                           style={{ width: cell.column.getSize() }}
@@ -346,11 +362,19 @@ export function DataTable<TData, TValue>({
                 {table.getFooterGroups().map((footerGroup) => (
                   <tr key={footerGroup.id}>
                     {footerGroup.headers.map((header) => {
-                      const hasBorderRight = (header.column.columnDef.meta as any)?.borderRight;
+                      const meta = header.column.columnDef.meta as any;
+                      const hasBorderRight = meta?.borderRight;
+                      const align = meta?.align || "left";
+                      const alignClass =
+                        align === "center"
+                          ? "text-center"
+                          : align === "right"
+                          ? "text-right"
+                          : "text-left";
                       return (
                         <td
                           key={header.id}
-                          className={`px-4 py-1.5 align-middle whitespace-nowrap bg-[#f8fafc] ${
+                          className={`px-4 py-1.5 align-middle whitespace-nowrap bg-[#f8fafc] ${alignClass} ${
                             hasBorderRight ? "border-r-3 border-r-[#e2e8f0]" : ""
                           }`}
                           style={{ width: header.column.getSize() }}
