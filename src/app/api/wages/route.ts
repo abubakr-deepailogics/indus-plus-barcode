@@ -21,6 +21,11 @@ export async function GET(request: Request) {
   const title = searchParams.get("title") || "";
   const from = searchParams.get("from") || "";
   const to = searchParams.get("to") || "";
+  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
+
+  if (!isCouponDepartment(department)) {
+    return Response.json({ error: "Invalid department." }, { status: 400 });
+  }
 
   try {
     const pool = await getPool("pitSystem");
@@ -36,11 +41,12 @@ export async function GET(request: Request) {
         pool
           .request()
           .input("wageId", sql.Int, wageId)
+          .input("department", sql.NVarChar, department)
           .query(`
             SELECT WageId, Title, FromDate, ToDate, TotalCoupons AS TotalRows,
                    TotalQty, TotalAmount, CreatedBy, CreatedAt
             FROM dbo.EmployeeWages
-            WHERE WageId = @wageId
+            WHERE WageId = @wageId AND Department = @department
           `),
         pool
           .request()
@@ -67,7 +73,8 @@ export async function GET(request: Request) {
 
     // Build header conditions
     const req = pool.request();
-    const conditions: string[] = [];
+    const conditions: string[] = ["Department = @department"];
+    req.input("department", sql.NVarChar, department);
 
     if (employeeCode.trim()) {
       req.input("empCode", sql.NVarChar, employeeCode.trim());
@@ -314,6 +321,11 @@ export async function POST(request: Request) {
 export async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
   const wageIdStr = searchParams.get("wageId") || "";
+  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
+
+  if (!isCouponDepartment(department)) {
+    return Response.json({ error: "Invalid department." }, { status: 400 });
+  }
 
   if (!wageIdStr) {
     return Response.json(
@@ -334,12 +346,13 @@ export async function DELETE(request: Request) {
     const result = await pool
       .request()
       .input("wageId", sql.Int, wageId)
+      .input("department", sql.NVarChar, department)
       .query(`
         UPDATE dbo.QrCode_Coupon
         SET WageId = NULL
-        WHERE WageId = @wageId;
+        WHERE WageId = @wageId AND Department = @department;
 
-        DELETE FROM dbo.EmployeeWages WHERE WageId = @wageId;
+        DELETE FROM dbo.EmployeeWages WHERE WageId = @wageId AND Department = @department;
         SELECT @@ROWCOUNT AS Deleted;
       `);
 

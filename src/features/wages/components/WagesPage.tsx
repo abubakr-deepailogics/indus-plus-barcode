@@ -17,6 +17,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { useAuth } from "@/features/auth/context/auth-context";
+import { useDepartment } from "@/lib/department-context";
 import { CreateWagesModal } from "./CreateWagesModal";
 import {
   deleteWages,
@@ -78,6 +79,7 @@ function currentPayCycleStart(): Date {
 
 export function WagesPage() {
   const { user } = useAuth();
+  const { department } = useDepartment();
   const [title, setTitle] = useState("");
   // Default tenure, before the user edits anything: the current pay cycle
   // (24th of last/this month → today) — same window Order Wise/Operator
@@ -132,6 +134,7 @@ export function WagesPage() {
         title: trimmedTitle || undefined,
         from: searchFrom || undefined,
         to: searchTo || undefined,
+        department,
       });
       if (!res.ok) {
         setMsg({ type: "error", message: res.error });
@@ -141,7 +144,7 @@ export function WagesPage() {
       }
       setLoading(false);
     },
-    [title, from, to],
+    [title, from, to, department],
   );
 
   // The picker only applies to a filtered search that's still ambiguous
@@ -168,7 +171,7 @@ export function WagesPage() {
       if (isDeleting) return;
       setIsDeleting(wageId);
       setMsg(null);
-      const res = await deleteWages({ wageId });
+      const res = await deleteWages({ wageId, department });
       if (!res.ok) {
         setMsg({ type: "error", message: res.error });
       } else {
@@ -177,7 +180,7 @@ export function WagesPage() {
       }
       setIsDeleting(null);
     },
-    [isDeleting],
+    [isDeleting, department],
   );
 
   return (
@@ -221,7 +224,7 @@ export function WagesPage() {
                 setTitle(picked);
                 void runSearch();
               }}
-              fetchSuggestions={fetchWageTitleSuggestions}
+              fetchSuggestions={(query) => fetchWageTitleSuggestions(query, department)}
               renderSuggestion={(t) => <span>{t}</span>}
               getSuggestionValue={(t) => t}
               minChars={0}
@@ -276,6 +279,7 @@ export function WagesPage() {
           open={createOpen}
           onOpenChange={setCreateOpen}
           createdBy={user?.email ?? null}
+          department={department}
           onCreated={() => {
             setMsg({ type: "success", message: "Wages created successfully." });
             void runSearch();

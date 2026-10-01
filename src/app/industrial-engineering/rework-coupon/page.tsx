@@ -18,6 +18,7 @@ import {
 } from "@/components/work-order-search-modal";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { ModulePageHeader } from "@/components/ModulePageHeader";
+import { useDepartment } from "@/lib/department-context";
 
 interface CutDetailRow {
   RowId: number;
@@ -65,6 +66,7 @@ const cellInputClassName =
 
 export default function ReworkCouponPage() {
   const { user, can } = useAuth();
+  const { department } = useDepartment();
 
   // Modal states
   const [isOpenLookup, setIsOpenLookup] = useState(false);
@@ -139,12 +141,13 @@ export default function ReworkCouponPage() {
       if (filters.workOrder) params.set("work_order", filters.workOrder);
       if (filters.customer) params.set("customer", filters.customer);
       if (filters.saleOrderNo) params.set("sale_order_no", filters.saleOrderNo);
+      params.set("department", department);
       const res = await fetch(
         `/api/open-order/work-orders?${params.toString()}`,
       );
       return res.ok ? res.json() : [];
     },
-    [],
+    [department],
   );
 
   async function loadWorkOrder(wo: string) {
@@ -156,7 +159,7 @@ export default function ReworkCouponPage() {
     setGlobalWorkOrder(trimmedWo);
     try {
       const response = await fetch(
-        `/api/open-order?work_order=${encodeURIComponent(trimmedWo)}&t=${Date.now()}`,
+        `/api/open-order?work_order=${encodeURIComponent(trimmedWo)}&department=${encodeURIComponent(department)}&t=${Date.now()}`,
       );
       if (!response.ok) {
         const errData = await response.json();
@@ -182,7 +185,7 @@ export default function ReworkCouponPage() {
       // actually have generated (non-rework) coupons on record — not
       // every operation in the style bulletin.
       const countRes = await fetch(
-        `/api/qr-code-generation/pdf?work_order=${encodeURIComponent(trimmedWo)}`,
+        `/api/qr-code-generation/pdf?work_order=${encodeURIComponent(trimmedWo)}&department=${encodeURIComponent(department)}`,
       );
       let generatedOpCodes: string[] | null = null;
       if (countRes.ok) {
@@ -487,6 +490,7 @@ export default function ReworkCouponPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workOrder,
+          department,
           saleOrderNo,
           customerName,
           reworkQty: Number(reworkQty),
@@ -632,8 +636,17 @@ export default function ReworkCouponPage() {
                 <button
                   type="button"
                   onClick={() => handleGenerateAndSave()}
-                  disabled={!activeStyle || isBusy || !hasCouponsGenerated || !can("rework-coupon", "create")}
-                  title={!can("rework-coupon", "create") ? "You don't have permission to generate coupons." : undefined}
+                  disabled={
+                    !activeStyle ||
+                    isBusy ||
+                    !hasCouponsGenerated ||
+                    !can("rework-coupon", "create")
+                  }
+                  title={
+                    !can("rework-coupon", "create")
+                      ? "You don't have permission to generate coupons."
+                      : undefined
+                  }
                   className="w-full flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed text-white px-4 py-2.5 rounded-xl font-semibold transition-all shadow-sm cursor-pointer text-xs"
                 >
                   {isSaving ? (

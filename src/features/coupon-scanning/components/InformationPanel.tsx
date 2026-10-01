@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useRef, useEffect } from "react";
+import { useDepartment } from "@/lib/department-context";
 import { Calendar as CalendarIcon, Cpu } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import {
@@ -66,6 +67,7 @@ function isValidSelectedDate(date: Date, lockedRanges: LockedRange[] = []): bool
 }
 
 export function InformationPanel(props: Facade) {
+  const { department: activeDepartment } = useDepartment();
   const {
     employeeCode,
     setEmployeeCode,
@@ -120,13 +122,13 @@ export function InformationPanel(props: Facade) {
   const [lockedRanges, setLockedRanges] = useState<LockedRange[]>([]);
   useEffect(() => {
     let cancelled = false;
-    void fetchLockedWageRanges().then((ranges) => {
+    void fetchLockedWageRanges(activeDepartment).then((ranges) => {
       if (!cancelled) setLockedRanges(ranges);
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [activeDepartment]);
 
   if (dated !== prevDated) {
     setPrevDated(dated);

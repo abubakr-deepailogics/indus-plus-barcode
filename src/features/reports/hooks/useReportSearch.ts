@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useState } from "react";
+import { useDepartment } from "@/lib/department-context";
 import {
   fetchAllReportSummary,
   fetchReportSummary,
@@ -23,6 +24,7 @@ export function currentPayCycleStart(): Date {
 }
 
 export function useReportSearch() {
+  const { department } = useDepartment();
   const [mode, setMode] = useState<ReportSearchMode>("employee");
   const [searchValue, setSearchValue] = useState("");
   // Defaults to the current pay-cycle month rather than all-time, so the
@@ -64,7 +66,7 @@ export function useReportSearch() {
       setIsLoading(true);
       setError(null);
       try {
-        const result = await fetchReportSummary(activeMode, value, range);
+        const result = await fetchReportSummary(activeMode, value, range, department);
         if (!result.ok) {
           setSummary(null);
           setError(result.error);
@@ -78,7 +80,7 @@ export function useReportSearch() {
         setIsLoading(false);
       }
     },
-    [mode, searchValue, dateRange],
+    [mode, searchValue, dateRange, department],
   );
 
   // Same flow as `search`, but aggregates every employee/work order/
@@ -92,7 +94,7 @@ export function useReportSearch() {
       setIsLoading(true);
       setError(null);
       try {
-        const result = await fetchAllReportSummary(mode, range);
+        const result = await fetchAllReportSummary(mode, range, department);
         if (!result.ok) {
           setSummary(null);
           setError(result.error);
@@ -106,7 +108,7 @@ export function useReportSearch() {
         setIsLoading(false);
       }
     },
-    [mode, dateRange],
+    [mode, dateRange, department],
   );
 
   // Switching what's being searched by (employee/work order/operation)

@@ -8,6 +8,7 @@ import {
   findWageLockForDate,
   wageLockMessage,
 } from "@/features/wages/services/wage-lock.service";
+import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +30,7 @@ export async function GET(request: Request) {
   const op = searchParams.get("op") || "";
   const fromCut = searchParams.get("fromCut") || "";
   const toCut = searchParams.get("toCut") || "";
+  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
 
   const employeeCode = searchParams.get("employeeCode") || "";
   const scanBy = searchParams.get("scanBy") || "";
@@ -42,6 +44,7 @@ export async function GET(request: Request) {
       { status: 400 },
     );
   }
+  if (!isCouponDepartment(department)) return Response.json({ error: "Invalid department." }, { status: 400 });
 
   try {
     // Wages already generated for this date? The whole tenure is closed —
@@ -49,7 +52,7 @@ export async function GET(request: Request) {
     // property of the scan date, not of any individual row. "fetch" mode is
     // a read-only lookup, so it stays open; only writes are refused.
     if (mode !== "fetch") {
-      const lock = await findWageLockForDate(scanDate);
+      const lock = await findWageLockForDate(scanDate, department as CouponDepartment);
       if (lock) {
         return Response.json({ error: wageLockMessage(lock) }, { status: 400 });
       }
@@ -69,6 +72,7 @@ export async function GET(request: Request) {
       .input("wo", sql.NVarChar, wo.trim())
       .input("bundle", sql.NVarChar, bundle.trim())
       .input("op", sql.NVarChar, op.trim())
+      .input("department", sql.NVarChar, department)
       .query(
         barcode.trim() !== ""
           ? `
@@ -76,6 +80,7 @@ export async function GET(request: Request) {
             FROM dbo.QrCode_Coupon WITH (NOLOCK)
             WHERE CouponCode = @barcode
               AND (@wo = '' OR WorkOrder = @wo)
+              AND Department = @department
               AND IsDeleted = 0
           `
           : `
@@ -84,6 +89,7 @@ export async function GET(request: Request) {
             WHERE WorkOrder = @wo
               AND (@bundle = '' OR BundleNo = @bundle)
               AND (@op = '' OR OpNo = @op)
+              AND Department = @department
               AND IsDeleted = 0
           `,
       );
@@ -122,6 +128,7 @@ export async function GET(request: Request) {
       await pool
         .request()
         .input("barcode", sql.NVarChar, barcode.trim())
+        .input("department", sql.NVarChar, department)
         .input("employeeCode", sql.NVarChar, employeeCode.trim())
         .input("scanBy", sql.NVarChar, scanBy.trim())
         .input("scanDate", sql.NVarChar, scanDate.trim()).query(`
@@ -131,7 +138,7 @@ export async function GET(request: Request) {
               ScanBy = NULLIF(@scanBy, ''),
               ScannedAt = ${SCANNED_AT_FROM_DATE_SQL},
               SystemScannedAt = GETDATE()
-          WHERE CouponCode = @barcode
+          WHERE CouponCode = @barcode AND Department = @department
         `);
 
       return Response.json(records);
@@ -176,7 +183,7 @@ export async function GET(request: Request) {
               ScanBy = NULLIF(@scanBy, ''),
               ScannedAt = ${SCANNED_AT_FROM_DATE_SQL},
               SystemScannedAt = GETDATE()
-          WHERE CouponCode IN (${placeholders.join(", ")})
+          WHERE CouponCode IN (${placeholders.join(", ")}) AND Department = @department
         `);
     }
 

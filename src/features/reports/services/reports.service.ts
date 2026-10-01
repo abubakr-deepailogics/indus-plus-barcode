@@ -7,6 +7,7 @@ import type {
   ReportSearchSuggestion,
   ReportSummary,
 } from "../types";
+import type { CouponDepartment } from "@/lib/department-classification";
 
 // Employee search reuses coupon-scanning's worker lookup (same /api/workers
 // endpoint) rather than duplicating an identical fetch here.
@@ -28,8 +29,10 @@ export async function fetchReportSummary(
   mode: ReportSearchMode,
   value: string,
   range?: ReportDateRange,
+  department: CouponDepartment = "sewing",
 ): Promise<{ ok: true; data: ReportSummary } | { ok: false; error: string }> {
   const params = new URLSearchParams({ by: mode, value });
+  params.set("department", department);
   if (range?.from) params.set("from", format(range.from, "yyyy-MM-dd"));
   if (range?.to) params.set("to", format(range.to, "yyyy-MM-dd"));
   return fetchSummaryByParams(params);
@@ -41,8 +44,10 @@ export async function fetchReportSummary(
 export async function fetchAllReportSummary(
   mode: ReportSearchMode,
   range?: ReportDateRange,
+  department: CouponDepartment = "sewing",
 ): Promise<{ ok: true; data: ReportSummary } | { ok: false; error: string }> {
   const params = new URLSearchParams({ by: mode, all: "true" });
+  params.set("department", department);
   if (range?.from) params.set("from", format(range.from, "yyyy-MM-dd"));
   if (range?.to) params.set("to", format(range.to, "yyyy-MM-dd"));
   return fetchSummaryByParams(params);
@@ -110,8 +115,11 @@ export async function fetchSectionSearchSuggestions(
 
 export async function fetchOrderWiseReport(
   cycleStart?: string,
+  department: CouponDepartment = "sewing",
 ): Promise<{ ok: true; data: OrderWiseReportResult } | { ok: false; error: string }> {
-  const qp = cycleStart ? `?cycleStart=${encodeURIComponent(cycleStart)}` : "";
+  const params = new URLSearchParams({ department });
+  if (cycleStart) params.set("cycleStart", cycleStart);
+  const qp = `?${params.toString()}`;
   const response = await fetch(`/api/reports/order-wise${qp}`);
   const data = await response.json();
   if (!response.ok) {
@@ -122,8 +130,11 @@ export async function fetchOrderWiseReport(
 
 export async function fetchOperatorWiseReport(
   cycleStart?: string,
+  department: CouponDepartment = "sewing",
 ): Promise<{ ok: true; data: OperatorWiseReportResult } | { ok: false; error: string }> {
-  const qp = cycleStart ? `?cycleStart=${encodeURIComponent(cycleStart)}` : "";
+  const params = new URLSearchParams({ department });
+  if (cycleStart) params.set("cycleStart", cycleStart);
+  const qp = `?${params.toString()}`;
   const response = await fetch(`/api/reports/operator-wise${qp}`);
   const data = await response.json();
   if (!response.ok) {

@@ -258,7 +258,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     setIsLoadingWorkOrder(true);
     try {
       const response = await fetch(
-        `/api/open-order?work_order=${encodeURIComponent(wo)}&t=${Date.now()}`,
+        `/api/open-order?work_order=${encodeURIComponent(wo)}&department=${encodeURIComponent(department)}&t=${Date.now()}`,
       );
       if (!response.ok) return;
       const data = await response.json();
@@ -405,12 +405,13 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       if (filters.workOrder) params.set("work_order", filters.workOrder);
       if (filters.customer) params.set("customer", filters.customer);
       if (filters.saleOrderNo) params.set("sale_order_no", filters.saleOrderNo);
+      params.set("department", department);
       const res = await fetch(
         `/api/open-order/work-orders?${params.toString()}`,
       );
       return res.ok ? res.json() : [];
     },
-    [],
+    [department],
   );
 
   const handleSelectWorkOrder = (row: WorkOrderSearchRow) => {

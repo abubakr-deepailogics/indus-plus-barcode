@@ -87,7 +87,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const handleDepartmentSwitch = (deptId: DepartmentKey) => {
     setDepartment(deptId);
     if (deptId === "washing") {
-      router.push("/washing/cut-report");
+      router.push("/washing/style-bulletin");
     } else if (deptId === "sewing" && pathname.startsWith("/washing")) {
       router.push("/industrial-engineering/cut-report");
     }
@@ -114,7 +114,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const currentNavTabs = useMemo(() => {
     if (department === "washing") {
-      return [{ label: "Cut Report", href: "/washing/cut-report", hasDropdown: false }];
+      return [
+        { label: "Style Bulletin", href: "/washing/style-bulletin", hasDropdown: false },
+        { label: "Coupon Generation", href: "/washing/coupon-generation", hasDropdown: false },
+        { label: "Coupon Scanning", href: "/washing/coupon-scanning", hasDropdown: false },
+        { label: "Coupon Tracing", href: "/washing/coupon-tracing", hasDropdown: false },
+        { label: "Rework Coupon", href: "/washing/rework-coupon", hasDropdown: false },
+        { label: "Reports", href: "/washing/reports", hasDropdown: false },
+        { label: "Wages", href: "/washing/reports/wages", hasDropdown: false },
+      ];
     }
     if (department === "sewing") {
       return navTabs;

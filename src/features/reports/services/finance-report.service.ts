@@ -9,7 +9,7 @@ import {
   STYLE_BULLETIN_TABLE,
   OPERATIONS_CATALOG_TABLE,
 } from "@/lib/db";
-import { classifyDepartment } from "@/lib/department-classification";
+import { classifyDepartment, type Department } from "@/lib/department-classification";
 import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import type {
   FinanceReportPeriod,
@@ -106,25 +106,26 @@ interface RawScanRow {
   ScannedAt: string;
 }
 
-async function fetchScansInRange(fromDate: Date, toDate: Date) {
+async function fetchScansInRange(fromDate: Date, toDate: Date, department: Department) {
   const pool = await getPool("pitSystem");
   const result = await pool
     .request()
     .input("from", sql.Date, format(fromDate, "yyyy-MM-dd"))
-    .input("to", sql.Date, format(toDate, "yyyy-MM-dd")).query(`
+    .input("to", sql.Date, format(toDate, "yyyy-MM-dd"))
+    .input("department", sql.NVarChar, department).query(`
       SELECT CouponCode, WorkOrder, BundleNo, OpNo, EmployeeCode, ScannedAt
       FROM dbo.QrCode_Coupon
       WHERE IsScanned = 1 AND IsDeleted = 0 AND ScannedAt IS NOT NULL
+        AND Department = @department
         AND ScannedAt >= @from AND ScannedAt < DATEADD(day, 1, @to)
     `);
   const rows = result.recordset as RawScanRow[];
   return enrichCouponRows(rows);
 }
 
-const DEPARTMENT_FILTER = "sewing" as const;
-
 async function fetchSewingOpCodesByWorkOrder(
   workOrders: string[],
+  department: Department,
 ): Promise<Map<string, Set<string>>> {
   const map = new Map<string, Set<string>>();
   const pool = await getPool("indusPlus");
@@ -142,7 +143,7 @@ async function fetchSewingOpCodesByWorkOrder(
       OpNo: string;
       Department: string | null;
     }[]) {
-      if (classifyDepartment(row) !== DEPARTMENT_FILTER) continue;
+      if (classifyDepartment(row) !== department) continue;
       if (!map.has(row.WorkOrder)) map.set(row.WorkOrder, new Set());
       map.get(row.WorkOrder)!.add(row.OpNo);
     }
@@ -184,6 +185,7 @@ async function fetchOperationCommissionsByWorkOrderOp(
 
 export async function buildOrderWiseReport(
   cycleStartParam?: string,
+  department: Department = "sewing",
 ): Promise<OrderWiseReportResult> {
   const {
     period,
@@ -192,10 +194,10 @@ export async function buildOrderWiseReport(
   } = resolvePeriod(cycleStartParam);
   const previousStart = previousPayCycleStart(currentStart);
 
-  const allScans = await fetchScansInRange(previousStart, toDate);
+  const allScans = await fetchScansInRange(previousStart, toDate, department);
 
   const scannedWorkOrders = [...new Set(allScans.map((r) => r.WorkOrder))];
-  const sewingOpsByWo = await fetchSewingOpCodesByWorkOrder(scannedWorkOrders);
+  const sewingOpsByWo = await fetchSewingOpCodesByWorkOrder(scannedWorkOrders, department);
   const scans = allScans.filter((row) =>
     sewingOpsByWo.get(row.WorkOrder)?.has(row.OpNo),
   );
@@ -251,6 +253,7 @@ export async function buildOrderWiseReport(
   for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
     const req = indusPool.request();
     const inClause = buildInClause(req, "wo", batch);
+    req.input("department", sql.NVarChar, department);
     const result = await req.query(`
       SELECT
         sb.[Order No]                               AS WorkOrder,
@@ -263,7 +266,7 @@ export async function buildOrderWiseReport(
       FROM ${STYLE_BULLETIN_TABLE} sb
       LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op ON sb.[Operation Code] = op.OperationCode
       WHERE sb.[Order No] IN (${inClause})
-        AND LOWER(ISNULL(op.Department, '')) = 'sewing'
+        AND LOWER(ISNULL(op.Department, '')) = @department
       GROUP BY sb.[Order No]
     `);
     for (const row of result.recordset as {
@@ -344,12 +347,13 @@ export async function buildOrderWiseReport(
 
 export async function buildOperatorWiseReport(
   cycleStartParam?: string,
+  department: Department = "sewing",
 ): Promise<OperatorWiseReportResult> {
   const { period, fromDate, toDate } = resolvePeriod(cycleStartParam);
-  const allScans = await fetchScansInRange(fromDate, toDate);
+  const allScans = await fetchScansInRange(fromDate, toDate, department);
 
   const scannedWorkOrders = [...new Set(allScans.map((r) => r.WorkOrder))];
-  const sewingOpsByWo = await fetchSewingOpCodesByWorkOrder(scannedWorkOrders);
+  const sewingOpsByWo = await fetchSewingOpCodesByWorkOrder(scannedWorkOrders, department);
   const scans = allScans.filter((row) =>
     sewingOpsByWo.get(row.WorkOrder)?.has(row.OpNo),
   );

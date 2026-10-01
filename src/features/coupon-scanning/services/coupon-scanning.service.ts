@@ -1,4 +1,5 @@
 import type { CouponApiItem, Worker, OperationSuggestion } from "../types";
+import type { CouponDepartment } from "@/lib/department-classification";
 
 async function getJson<T>(url: string): Promise<T | null> {
   const response = await fetch(url);
@@ -32,9 +33,9 @@ export async function checkAttendance(
   return { ok: true, present: !!data.present };
 }
 
-export function fetchWorkOrderSuggestions(query: string): Promise<string[]> {
+export function fetchWorkOrderSuggestions(query: string, department: CouponDepartment): Promise<string[]> {
   return getJson<string[]>(
-    `/api/open-order/suggestions?query=${encodeURIComponent(query)}&only_generated=true`,
+    `/api/open-order/suggestions?query=${encodeURIComponent(query)}&only_generated=true&department=${encodeURIComponent(department)}`,
   ).then((data) => data ?? []);
 }
 
@@ -43,43 +44,49 @@ function fetchCouponSuggestions(
   type: "bundle" | "operation" | "cut",
   query: string,
   onlyGenerated: boolean,
+  department: CouponDepartment,
 ) {
   const suffix = onlyGenerated ? "&only_generated=true" : "";
   return getJson<unknown[]>(
-    `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=${type}&query=${encodeURIComponent(query)}${suffix}`,
+    `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=${type}&query=${encodeURIComponent(query)}${suffix}&department=${encodeURIComponent(department)}`,
   ).then((data) => data ?? []);
 }
 
 export function fetchBundleSuggestions(
   workOrder: string,
   query: string,
+  department: CouponDepartment,
 ): Promise<string[]> {
   return fetchCouponSuggestions(
     workOrder,
     "bundle",
     query,
     true,
+    department,
   ) as Promise<string[]>;
 }
 
 export function fetchOpSuggestions(
   workOrder: string,
   query: string,
+  department: CouponDepartment,
 ): Promise<OperationSuggestion[]> {
   return fetchCouponSuggestions(
     workOrder,
     "operation",
     query,
     true,
+    department,
   ) as Promise<OperationSuggestion[]>;
 }
 
-export function fetchCutSuggestions(workOrder: string, query: string) {
+export function fetchCutSuggestions(workOrder: string, query: string, department: CouponDepartment) {
   return fetchCouponSuggestions(
     workOrder,
     "cut",
     query,
     false,
+    department,
   ) as Promise<string[]>;
 }
 
@@ -92,11 +99,12 @@ export async function fetchCouponInfo(params: {
   fromCut?: string;
   toCut?: string;
   bundleNo?: string;
+  department: CouponDepartment;
 }): Promise<{ ok: true; items: CouponApiItem[] } | { ok: false; error: string }> {
-  const { couponCode, workOrder, opNo, fromCut, toCut, bundleNo } = params;
+  const { couponCode, workOrder, opNo, fromCut, toCut, bundleNo, department } = params;
   const url = couponCode?.trim()
-    ? `/api/coupons/scan?mode=fetch&barcode=${encodeURIComponent(couponCode.trim())}`
-    : `/api/coupons/scan?mode=fetch&wo=${encodeURIComponent(workOrder ?? "")}&op=${encodeURIComponent(opNo ?? "")}&fromCut=${encodeURIComponent(fromCut ?? "")}&toCut=${encodeURIComponent(toCut ?? "")}&bundle=${encodeURIComponent(bundleNo ?? "")}`;
+    ? `/api/coupons/scan?mode=fetch&barcode=${encodeURIComponent(couponCode.trim())}&department=${encodeURIComponent(department)}`
+    : `/api/coupons/scan?mode=fetch&wo=${encodeURIComponent(workOrder ?? "")}&op=${encodeURIComponent(opNo ?? "")}&fromCut=${encodeURIComponent(fromCut ?? "")}&toCut=${encodeURIComponent(toCut ?? "")}&bundle=${encodeURIComponent(bundleNo ?? "")}&department=${encodeURIComponent(department)}`;
 
   const response = await fetch(url);
   const data = await response.json();
@@ -114,11 +122,12 @@ export async function scanCoupon(params: {
   employeeCode: string;
   scanBy: string;
   scanDate: string;
+  department: CouponDepartment;
 }): Promise<{ ok: true; item: CouponApiItem } | { ok: false; error: string }> {
-  const { barcode, workOrder, employeeCode, scanBy, scanDate } = params;
+  const { barcode, workOrder, employeeCode, scanBy, scanDate, department } = params;
   const woParam = workOrder ? `&wo=${encodeURIComponent(workOrder)}` : "";
   const response = await fetch(
-    `/api/coupons/scan?barcode=${encodeURIComponent(barcode)}${woParam}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}&scanDate=${encodeURIComponent(scanDate)}`,
+    `/api/coupons/scan?barcode=${encodeURIComponent(barcode)}${woParam}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}&scanDate=${encodeURIComponent(scanDate)}&department=${encodeURIComponent(department)}`,
   );
   const data = await response.json();
 
@@ -147,6 +156,7 @@ export async function scanCouponsBatch(params: {
   employeeCode: string;
   scanBy: string;
   scanDate: string;
+  department: CouponDepartment;
 }): Promise<
   | { ok: true; scanned: CouponApiItem[]; failed: FailedScan[] }
   | { ok: false; error: string }
@@ -165,11 +175,12 @@ export async function scanCouponsBatch(params: {
 
 export async function unscanCoupon(
   couponCode: string,
+  department: CouponDepartment,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const response = await fetch("/api/coupons/unscan", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ couponCode }),
+    body: JSON.stringify({ couponCode, department }),
   });
   const data = await response.json();
   if (!response.ok) {

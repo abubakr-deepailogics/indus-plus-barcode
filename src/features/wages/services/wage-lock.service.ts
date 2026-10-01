@@ -25,6 +25,7 @@ export interface WageLock {
 // require a date validate it themselves; an absent date isn't a locked one.
 export async function findWageLockForDate(
   date: string,
+  department: CouponDepartment = "sewing",
 ): Promise<WageLock | null> {
   const trimmed = (date || "").trim();
   if (!trimmed) return null;
@@ -33,10 +34,11 @@ export async function findWageLockForDate(
   const result = await pool
     .request()
     .input("scanDate", sql.Date, trimmed)
+    .input("department", sql.NVarChar, department)
     .query(`
       SELECT TOP 1 WageId, Title, FromDate, ToDate
       FROM dbo.EmployeeWages WITH (NOLOCK)
-      WHERE @scanDate BETWEEN FromDate AND ToDate
+      WHERE Department = @department AND @scanDate BETWEEN FromDate AND ToDate
       ORDER BY WageId DESC
     `);
 
@@ -57,11 +59,11 @@ export function wageLockMessage(lock: WageLock): string {
 }
 
 // Every locked tenure, for disabling dates in the scan page's date picker.
-export async function fetchLockedRanges(): Promise<LockedRange[]> {
+export async function fetchLockedRanges(department: CouponDepartment = "sewing"): Promise<LockedRange[]> {
   const pool = await getPool("pitSystem");
-  const result = await pool.request().query(`
+  const result = await pool.request().input("department", sql.NVarChar, department).query(`
     SELECT WageId, Title, FromDate, ToDate
-    FROM dbo.EmployeeWages WITH (NOLOCK)
+    FROM dbo.EmployeeWages WITH (NOLOCK) WHERE Department = @department
     ORDER BY FromDate
   `);
 

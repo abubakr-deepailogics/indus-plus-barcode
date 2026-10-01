@@ -24,12 +24,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { createWages, previewWages, type WagePreviewResult } from "../services/wages.service";
+import type { CouponDepartment } from "@/lib/department-classification";
 
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   createdBy?: string | null;
   onCreated?: (wageId: number) => void;
+  department: CouponDepartment;
 }
 
 function currentPayCycleStart(): Date {
@@ -45,7 +47,7 @@ const PRESETS: { label: string; range: () => { from: Date; to: Date } }[] = [
   { label: "This Pay Cycle", range: () => ({ from: currentPayCycleStart(), to: new Date() }) },
 ];
 
-export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated }: Props) {
+export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated, department }: Props) {
   const [title, setTitle] = useState("");
   const [range, setRange] = useState<{ from?: Date; to?: Date }>({});
   const [preview, setPreview] = useState<WagePreviewResult | null>(null);
@@ -75,7 +77,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated }: P
       }
 
       setPreviewing(true);
-      void previewWages({ from: nextFrom, to: nextTo }).then((res) => {
+      void previewWages({ from: nextFrom, to: nextTo, department }).then((res) => {
         if (seq !== previewSeq.current) return;
         setPreviewing(false);
         if (res.ok) {
@@ -86,7 +88,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated }: P
         }
       });
     },
-    [],
+    [department],
   );
 
   const handleOpenChange = useCallback(
@@ -143,6 +145,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated }: P
         from,
         to,
         createdBy: createdBy ?? undefined,
+        department,
       });
       if (!res.ok) {
         setError(res.error);
@@ -166,6 +169,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated }: P
     createdBy,
     onCreated,
     handleOpenChange,
+    department,
   ]);
 
   return (

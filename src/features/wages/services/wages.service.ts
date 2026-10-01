@@ -1,4 +1,5 @@
 import type { LockedRange, WagePreview, WagesBatch } from "../types";
+import type { CouponDepartment } from "@/lib/department-classification";
 
 // Client-side calls to /api/wages. A wage is created from a TENURE alone —
 // the server builds the rows, so nothing row-shaped is uploaded from here.
@@ -6,6 +7,7 @@ import type { LockedRange, WagePreview, WagesBatch } from "../types";
 export interface WagePreviewResult extends WagePreview {
   from: string;
   to: string;
+  department: CouponDepartment;
   // Set when the tenure collides with an existing wage — the modal warns
   // before the user commits instead of failing them at confirm.
   overlap: { wageId: number; title: string; from: string; to: string } | null;
@@ -14,8 +16,9 @@ export interface WagePreviewResult extends WagePreview {
 export async function previewWages(params: {
   from: string;
   to: string;
+  department: CouponDepartment;
 }): Promise<{ ok: true; preview: WagePreviewResult } | { ok: false; error: string }> {
-  const qp = new URLSearchParams({ from: params.from, to: params.to });
+  const qp = new URLSearchParams({ from: params.from, to: params.to, department: params.department });
   const response = await fetch(`/api/wages/preview?${qp.toString()}`);
   const data = await response.json();
   if (!response.ok) {
@@ -29,6 +32,7 @@ export async function createWages(params: {
   from: string;
   to: string;
   createdBy?: string;
+  department: CouponDepartment;
 }): Promise<
   | { ok: true; wageId: number; totalRows: number; totalQty: number; totalAmount: number }
   | { ok: false; error: string }
@@ -57,6 +61,7 @@ export async function fetchWages(params: {
   title?: string;
   from?: string;
   to?: string;
+  department: CouponDepartment;
 }): Promise<{ ok: true; wages: WagesBatch[] } | { ok: false; error: string }> {
   const qp = new URLSearchParams();
   if (params.wageId) qp.set("wageId", String(params.wageId));
@@ -64,6 +69,7 @@ export async function fetchWages(params: {
   if (params.title) qp.set("title", params.title);
   if (params.from) qp.set("from", params.from);
   if (params.to) qp.set("to", params.to);
+  qp.set("department", params.department);
 
   const response = await fetch(`/api/wages?${qp.toString()}`);
   const data = await response.json();
@@ -75,8 +81,9 @@ export async function fetchWages(params: {
 
 export async function deleteWages(params: {
   wageId: number;
+  department: CouponDepartment;
 }): Promise<{ ok: true; message: string } | { ok: false; error: string }> {
-  const qp = new URLSearchParams({ wageId: String(params.wageId) });
+  const qp = new URLSearchParams({ wageId: String(params.wageId), department: params.department });
   const response = await fetch(`/api/wages?${qp.toString()}`, {
     method: "DELETE",
   });
@@ -92,10 +99,11 @@ export async function deleteWages(params: {
 // behaves like a plain text input instead of blocking the search.
 export async function fetchWageTitleSuggestions(
   query: string,
+  department: CouponDepartment,
 ): Promise<string[]> {
   try {
     const response = await fetch(
-      `/api/wages/suggestions?query=${encodeURIComponent(query)}`,
+      `/api/wages/suggestions?query=${encodeURIComponent(query)}&department=${encodeURIComponent(department)}`,
     );
     if (!response.ok) return [];
     const data = await response.json();
@@ -108,9 +116,9 @@ export async function fetchWageTitleSuggestions(
 // Tenures that already have a wage — used to disable dates in the coupon
 // scanning date picker. Failure returns an empty list: the server enforces
 // the lock regardless, so a fetch error must not block scanning entirely.
-export async function fetchLockedWageRanges(): Promise<LockedRange[]> {
+export async function fetchLockedWageRanges(department: CouponDepartment): Promise<LockedRange[]> {
   try {
-    const response = await fetch("/api/wages/locked-ranges");
+    const response = await fetch(`/api/wages/locked-ranges?department=${encodeURIComponent(department)}`);
     if (!response.ok) return [];
     const data = await response.json();
     return Array.isArray(data.ranges) ? data.ranges : [];

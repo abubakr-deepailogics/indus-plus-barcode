@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { ArrowLeft, ClipboardList, Loader2, Printer } from "lucide-react";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
 import { fetchOrderWiseReport } from "../services/reports.service";
+import { useDepartment } from "@/lib/department-context";
 import { recentPayCycles } from "../utils/pay-cycle";
 import type { OrderWiseReportResult } from "../types";
 
@@ -22,6 +23,8 @@ function formatAmount(value: number): string {
 // its own. Defaults to the current pay-cycle month; the picker below lets
 // the user step back to any earlier month instead.
 export function OrderWiseReportPage() {
+  const { department } = useDepartment();
+  const departmentLabel = `${department.charAt(0).toUpperCase()}${department.slice(1)}`;
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -35,7 +38,7 @@ export function OrderWiseReportPage() {
     (async () => {
       setLoading(true);
       setError(null);
-      const res = await fetchOrderWiseReport(cycleStart || undefined);
+      const res = await fetchOrderWiseReport(cycleStart || undefined, department);
       if (cancelled) return;
       if (!res.ok) setError(res.error);
       else setData(res.data);
@@ -44,7 +47,7 @@ export function OrderWiseReportPage() {
     return () => {
       cancelled = true;
     };
-  }, [cycleStart]);
+  }, [cycleStart, department]);
 
   const totals = useMemo(() => {
     if (!data?.rows?.length) return null;
@@ -155,7 +158,7 @@ export function OrderWiseReportPage() {
               <ClipboardList className="size-4" />
             </span>
             <h1 className="text-sm font-semibold text-slate-900 md:text-base">
-              Order Wise Report (Sewing Department)
+              Order Wise Report ({departmentLabel} Department)
             </h1>
           </div>
           {data && (
@@ -183,7 +186,7 @@ export function OrderWiseReportPage() {
 
         {data && !loading && data.rows.length === 0 && (
           <div className="flex min-h-56 items-center justify-center px-5 text-center text-sm font-medium text-slate-500">
-            No Sewing coupons scanned in this pay-cycle month.
+            No {departmentLabel} coupons scanned in this pay-cycle month.
           </div>
         )}
 

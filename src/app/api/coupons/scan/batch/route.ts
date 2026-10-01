@@ -4,6 +4,7 @@ import {
   findWageLockForDate,
   wageLockMessage,
 } from "@/features/wages/services/wage-lock.service";
+import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
     const employeeCode = String(body.employeeCode || "").trim();
     const scanBy = String(body.scanBy || "").trim();
     const scanDate = String(body.scanDate || "").trim();
+    const department = String(body.department || "sewing").trim().toLowerCase();
 
     if (codes.length === 0) {
       return Response.json(
@@ -50,11 +52,12 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    if (!isCouponDepartment(department)) return Response.json({ error: "Invalid department." }, { status: 400 });
 
     // Wages already generated for this date? The whole tenure is closed.
     // One check for the batch — the lock belongs to the scan date, which is
     // the same for every code in it.
-    const lock = await findWageLockForDate(scanDate);
+    const lock = await findWageLockForDate(scanDate, department as CouponDepartment);
     if (lock) {
       return Response.json({ error: wageLockMessage(lock) }, { status: 400 });
     }
@@ -68,6 +71,7 @@ export async function POST(request: Request) {
     request_.input("employeeCode", sql.NVarChar, employeeCode);
     request_.input("scanBy", sql.NVarChar, scanBy);
     request_.input("scanDate", sql.NVarChar, scanDate);
+    request_.input("department", sql.NVarChar, department);
 
     // Only flips codes that exist AND aren't already scanned — codes that
     // don't match or were already scanned are silently excluded from
@@ -89,11 +93,11 @@ export async function POST(request: Request) {
       OUTPUT inserted.CouponCode INTO @Updated
       FROM dbo.QrCode_Coupon c
       INNER JOIN @Codes src ON src.CouponCode = c.CouponCode
-      WHERE c.IsScanned = 0 AND c.IsDeleted = 0;
+      WHERE c.IsScanned = 0 AND c.IsDeleted = 0 AND c.Department = @department;
 
       SELECT c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.IsScanned, c.ScannedAt
       FROM @Updated u
-      INNER JOIN dbo.QrCode_Coupon c ON c.CouponCode = u.CouponCode;
+      INNER JOIN dbo.QrCode_Coupon c ON c.CouponCode = u.CouponCode AND c.Department = @department;
 
       SELECT src.CouponCode,
              CASE
@@ -101,7 +105,7 @@ export async function POST(request: Request) {
                ELSE 'already_scanned'
              END AS Reason
       FROM @Codes src
-      LEFT JOIN dbo.QrCode_Coupon c ON c.CouponCode = src.CouponCode AND c.IsDeleted = 0
+      LEFT JOIN dbo.QrCode_Coupon c ON c.CouponCode = src.CouponCode AND c.IsDeleted = 0 AND c.Department = @department
       WHERE src.CouponCode NOT IN (SELECT CouponCode FROM @Updated);
     `);
 

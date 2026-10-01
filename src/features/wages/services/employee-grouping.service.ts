@@ -32,10 +32,20 @@ export function groupEmployeeData(
   if (!employeesList) return [];
   const coupons = couponsList || [];
 
+  // Index once instead of filtering the entire coupon list for every
+  // employee below. A large pay cycle can contain thousands of coupons, so
+  // this changes the grouping setup from O(employees × coupons) to O(coupons).
+  const couponsByEmployee = new Map<string, CouponReportItem[]>();
+  for (const coupon of coupons) {
+    const employeeCode = coupon.employeeCode;
+    if (!employeeCode) continue;
+    const employeeCoupons = couponsByEmployee.get(employeeCode);
+    if (employeeCoupons) employeeCoupons.push(coupon);
+    else couponsByEmployee.set(employeeCode, [coupon]);
+  }
+
   return employeesList.map((emp) => {
-    const empCoupons = coupons.filter(
-      (c) => c.employeeCode === emp.employeeCode,
-    );
+    const empCoupons = couponsByEmployee.get(emp.employeeCode) ?? [];
 
     if (empCoupons.length === 0) {
       return {

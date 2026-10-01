@@ -1,16 +1,21 @@
 import { getPool, sql } from "@/lib/db";
+import { isCouponDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
   try {
-    const { couponCode } = await request.json();
+    const { couponCode, department } = await request.json();
 
     if (!couponCode) {
       return Response.json(
         { error: "Coupon Code is required." },
         { status: 400 }
       );
+    }
+    const normalizedDepartment = String(department || "sewing").trim().toLowerCase();
+    if (!isCouponDepartment(normalizedDepartment)) {
+      return Response.json({ error: "Invalid department." }, { status: 400 });
     }
 
     const pool = await getPool("pitSystem");
@@ -19,6 +24,7 @@ export async function POST(request: Request) {
     const result = await pool
       .request()
       .input("couponCode", sql.NVarChar, couponCode.trim())
+      .input("department", sql.NVarChar, normalizedDepartment)
       .query(`
         UPDATE dbo.QrCode_Coupon
         SET IsScanned = 0,
@@ -26,7 +32,7 @@ export async function POST(request: Request) {
             ScanBy = NULL,
             ScannedAt = NULL,
             SystemScannedAt = NULL
-        WHERE CouponCode = @couponCode AND IsDeleted = 0
+        WHERE CouponCode = @couponCode AND IsDeleted = 0 AND Department = @department
       `);
 
     if (result.rowsAffected[0] === 0) {

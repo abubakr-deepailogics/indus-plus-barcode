@@ -1,4 +1,5 @@
 import { getPool, sql, CUT_DETAIL_VIEW, STYLE_BULLETIN_TABLE } from "@/lib/db";
+import { isCouponDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -8,6 +9,7 @@ export async function GET(request: Request) {
   const type = searchParams.get("type") || ""; // 'bundle' or 'operation'
   const query = searchParams.get("query") || "";
   const onlyGenerated = searchParams.get("only_generated") === "true";
+  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
 
   if (!wo) {
     return Response.json(
@@ -15,6 +17,7 @@ export async function GET(request: Request) {
       { status: 400 },
     );
   }
+  if (!isCouponDepartment(department)) return Response.json({ error: "Invalid department." }, { status: 400 });
 
   try {
     // Cross-server: QrCode_Coupon lives on pitSystem; SaleOrderPOCutDetailViewV1/
@@ -28,12 +31,14 @@ export async function GET(request: Request) {
         const result = await pool
           .request()
           .input("wo", sql.NVarChar, wo.trim())
+          .input("department", sql.NVarChar, department)
           .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
             SELECT DISTINCT TOP 10 BundleNo
             FROM dbo.QrCode_Coupon
             WHERE WorkOrder = @wo
               AND BundleNo LIKE @q
               AND IsDeleted = 0
+              AND Department = @department
             ORDER BY BundleNo
           `);
         const list = result.recordset.map((r) => String(r.BundleNo));
@@ -63,7 +68,8 @@ export async function GET(request: Request) {
           (await getPool("pitSystem"))
             .request()
             .input("wo", sql.NVarChar, wo.trim())
-            .query(`SELECT DISTINCT OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @wo AND IsDeleted = 0`),
+            .input("department", sql.NVarChar, department)
+            .query(`SELECT DISTINCT OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @wo AND IsDeleted = 0 AND Department = @department`),
           (await getPool("indusPlus"))
             .request()
             .input("wo", sql.NVarChar, wo.trim())
@@ -113,11 +119,11 @@ export async function GET(request: Request) {
       // filter's options always match what's actually in this work order's
       // coupons rather than the full style bulletin's section list.
       const pool = await getPool("pitSystem");
-      const result = await pool.request().input("wo", sql.NVarChar, wo.trim())
+      const result = await pool.request().input("wo", sql.NVarChar, wo.trim()).input("department", sql.NVarChar, department)
         .query(`
           SELECT DISTINCT Section
           FROM dbo.QrCode_Coupon
-          WHERE WorkOrder = @wo AND Section IS NOT NULL AND Section <> '' AND IsDeleted = 0
+          WHERE WorkOrder = @wo AND Section IS NOT NULL AND Section <> '' AND IsDeleted = 0 AND Department = @department
           ORDER BY Section
         `);
 
@@ -129,6 +135,7 @@ export async function GET(request: Request) {
       const result = await pool
         .request()
         .input("wo", sql.NVarChar, wo.trim())
+        .input("department", sql.NVarChar, department)
         .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
           SELECT CutNo FROM (
             SELECT DISTINCT CutNo
@@ -138,6 +145,7 @@ export async function GET(request: Request) {
               AND CutNo <> ''
               AND CutNo LIKE @q
               AND IsDeleted = 0
+              AND Department = @department
           ) t
           ORDER BY LEN(CutNo), CutNo
         `);

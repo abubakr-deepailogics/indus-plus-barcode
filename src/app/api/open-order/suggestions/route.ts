@@ -1,10 +1,16 @@
 import { getPool, sql, CUT_DETAIL_VIEW, WORKERS_VIEW } from "@/lib/db";
+import { isCouponDepartment } from "@/lib/department-classification";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("query") || "";
   const type = searchParams.get("type") || "work_order";
   const onlyGenerated = searchParams.get("only_generated") === "true";
+  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
+
+  if (onlyGenerated && !isCouponDepartment(department)) {
+    return Response.json({ error: "Invalid department." }, { status: 400 });
+  }
 
   try {
     // Cross-server: SaleOrderPOCutDetailViewV1 lives on indusPlus, the
@@ -39,7 +45,7 @@ export async function GET(request: Request) {
           `);
         return Response.json(result.recordset);
       } else {
-        const result = await pool.request().query(`
+        const result = await pool.request().input("department", sql.NVarChar, department).query(`
           SELECT DISTINCT TOP 20 EmployeeID, FirstName
           FROM ${WORKERS_VIEW}
           WHERE FirstName IS NOT NULL AND EmpStatus = 'Active'
@@ -56,7 +62,7 @@ export async function GET(request: Request) {
         const result = await pool.request().query(`
           SELECT DISTINCT TOP 12 WorkOrder
           FROM dbo.QrCode_Coupon
-          WHERE IsDeleted = 0
+          WHERE IsDeleted = 0 AND Department = @department
           ORDER BY WorkOrder DESC
         `);
         return Response.json(result.recordset.map((r) => r.WorkOrder));
@@ -64,10 +70,11 @@ export async function GET(request: Request) {
 
       const result = await pool
         .request()
-        .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
+        .input("q", sql.NVarChar, `%${query.trim()}%`)
+        .input("department", sql.NVarChar, department).query(`
           SELECT DISTINCT TOP 8 WorkOrder
           FROM dbo.QrCode_Coupon
-          WHERE (WorkOrder LIKE @q OR CouponCode LIKE @q OR BundleNo LIKE @q) AND IsDeleted = 0
+          WHERE (WorkOrder LIKE @q OR CouponCode LIKE @q OR BundleNo LIKE @q) AND IsDeleted = 0 AND Department = @department
           ORDER BY WorkOrder
         `);
 

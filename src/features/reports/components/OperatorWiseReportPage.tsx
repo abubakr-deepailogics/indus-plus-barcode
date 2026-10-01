@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { ArrowLeft, Loader2, Printer, Users } from "lucide-react";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
 import { fetchOperatorWiseReport } from "../services/reports.service";
+import { useDepartment } from "@/lib/department-context";
 import { recentPayCycles } from "../utils/pay-cycle";
 import type { OperatorWiseReportResult } from "../types";
 
@@ -21,6 +22,8 @@ function formatAmount(value: number): string {
 // main Reports dashboard. Defaults to the current pay-cycle month; the
 // picker below lets the user step back to any earlier month instead.
 export function OperatorWiseReportPage() {
+  const { department } = useDepartment();
+  const departmentLabel = `${department.charAt(0).toUpperCase()}${department.slice(1)}`;
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,7 +37,7 @@ export function OperatorWiseReportPage() {
     (async () => {
       setLoading(true);
       setError(null);
-      const res = await fetchOperatorWiseReport(cycleStart || undefined);
+      const res = await fetchOperatorWiseReport(cycleStart || undefined, department);
       if (cancelled) return;
       if (!res.ok) setError(res.error);
       else setData(res.data);
@@ -43,7 +46,7 @@ export function OperatorWiseReportPage() {
     return () => {
       cancelled = true;
     };
-  }, [cycleStart]);
+  }, [cycleStart, department]);
 
   const totals = useMemo(() => {
     if (!data?.rows?.length) return null;
@@ -158,7 +161,7 @@ export function OperatorWiseReportPage() {
 
         {data && !loading && data.rows.length === 0 && (
           <div className="flex min-h-56 items-center justify-center px-5 text-center text-sm font-medium text-slate-500">
-            No Sewing coupons scanned in this pay-cycle month.
+            No {departmentLabel} coupons scanned in this pay-cycle month.
           </div>
         )}
 

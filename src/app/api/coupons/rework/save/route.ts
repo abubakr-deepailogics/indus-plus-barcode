@@ -10,6 +10,7 @@ import type {
   BundleDetailRow,
   OperationsDetailRow,
 } from "@/features/qr-code-generation/types";
+import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -22,6 +23,7 @@ interface SaveRequestBody {
   insertedBy?: string;
   bundles: BundleDetailRow[];
   operations: OperationsDetailRow[];
+  department: CouponDepartment;
 }
 
 const ROWS_PER_CHUNK = 150;
@@ -44,6 +46,7 @@ export async function POST(request: Request) {
       insertedBy,
       bundles,
       operations,
+      department,
     } = body;
 
     if (!workOrder || !Array.isArray(bundles) || !Array.isArray(operations)) {
@@ -52,6 +55,10 @@ export async function POST(request: Request) {
         { status: 400 },
       );
     }
+    if (!isCouponDepartment(String(department || "").toLowerCase())) {
+      return Response.json({ error: "Invalid department." }, { status: 400 });
+    }
+    const couponDepartment = String(department).toLowerCase() as CouponDepartment;
 
     const selectedBundles = bundles.filter((b) => b.sel);
     const selectedOperations = operations.filter((op) => op.lastOpSection);
@@ -99,10 +106,11 @@ export async function POST(request: Request) {
     const origCouponsCheck = await pool
       .request()
       .input("wo", sql.NVarChar, workOrder)
+      .input("department", sql.NVarChar, couponDepartment)
       .query(`
         SELECT TOP 1 1 AS hasCoupons
         FROM dbo.QrCode_Coupon
-        WHERE WorkOrder = @wo AND IsDeleted = 0 AND BundleNo NOT LIKE 'RW%'
+        WHERE WorkOrder = @wo AND IsDeleted = 0 AND BundleNo NOT LIKE 'RW%' AND Department = @department
       `);
 
     if (origCouponsCheck.recordset.length === 0) {
@@ -182,6 +190,8 @@ export async function POST(request: Request) {
       cards,
       by,
       batchId,
+      undefined,
+      couponDepartment,
     );
 
     // 4. Snapshot operations to pitSystem dbo.StyleBullettinInt with the shared batchId
@@ -198,7 +208,7 @@ export async function POST(request: Request) {
     }
 
     // 5. Query updated total coupon count
-    const couponCount = await countCoupons(pool, workOrder);
+    const couponCount = await countCoupons(pool, workOrder, couponDepartment);
 
     return Response.json({
       success: true,

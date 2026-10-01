@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { format } from "date-fns";
 import { useAuth } from "@/features/auth/context/auth-context";
+import { useDepartment } from "@/lib/department-context";
 import {
   ScanningRow,
   Worker,
@@ -26,6 +27,7 @@ function sumRates(items: CouponApiItem[]): number {
 
 export function useCouponScanning() {
   const { user } = useAuth();
+  const { department: activeDepartment } = useDepartment();
   // Information panel state
   const [employeeCode, setEmployeeCode] = useState("");
   const [department, setDepartment] = useState("");
@@ -198,7 +200,7 @@ export function useCouponScanning() {
 
   const fetchWorkOrderSuggestions = useCallback((query: string) => {
     return couponScanningService
-      .fetchWorkOrderSuggestions(query)
+      .fetchWorkOrderSuggestions(query, activeDepartment)
       .catch((err) => {
         console.error("WO suggestions fetch error:", err);
         return [];
@@ -209,39 +211,39 @@ export function useCouponScanning() {
     (query: string) => {
       if (!workOrder) return Promise.resolve([]);
       return couponScanningService
-        .fetchBundleSuggestions(workOrder, query)
+        .fetchBundleSuggestions(workOrder, query, activeDepartment)
         .catch((err) => {
           console.error("Bundle suggestions fetch error:", err);
           return [];
         });
     },
-    [workOrder],
+    [workOrder, activeDepartment],
   );
 
   const fetchOpSuggestions = useCallback(
     (query: string) => {
       if (!workOrder) return Promise.resolve([]);
       return couponScanningService
-        .fetchOpSuggestions(workOrder, query)
+        .fetchOpSuggestions(workOrder, query, activeDepartment)
         .catch((err) => {
           console.error("Op suggestions fetch error:", err);
           return [];
         });
     },
-    [workOrder],
+    [workOrder, activeDepartment],
   );
 
   const fetchCutSuggestions = useCallback(
     (query: string) => {
       if (!workOrder) return Promise.resolve([]);
       return couponScanningService
-        .fetchCutSuggestions(workOrder, query)
+        .fetchCutSuggestions(workOrder, query, activeDepartment)
         .catch((err) => {
           console.error("Cut suggestions fetch error:", err);
           return [];
         });
     },
-    [workOrder],
+    [workOrder, activeDepartment],
   );
 
   // Fetches matching coupons and immediately marks them as scanned in the database.
@@ -286,6 +288,7 @@ export function useCouponScanning() {
         fromCut,
         toCut,
         bundleNo,
+        department: activeDepartment,
       });
 
       if (!result.ok) {
@@ -319,6 +322,7 @@ export function useCouponScanning() {
         employeeCode,
         scanBy,
         scanDate: dated,
+        department: activeDepartment,
       });
 
       if (!scanResult.ok) {
@@ -514,6 +518,7 @@ export function useCouponScanning() {
         employeeCode,
         scanBy,
         scanDate: dated,
+        department: activeDepartment,
       });
 
       if (!result.ok) {
@@ -586,6 +591,7 @@ export function useCouponScanning() {
     isEmployeePresent,
     verifyAttendance,
     playAlreadyScannedSound,
+    activeDepartment,
   ]);
 
   const handleScannerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -650,7 +656,7 @@ export function useCouponScanning() {
         return;
       }
       try {
-        const result = await couponScanningService.unscanCoupon(row.barCode);
+        const result = await couponScanningService.unscanCoupon(row.barCode, activeDepartment);
         if (!result.ok) {
           setScanError(result.error);
           return;
@@ -763,6 +769,7 @@ export function useCouponScanning() {
         employeeCode,
         scanBy,
         scanDate: dated,
+        department: activeDepartment,
       });
 
       if (!result.ok) {
