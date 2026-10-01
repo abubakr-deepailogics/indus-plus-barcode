@@ -3,6 +3,10 @@ import { getPool, sql } from "@/lib/db";
 import { generateCouponPdf } from "@/features/qr-code-generation/services/pdf-generation.service";
 import { buildCouponCards } from "@/features/qr-code-generation/services/coupon-pairing.service";
 import { registerCoupons, countCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
+import {
+  isCouponDepartment,
+  type CouponDepartment,
+} from "@/lib/department-classification";
 import type { BundleDetailRow, CouponLayout, OperationsDetailRow } from "@/features/qr-code-generation/types";
 
 interface GenerateRequestBody {
@@ -15,6 +19,7 @@ interface GenerateRequestBody {
   margins: { top: number; bottom: number; left: number; right: number };
   codeType: "qr" | "barcode";
   generatedBy?: string;
+  department?: string;
 }
 
 // Renders the PDF and streams it straight back in this response — nothing
@@ -24,6 +29,7 @@ interface GenerateRequestBody {
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<GenerateRequestBody>;
   const { workOrder, saleOrderNo, styleCode, bundles, operations, layout, margins, codeType, generatedBy } = body;
+  const department = (body.department || "sewing").trim().toLowerCase();
 
   // styleCode is only a display label in the PDF header — some sources
   // (e.g. Open Order) have no real style code and legitimately send "".
@@ -31,6 +37,13 @@ export async function POST(request: Request) {
   if (!workOrder || !Array.isArray(bundles) || !Array.isArray(operations)) {
     return Response.json(
       { error: "workOrder, bundles, and operations are all required." },
+      { status: 400 },
+    );
+  }
+
+  if (!isCouponDepartment(department)) {
+    return Response.json(
+      { error: "department must be one of: cutting, sewing, washing, finishing, gdp." },
       { status: 400 },
     );
   }
@@ -68,6 +81,8 @@ export async function POST(request: Request) {
       buildCouponCards(selectedBundles, selectedOperations),
       generatedBy || "system",
       randomUUID(),
+      undefined,
+      department as CouponDepartment,
     );
 
     // Distinct coupons registered for this work order so far (post-dedup) —

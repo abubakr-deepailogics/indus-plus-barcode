@@ -20,13 +20,34 @@
 // "Finishing") — normalize to lowercase here, once, rather than each caller
 // needing to know the DB's raw casing.
 export type Department = "cutting" | "washing" | "sewing" | "finishing";
+export type CouponDepartment = Department | "gdp";
 
-const KNOWN_DEPARTMENTS: ReadonlySet<Department> = new Set([
+export const STYLE_BULLETIN_DEPARTMENTS = [
   "cutting",
   "washing",
   "sewing",
   "finishing",
+] as const satisfies readonly Department[];
+
+const KNOWN_DEPARTMENTS: ReadonlySet<Department> = new Set(
+  STYLE_BULLETIN_DEPARTMENTS,
+);
+
+/** Validates API input; GDP must never silently broaden to all operations. */
+export function isStyleBulletinDepartment(
+  value: string,
+): value is Department {
+  return KNOWN_DEPARTMENTS.has(value as Department);
+}
+
+const COUPON_DEPARTMENTS: ReadonlySet<CouponDepartment> = new Set([
+  ...STYLE_BULLETIN_DEPARTMENTS,
+  "gdp",
 ]);
+
+export function isCouponDepartment(value: string): value is CouponDepartment {
+  return COUPON_DEPARTMENTS.has(value as CouponDepartment);
+}
 
 interface DepartmentSource {
   Department?: string | null;

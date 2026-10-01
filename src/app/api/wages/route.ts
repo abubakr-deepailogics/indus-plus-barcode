@@ -4,6 +4,7 @@ import {
   validateTenure,
 } from "@/features/wages/services/wage-builder.service";
 import { findOverlappingWage } from "@/features/wages/services/wage-lock.service";
+import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -158,6 +159,10 @@ export async function POST(request: Request) {
     const body = await request.json();
 
     const title = typeof body?.title === "string" ? body.title.trim() : "";
+    const department = String(body?.department || "sewing").trim().toLowerCase();
+    if (!isCouponDepartment(department)) {
+      return Response.json({ error: "Invalid department." }, { status: 400 });
+    }
     if (!title) {
       return Response.json({ error: "A wage title is required." }, { status: 400 });
     }
@@ -178,7 +183,11 @@ export async function POST(request: Request) {
 
     // A date may belong to only one wage — otherwise the same coupons get
     // paid twice and the lock can't say which wage owns the date.
-    const overlap = await findOverlappingWage(fromDate, toDate);
+    const overlap = await findOverlappingWage(
+      fromDate,
+      toDate,
+      department as CouponDepartment,
+    );
     if (overlap) {
       return Response.json(
         {
@@ -188,7 +197,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const built = await buildWageData(fromDate, toDate);
+    const built = await buildWageData(
+      fromDate,
+      toDate,
+      department as CouponDepartment,
+    );
     if (!built.ok) {
       return Response.json({ error: built.error }, { status: built.status });
     }
@@ -214,11 +227,12 @@ export async function POST(request: Request) {
       .input("totalQty", sql.Int, preview.totalQty)
       .input("totalAmount", sql.Decimal(18, 2), preview.totalAmount)
       .input("createdBy", sql.NVarChar, createdBy)
+      .input("department", sql.NVarChar, department)
       .query(`
         INSERT INTO dbo.EmployeeWages
-          (Title, FromDate, ToDate, TotalCoupons, TotalQty, TotalAmount, CreatedBy, CreatedAt)
+          (Title, FromDate, ToDate, TotalCoupons, TotalQty, TotalAmount, CreatedBy, CreatedAt, Department)
         OUTPUT inserted.WageId
-        VALUES (@title, @fromDate, @toDate, @totalRows, @totalQty, @totalAmount, @createdBy, GETDATE());
+        VALUES (@title, @fromDate, @toDate, @totalRows, @totalQty, @totalAmount, @createdBy, GETDATE(), @department);
       `);
 
     const wageId = headerResult.recordset[0]?.WageId as number;
@@ -263,11 +277,13 @@ export async function POST(request: Request) {
       .input("wageId", sql.Int, wageId)
       .input("fromDate", sql.Date, fromDate)
       .input("toDate", sql.Date, toDate)
+      .input("department", sql.NVarChar, department)
       .query(`
         UPDATE dbo.QrCode_Coupon
         SET WageId = @wageId
         WHERE IsScanned = 1
           AND IsDeleted = 0
+          AND Department = @department
           AND ScannedAt >= @fromDate
           AND ScannedAt < DATEADD(day, 1, @toDate);
       `);

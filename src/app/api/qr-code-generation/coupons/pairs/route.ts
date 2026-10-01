@@ -1,5 +1,9 @@
 import { getPool } from "@/lib/db";
 import { getGeneratedPairs } from "@/features/qr-code-generation/services/coupon-registration.service";
+import {
+  isCouponDepartment,
+  type CouponDepartment,
+} from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -9,14 +13,27 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = searchParams.get("work_order") || "";
+  const department = (searchParams.get("department") || "sewing")
+    .trim()
+    .toLowerCase();
 
   if (!workOrder) {
     return Response.json({ error: "work_order is required." }, { status: 400 });
   }
+  if (!isCouponDepartment(department)) {
+    return Response.json(
+      { error: "department must be one of: cutting, sewing, washing, finishing, gdp." },
+      { status: 400 },
+    );
+  }
 
   try {
     const pool = await getPool("pitSystem");
-    const pairs = await getGeneratedPairs(pool, workOrder);
+    const pairs = await getGeneratedPairs(
+      pool,
+      workOrder,
+      department as CouponDepartment,
+    );
     return Response.json({ pairs });
   } catch (err: unknown) {
     console.error("Generated pairs lookup error:", err);

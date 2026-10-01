@@ -34,7 +34,7 @@ import type {
 import { useGenerateCouponPdf } from "@/features/qr-code-generation/hooks/useGenerateCouponPdf";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
-import { classifyDepartment } from "@/lib/department-classification";
+import { useDepartment } from "@/lib/department-context";
 import {
   WorkOrderSearchModal,
   type WorkOrderSearchRow,
@@ -132,6 +132,8 @@ function TableSkeleton({ columnsCount }: { columnsCount: number }) {
 
 export default function OpenOrderPage() {
   const { user, can } = useAuth();
+  const { department } = useDepartment();
+  const styleBulletinDepartment = department === "gdp" ? null : department;
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
   const activeTab = "style_bulletin";
@@ -157,22 +159,24 @@ export default function OpenOrderPage() {
       customer: string;
       saleOrderNo: string;
     }): Promise<WorkOrderSearchRow[]> => {
+      if (!styleBulletinDepartment) {
+        return [];
+      }
+
       const params = new URLSearchParams();
       if (filters.workOrder) params.set("work_order", filters.workOrder);
       if (filters.customer) params.set("customer", filters.customer);
       if (filters.saleOrderNo) params.set("sale_order_no", filters.saleOrderNo);
+      params.set("department", styleBulletinDepartment);
       const res = await fetch(
         `/api/style-bulletin/work-orders?${params.toString()}`,
       );
       return res.ok ? res.json() : [];
     },
-    [],
+    [styleBulletinDepartment],
   );
   const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
   const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
-  const [selectedDeptFilter, setSelectedDeptFilter] = useState<
-    "all" | "cutting" | "washing" | "sewing" | "finishing"
-  >("all");
   const [selectedSections, setSelectedSections] = useState<string[]>([]);
   const [selectedMachines, setSelectedMachines] = useState<string[]>([]);
   const [machineDropdownOpen, setMachineDropdownOpen] = useState(false);
@@ -194,19 +198,12 @@ export default function OpenOrderPage() {
     };
   }, []);
 
-  const getDepartment = useCallback(
-    (row: StyleBulletinRow) => classifyDepartment(row),
-    [],
-  );
-
   const uniqueSections = useMemo(() => {
-    let list = styleBulletins;
-    if (selectedDeptFilter !== "all") {
-      list = list.filter((row) => getDepartment(row) === selectedDeptFilter);
-    }
-    const sections = list.map((row) => row.Section).filter(Boolean) as string[];
+    const sections = styleBulletins
+      .map((row) => row.Section)
+      .filter(Boolean) as string[];
     return Array.from(new Set(sections));
-  }, [styleBulletins, selectedDeptFilter, getDepartment]);
+  }, [styleBulletins]);
 
   const uniqueMachines = useMemo(() => {
     const machines = styleBulletins
@@ -215,18 +212,8 @@ export default function OpenOrderPage() {
     return Array.from(new Set(machines));
   }, [styleBulletins]);
 
-  useEffect(() => {
-    setSelectedSections([]);
-  }, [selectedDeptFilter]);
-
   const filteredStyleBulletins = useMemo(() => {
     let result = styleBulletins;
-
-    if (selectedDeptFilter !== "all") {
-      result = result.filter(
-        (row) => getDepartment(row) === selectedDeptFilter,
-      );
-    }
 
     if (selectedSections.length > 0) {
       result = result.filter(
@@ -242,7 +229,7 @@ export default function OpenOrderPage() {
     }
 
     return result;
-  }, [styleBulletins, selectedDeptFilter, selectedSections, selectedMachines]);
+  }, [styleBulletins, selectedSections, selectedMachines]);
 
   const [isLoading, setIsLoading] = useState(false);
   const [isTransitioning, setIsTransitioning] = useState(false);
@@ -341,7 +328,9 @@ export default function OpenOrderPage() {
         // than Operations.
         footer: ({ table }) => {
           const rows = table.getFilteredRowModel().rows;
-          const uniqueOps = new Set(rows.map((row) => row.original.Operation_Code)).size;
+          const uniqueOps = new Set(
+            rows.map((row) => row.original.Operation_Code),
+          ).size;
           return (
             <div className="flex flex-col gap-0.5">
               <span className="font-bold text-slate-800 uppercase text-[10px] tracking-wider">
@@ -415,9 +404,7 @@ export default function OpenOrderPage() {
               <span className="text-right font-bold text-slate-700">
                 {total.toFixed(4)}
               </span>
-              <span className="invisible text-[9px] leading-tight">
-                spacer
-              </span>
+              <span className="invisible text-[9px] leading-tight">spacer</span>
             </div>
           );
         },
@@ -553,7 +540,7 @@ export default function OpenOrderPage() {
         size: 80,
       },
     ],
-    [rowAttachments, filteredStyleBulletins, getDepartment],
+    [rowAttachments, filteredStyleBulletins],
   );
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -670,46 +657,59 @@ export default function OpenOrderPage() {
   // Fetch data from API only when the active (committed) search query
   // changes — typing alone must not refetch/replace the table.
   useEffect(() => {
-    setSelectedDeptFilter("all");
-    setSelectedSections([]);
-    setSelectedMachines([]);
-
-    // Clear/reset all input fields when activeSearchQuery changes or is empty
-    setDescription("");
-    setStyleDescription("");
-    setStyleCategory("");
-    setSmdNo("");
-    setFinalSmdNo("");
-    setTarget("");
-    setTargetUnitMin("");
-    setStartTime("");
-    setPocSam("");
-    setPocPieceRate("");
-    setHeadReqd("");
-    setTotalSam("");
-    setTotalRate("");
-    setAppDate("");
-    setAppBy("");
-    setStatus("Approved");
-    setForwardForApproval("");
-    setRowAttachments({});
-    setPreviewFile(null);
-
-    if (!activeSearchQuery) {
-      setCutDetails([]);
-      setStyleBulletins([]);
-      setHasSearched(false);
-      return;
-    }
+    let cancelled = false;
 
     const fetchData = async () => {
+      await Promise.resolve();
+      if (cancelled) return;
+
+      setSelectedSections([]);
+      setSelectedMachines([]);
+      setDescription("");
+      setStyleDescription("");
+      setStyleCategory("");
+      setSmdNo("");
+      setFinalSmdNo("");
+      setTarget("");
+      setTargetUnitMin("");
+      setStartTime("");
+      setPocSam("");
+      setPocPieceRate("");
+      setHeadReqd("");
+      setTotalSam("");
+      setTotalRate("");
+      setAppDate("");
+      setAppBy("");
+      setStatus("Approved");
+      setForwardForApproval("");
+      setRowAttachments({});
+      setPreviewFile(null);
+
+      if (!activeSearchQuery) {
+        setCutDetails([]);
+        setStyleBulletins([]);
+        setHasSearched(false);
+        return;
+      }
+
       setIsLoading(true);
       setErrorMsg("");
       setHasSearched(true);
+      setCutDetails([]);
+      setStyleBulletins([]);
       try {
-        const response = await fetch(
-          `/api/open-order?work_order=${encodeURIComponent(activeSearchQuery)}&t=${Date.now()}`,
-        );
+        if (!styleBulletinDepartment) {
+          throw new Error(
+            "Style Bulletin is not available for the GDP department.",
+          );
+        }
+
+        const params = new URLSearchParams({
+          work_order: activeSearchQuery,
+          department: styleBulletinDepartment,
+          t: String(Date.now()),
+        });
+        const response = await fetch(`/api/open-order?${params.toString()}`);
         if (!response.ok) {
           const errData = await response.json();
           throw new Error(
@@ -717,16 +717,18 @@ export default function OpenOrderPage() {
           );
         }
         const data = await response.json();
+        if (cancelled) return;
         setCutDetails(data.cutDetails || []);
         setStyleBulletins(data.styleBulletins || []);
 
         // Compute and set totalSam & totalRate
         const computedSam = (data.styleBulletins || []).reduce(
-          (acc: number, curr: any) => acc + (curr.Smv_Sam ?? 0),
+          (acc: number, curr: StyleBulletinRow) => acc + (curr.Smv_Sam ?? 0),
           0,
         );
         const computedRate = (data.styleBulletins || []).reduce(
-          (acc: number, curr: any) => acc + (curr.Piece_Rate ?? 0),
+          (acc: number, curr: StyleBulletinRow) =>
+            acc + (curr.Piece_Rate ?? 0),
           0,
         );
         setTotalSam(computedSam.toFixed(2));
@@ -750,17 +752,23 @@ export default function OpenOrderPage() {
           setForwardForApproval(data.metadata.Forward_For_Approval || "No");
         }
       } catch (err: unknown) {
+        if (cancelled) return;
         console.error("Fetch error:", err);
         const msg =
           err instanceof Error ? err.message : "An unexpected error occurred.";
         setErrorMsg(msg);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) {
+          setIsLoading(false);
+        }
       }
     };
 
-    fetchData();
-  }, [activeSearchQuery]);
+    void fetchData();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSearchQuery, styleBulletinDepartment]);
 
   const activeRecordsCount = styleBulletins.length;
 
@@ -1219,9 +1227,7 @@ export default function OpenOrderPage() {
                         : "hover:bg-slate-50 text-slate-500 hover:text-slate-700"
                     }`}
                   >
-                    {selectedDeptFilter === "all"
-                      ? "All Sections"
-                      : selectedDeptFilter}
+                    All Sections
                   </button>
                   <div className="h-[1px] bg-slate-100 my-1" />
                   {uniqueSections.map((section) => {
@@ -1297,76 +1303,6 @@ export default function OpenOrderPage() {
                       { header: "No M/C", accessor: (row) => row.No_Mc },
                     ],
                   }}
-                  toolbarChildren={
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedDeptFilter(
-                            selectedDeptFilter === "cutting"
-                              ? "all"
-                              : "cutting",
-                          )
-                        }
-                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
-                          selectedDeptFilter === "cutting"
-                            ? "bg-sky-50 text-sky-700 border-sky-200"
-                            : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
-                        }`}
-                      >
-                        cutting
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedDeptFilter(
-                            selectedDeptFilter === "sewing" ? "all" : "sewing",
-                          )
-                        }
-                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
-                          selectedDeptFilter === "sewing"
-                            ? "bg-amber-50 text-amber-600 border-amber-200"
-                            : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
-                        }`}
-                      >
-                        sewing
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedDeptFilter(
-                            selectedDeptFilter === "washing"
-                              ? "all"
-                              : "washing",
-                          )
-                        }
-                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
-                          selectedDeptFilter === "washing"
-                            ? "bg-red-50 text-red-600 border-red-200"
-                            : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
-                        }`}
-                      >
-                        washing
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setSelectedDeptFilter(
-                            selectedDeptFilter === "finishing"
-                              ? "all"
-                              : "finishing",
-                          )
-                        }
-                        className={`px-3 py-1.5 rounded-xl border text-xs font-bold transition-all shadow-sm cursor-pointer ${
-                          selectedDeptFilter === "finishing"
-                            ? "bg-purple-50 text-purple-600 border-purple-200"
-                            : "bg-white text-slate-500 border-slate-200 hover:bg-slate-50"
-                        }`}
-                      >
-                        finishing
-                      </button>
-                    </div>
-                  }
                 />
               </div>
             </div>

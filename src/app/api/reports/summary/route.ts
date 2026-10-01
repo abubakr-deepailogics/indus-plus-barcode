@@ -1,5 +1,6 @@
 import { buildReportSummary } from "@/features/reports/services/report-summary-builder.service";
 import type { ReportSearchMode } from "@/features/reports/types";
+import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -28,6 +29,7 @@ export async function GET(request: Request) {
   const from = (searchParams.get("from") || "").trim();
   const to = (searchParams.get("to") || "").trim();
   const isAll = searchParams.get("all") === "true";
+  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
 
   if (!by || !VALID_MODES.includes(by as ReportSearchMode)) {
     return Response.json(
@@ -44,6 +46,9 @@ export async function GET(request: Request) {
       { status: 400 },
     );
   }
+  if (!isCouponDepartment(department)) {
+    return Response.json({ error: "Invalid department." }, { status: 400 });
+  }
 
   try {
     const result = await buildReportSummary(
@@ -51,7 +56,7 @@ export async function GET(request: Request) {
       value,
       from,
       to,
-      { all: isAll },
+      { all: isAll, department: department as CouponDepartment },
     );
     if (!result.ok) {
       return Response.json({ error: result.error }, { status: result.status });

@@ -7,7 +7,10 @@ import {
   STYLE_BULLETIN_TABLE,
   OPERATIONS_CATALOG_TABLE,
 } from "@/lib/db";
-import { classifyDepartment } from "@/lib/department-classification";
+import {
+  classifyDepartment,
+  type CouponDepartment,
+} from "@/lib/department-classification";
 import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import type {
   BundleReportItem,
@@ -274,7 +277,7 @@ export async function buildReportSummary(
   rawValue: string,
   from: string,
   to: string,
-  options: { all?: boolean } = {},
+  options: { all?: boolean; department?: CouponDepartment } = {},
 ): Promise<BuildReportSummaryResult> {
   // "All <mode>" reuses that mode's column/query shape but drops the
   // equality filter — every other dimension (aggregation, breakdowns,
@@ -306,6 +309,7 @@ export async function buildReportSummary(
   }
 
   const pitPool = await getPool("pitSystem");
+  const department = options.department ?? "sewing";
   const column = COLUMN_BY_MODE[mode];
 
   // Section scopes on a set of operation codes rather than one value — same
@@ -319,8 +323,9 @@ export async function buildReportSummary(
       })
       .join(", ");
 
-  const couponConditions = ["IsScanned = 1", "IsDeleted = 0"];
+  const couponConditions = ["IsScanned = 1", "IsDeleted = 0", "Department = @department"];
   const couponRequest = pitPool.request();
+  couponRequest.input("department", sql.NVarChar, department);
   if (mode === "section" && !isAll) {
     const codes = (opCodes ?? []).slice(0, IN_LIST_CHUNK_SIZE);
     couponConditions.push(
@@ -344,6 +349,7 @@ export async function buildReportSummary(
   }
 
   const scanCountsRequest = pitPool.request();
+  scanCountsRequest.input("department", sql.NVarChar, department);
   let scanCountsScope: string;
   if (mode === "section" && !isAll) {
     const codes = (opCodes ?? []).slice(0, IN_LIST_CHUNK_SIZE);
@@ -366,12 +372,12 @@ export async function buildReportSummary(
       SELECT
         (
           SELECT COUNT(*) FROM dbo.QrCode_Coupon
-          WHERE ${scanCountsScope} AND IsScanned = 1 AND IsDeleted = 0 AND ScannedAt IS NOT NULL
+          WHERE ${scanCountsScope} AND Department = @department AND IsScanned = 1 AND IsDeleted = 0 AND ScannedAt IS NOT NULL
             AND CAST(ScannedAt AS DATE) = CAST(GETDATE() AS DATE)
         ) AS TodayScans,
         (
           SELECT COUNT(*) FROM dbo.QrCode_Coupon
-          WHERE ${scanCountsScope} AND IsScanned = 1 AND IsDeleted = 0 AND ScannedAt IS NOT NULL
+          WHERE ${scanCountsScope} AND Department = @department AND IsScanned = 1 AND IsDeleted = 0 AND ScannedAt IS NOT NULL
             AND ScannedAt >= DATEADD(month, DATEDIFF(month, 0, GETDATE()), 0)
         ) AS MonthScans
       `),
