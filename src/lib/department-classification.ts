@@ -21,12 +21,23 @@
 // needing to know the DB's raw casing.
 export type Department = "cutting" | "washing" | "sewing" | "finishing";
 
-const KNOWN_DEPARTMENTS: ReadonlySet<Department> = new Set([
+export const STYLE_BULLETIN_DEPARTMENTS = [
   "cutting",
   "washing",
   "sewing",
   "finishing",
-]);
+] as const satisfies readonly Department[];
+
+const KNOWN_DEPARTMENTS: ReadonlySet<Department> = new Set(
+  STYLE_BULLETIN_DEPARTMENTS,
+);
+
+/** Validates API input; GDP must never silently broaden to all operations. */
+export function isStyleBulletinDepartment(
+  value: string,
+): value is Department {
+  return KNOWN_DEPARTMENTS.has(value as Department);
+}
 
 interface DepartmentSource {
   Department?: string | null;

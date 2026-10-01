@@ -1,4 +1,10 @@
-import { getPool, sql, STYLE_BULLETIN_TABLE } from "@/lib/db";
+import {
+  getPool,
+  OPERATIONS_CATALOG_TABLE,
+  sql,
+  STYLE_BULLETIN_TABLE,
+} from "@/lib/db";
+import { isStyleBulletinDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +20,16 @@ export async function GET(request: Request) {
   const workOrder = (searchParams.get("work_order") || "").trim();
   const customer = (searchParams.get("customer") || "").trim();
   const saleOrderNo = (searchParams.get("sale_order_no") || "").trim();
+  const department = (searchParams.get("department") || "")
+    .trim()
+    .toLowerCase();
+
+  if (department && !isStyleBulletinDepartment(department)) {
+    return Response.json(
+      { error: "department must be one of: cutting, sewing, washing, finishing." },
+      { status: 400 },
+    );
+  }
 
   try {
     const pool = await getPool("indusPlus");
@@ -21,6 +37,15 @@ export async function GET(request: Request) {
     const conditions: string[] = [
       "[Order No] IS NOT NULL AND [Order No] <> ''",
     ];
+
+    if (department) {
+      request_.input(
+        "department",
+        sql.NVarChar,
+        `${department.charAt(0).toUpperCase()}${department.slice(1)}`,
+      );
+      conditions.push("op.Department = @department");
+    }
 
     if (workOrder) {
       request_.input("workOrder", sql.NVarChar, `%${workOrder}%`);
@@ -43,7 +68,9 @@ export async function GET(request: Request) {
         [Order No] AS workOrder,
         [Customer Name] AS customer,
         [Sale order No] AS saleOrderNo
-      FROM ${STYLE_BULLETIN_TABLE}
+      FROM ${STYLE_BULLETIN_TABLE} sb
+      INNER JOIN ${OPERATIONS_CATALOG_TABLE} op
+        ON sb.[Operation Code] = op.OperationCode
       WHERE ${conditions.join(" AND ")}
       ORDER BY [Order No] ${orderDirection}
     `);

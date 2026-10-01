@@ -4,12 +4,23 @@ import {
   cutDetailByFilter,
   styleBulletinByFilter,
 } from "@/lib/db";
+import { isStyleBulletinDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const workOrder = searchParams.get("work_order") || "";
+  const workOrder = (searchParams.get("work_order") || "").trim();
+  const department = (searchParams.get("department") || "")
+    .trim()
+    .toLowerCase();
+
+  if (department && !isStyleBulletinDepartment(department)) {
+    return Response.json(
+      { error: "department must be one of: cutting, sewing, washing, finishing." },
+      { status: 400 },
+    );
+  }
 
   if (!workOrder) {
     return Response.json({
@@ -21,12 +32,26 @@ export async function GET(request: Request) {
 
   try {
     const pool = await getPool("indusPlus");
+    const styleBulletinRequest = pool
+      .request()
+      .input("wo", sql.NVarChar, workOrder);
+
+    if (department) {
+      styleBulletinRequest.input(
+        "department",
+        sql.NVarChar,
+        `${department.charAt(0).toUpperCase()}${department.slice(1)}`,
+      );
+    }
 
     const [styleBulletinResult, cutDetailResult] = await Promise.all([
-      pool
-        .request()
-        .input("wo", sql.NVarChar, workOrder)
-        .query(styleBulletinByFilter("[Order No] = @wo")),
+      styleBulletinRequest.query(
+        styleBulletinByFilter(
+          department
+            ? "[Order No] = @wo AND op.Department = @department"
+            : "[Order No] = @wo",
+        ),
+      ),
       pool
         .request()
         .input("wo", sql.NVarChar, workOrder)
