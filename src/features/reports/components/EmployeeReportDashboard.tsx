@@ -1081,7 +1081,7 @@ export function EmployeeReportDashboard() {
                   )}
                   getSuggestionValue={(item) => item.value}
                   placeholder={modeConfig.placeholder}
-                  inputClassName="h-10 w-full rounded-lg border border-slate-200 bg-white px-3.5 text-sm font-medium text-slate-800 placeholder-slate-400 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
+                  inputClassName="h-10 w-full rounded-lg border border-slate-200 bg-white px-3.5 text-sm font-medium text-slate-800 placeholder-slate-400 transition focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                   onKeyDown={handleKeyDown}
                   minChars={1}
                 />
@@ -1116,7 +1116,7 @@ export function EmployeeReportDashboard() {
               Tenure / Scope
             </span>
             <Popover actionsRef={rangePopoverActionsRef}>
-              <PopoverTrigger className="flex h-10 w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100">
+              <PopoverTrigger className="flex h-10 w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100">
                 <CalendarIcon className="w-4 h-4 text-slate-400 shrink-0" />
                 <span className="truncate">{formatRangeLabel(dateRange)}</span>
               </PopoverTrigger>

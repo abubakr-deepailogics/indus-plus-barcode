@@ -86,7 +86,7 @@ export function OrderWiseReportPage() {
           <select
             value={cycleStart}
             onChange={(e) => setCycleStart(e.target.value)}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200"
+            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-100"
             title="Pay-cycle month"
           >
             {cycleOptions.map((opt) => (
