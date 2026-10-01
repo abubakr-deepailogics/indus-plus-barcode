@@ -139,7 +139,7 @@ export async function GET(request: Request) {
               AND CutNo LIKE @q
               AND IsDeleted = 0
           ) t
-          ORDER BY TRY_CAST(CutNo AS INT), CutNo
+          ORDER BY LEN(CutNo), CutNo
         `);
 
       return Response.json(result.recordset.map((r) => String(r.CutNo)));

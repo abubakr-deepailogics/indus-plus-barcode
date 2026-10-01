@@ -325,11 +325,11 @@ function applyCouponFilters(request: sql.Request, workOrder: string, filters: Co
     request.input("isScanned", sql.Bit, filters.isScanned);
   }
   if (filters.fromCut) {
-    conditions.push("TRY_CAST(c.CutNo AS INT) >= TRY_CAST(@fromCut AS INT)");
+    conditions.push("(LEN(c.CutNo) > LEN(@fromCut) OR (LEN(c.CutNo) = LEN(@fromCut) AND c.CutNo >= @fromCut))");
     request.input("fromCut", sql.NVarChar, filters.fromCut);
   }
   if (filters.toCut) {
-    conditions.push("TRY_CAST(c.CutNo AS INT) <= TRY_CAST(@toCut AS INT)");
+    conditions.push("(LEN(c.CutNo) < LEN(@toCut) OR (LEN(c.CutNo) = LEN(@toCut) AND c.CutNo <= @toCut))");
     request.input("toCut", sql.NVarChar, filters.toCut);
   }
   if (filters.employeeCode) {

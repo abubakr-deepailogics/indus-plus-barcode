@@ -15,13 +15,12 @@ export async function GET(request: Request) {
     );
   }
 
-  // Cut and Bundle_Id are numeric columns — binding them as strings would
-  // never match, so validate + coerce before querying.
-  const cut = Number(cutRaw);
+  // Cut # is alphanumeric; Bundle_Id is a numeric column — validate + coerce it.
+  const cut = cutRaw.trim();
   const bundleId = Number(bundleIdRaw);
-  if (!Number.isFinite(cut) || !Number.isFinite(bundleId)) {
+  if (!Number.isFinite(bundleId)) {
     return Response.json(
-      { error: "cut and bundle_id must be numeric." },
+      { error: "bundle_id must be numeric." },
       { status: 400 },
     );
   }
@@ -32,7 +31,7 @@ export async function GET(request: Request) {
     const cutDetailResult = await pool
       .request()
       .input("wo", sql.NVarChar, workOrder)
-      .input("cut", sql.Int, cut)
+      .input("cut", sql.NVarChar(50), cut)
       .input("bundleId", sql.Int, bundleId)
       .query(
         cutDetailByFilter(

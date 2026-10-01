@@ -86,7 +86,7 @@ export async function getWashingCutReport(workOrder: string): Promise<{
       WHERE [WorkOrder] = @wo
         AND [Department] = 'washing'
         AND [IsDeleted] = 0
-      ORDER BY TRY_CAST([Cut] AS INT), [Cut],
+      ORDER BY LEN([Cut]), [Cut],
                TRY_CAST([BundleId] AS BIGINT), [BundleId]
     `);
 

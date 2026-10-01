@@ -249,19 +249,19 @@ export async function fetchPieceRates<
   });
 }
 
-// Mirrors the old SQL's `TRY_CAST(d.Cut AS INT) >= / <= TRY_CAST(@cut AS INT)`
-// range filter — now applied in JS after enrichment instead of inside the
-// (impossible) cross-server query. A non-numeric CutNo fails the check
-// whenever a cut filter is active, same as TRY_CAST returning NULL in SQL.
+// Cut # is alphanumeric: order by length, then lexically (matches the SQL
+// range filters, e.g. "9" < "10", "T0002451" < "T0002460").
+const cutCmp = (a: string, b: string) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
+
 export function withinCutRange(
   cutNo: unknown,
   fromCut: string,
   toCut: string,
 ): boolean {
   if (!fromCut && !toCut) return true;
-  const cut = Number(cutNo);
-  if (!Number.isFinite(cut)) return false;
-  if (fromCut && cut < Number(fromCut)) return false;
-  if (toCut && cut > Number(toCut)) return false;
+  const cut = String(cutNo ?? "").trim();
+  if (!cut) return false;
+  if (fromCut && cutCmp(cut, fromCut.trim()) < 0) return false;
+  if (toCut && cutCmp(cut, toCut.trim()) > 0) return false;
   return true;
 }

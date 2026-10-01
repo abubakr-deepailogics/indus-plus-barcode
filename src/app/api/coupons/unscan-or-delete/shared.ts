@@ -136,11 +136,11 @@ export async function findMatchingCoupons(
   }
   if (filter.fromCut) {
     request.input("fromCut", sql.NVarChar, filter.fromCut);
-    conditions.push("TRY_CAST(CutNo AS INT) >= TRY_CAST(@fromCut AS INT)");
+    conditions.push("(LEN(CutNo) > LEN(@fromCut) OR (LEN(CutNo) = LEN(@fromCut) AND CutNo >= @fromCut))");
   }
   if (filter.toCut) {
     request.input("toCut", sql.NVarChar, filter.toCut);
-    conditions.push("TRY_CAST(CutNo AS INT) <= TRY_CAST(@toCut AS INT)");
+    conditions.push("(LEN(CutNo) < LEN(@toCut) OR (LEN(CutNo) = LEN(@toCut) AND CutNo <= @toCut))");
   }
   if (filter.employeeCode) {
     request.input("employeeCode", sql.NVarChar, filter.employeeCode);
