@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { printPdf } from "@/lib/print";
+import { useDepartment } from "@/lib/department-context";
 import type { CouponLayout, QrCodeStyleData } from "../types";
 
 // Shared by every page that offers coupon generation (qr-code-generation,
@@ -18,6 +19,7 @@ export function useGenerateCouponPdf(
     generateBy?: string;
   },
 ) {
+  const { department } = useDepartment();
   const [generatingCoupons, setGeneratingCoupons] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [couponCount, setCouponCount] = useState<number | null>(null);
@@ -53,6 +55,7 @@ export function useGenerateCouponPdf(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workOrder: activeStyle.workOrder,
+          department,
           bundles: activeStyle.bundles,
           operations: activeStyle.operations,
           generatedBy: activeStyle.generateBy,
@@ -117,6 +120,7 @@ export function useGenerateCouponPdf(
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           workOrder: activeStyle.workOrder,
+          department,
           saleOrderNo: activeStyle.saleOrderNo,
           styleCode: activeStyle.styleCode,
           bundles: activeStyle.bundles,

@@ -3,6 +3,10 @@ import { getPool } from "@/lib/db";
 import { buildCouponCards } from "@/features/qr-code-generation/services/coupon-pairing.service";
 import { registerCoupons, countCoupons, listCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
 import { snapshotWorkOrderBulletin } from "@/features/order-style-bulletin/services/style-bulletin-snapshot.service";
+import {
+  isCouponDepartment,
+  type CouponDepartment,
+} from "@/lib/department-classification";
 import type { BundleDetailRow, OperationsDetailRow } from "@/features/qr-code-generation/types";
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -13,6 +17,7 @@ interface GenerateCouponsRequestBody {
   bundles: BundleDetailRow[];
   operations: OperationsDetailRow[];
   generatedBy?: string;
+  department?: string;
 }
 
 // Registers coupon identities in the DB only — no PDF render, no PDF
@@ -29,10 +34,18 @@ interface GenerateCouponsRequestBody {
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<GenerateCouponsRequestBody>;
   const { workOrder, bundles, operations, generatedBy } = body;
+  const department = (body.department || "sewing").trim().toLowerCase();
 
   if (!workOrder || !Array.isArray(bundles) || !Array.isArray(operations)) {
     return Response.json(
       { error: "workOrder, bundles, and operations are all required." },
+      { status: 400 },
+    );
+  }
+
+  if (!isCouponDepartment(department)) {
+    return Response.json(
+      { error: "department must be one of: cutting, sewing, washing, finishing, gdp." },
       { status: 400 },
     );
   }
@@ -71,8 +84,13 @@ export async function POST(request: Request) {
           (done, total) => {
             send({ done, total });
           },
+          department as CouponDepartment,
         );
-        const couponCount = await countCoupons(pool, workOrder);
+        const couponCount = await countCoupons(
+          pool,
+          workOrder,
+          department as CouponDepartment,
+        );
 
         // Snapshot into the pitSystem-owned style-bulletin/cut-detail tables
         // so reports can read them locally (see
@@ -149,9 +167,18 @@ export async function GET(request: Request) {
   const fromCut = searchParams.get("from_cut") || undefined;
   const toCut = searchParams.get("to_cut") || undefined;
   const employeeCode = searchParams.get("employee_code") || undefined;
+  const department = (searchParams.get("department") || "sewing")
+    .trim()
+    .toLowerCase();
 
   if (!workOrder) {
     return Response.json({ error: "work_order is required." }, { status: 400 });
+  }
+  if (!isCouponDepartment(department)) {
+    return Response.json(
+      { error: "department must be one of: cutting, sewing, washing, finishing, gdp." },
+      { status: 400 },
+    );
   }
 
   try {
@@ -165,6 +192,7 @@ export async function GET(request: Request) {
       fromCut,
       toCut,
       employeeCode,
+      department: department as CouponDepartment,
     });
     return Response.json({ coupons: rows, total, page, pageSize });
   } catch (err: unknown) {

@@ -20,6 +20,7 @@
 // "Finishing") — normalize to lowercase here, once, rather than each caller
 // needing to know the DB's raw casing.
 export type Department = "cutting" | "washing" | "sewing" | "finishing";
+export type CouponDepartment = Department | "gdp";
 
 export const STYLE_BULLETIN_DEPARTMENTS = [
   "cutting",
@@ -37,6 +38,15 @@ export function isStyleBulletinDepartment(
   value: string,
 ): value is Department {
   return KNOWN_DEPARTMENTS.has(value as Department);
+}
+
+const COUPON_DEPARTMENTS: ReadonlySet<CouponDepartment> = new Set([
+  ...STYLE_BULLETIN_DEPARTMENTS,
+  "gdp",
+]);
+
+export function isCouponDepartment(value: string): value is CouponDepartment {
+  return COUPON_DEPARTMENTS.has(value as CouponDepartment);
 }
 
 interface DepartmentSource {

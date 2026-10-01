@@ -28,10 +28,18 @@ export function trimBundleNo(workOrder: string, bundleNo: string): string {
   return bundleNo;
 }
 
-export function buildCouponCode(workOrder: string, bundleNo: string, opNo: string): string {
+export function buildCouponCode(
+  workOrder: string,
+  bundleNo: string,
+  opNo: string,
+  department = "sewing",
+): string {
   const workOrderDigits = workOrder.replace(/\D/g, "").replace(/^0+/, "");
   const trimmedBundleNo = trimBundleNo(workOrder, bundleNo);
-  return `${workOrderDigits || workOrder}-${trimmedBundleNo}-${opNo}`;
+  // Keep legacy Sewing codes stable; identify non-Sewing flows so the same
+  // work order/bundle/operation cannot collide across departments.
+  const departmentPrefix = department === "sewing" ? "" : `-${department[0]}`;
+  return `${workOrderDigits || workOrder}${departmentPrefix}-${trimmedBundleNo}-${opNo}`;
 }
 
 // ponytail self-check (not auto-run). Verify with:

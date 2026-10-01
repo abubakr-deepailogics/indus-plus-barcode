@@ -10,6 +10,7 @@ import { DEFAULT_MARGINS } from "../types";
 import { useGenerateCouponPdf } from "./useGenerateCouponPdf";
 import { useAuth } from "@/features/auth/context/auth-context";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
+import { useDepartment } from "@/lib/department-context";
 import type { WorkOrderSearchRow } from "@/components/work-order-search-modal";
 
 interface WorkerItem {
@@ -91,6 +92,7 @@ const emptyStyle: QrCodeStyleData = {
 };
 
 export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
+  const { department } = useDepartment();
   const { user, can } = useAuth();
   const canGenerate = can("coupon-generation", "create");
   const [activeStyle, setActiveStyle] = useState<QrCodeStyleData>(emptyStyle);
@@ -327,7 +329,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       let couponCount = "0";
       try {
         const countRes = await fetch(
-          `/api/qr-code-generation/coupons?work_order=${encodeURIComponent(wo)}&page_size=1`,
+          `/api/qr-code-generation/coupons?work_order=${encodeURIComponent(wo)}&page_size=1&department=${encodeURIComponent(department)}`,
         );
         if (countRes.ok) {
           const countData = await countRes.json();
@@ -342,7 +344,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       let pairs = new Set<string>();
       try {
         const pairsRes = await fetch(
-          `/api/qr-code-generation/coupons/pairs?work_order=${encodeURIComponent(wo)}`,
+          `/api/qr-code-generation/coupons/pairs?work_order=${encodeURIComponent(wo)}&department=${encodeURIComponent(department)}`,
         );
         if (pairsRes.ok) {
           const pairsData = await pairsRes.json();
@@ -523,6 +525,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         },
         body: JSON.stringify({
           workOrder: activeStyle.workOrder,
+          department,
           bundles: activeStyle.bundles,
           operations: operationsToSend,
           generatedBy: activeStyle.generateBy,

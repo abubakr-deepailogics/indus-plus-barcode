@@ -1,4 +1,5 @@
 import { sql, getPool, STYLE_BULLETIN_TABLE, WORKERS_VIEW } from "@/lib/db";
+import { buildCutRangePredicate } from "@/lib/cut-range";
 import { buildCouponCode } from "./coupon-code";
 import type { CouponCard } from "./coupon-pairing.service";
 
@@ -12,7 +13,8 @@ const CHUNK_COUNT = 4;
 
 export function chunk<T>(items: T[], size: number): T[][] {
   const out: T[][] = [];
-  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  for (let i = 0; i < items.length; i += size)
+    out.push(items.slice(i, i + size));
   return out;
 }
 
@@ -38,7 +40,9 @@ interface CouponRow {
 // this file — see the requestTimeout cast below.
 function buildCouponRowsTable(batch: CouponRow[]): sql.Table {
   const table = new sql.Table("dbo.CouponRowType") as unknown as {
-    columns: { add: (name: string, type: unknown, opts?: { nullable?: boolean }) => void };
+    columns: {
+      add: (name: string, type: unknown, opts?: { nullable?: boolean }) => void;
+    };
     rows: { add: (...values: unknown[]) => void };
   };
   table.columns.add("CouponCode", sql.NVarChar(200));
@@ -47,13 +51,20 @@ function buildCouponRowsTable(batch: CouponRow[]): sql.Table {
   table.columns.add("Section", sql.NVarChar(200), { nullable: true });
   table.columns.add("CutNo", sql.NVarChar(50), { nullable: true });
   for (const row of batch) {
-    table.rows.add(row.couponCode, row.bundleNo, row.opNo, row.section || null, row.cutNo || null);
+    table.rows.add(
+      row.couponCode,
+      row.bundleNo,
+      row.opNo,
+      row.section || null,
+      row.cutNo || null,
+    );
   }
   return table as unknown as sql.Table;
 }
 
 interface InsertBatchResult {
   count: number;
+  cutNoUpdatedCount: number;
   bundleNos: Set<string>;
   opNos: Set<string>;
 }
@@ -63,12 +74,13 @@ interface InsertBatchResult {
 // soft-deleted (IsDeleted=1) — CouponCode is the table's PK, so a
 // previously-generated-then-deleted coupon can never be re-INSERTed; the
 // only way to bring it back is to un-delete the existing row. A code that
-// still exists and is NOT deleted (i.e. already active) matches neither
-// statement and is left untouched — that's the "already existed" case.
+// still exists and is NOT deleted (i.e. already active) is not duplicated.
+// Its CutNo may be synchronized when it is still unscanned and unpaid, so a
+// corrected cut label is reflected by scanning without rewriting history.
 // One round trip per chunk regardless of chunk size. requestTimeout raised
 // above the driver's 15s default — @types/mssql doesn't declare
 // pool.request(conf), hence the cast (see pdf/route.ts).
-// OUTPUT on both statements reports back exactly which BundleNo/OpNo pairs
+// OUTPUT on insert/restore reports back exactly which BundleNo/OpNo pairs
 // were actually made available this call (newly inserted + restored from a
 // soft delete) — codes that were already active produce no output row. The
 // caller uses this both to report "N newly generated, M already existed"
@@ -84,15 +96,16 @@ async function insertCouponBatch(
   insertedBy: string,
   generationId: string,
 ): Promise<InsertBatchResult> {
-  const request = (pool.request as (conf?: { requestTimeout: number }) => sql.Request)({
+  const request = (
+    pool.request as (conf?: { requestTimeout: number }) => sql.Request
+  )({
     requestTimeout: 60_000,
   });
   const result = await request
     .input("workOrder", sql.NVarChar, workOrder)
     .input("insertedBy", sql.NVarChar, insertedBy)
     .input("generationId", sql.UniqueIdentifier, generationId)
-    .input("CouponRows", buildCouponRowsTable(batch))
-    .query(`
+    .input("CouponRows", buildCouponRowsTable(batch)).query(`
       INSERT INTO dbo.QrCode_Coupon (CouponCode, WorkOrder, BundleNo, OpNo, Section, CutNo, InsertedBy, Id)
       OUTPUT inserted.BundleNo, inserted.OpNo
       SELECT src.CouponCode, @workOrder, src.BundleNo, src.OpNo, src.Section, src.CutNo, @insertedBy, @generationId
@@ -118,21 +131,41 @@ async function insertCouponBatch(
       FROM dbo.QrCode_Coupon c
       INNER JOIN @CouponRows src ON src.CouponCode = c.CouponCode
       WHERE c.IsDeleted = 1;
+
+      UPDATE c
+      SET c.CutNo = src.CutNo
+      OUTPUT inserted.BundleNo, inserted.OpNo
+      FROM dbo.QrCode_Coupon c
+      INNER JOIN @CouponRows src ON src.CouponCode = c.CouponCode
+      WHERE c.IsDeleted = 0
+        AND c.IsScanned = 0
+        AND c.WageId IS NULL
+        AND ISNULL(c.CutNo, '') <> ISNULL(src.CutNo, '');
     `);
-  const recordsets = result.recordsets as unknown as { BundleNo: string; OpNo: string }[][];
+  const recordsets = result.recordsets as unknown as {
+    BundleNo: string;
+    OpNo: string;
+  }[][];
   const insertedRows = recordsets[0] ?? [];
   const restoredRows = recordsets[1] ?? [];
+  const cutNoUpdatedRows = recordsets[2] ?? [];
   const bundleNos = new Set<string>();
   const opNos = new Set<string>();
   for (const row of [...insertedRows, ...restoredRows]) {
     bundleNos.add(row.BundleNo);
     opNos.add(row.OpNo);
   }
-  return { count: insertedRows.length + restoredRows.length, bundleNos, opNos };
+  return {
+    count: insertedRows.length + restoredRows.length,
+    cutNoUpdatedCount: cutNoUpdatedRows.length,
+    bundleNos,
+    opNos,
+  };
 }
 
 export interface RegisterCouponsResult {
   insertedCount: number;
+  cutNoUpdatedCount: number;
   // Distinct BundleNo/OpNo values that appeared in a coupon this run
   // actually created (inserted or restored from a soft delete) — a subset
   // of the full selection whenever some of it was already generated in an
@@ -175,16 +208,26 @@ export async function registerCoupons(
   const total = rows.length;
   let done = 0;
   let insertedCount = 0;
+  let cutNoUpdatedCount = 0;
   const newBundleNos = new Set<string>();
   const newOpNos = new Set<string>();
   const merge = (r: InsertBatchResult) => {
     insertedCount += r.count;
+    cutNoUpdatedCount += r.cutNoUpdatedCount;
     for (const b of r.bundleNos) newBundleNos.add(b);
     for (const o of r.opNos) newOpNos.add(o);
   };
   for (const batch of chunkEvenly(rows, CHUNK_COUNT)) {
     try {
-      merge(await insertCouponBatch(pool, workOrder, batch, insertedBy, generationId));
+      merge(
+        await insertCouponBatch(
+          pool,
+          workOrder,
+          batch,
+          insertedBy,
+          generationId,
+        ),
+      );
     } catch (err: unknown) {
       // 2627/2601 = unique constraint violation — two concurrent requests
       // raced on the same coupon(s) between the NOT EXISTS check and the
@@ -194,7 +237,15 @@ export async function registerCoupons(
       if (num !== 2627 && num !== 2601) throw err;
       for (const row of batch) {
         try {
-          merge(await insertCouponBatch(pool, workOrder, [row], insertedBy, generationId));
+          merge(
+            await insertCouponBatch(
+              pool,
+              workOrder,
+              [row],
+              insertedBy,
+              generationId,
+            ),
+          );
         } catch (rowErr: unknown) {
           const rowNum = (rowErr as { number?: number }).number;
           if (rowNum !== 2627 && rowNum !== 2601) throw rowErr;
@@ -206,16 +257,22 @@ export async function registerCoupons(
   }
   return {
     insertedCount,
+    cutNoUpdatedCount,
     newBundleNos: [...newBundleNos],
     newOpNos: [...newOpNos],
   };
 }
 
-export async function countCoupons(pool: sql.ConnectionPool, workOrder: string): Promise<number> {
+export async function countCoupons(
+  pool: sql.ConnectionPool,
+  workOrder: string,
+): Promise<number> {
   const result = await pool
     .request()
     .input("workOrder", sql.NVarChar, workOrder)
-    .query(`SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0`);
+    .query(
+      `SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0`,
+    );
   return result.recordset[0].total;
 }
 
@@ -255,8 +312,7 @@ export async function getGeneratedPairs(
 ): Promise<{ bundleNo: string; opNo: string }[]> {
   const result = await pool
     .request()
-    .input("workOrder", sql.NVarChar, workOrder)
-    .query(`
+    .input("workOrder", sql.NVarChar, workOrder).query(`
       SELECT DISTINCT BundleNo, OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0
     `);
   return result.recordset.map((r: { BundleNo: string; OpNo: string }) => ({
@@ -300,16 +356,24 @@ export interface CouponListFilters {
 // /api/coupons/suggestions?type=section). Applies the same inputs+conditions
 // to whichever request object is passed in, so paginated and full-set
 // queries stay in sync.
-function applyCouponFilters(request: sql.Request, workOrder: string, filters: CouponListFilters) {
+function applyCouponFilters(
+  request: sql.Request,
+  workOrder: string,
+  filters: CouponListFilters,
+) {
   const conditions = ["c.WorkOrder = @workOrder", "c.IsDeleted = 0"];
   request.input("workOrder", sql.NVarChar, workOrder);
 
   if (filters.fromBundle) {
-    conditions.push("TRY_CAST(c.BundleNo AS INT) >= TRY_CAST(@fromBundle AS INT)");
+    conditions.push(
+      "TRY_CAST(c.BundleNo AS INT) >= TRY_CAST(@fromBundle AS INT)",
+    );
     request.input("fromBundle", sql.NVarChar, filters.fromBundle);
   }
   if (filters.toBundle) {
-    conditions.push("TRY_CAST(c.BundleNo AS INT) <= TRY_CAST(@toBundle AS INT)");
+    conditions.push(
+      "TRY_CAST(c.BundleNo AS INT) <= TRY_CAST(@toBundle AS INT)",
+    );
     request.input("toBundle", sql.NVarChar, filters.toBundle);
   }
   if (filters.opNo) {
@@ -325,11 +389,11 @@ function applyCouponFilters(request: sql.Request, workOrder: string, filters: Co
     request.input("isScanned", sql.Bit, filters.isScanned);
   }
   if (filters.fromCut) {
-    conditions.push("(LEN(c.CutNo) > LEN(@fromCut) OR (LEN(c.CutNo) = LEN(@fromCut) AND c.CutNo >= @fromCut))");
+    conditions.push(buildCutRangePredicate("c.CutNo", "fromCut", ">="));
     request.input("fromCut", sql.NVarChar, filters.fromCut);
   }
   if (filters.toCut) {
-    conditions.push("(LEN(c.CutNo) < LEN(@toCut) OR (LEN(c.CutNo) = LEN(@toCut) AND c.CutNo <= @toCut))");
+    conditions.push(buildCutRangePredicate("c.CutNo", "toCut", "<="));
     request.input("toCut", sql.NVarChar, filters.toCut);
   }
   if (filters.employeeCode) {
@@ -350,17 +414,19 @@ function applyCouponFilters(request: sql.Request, workOrder: string, filters: Co
 
 // A work order's whole bulletin is small (one op list), so this is one
 // query regardless of how many coupon rows are being paged/listed.
-async function fetchOpNamesByOpNo(workOrder: string): Promise<Map<string, string>> {
+async function fetchOpNamesByOpNo(
+  workOrder: string,
+): Promise<Map<string, string>> {
   const pool = await getPool("indusPlus");
-  const result = await pool
-    .request()
-    .input("wo", sql.NVarChar, workOrder)
+  const result = await pool.request().input("wo", sql.NVarChar, workOrder)
     .query(`
       SELECT DISTINCT [Operation Code] AS OpNo, [Operation Name] AS OpName
       FROM ${STYLE_BULLETIN_TABLE}
       WHERE [Order No] = @wo
     `);
-  return new Map(result.recordset.map((r) => [r.OpNo as string, r.OpName as string]));
+  return new Map(
+    result.recordset.map((r) => [r.OpNo as string, r.OpName as string]),
+  );
 }
 
 // Chunked well under SQL Server's ~2100 parameter cap (see buildCouponRowsTable
@@ -369,7 +435,9 @@ async function fetchOpNamesByOpNo(workOrder: string): Promise<Map<string, string
 // even if it did.
 const EMPLOYEE_CODE_CHUNK_SIZE = 500;
 
-function distinctEmployeeCodes(rows: { EmployeeCode?: string | null }[]): number[] {
+function distinctEmployeeCodes(
+  rows: { EmployeeCode?: string | null }[],
+): number[] {
   const codes = new Set<number>();
   for (const row of rows) {
     const parsed = row.EmployeeCode ? Number(row.EmployeeCode) : NaN;
@@ -378,7 +446,9 @@ function distinctEmployeeCodes(rows: { EmployeeCode?: string | null }[]): number
   return [...codes];
 }
 
-async function fetchEmployeeNamesById(employeeCodes: number[]): Promise<Map<number, string>> {
+async function fetchEmployeeNamesById(
+  employeeCodes: number[],
+): Promise<Map<number, string>> {
   if (employeeCodes.length === 0) return new Map();
   const pool = await getPool("hrms");
   const names = new Map<number, string>();
@@ -391,7 +461,8 @@ async function fetchEmployeeNamesById(employeeCodes: number[]): Promise<Map<numb
     const result = await request.query(
       `SELECT EmployeeID, FirstName FROM ${WORKERS_VIEW} WHERE EmployeeID IN (${placeholders.join(", ")})`,
     );
-    for (const row of result.recordset) names.set(row.EmployeeID, row.FirstName);
+    for (const row of result.recordset)
+      names.set(row.EmployeeID, row.FirstName);
   }
   return names;
 }
@@ -404,7 +475,9 @@ function attachNames<T extends { OpNo: string; EmployeeCode?: string | null }>(
   return rows.map((row) => ({
     ...row,
     OpName: opNames.get(row.OpNo) ?? null,
-    EmployeeName: row.EmployeeCode ? employeeNames.get(Number(row.EmployeeCode)) ?? null : null,
+    EmployeeName: row.EmployeeCode
+      ? (employeeNames.get(Number(row.EmployeeCode)) ?? null)
+      : null,
   }));
 }
 
@@ -427,8 +500,7 @@ export async function listCoupons(
   const [dataResult, countResult, opNames] = await Promise.all([
     request
       .input("offset", sql.Int, (page - 1) * pageSize)
-      .input("pageSize", sql.Int, pageSize)
-      .query(`
+      .input("pageSize", sql.Int, pageSize).query(`
         SELECT
           c.Id, c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.Section, c.IsScanned, c.InsertedAt, c.CutNo,
           c.EmployeeCode, c.ScanBy,
@@ -438,10 +510,14 @@ export async function listCoupons(
         ORDER BY c.CouponCode
         OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
       `),
-    countRequest.query(`SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon c WHERE ${where}`),
+    countRequest.query(
+      `SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon c WHERE ${where}`,
+    ),
     fetchOpNamesByOpNo(workOrder),
   ]);
-  const employeeNames = await fetchEmployeeNamesById(distinctEmployeeCodes(dataResult.recordset));
+  const employeeNames = await fetchEmployeeNamesById(
+    distinctEmployeeCodes(dataResult.recordset),
+  );
   return {
     rows: attachNames(dataResult.recordset, opNames, employeeNames),
     total: countResult.recordset[0].total,
@@ -469,6 +545,8 @@ export async function listAllCoupons(
     `),
     fetchOpNamesByOpNo(workOrder),
   ]);
-  const employeeNames = await fetchEmployeeNamesById(distinctEmployeeCodes(result.recordset));
+  const employeeNames = await fetchEmployeeNamesById(
+    distinctEmployeeCodes(result.recordset),
+  );
   return attachNames(result.recordset, opNames, employeeNames);
 }
