@@ -1,4 +1,5 @@
 import { getPool, sql } from "@/lib/db";
+import type { CouponDepartment } from "@/lib/department-classification";
 
 import type { LockedRange } from "../types";
 
@@ -116,16 +117,18 @@ export async function findLockedDates(
 export async function findOverlappingWage(
   from: string,
   to: string,
+  department: CouponDepartment = "sewing",
 ): Promise<WageLock | null> {
   const pool = await getPool("pitSystem");
   const result = await pool
     .request()
     .input("from", sql.Date, from)
     .input("to", sql.Date, to)
+    .input("department", sql.NVarChar, department)
     .query(`
       SELECT TOP 1 WageId, Title, FromDate, ToDate
       FROM dbo.EmployeeWages WITH (NOLOCK)
-      WHERE FromDate <= @to AND ToDate >= @from
+      WHERE Department = @department AND FromDate <= @to AND ToDate >= @from
       ORDER BY WageId DESC
     `);
 

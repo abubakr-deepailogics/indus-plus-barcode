@@ -2,6 +2,7 @@ import { buildReportSummary } from "@/features/reports/services/report-summary-b
 
 import type { WagePreview, WageRow } from "../types";
 import { groupEmployeeData } from "./employee-grouping.service";
+import type { CouponDepartment } from "@/lib/department-classification";
 
 // ── Tenure-scoped wage building ──────────────────────────────────────────────
 // A wage covers EVERY scanned coupon in its tenure, for every employee — the
@@ -18,10 +19,12 @@ export type BuildWageDataResult =
 export async function buildWageData(
   from: string,
   to: string,
+  department: CouponDepartment = "sewing",
 ): Promise<BuildWageDataResult> {
   // "all employees" over the tenure — no search value, no filters.
   const summaryResult = await buildReportSummary("employee", "", from, to, {
     all: true,
+    department,
   });
   if (!summaryResult.ok) return summaryResult;
 
