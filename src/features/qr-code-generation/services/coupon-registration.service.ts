@@ -1,6 +1,7 @@
 import { sql, getPool, STYLE_BULLETIN_TABLE, WORKERS_VIEW } from "@/lib/db";
 import { buildCouponCode } from "./coupon-code";
 import type { CouponCard } from "./coupon-pairing.service";
+import type { CouponDepartment } from "@/lib/department-classification";
 
 // Number of TVP round trips a registration run is split into — a divisor
 // of the row count, not a fixed row-count-per-chunk. A TVP has no 2100-param
@@ -91,6 +92,7 @@ interface InsertBatchResult {
 async function insertCouponBatch(
   pool: sql.ConnectionPool,
   workOrder: string,
+  department: CouponDepartment,
   batch: CouponRow[],
   insertedBy: string,
   generationId: string,
@@ -102,12 +104,13 @@ async function insertCouponBatch(
   });
   const result = await request
     .input("workOrder", sql.NVarChar, workOrder)
+    .input("department", sql.NVarChar, department)
     .input("insertedBy", sql.NVarChar, insertedBy)
     .input("generationId", sql.UniqueIdentifier, generationId)
     .input("CouponRows", buildCouponRowsTable(batch)).query(`
-      INSERT INTO dbo.QrCode_Coupon (CouponCode, WorkOrder, BundleNo, OpNo, Section, CutNo, InsertedBy, Id)
+      INSERT INTO dbo.QrCode_Coupon (CouponCode, WorkOrder, BundleNo, OpNo, Section, CutNo, Department, InsertedBy, Id)
       OUTPUT inserted.BundleNo, inserted.OpNo
-      SELECT src.CouponCode, @workOrder, src.BundleNo, src.OpNo, src.Section, src.CutNo, @insertedBy, @generationId
+      SELECT src.CouponCode, @workOrder, src.BundleNo, src.OpNo, src.Section, src.CutNo, @department, @insertedBy, @generationId
       FROM @CouponRows src
       WHERE NOT EXISTS (
         SELECT 1 FROM dbo.QrCode_Coupon existing WHERE existing.CouponCode = src.CouponCode
@@ -119,6 +122,7 @@ async function insertCouponBatch(
           c.DeletedBy = NULL,
           c.Section = src.Section,
           c.CutNo = src.CutNo,
+          c.Department = @department,
           c.InsertedBy = @insertedBy,
           c.Id = @generationId,
           c.IsScanned = 0,
@@ -195,6 +199,7 @@ export async function registerCoupons(
   insertedBy: string,
   generationId: string,
   onProgress?: (done: number, total: number) => void,
+  department: CouponDepartment = "sewing",
 ): Promise<RegisterCouponsResult> {
   const rows = cards.map(({ bundle, op }) => ({
     couponCode: buildCouponCode(workOrder, bundle.bundleNo, op.opNo),
@@ -222,6 +227,7 @@ export async function registerCoupons(
         await insertCouponBatch(
           pool,
           workOrder,
+          department,
           batch,
           insertedBy,
           generationId,
@@ -240,6 +246,7 @@ export async function registerCoupons(
             await insertCouponBatch(
               pool,
               workOrder,
+              department,
               [row],
               insertedBy,
               generationId,
@@ -265,12 +272,13 @@ export async function registerCoupons(
 export async function countCoupons(
   pool: sql.ConnectionPool,
   workOrder: string,
+  department?: CouponDepartment,
 ): Promise<number> {
-  const result = await pool
-    .request()
-    .input("workOrder", sql.NVarChar, workOrder)
+  const request = pool.request().input("workOrder", sql.NVarChar, workOrder);
+  if (department) request.input("department", sql.NVarChar, department);
+  const result = await request
     .query(
-      `SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0`,
+      `SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0${department ? " AND Department = @department" : ""}`,
     );
   return result.recordset[0].total;
 }
@@ -308,11 +316,12 @@ export async function softDeleteCoupons(
 export async function getGeneratedPairs(
   pool: sql.ConnectionPool,
   workOrder: string,
+  department?: CouponDepartment,
 ): Promise<{ bundleNo: string; opNo: string }[]> {
-  const result = await pool
-    .request()
-    .input("workOrder", sql.NVarChar, workOrder).query(`
-      SELECT DISTINCT BundleNo, OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0
+  const request = pool.request().input("workOrder", sql.NVarChar, workOrder);
+  if (department) request.input("department", sql.NVarChar, department);
+  const result = await request.query(`
+      SELECT DISTINCT BundleNo, OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0${department ? " AND Department = @department" : ""}
     `);
   return result.recordset.map((r: { BundleNo: string; OpNo: string }) => ({
     bundleNo: r.BundleNo,
@@ -339,6 +348,7 @@ export interface CouponListRow {
 }
 
 export interface CouponListFilters {
+  department?: CouponDepartment;
   fromBundle?: string;
   toBundle?: string;
   opNo?: string;
@@ -362,6 +372,10 @@ function applyCouponFilters(
 ) {
   const conditions = ["c.WorkOrder = @workOrder", "c.IsDeleted = 0"];
   request.input("workOrder", sql.NVarChar, workOrder);
+  if (filters.department) {
+    conditions.push("c.Department = @department");
+    request.input("department", sql.NVarChar, filters.department);
+  }
 
   if (filters.fromBundle) {
     conditions.push(
