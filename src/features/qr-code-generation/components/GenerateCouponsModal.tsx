@@ -53,7 +53,11 @@ export function GenerateCouponsModal({
   }, [state, onClose]);
 
   return (
-    <div className="fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div
+      className={`fixed inset-0 flex items-center justify-center z-50 p-4 backdrop-blur-sm ${
+        state === "success" ? "bg-slate-900/10" : "bg-[#0f172a]/40"
+      }`}
+    >
       <div className="bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] max-w-[420px] w-full p-6 animate-scale-up">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-[#f1f5f9] pb-3 mb-4">
