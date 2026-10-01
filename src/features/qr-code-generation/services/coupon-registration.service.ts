@@ -1,5 +1,4 @@
 import { sql, getPool, STYLE_BULLETIN_TABLE, WORKERS_VIEW } from "@/lib/db";
-import { buildCutRangePredicate } from "@/lib/cut-range";
 import { buildCouponCode } from "./coupon-code";
 import type { CouponCard } from "./coupon-pairing.service";
 
@@ -389,11 +388,15 @@ function applyCouponFilters(
     request.input("isScanned", sql.Bit, filters.isScanned);
   }
   if (filters.fromCut) {
-    conditions.push(buildCutRangePredicate("c.CutNo", "fromCut", ">="));
+    conditions.push(
+      "(LEN(c.CutNo) > LEN(@fromCut) OR (LEN(c.CutNo) = LEN(@fromCut) AND c.CutNo >= @fromCut))",
+    );
     request.input("fromCut", sql.NVarChar, filters.fromCut);
   }
   if (filters.toCut) {
-    conditions.push(buildCutRangePredicate("c.CutNo", "toCut", "<="));
+    conditions.push(
+      "(LEN(c.CutNo) < LEN(@toCut) OR (LEN(c.CutNo) = LEN(@toCut) AND c.CutNo <= @toCut))",
+    );
     request.input("toCut", sql.NVarChar, filters.toCut);
   }
   if (filters.employeeCode) {
