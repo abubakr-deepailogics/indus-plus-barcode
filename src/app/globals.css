@@ -128,3 +128,74 @@
     @apply font-sans;
   }
 }
+
+:root {
+  --client-brand-red: #b11016;
+  --client-brand-red-hover: #8f1117;
+  --client-brand-red-soft: #fff1f2;
+  --client-brand-red-border: #efc3c6;
+  --client-brand-charcoal: #211f20;
+}
+
+[data-client-brand] [class*="text-indigo-"]:not(table *, td *, th *),
+[data-client-brand] [class*="text-[#4f46e5]"]:not(table *, td *, th *),
+[data-client-brand] [class*="text-[#4338ca]"]:not(table *, td *, th *) {
+  color: var(--client-brand-red);
+}
+
+[data-client-brand] [class*="bg-indigo-50"],
+[data-client-brand] [class*="bg-indigo-100"] {
+  background-color: var(--client-brand-red-soft);
+}
+
+[data-client-brand] [class*="bg-indigo-600"],
+[data-client-brand] [class*="bg-indigo-700"],
+[data-client-brand] [class*="bg-[#4f46e5]"] {
+  background-color: var(--client-brand-red) !important;
+  color: white !important;
+}
+
+[data-client-brand] [class*="border-indigo-"],
+[data-client-brand] [class*="border-[#4f46e5]"] {
+  border-color: var(--client-brand-red-border);
+}
+
+[data-client-brand] [class*="ring-indigo-"],
+[data-client-brand] [class*="ring-[#4f46e5]"] {
+  --tw-ring-color: rgb(177 16 22 / 0.16);
+}
+
+[data-client-brand] [class*="hover:bg-indigo-"]:hover,
+[data-client-brand] [class*="hover:bg-[#4338ca]"]:hover {
+  background-color: var(--client-brand-red-soft);
+}
+
+[data-client-brand] [class*="hover:bg-indigo-700"]:hover,
+[data-client-brand] [class*="hover:bg-indigo-800"]:hover,
+[data-client-brand] [class*="hover:bg-[#4338ca]"]:hover {
+  background-color: var(--client-brand-red-hover);
+  color: white;
+}
+
+[data-client-brand] [class*="hover:text-indigo-"]:hover {
+  color: var(--client-brand-red-hover);
+}
+
+[data-client-brand] [class*="hover:border-indigo-"]:hover,
+[data-client-brand] [class*="focus:border-indigo-"]:focus {
+  border-color: var(--client-brand-red);
+}
+
+[data-client-brand] [class*="focus:ring-indigo-"]:focus,
+[data-client-brand] [class*="focus:ring-[#4f46e5]"]:focus {
+  --tw-ring-color: rgb(177 16 22 / 0.16);
+}
+
+[data-client-brand] [class*="bg-slate-900"] {
+  background-color: var(--client-brand-charcoal);
+}
+
+[data-client-brand] [class*="text-slate-950"],
+[data-client-brand] [class*="text-slate-900"] {
+  color: var(--client-brand-charcoal);
+}

@@ -8,7 +8,8 @@ import { WorkOrderSearchModal } from "@/components/work-order-search-modal";
 import { PageSetupModal } from "./PageSetupModal";
 import { GenerateCouponsModal } from "./GenerateCouponsModal";
 import { CodeTypeSelectionModal } from "./CodeTypeSelectionModal";
-import { Loader2 } from "lucide-react";
+import { Loader2, QrCode } from "lucide-react";
+import { ModulePageHeader } from "@/components/ModulePageHeader";
 
 function DetailTableSkeleton() {
   const rows = Array.from({ length: 6 });
@@ -52,6 +53,13 @@ export function QrCodeGenerationView() {
   return (
     <>
       <div className="no-print flex flex-col gap-6 max-w-345 mx-auto text-xs text-[#334155] animate-fade-in relative pb-16">
+        <ModulePageHeader
+          eyebrow="Production / Serialization"
+          title="Coupon Generation"
+          detail="Bundle selection, operation coverage and print setup"
+          icon={QrCode}
+          accent="indigo"
+        />
         {/* Main Parameters Panel */}
         <ParametersPanel
           activeStyle={facade.activeStyle}

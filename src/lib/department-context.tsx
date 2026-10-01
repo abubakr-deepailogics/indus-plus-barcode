@@ -22,7 +22,8 @@ export const DEPARTMENTS: readonly DepartmentConfig[] = [
     id: "sewing",
     label: "Sewing",
     badge: "Active",
-    description: "Production bulletins, cutting, coupon scanning, tracing & reports",
+    description:
+      "Production bulletins, cutting, coupon scanning, tracing & reports",
   },
   {
     id: "washing",
@@ -35,12 +36,6 @@ export const DEPARTMENTS: readonly DepartmentConfig[] = [
     label: "Finishing",
     badge: "Planned",
     description: "Pre-finishing, finishing bulletins, packing & final audit",
-  },
-  {
-    id: "gdp",
-    label: "GDP",
-    badge: "Planned",
-    description: "Garment Dyeing & Printing operations & tracking",
   },
 ] as const;
 
@@ -60,7 +55,9 @@ export function DepartmentProvider({ children }: { children: ReactNode }) {
   const [department, setDepartmentState] = useState<DepartmentKey>(() => {
     if (typeof window === "undefined") return "sewing";
     try {
-      const saved = window.localStorage.getItem(STORAGE_KEY) as DepartmentKey | null;
+      const saved = window.localStorage.getItem(
+        STORAGE_KEY,
+      ) as DepartmentKey | null;
       if (saved && ["sewing", "washing", "finishing", "gdp"].includes(saved)) {
         return saved;
       }

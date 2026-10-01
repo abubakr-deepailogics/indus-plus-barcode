@@ -341,7 +341,7 @@ export default function ManageUsersPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6">
+    <div data-client-brand className="flex flex-1 flex-col gap-6">
       <header className="flex flex-col justify-between gap-5 border-b border-slate-200 pb-5 sm:flex-row sm:items-center">
         <div className="flex items-start gap-4">
           <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm">
@@ -438,7 +438,7 @@ export default function ManageUsersPage() {
           !open && !resettingPassword && setResetConfirmUser(null)
         }
       >
-        <DialogContent>
+        <DialogContent data-client-brand>
           <DialogHeader>
             <DialogTitle>Reset password?</DialogTitle>
             <DialogDescription>
@@ -472,7 +472,7 @@ export default function ManageUsersPage() {
           !open && !deletingUser && setDeleteConfirmUser(null)
         }
       >
-        <DialogContent>
+        <DialogContent data-client-brand>
           <DialogHeader>
             <DialogTitle>Delete user?</DialogTitle>
             <DialogDescription>

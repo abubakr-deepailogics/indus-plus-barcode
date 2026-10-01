@@ -275,8 +275,8 @@ export function WorkOrderSearchModal({
                   onClick={() => onSelect(row)}
                   className={`w-full grid gap-3 ${gridColsClass} text-left px-4 py-2.5 cursor-pointer transition-colors ${
                     idx === activeIndex
-                      ? "bg-indigo-50/60"
-                      : "hover:bg-indigo-50/30"
+                      ? "bg-slate-100 font-semibold text-slate-900"
+                      : "hover:bg-slate-50 text-slate-700"
                   }`}
                 >
                   <span className="text-xs font-semibold text-[#334155]">

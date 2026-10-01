@@ -103,10 +103,10 @@ export function CreateUserDialog({
           </Button>
         }
       />
-      <DialogContent className="max-w-[calc(100%-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white p-0 shadow-2xl sm:max-w-[520px]">
+      <DialogContent data-client-brand className="max-w-[calc(100%-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white p-0 shadow-2xl sm:max-w-[520px]">
         <div className="border-b border-slate-200 bg-slate-50/80 px-6 py-5 sm:px-7">
           <DialogHeader className="flex-row items-start gap-3.5">
-            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-indigo-100 text-indigo-700 ring-1 ring-indigo-200">
+            <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm">
               <UserRoundPlus className="size-5" />
             </div>
             <div className="min-w-0">

@@ -152,7 +152,7 @@ export function ScanningDetailsTable(props: Facade) {
 
       {/* Barcode scanner field — focus here, then scan; each scan appends a fetched row below */}
       <div className="flex flex-col gap-0.5 max-w-xs">
-        <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
+        <span className="font-bold text-[10px] uppercase text-slate-500">
           Scanner Input
         </span>
         <input
@@ -175,7 +175,7 @@ export function ScanningDetailsTable(props: Facade) {
           onKeyDown={handleScannerKeyDown}
           onBlur={handleInputBlur}
           disabled={scannerDisabled}
-          className="w-full px-3 py-1 rounded-lg border border-indigo-200 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:border-[#4f46e5] transition-all bg-indigo-50/30 disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full px-3 py-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition-all bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
         />
       </div>
 
@@ -426,7 +426,7 @@ export function ScanningDetailsTable(props: Facade) {
           <span className="font-bold text-[#64748b] text-[10px] uppercase tracking-wider">
             Total Value
           </span>
-          <div className="px-3 py-1 rounded-lg border border-indigo-100 bg-indigo-50/50 text-indigo-700 font-black text-sm text-right min-w-[100px] shadow-sm">
+          <div className="px-3 py-1 rounded-lg border border-slate-200 bg-white text-slate-800 font-black text-sm text-right min-w-[100px] shadow-sm">
             {totalValue.toFixed(2)}
           </div>
         </div>

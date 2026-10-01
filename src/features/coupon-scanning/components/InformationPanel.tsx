@@ -504,7 +504,7 @@ export function InformationPanel(props: Facade) {
           <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
             {/* Coupon Code */}
             <div className="flex flex-col gap-0.5 md:col-span-2">
-              <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
+              <span className="font-bold text-[10px] uppercase text-slate-500">
                 Coupon Code
               </span>
               <input
@@ -512,13 +512,13 @@ export function InformationPanel(props: Facade) {
                 placeholder="Scan or enter Coupon Code"
                 value={scanCouponCode}
                 onChange={(e) => setScanCouponCode(e.target.value)}
-                className="w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                className="w-full px-3 py-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-600/10 focus:border-indigo-600 transition-all bg-white"
               />
             </div>
 
             {/* Work Order */}
             <div className="flex flex-col gap-0.5 relative md:col-span-2">
-              <span className="font-bold text-[10px] uppercase text-[#4f46e5]">
+              <span className="font-bold text-[10px] uppercase text-slate-500">
                 Work Order{" "}
                 {!scanCouponCode.trim() && (
                   <span className="text-red-500">*</span>
@@ -538,7 +538,7 @@ export function InformationPanel(props: Facade) {
                 renderSuggestion={(item) => <span>{item}</span>}
                 getSuggestionValue={(item) => item}
                 placeholder="Enter W/O"
-                inputClassName="w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
+                inputClassName="w-full px-3 py-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-600/10 focus:border-indigo-600 transition-all bg-white"
               />
             </div>
 
@@ -546,7 +546,7 @@ export function InformationPanel(props: Facade) {
             <div className="grid grid-cols-2 gap-2 md:col-span-2">
               <div className="flex flex-col gap-0.5 relative">
                 <span
-                  className={`font-bold text-[10px] uppercase transition-colors ${!workOrder.trim() ? "text-slate-400" : "text-[#4f46e5]"}`}
+                  className={`font-bold text-[10px] uppercase transition-colors ${!workOrder.trim() ? "text-slate-400" : "text-slate-500"}`}
                 >
                   From Cut
                 </span>
@@ -560,17 +560,17 @@ export function InformationPanel(props: Facade) {
                   minChars={0}
                   disabled={!workOrder.trim()}
                   placeholder="e.g. 1"
-                  inputClassName={`w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold focus:outline-none transition-all ${
+                  inputClassName={`w-full px-3 py-1 rounded-lg border text-xs font-semibold focus:outline-none transition-all ${
                     !workOrder.trim()
                       ? "bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200"
-                      : "bg-white text-slate-800 focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
+                      : "bg-white text-slate-800 border-slate-200 focus:ring-2 focus:ring-indigo-600/10 focus:border-indigo-600"
                   }`}
                 />
               </div>
 
               <div className="flex flex-col gap-0.5 relative">
                 <span
-                  className={`font-bold text-[10px] uppercase transition-colors ${!workOrder.trim() ? "text-slate-400" : "text-[#4f46e5]"}`}
+                  className={`font-bold text-[10px] uppercase transition-colors ${!workOrder.trim() ? "text-slate-400" : "text-slate-500"}`}
                 >
                   To Cut
                 </span>
@@ -584,10 +584,10 @@ export function InformationPanel(props: Facade) {
                   minChars={0}
                   disabled={!workOrder.trim()}
                   placeholder="e.g. 10"
-                  inputClassName={`w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold focus:outline-none transition-all ${
+                  inputClassName={`w-full px-3 py-1 rounded-lg border text-xs font-semibold focus:outline-none transition-all ${
                     !workOrder.trim()
                       ? "bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200"
-                      : "bg-white text-slate-800 focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
+                      : "bg-white text-slate-800 border-slate-200 focus:ring-2 focus:ring-indigo-600/10 focus:border-indigo-600"
                   }`}
                 />
               </div>
@@ -596,7 +596,7 @@ export function InformationPanel(props: Facade) {
             {/* Bundle No */}
             <div className="flex flex-col gap-0.5 relative md:col-span-2">
               <span
-                className={`font-bold text-[10px] uppercase transition-colors ${!workOrder.trim() ? "text-slate-400" : "text-[#4f46e5]"}`}
+                className={`font-bold text-[10px] uppercase transition-colors ${!workOrder.trim() ? "text-slate-400" : "text-slate-500"}`}
               >
                 Bundle No
               </span>
@@ -610,10 +610,10 @@ export function InformationPanel(props: Facade) {
                 getSuggestionValue={(item) => item}
                 minChars={0}
                 placeholder="e.g. 33550001"
-                inputClassName={`w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold focus:outline-none transition-all ${
+                inputClassName={`w-full px-3 py-1 rounded-lg border text-xs font-semibold focus:outline-none transition-all ${
                   !workOrder.trim()
                     ? "bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200"
-                    : "bg-white text-slate-800 focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
+                    : "bg-white text-slate-800 border-slate-200 focus:ring-2 focus:ring-indigo-600/10 focus:border-indigo-600"
                 }`}
               />
             </div>
@@ -621,7 +621,7 @@ export function InformationPanel(props: Facade) {
             {/* Operation No */}
             <div className="flex flex-col gap-0.5 relative md:col-span-2">
               <span
-                className={`font-bold text-[10px] uppercase transition-colors ${!workOrder.trim() ? "text-slate-400" : "text-[#4f46e5]"}`}
+                className={`font-bold text-[10px] uppercase transition-colors ${!workOrder.trim() ? "text-slate-400" : "text-slate-500"}`}
               >
                 Operation No
               </span>
@@ -633,7 +633,7 @@ export function InformationPanel(props: Facade) {
                 disabled={!workOrder.trim()}
                 renderSuggestion={(op) => (
                   <div className="flex flex-col">
-                    <span className="text-[#4f46e5] font-bold text-[10px]">
+                    <span className="text-indigo-600 font-bold text-[10px]">
                       {op.Operation_Code}
                     </span>
                     <span className="text-[10px] text-slate-500 truncate">
@@ -643,10 +643,10 @@ export function InformationPanel(props: Facade) {
                 )}
                 getSuggestionValue={(op) => op.Operation_Code}
                 placeholder="e.g. SW0000090"
-                inputClassName={`w-full px-3 py-1 rounded-lg border border-indigo-100 text-xs font-semibold focus:outline-none transition-all ${
+                inputClassName={`w-full px-3 py-1 rounded-lg border text-xs font-semibold focus:outline-none transition-all ${
                   !workOrder.trim()
                     ? "bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200"
-                    : "bg-white text-slate-800 focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
+                    : "bg-white text-slate-800 border-slate-200 focus:ring-2 focus:ring-indigo-600/10 focus:border-indigo-600"
                 }`}
               />
             </div>

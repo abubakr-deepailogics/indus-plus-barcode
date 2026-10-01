@@ -181,12 +181,12 @@ export function WagesPage() {
   );
 
   return (
-    <div className="flex flex-col gap-6 [&_thead_th]:border-b [&_thead_th]:border-slate-200 [&_thead_th]:bg-slate-50 [&_thead_th]:py-3 [&_thead_th]:text-[10px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-wide [&_thead_th]:text-slate-500 [&_tbody_td]:py-2.5 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-emerald-50/30 [&_tfoot_tr]:border-t-2 [&_tfoot_tr]:border-slate-300 [&_tfoot_tr]:bg-slate-100 [&_tfoot_tr]:font-semibold [&_tfoot_tr]:text-slate-900">
+    <div data-client-brand className="flex flex-col gap-6 [&_thead_th]:border-b [&_thead_th]:border-slate-200 [&_thead_th]:bg-slate-50 [&_thead_th]:py-3 [&_thead_th]:text-[10px] [&_thead_th]:font-semibold [&_thead_th]:uppercase [&_thead_th]:tracking-wide [&_thead_th]:text-slate-500 [&_tbody_td]:py-2.5 [&_tbody_tr]:transition-colors [&_tbody_tr:hover]:bg-emerald-50/30 [&_tfoot_tr]:border-t-2 [&_tfoot_tr]:border-slate-300 [&_tfoot_tr]:bg-slate-100 [&_tfoot_tr]:font-semibold [&_tfoot_tr]:text-slate-900">
       {/* Header */}
       <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/70 px-4 py-4 md:px-5">
           <div className="flex items-center gap-2">
-            <span className="flex size-9 items-center justify-center rounded-md bg-emerald-100 text-emerald-800">
+            <span className="flex size-9 items-center justify-center rounded-lg bg-slate-900 text-white shadow-sm">
               <Coins className="size-4" />
             </span>
             <h2 className="text-sm font-semibold text-slate-900">
@@ -197,7 +197,7 @@ export function WagesPage() {
             <button
               type="button"
               onClick={() => setCreateOpen(true)}
-              className="flex h-9 items-center gap-1.5 rounded-lg bg-slate-900 px-3.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-slate-700"
+              className="flex h-9 items-center gap-1.5 rounded-lg bg-indigo-700 px-3.5 text-xs font-semibold text-white shadow-sm transition-colors hover:bg-indigo-800"
             >
               <Coins className="w-3.5 h-3.5" />
               Create Wages
@@ -257,7 +257,7 @@ export function WagesPage() {
               <Button
                 onClick={() => runSearch()}
                 disabled={loading}
-                className="h-10 shrink-0 rounded-lg bg-slate-900 px-3 text-white hover:bg-slate-700"
+                className="h-10 shrink-0 rounded-lg bg-indigo-700 px-3 text-white hover:bg-indigo-800"
               >
                 {loading ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />

@@ -51,7 +51,7 @@ function ResetPasswordResultDialogInner({
 
   return (
     <Dialog open={!!temporaryPassword} onOpenChange={(open) => !open && onClose()}>
-      <DialogContent>
+      <DialogContent data-client-brand>
         <DialogHeader>
           <DialogTitle>Password reset</DialogTitle>
           <DialogDescription>

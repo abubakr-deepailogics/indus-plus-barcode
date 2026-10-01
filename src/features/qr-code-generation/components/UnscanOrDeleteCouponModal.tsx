@@ -208,14 +208,14 @@ export function UnscanOrDeleteCouponModal({
   };
 
   return (
-    <div className="fixed inset-0 bg-[#0f172a]/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] max-w-[460px] w-full p-6 animate-scale-up">
-        <div className="flex items-center justify-between border-b border-[#f1f5f9] pb-3 mb-4">
+    <div className="fixed inset-0 bg-slate-950/40 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl shadow-2xl border border-slate-200/80 max-w-[460px] w-full p-6 animate-scale-up">
+        <div className="flex items-center justify-between border-b border-slate-100 pb-3 mb-4">
           <div className="flex items-center gap-2">
-            <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-amber-50 text-amber-600">
+            <span className="inline-flex items-center justify-center w-8 h-8 rounded-xl bg-amber-50 text-amber-700">
               <Eraser className="w-4 h-4" />
             </span>
-            <h3 className="text-sm font-extrabold text-[#0f172a]">
+            <h3 className="text-sm font-semibold text-slate-950">
               {step === "success"
                 ? "Done"
                 : step === "error"
@@ -227,7 +227,7 @@ export function UnscanOrDeleteCouponModal({
             <button
               type="button"
               onClick={onClose}
-              className="p-1.5 rounded-lg hover:bg-[#f1f5f9] text-[#64748b] hover:text-[#0f172a] transition-colors cursor-pointer"
+              className="p-1.5 rounded-xl hover:bg-slate-50 text-slate-500 hover:text-slate-800 transition-colors cursor-pointer"
             >
               <X className="w-4 h-4" />
             </button>
@@ -238,7 +238,7 @@ export function UnscanOrDeleteCouponModal({
           {step === "checking" && (
             <div className="flex flex-col items-center py-8">
               <Loader2 className="w-10 h-10 text-amber-600 animate-spin mb-4" />
-              <h4 className="text-sm font-extrabold text-slate-800">
+              <h4 className="text-sm font-semibold text-slate-800">
                 Checking matching coupons...
               </h4>
             </div>
@@ -247,29 +247,29 @@ export function UnscanOrDeleteCouponModal({
           {step === "confirm" && matchCounts && confirmAction && (
             <div className="w-full flex flex-col items-center py-2">
               <AlertCircle className="w-12 h-12 text-amber-500 mb-4" />
-              <h4 className="text-sm font-extrabold text-slate-800 mb-2">
+              <h4 className="text-sm font-semibold text-slate-800 mb-2">
                 Confirm this action
               </h4>
 
-              <div className="w-full rounded-2xl border border-amber-100 bg-amber-50/60 p-3 mb-4 text-left">
-                <div className="text-[10px] font-black uppercase tracking-wider text-amber-700 mb-2">
+              <div className="w-full rounded-2xl border border-amber-200 bg-amber-50/60 p-3 mb-4 text-left">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-amber-800 mb-2">
                   Active Scope
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-bold text-slate-700">
+                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-700">
                     W/O: {filters.workOrder}
                   </span>
                   {hasFilters ? (
                     entries.map((entry) => (
                       <span
                         key={`${entry.label}:${entry.value}`}
-                        className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-white px-2 py-1 text-[10px] font-bold text-amber-800"
+                        className="inline-flex items-center gap-1 rounded-full border border-amber-200 bg-white px-2 py-1 text-[10px] font-semibold text-amber-800"
                       >
                         {entry.label}: {entry.value}
                       </span>
                     ))
                   ) : (
-                    <span className="inline-flex items-center gap-1 rounded-full border border-red-100 bg-white px-2 py-1 text-[10px] font-bold text-red-700">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-white px-2 py-1 text-[10px] font-semibold text-red-700">
                       Entire work order
                     </span>
                   )}
@@ -320,14 +320,14 @@ export function UnscanOrDeleteCouponModal({
                 <button
                   type="button"
                   onClick={onClose}
-                  className="flex-1 bg-white border border-[#e2e8f0] text-[#64748b] px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#f8fafc] transition-colors cursor-pointer"
+                  className="flex-1 bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
                   onClick={handleConfirm}
-                  className={`flex-1 flex items-center justify-center gap-1.5 text-white px-4 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer ${
+                  className={`flex-1 flex items-center justify-center gap-1.5 text-white px-4 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer ${
                     confirmAction === "delete"
                       ? "bg-red-600 hover:bg-red-700"
                       : "bg-amber-600 hover:bg-amber-700"
@@ -352,7 +352,7 @@ export function UnscanOrDeleteCouponModal({
           {step === "processing" && (
             <div className="flex flex-col items-center py-4 w-full">
               <Loader2 className="w-10 h-10 text-amber-600 animate-spin mb-4" />
-              <h4 className="text-sm font-extrabold text-slate-800 mb-1">
+              <h4 className="text-sm font-semibold text-slate-800 mb-1">
                 Processing {progress?.total ?? matchCounts?.totalCount ?? 0}{" "}
                 Coupons...
               </h4>
@@ -366,7 +366,7 @@ export function UnscanOrDeleteCouponModal({
                       }}
                     />
                   </div>
-                  <p className="text-[11px] text-[#64748b] font-semibold mt-1.5">
+                  <p className="text-[11px] text-slate-500 font-semibold mt-1.5">
                     {progress.done} of {progress.total} coupons processed
                   </p>
                 </div>
@@ -377,7 +377,7 @@ export function UnscanOrDeleteCouponModal({
           {step === "success" && result && (
             <div className="w-full flex flex-col items-center py-2">
               <CheckCircle2 className="w-12 h-12 text-emerald-500 mb-4" />
-              <h4 className="text-sm font-extrabold text-slate-800 mb-1">
+              <h4 className="text-sm font-semibold text-slate-800 mb-1">
                 {result.unscannedCount + result.deletedCount} Coupon
                 {result.unscannedCount + result.deletedCount === 1
                   ? ""
@@ -400,7 +400,7 @@ export function UnscanOrDeleteCouponModal({
               <button
                 type="button"
                 onClick={onDone}
-                className="w-full bg-emerald-500 hover:bg-emerald-600 text-white px-5 py-2.5 rounded-xl text-xs font-bold transition-all shadow-md cursor-pointer"
+                className="w-full bg-slate-900 hover:bg-slate-800 text-white px-5 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-xs cursor-pointer"
               >
                 Done
               </button>
@@ -410,7 +410,7 @@ export function UnscanOrDeleteCouponModal({
           {step === "error" && (
             <div className="w-full flex flex-col items-center py-2">
               <AlertCircle className="w-12 h-12 text-red-500 mb-4" />
-              <h4 className="text-sm font-extrabold text-slate-800 mb-1">
+              <h4 className="text-sm font-semibold text-slate-800 mb-1">
                 Could Not Process Coupons
               </h4>
               <div className="bg-red-50/50 border border-red-100 rounded-xl p-3 text-left w-full mb-5 max-h-[120px] overflow-y-auto">
@@ -421,7 +421,7 @@ export function UnscanOrDeleteCouponModal({
               <button
                 type="button"
                 onClick={onClose}
-                className="w-full bg-white border border-[#e2e8f0] text-[#64748b] px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-[#f8fafc] transition-colors cursor-pointer"
+                className="w-full bg-white border border-slate-200 text-slate-600 px-4 py-2.5 rounded-xl text-xs font-semibold hover:bg-slate-50 transition-colors cursor-pointer"
               >
                 Close
               </button>

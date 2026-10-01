@@ -108,12 +108,12 @@ export function OperationsDetailTable({
   }, [operations, sort]);
 
   return (
-    <div className="lg:col-span-6 bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm flex flex-col gap-4">
-      <div className="flex items-center justify-between border-b border-[#f1f5f9] pb-2">
-        <h3 className="text-sm font-extrabold text-[#4f46e5]">Operations Detail</h3>
+    <div className="lg:col-span-6 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm flex flex-col gap-4">
+      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+        <h3 className="text-sm font-semibold text-slate-900">Operations Detail</h3>
         <div className="flex items-center gap-4">
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-bold text-[#64748b]">
+            <span className="text-[11px] font-semibold text-slate-500">
               Complete selection
             </span>
             <input
@@ -121,28 +121,28 @@ export function OperationsDetailTable({
               onChange={(e) => {
                 onAllOperationsSelChange(e.target.checked);
               }}
-              className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
+              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer w-3.5 h-3.5"
             />
           </div>
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-bold text-[#64748b]">
+            <span className="text-[11px] font-semibold text-slate-500">
               Section Wise selection
             </span>
             <input
               type="checkbox"
               checked={isSectionWise}
               onChange={(e) => setIsSectionWise(e.target.checked)}
-              className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
+              className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer w-3.5 h-3.5"
             />
           </div>
         </div>
       </div>
 
-      <div className="overflow-auto max-h-[420px] border border-[#f1f5f9] rounded-xl">
+      <div className="overflow-auto max-h-[420px] border border-slate-100 rounded-xl">
         <table className="w-full text-left border-collapse min-w-[500px]">
           <thead>
-            <tr className="border-b border-[#e2e8f0]">
-              <th className="py-2 text-left sticky top-0 z-10 bg-white">
+            <tr className="border-b border-slate-200 bg-slate-50/80">
+              <th className="py-2 text-left sticky top-0 z-10 bg-slate-50">
                 <SortableHeader
                   title="Section"
                   column="section"
@@ -150,7 +150,7 @@ export function OperationsDetailTable({
                   onSort={handleSort}
                 />
               </th>
-              <th className="py-2 text-center sticky top-0 z-10 bg-white">
+              <th className="py-2 text-center sticky top-0 z-10 bg-slate-50">
                 <SortableHeader
                   title="Seq #"
                   align="center"
@@ -159,10 +159,10 @@ export function OperationsDetailTable({
                   onSort={handleSort}
                 />
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+              <th className="py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center sticky top-0 z-10 bg-slate-50">
                 Op #
               </th>
-              <th className="py-2 text-left sticky top-0 z-10 bg-white">
+              <th className="py-2 text-left sticky top-0 z-10 bg-slate-50">
                 <SortableHeader
                   title="Operation"
                   column="operationName"
@@ -170,30 +170,30 @@ export function OperationsDetailTable({
                   onSort={handleSort}
                 />
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+              <th className="py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center sticky top-0 z-10 bg-slate-50">
                 SMV
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+              <th className="py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center sticky top-0 z-10 bg-slate-50">
                 Rate
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+              <th className="py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center sticky top-0 z-10 bg-slate-50">
                 Inc.
               </th>
-              <th className="py-2 text-[10px] font-bold text-[#64748b] uppercase tracking-wider text-center sticky top-0 z-10 bg-white">
+              <th className="py-2 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center sticky top-0 z-10 bg-slate-50">
                 Sel
               </th>
             </tr>
           </thead>
-          <tbody className="divide-y divide-[#f1f5f9]">
+          <tbody className="divide-y divide-slate-100">
             {sortedOperations.map((op) => (
-              <tr key={op.id} className="hover:bg-[#f8fafc] border-b border-[#f1f5f9] transition-colors text-[11px] font-semibold text-slate-700">
-                <td className="py-2.5 text-left text-[#64748b] font-bold uppercase">
+              <tr key={op.id} className="hover:bg-slate-50/60 border-b border-slate-100 transition-colors text-[11px] font-semibold text-slate-700">
+                <td className="py-2.5 text-left text-slate-600 font-bold uppercase">
                   {op.section}
                 </td>
-                <td className="py-2.5 text-center text-[#4f46e5] font-bold">
+                <td className="py-2.5 text-center text-indigo-700 font-bold">
                   {op.seqNo}
                 </td>
-                <td className="py-2.5 text-center text-purple-600 font-bold font-mono">
+                <td className="py-2.5 text-center text-slate-700 font-bold font-mono">
                   {op.opNo}
                 </td>
                 <td className="py-2.5 text-left text-slate-800 font-medium">
@@ -224,7 +224,7 @@ export function OperationsDetailTable({
                         onOperationChange(op.id, "lastOpSection", isChecked);
                       }
                     }}
-                    className="rounded border-slate-300 text-[#4f46e5] focus:ring-[#4f46e5]/10 cursor-pointer w-3.5 h-3.5"
+                    className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500/20 cursor-pointer w-3.5 h-3.5"
                   />
                 </td>
               </tr>

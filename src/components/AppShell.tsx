@@ -123,7 +123,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [department, navTabs]);
 
   return (
-    <div className="min-h-screen bg-[#f8fafc] text-[#1e293b] flex flex-col font-sans selection:bg-indigo-100 selection:text-indigo-900">
+    <div data-client-brand className="min-h-screen bg-[#f8fafc] text-[#1e293b] flex flex-col font-sans selection:bg-indigo-100 selection:text-indigo-900">
       {/* Primary Header */}
       <header className="no-print sticky top-0 z-50 bg-white border-b border-[#f1f5f9] px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between shadow-xs gap-3">
         {/* Logo block */}
