@@ -18,6 +18,18 @@ import {
   Users
 } from "lucide-react";
 
+function productionModuleTabs(basePath: "/washing" | "/finishing") {
+  return [
+    { label: "Style Bulletin", href: `${basePath}/style-bulletin`, hasDropdown: false },
+    { label: "Coupon Generation", href: `${basePath}/coupon-generation`, hasDropdown: false },
+    { label: "Coupon Scanning", href: `${basePath}/coupon-scanning`, hasDropdown: false },
+    { label: "Coupon Tracing", href: `${basePath}/coupon-tracing`, hasDropdown: false },
+    { label: "Rework Coupon", href: `${basePath}/rework-coupon`, hasDropdown: false },
+    { label: "Reports", href: `${basePath}/reports`, hasDropdown: false },
+    { label: "Wages", href: `${basePath}/reports/wages`, hasDropdown: false },
+  ];
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [isIeOpen, setIsIeOpen] = useState(false); // Dropdown closed by default
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -81,6 +93,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (pathname.startsWith("/washing") && department !== "washing") {
       setDepartment("washing");
+    } else if (pathname.startsWith("/finishing") && department !== "finishing") {
+      setDepartment("finishing");
     } else if (
       (pathname.startsWith("/industrial-engineering") || pathname === "/manage-users") &&
       department !== "sewing"
@@ -91,9 +105,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const handleDepartmentSwitch = (deptId: DepartmentKey) => {
     setDepartment(deptId);
-    if (deptId === "washing") {
-      router.push("/washing/style-bulletin");
-    } else if (deptId === "sewing" && pathname.startsWith("/washing")) {
+    if (deptId === "washing" || deptId === "finishing") {
+      router.push(`/${deptId}/style-bulletin`);
+    } else if (
+      deptId === "sewing" &&
+      (pathname.startsWith("/washing") || pathname.startsWith("/finishing"))
+    ) {
       router.push("/industrial-engineering/cut-report");
     }
   };
@@ -118,16 +135,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   ];
 
   const currentNavTabs = useMemo(() => {
-    if (department === "washing") {
-      return [
-        { label: "Style Bulletin", href: "/washing/style-bulletin", hasDropdown: false },
-        { label: "Coupon Generation", href: "/washing/coupon-generation", hasDropdown: false },
-        { label: "Coupon Scanning", href: "/washing/coupon-scanning", hasDropdown: false },
-        { label: "Coupon Tracing", href: "/washing/coupon-tracing", hasDropdown: false },
-        { label: "Rework Coupon", href: "/washing/rework-coupon", hasDropdown: false },
-        { label: "Reports", href: "/washing/reports", hasDropdown: false },
-        { label: "Wages", href: "/washing/reports/wages", hasDropdown: false },
-      ];
+    if (department === "washing" || department === "finishing") {
+      return productionModuleTabs(`/${department}`);
     }
     if (department === "sewing") {
       return navTabs;
@@ -634,7 +643,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-[1400px] w-full mx-auto p-6 md:p-8 relative">
-        {department === "sewing" || department === "washing" ? (
+        {department === "sewing" || department === "washing" || department === "finishing" ? (
           children
         ) : (
           <div className="flex flex-col items-center justify-center min-h-[380px] text-center p-8 bg-white rounded-2xl border border-dashed border-slate-200 shadow-xs">

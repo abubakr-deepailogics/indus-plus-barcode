@@ -1,4 +1,9 @@
-import { getPool, sql, cutDetailByFilter, styleBulletinByFilter } from "@/lib/db";
+import {
+  getPool,
+  sql,
+  cutDetailByFilter,
+  styleBulletinByFilter,
+} from "@/lib/db";
 import { generateCouponPdf } from "@/features/qr-code-generation/services/pdf-generation.service";
 import type { CouponCard } from "@/features/qr-code-generation/services/coupon-pairing.service";
 import {
@@ -49,7 +54,9 @@ export async function GET(request: Request) {
   const employeeCode = searchParams.get("employee_code") || undefined;
   const codeTypeParam = searchParams.get("code_type");
   const codeType = codeTypeParam === "barcode" ? "barcode" : "qr";
-  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
+  const department = (searchParams.get("department") || "sewing")
+    .trim()
+    .toLowerCase();
 
   if (!workOrder) {
     return Response.json({ error: "work_order is required." }, { status: 400 });
@@ -98,7 +105,9 @@ export async function GET(request: Request) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any -- matches sql.Request#query's own recordset typing
     const cutRecordsets: any[][] = [];
     for (const batch of chunk(bundleNos, 2000)) {
-      const cutRequest = indusPlusPool.request().input("wo", sql.NVarChar, workOrder);
+      const cutRequest = indusPlusPool
+        .request()
+        .input("wo", sql.NVarChar, workOrder);
       batch.forEach((b, i) => cutRequest.input(`bundle${i}`, sql.NVarChar, b));
       const result = await cutRequest.query(
         cutDetailByFilter(
@@ -132,7 +141,9 @@ export async function GET(request: Request) {
         })),
     );
 
-    const opRequest = indusPlusPool.request().input("wo", sql.NVarChar, workOrder);
+    const opRequest = indusPlusPool
+      .request()
+      .input("wo", sql.NVarChar, workOrder);
     opNos.forEach((o, i) => opRequest.input(`op${i}`, sql.NVarChar, o));
     const opRows = await opRequest.query(
       styleBulletinByFilter(
@@ -206,7 +217,8 @@ export async function GET(request: Request) {
     const cards: CouponCard[] = coupons.flatMap((c) => {
       const bundle = bundleByNo.get(c.BundleNo);
       const op = opByNo.get(c.OpNo);
-      return bundle && op ? [{ bundle, op }] : [];
+
+      return bundle && op ? [{ bundle, op, couponCode: c.CouponCode }] : [];
     });
 
     if (cards.length === 0) {
@@ -226,6 +238,7 @@ export async function GET(request: Request) {
 
     const { buffer } = await generateCouponPdf({
       workOrder,
+      department: department as CouponDepartment,
       saleOrderNo,
       styleCode: "",
       bundles,

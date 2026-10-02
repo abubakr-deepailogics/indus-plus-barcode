@@ -495,6 +495,10 @@ function getCard2Config(summary: ReportSummary): Card2Config {
 
 export function EmployeeReportDashboard() {
   const { department } = useDepartment();
+  const reportsBasePath =
+    department === "washing" || department === "finishing"
+      ? `/${department}/reports`
+      : "/industrial-engineering/reports";
   const {
     mode,
     changeMode,
@@ -1666,7 +1670,7 @@ export function EmployeeReportDashboard() {
                   <>
                     <span className="w-px h-6 bg-slate-200 mx-1 shrink-0" />
                     <Link
-                      href="/industrial-engineering/reports/operator-wise"
+                      href={`${reportsBasePath}/operator-wise`}
                       title="Operator Wise Final Payment — always for the current pay-cycle month (24th → today)"
                       className="flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer text-slate-600 hover:bg-slate-100 shrink-0"
                     >
@@ -1695,7 +1699,7 @@ export function EmployeeReportDashboard() {
                   </div>
                 )}
                 <CsvExportButton
-                  filename={exportData?.filename ?? "report-export"}
+                  filename={exportData ? `${department}-${exportData.filename}` : "report-export"}
                   headers={exportData?.headers ?? []}
                   rows={exportData?.rows ?? []}
                   disabled={!exportData}

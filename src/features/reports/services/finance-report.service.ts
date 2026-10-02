@@ -153,22 +153,26 @@ async function fetchSewingOpCodesByWorkOrder(
 
 async function fetchOperationCommissionsByWorkOrderOp(
   workOrders: string[],
+  department: Department,
 ): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   if (workOrders.length === 0) return map;
 
   const pool = await getPool("indusPlus");
   for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
-    const req = pool.request();
+    const req = pool.request().input("department", sql.NVarChar, department);
     const inClause = buildInClause(req, "wo", batch);
     const result = await req.query(`
       SELECT
-        [Order No] AS WorkOrder,
-        [Operation Code] AS OpNo,
-        MAX(COALESCE(TRY_CAST([UD_Commission] AS DECIMAL(18, 4)), 0)) AS OpInc
-      FROM ${STYLE_BULLETIN_TABLE}
-      WHERE [Order No] IN (${inClause})
-      GROUP BY [Order No], [Operation Code]
+        sb.[Order No] AS WorkOrder,
+        sb.[Operation Code] AS OpNo,
+        MAX(COALESCE(TRY_CAST(sb.[UD_Commission] AS DECIMAL(18, 4)), 0)) AS OpInc
+      FROM ${STYLE_BULLETIN_TABLE} sb
+      INNER JOIN ${OPERATIONS_CATALOG_TABLE} op
+        ON op.OperationCode = sb.[Operation Code]
+      WHERE sb.[Order No] IN (${inClause})
+        AND LOWER(ISNULL(op.Department, '')) = @department
+      GROUP BY sb.[Order No], sb.[Operation Code]
     `);
     for (const row of result.recordset as {
       WorkOrder: string;
@@ -202,7 +206,7 @@ export async function buildOrderWiseReport(
     sewingOpsByWo.get(row.WorkOrder)?.has(row.OpNo),
   );
   const operationCommissions =
-    await fetchOperationCommissionsByWorkOrderOp(scannedWorkOrders);
+    await fetchOperationCommissionsByWorkOrderOp(scannedWorkOrders, department);
 
   const byWorkOrder = new Map<
     string,
@@ -358,7 +362,7 @@ export async function buildOperatorWiseReport(
     sewingOpsByWo.get(row.WorkOrder)?.has(row.OpNo),
   );
   const operationCommissions =
-    await fetchOperationCommissionsByWorkOrderOp(scannedWorkOrders);
+    await fetchOperationCommissionsByWorkOrderOp(scannedWorkOrders, department);
 
   const pieceRateByEmployee = new Map<string, number>();
   const opIncByEmployee = new Map<string, number>();

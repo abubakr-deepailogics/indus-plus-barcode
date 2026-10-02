@@ -127,8 +127,7 @@ export default function ReworkCouponPage() {
   const { setWorkOrder: setGlobalWorkOrder } = useWorkOrderParam(
     useCallback((wo: string) => {
       loadWorkOrder(wo);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []),
+    }, [department]),
   );
 
   const fetchWorkOrderRows = useCallback(

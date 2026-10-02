@@ -1,14 +1,22 @@
 import { randomUUID } from "crypto";
 import { getPool } from "@/lib/db";
 import { buildCouponCards } from "@/features/qr-code-generation/services/coupon-pairing.service";
-import { registerCoupons, countCoupons, listCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
+import {
+  registerCoupons,
+  countCoupons,
+  listCoupons,
+} from "@/features/qr-code-generation/services/coupon-registration.service";
 import { snapshotWorkOrderBulletin } from "@/features/order-style-bulletin/services/style-bulletin-snapshot.service";
 import { saveManualCouponCutDetails } from "@/features/qr-code-generation/services/manual-coupon-cut-detail.service";
 import {
   isCouponDepartment,
   type CouponDepartment,
+  usesManualCouponCutDetails,
 } from "@/lib/department-classification";
-import type { BundleDetailRow, OperationsDetailRow } from "@/features/qr-code-generation/types";
+import type {
+  BundleDetailRow,
+  OperationsDetailRow,
+} from "@/features/qr-code-generation/types";
 
 const DEFAULT_PAGE_SIZE = 50;
 const MAX_PAGE_SIZE = 200;
@@ -35,7 +43,8 @@ interface GenerateCouponsRequestBody {
 // response — the stream only starts once there's actually work to stream.
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<GenerateCouponsRequestBody>;
-  const { workOrder, bundles, operations, generatedBy, manualCutDetails } = body;
+  const { workOrder, bundles, operations, generatedBy, manualCutDetails } =
+    body;
   const department = (body.department || "sewing").trim().toLowerCase();
 
   if (!workOrder || !Array.isArray(bundles) || !Array.isArray(operations)) {
@@ -47,7 +56,10 @@ export async function POST(request: Request) {
 
   if (!isCouponDepartment(department)) {
     return Response.json(
-      { error: "department must be one of: cutting, sewing, washing, finishing, gdp." },
+      {
+        error:
+          "department must be one of: cutting, sewing, washing, finishing, gdp.",
+      },
       { status: 400 },
     );
   }
@@ -61,16 +73,34 @@ export async function POST(request: Request) {
     );
   }
   if (manualCutDetails) {
-    const invalidBundle = selectedBundles.find(
-      (bundle) => !bundle.bundleNo?.trim() || !Number.isInteger(Number(bundle.pcs)) || Number(bundle.pcs) <= 0,
-    );
-    if (invalidBundle) {
+    if (!usesManualCouponCutDetails(department)) {
       return Response.json(
-        { error: "Every selected manual bundle needs a Bundle No. and Pcs greater than 0." },
+        {
+          error:
+            "Manual bundle details are available only for Washing and Finishing.",
+        },
         { status: 400 },
       );
     }
-    const bundleNos = selectedBundles.map((bundle) => bundle.bundleNo.trim());
+    const invalidBundle = selectedBundles.find(
+      (bundle) =>
+        !bundle.bundleNo?.trim() ||
+        !Number.isInteger(Number(bundle.pcs)) ||
+        Number(bundle.pcs) <= 0,
+    );
+    if (invalidBundle) {
+      return Response.json(
+        {
+          error:
+            "Every selected manual bundle needs a Bundle No. and Pcs greater than 0.",
+        },
+        { status: 400 },
+      );
+    }
+
+    const bundleNos = selectedBundles.map((bundle) =>
+      bundle.bundleNo.trim().toLocaleLowerCase(),
+    );
     if (new Set(bundleNos).size !== bundleNos.length) {
       return Response.json(
         { error: "Manual Bundle No. values must be unique." },
@@ -163,7 +193,8 @@ export async function POST(request: Request) {
         // the way the old non-streaming handler did — it goes in-band as a
         // final line instead.
         console.error("Coupon registration error:", err);
-        const message = err instanceof Error ? err.message : "Internal Server Error";
+        const message =
+          err instanceof Error ? err.message : "Internal Server Error";
         send({ status: "error", message });
       } finally {
         controller.close();
@@ -204,7 +235,10 @@ export async function GET(request: Request) {
   }
   if (!isCouponDepartment(department)) {
     return Response.json(
-      { error: "department must be one of: cutting, sewing, washing, finishing, gdp." },
+      {
+        error:
+          "department must be one of: cutting, sewing, washing, finishing, gdp.",
+      },
       { status: 400 },
     );
   }
@@ -225,7 +259,8 @@ export async function GET(request: Request) {
     return Response.json({ coupons: rows, total, page, pageSize });
   } catch (err: unknown) {
     console.error("Coupon list error:", err);
-    const message = err instanceof Error ? err.message : "Internal Server Error";
+    const message =
+      err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
 }

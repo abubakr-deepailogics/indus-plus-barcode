@@ -12,6 +12,7 @@ import { useGenerateCouponPdf } from "./useGenerateCouponPdf";
 import { useAuth } from "@/features/auth/context/auth-context";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { useDepartment } from "@/lib/department-context";
+import { usesManualCouponCutDetails } from "@/lib/department-classification";
 import type { WorkOrderSearchRow } from "@/components/work-order-search-modal";
 
 interface WorkerItem {
@@ -271,7 +272,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       const data = await response.json();
 
       let fetchedCuts = data.cutDetails || [];
-      if (department === "washing") {
+      if (usesManualCouponCutDetails(department)) {
         const manualDetailsResponse = await fetch(
           `/api/manual-coupon-cut-details?work_order=${encodeURIComponent(wo)}&department=${department}`,
         );
@@ -326,14 +327,14 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         inseam: cut.Inseam !== undefined ? String(cut.Inseam) : "",
         size: cut.Size !== undefined ? String(cut.Size) : "",
         pcs: Number(cut.Bundle_Qty ?? cut.Pcs ?? 0),
-        // Manual Washing rows follow the Rework model: populated rows are
+        // Manual department rows follow the Rework model: populated rows are
         // included automatically, while the trailing blank row is not.
-        sel: department === "washing",
+        sel: usesManualCouponCutDetails(department),
         code: cut.Color || "",
         rPcs: cut.R_Pcs !== undefined ? String(cut.R_Pcs) : "-",
       }));
 
-      if (department === "washing" && bundles.length === 0) {
+      if (usesManualCouponCutDetails(department) && bundles.length === 0) {
         bundles.push({
           id: -1,
           cutNo: "",
@@ -586,7 +587,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       );
       return;
     }
-    if (department === "washing") {
+    if (usesManualCouponCutDetails(department)) {
       const invalidBundle = selectedBundles.find(
         (bundle) => !bundle.bundleNo.trim() || !Number.isInteger(bundle.pcs) || bundle.pcs <= 0,
       );
@@ -594,7 +595,9 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         alert("Every selected manual bundle needs a Bundle No. and Pcs greater than 0.");
         return;
       }
-      const bundleNos = selectedBundles.map((bundle) => bundle.bundleNo.trim());
+      const bundleNos = selectedBundles.map((bundle) =>
+        bundle.bundleNo.trim().toLocaleLowerCase(),
+      );
       if (new Set(bundleNos).size !== bundleNos.length) {
         alert("Manual Bundle No. values must be unique.");
         return;
@@ -637,7 +640,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         body: JSON.stringify({
           workOrder: activeStyle.workOrder,
           department,
-          manualCutDetails: department === "washing",
+          manualCutDetails: usesManualCouponCutDetails(department),
           bundles: activeStyle.bundles,
           operations: operationsToSend,
           generatedBy: activeStyle.generateBy,

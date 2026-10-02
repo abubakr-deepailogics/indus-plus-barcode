@@ -113,7 +113,17 @@ async function insertCouponBatch(
       SELECT src.CouponCode, @workOrder, src.BundleNo, src.OpNo, src.Section, src.CutNo, @department, @insertedBy, @generationId
       FROM @CouponRows src
       WHERE NOT EXISTS (
-        SELECT 1 FROM dbo.QrCode_Coupon existing WHERE existing.CouponCode = src.CouponCode
+        -- CouponCode is the physical primary key, but the production
+        -- identity is department + work order + bundle + operation. This
+        -- also recognizes a historical non-Sewing code that pre-dates the
+        -- department suffix and prevents a second logical coupon from being
+        -- inserted for the same work item.
+        SELECT 1
+        FROM dbo.QrCode_Coupon existing
+        WHERE existing.Department = @department
+          AND existing.WorkOrder = @workOrder
+          AND existing.BundleNo = src.BundleNo
+          AND existing.OpNo = src.OpNo
       );
 
       UPDATE c
@@ -132,15 +142,21 @@ async function insertCouponBatch(
           c.SystemScannedAt = NULL
       OUTPUT inserted.BundleNo, inserted.OpNo
       FROM dbo.QrCode_Coupon c
-      INNER JOIN @CouponRows src ON src.CouponCode = c.CouponCode
-      WHERE c.IsDeleted = 1;
+      INNER JOIN @CouponRows src
+        ON src.BundleNo = c.BundleNo AND src.OpNo = c.OpNo
+      WHERE c.WorkOrder = @workOrder
+        AND c.Department = @department
+        AND c.IsDeleted = 1;
 
       UPDATE c
       SET c.CutNo = src.CutNo
       OUTPUT inserted.BundleNo, inserted.OpNo
       FROM dbo.QrCode_Coupon c
-      INNER JOIN @CouponRows src ON src.CouponCode = c.CouponCode
-      WHERE c.IsDeleted = 0
+      INNER JOIN @CouponRows src
+        ON src.BundleNo = c.BundleNo AND src.OpNo = c.OpNo
+      WHERE c.WorkOrder = @workOrder
+        AND c.Department = @department
+        AND c.IsDeleted = 0
         AND c.IsScanned = 0
         AND c.WageId IS NULL
         AND ISNULL(c.CutNo, '') <> ISNULL(src.CutNo, '');
@@ -202,7 +218,7 @@ export async function registerCoupons(
   department: CouponDepartment = "sewing",
 ): Promise<RegisterCouponsResult> {
   const rows = cards.map(({ bundle, op }) => ({
-    couponCode: buildCouponCode(workOrder, bundle.bundleNo, op.opNo),
+    couponCode: buildCouponCode(workOrder, bundle.bundleNo, op.opNo, department),
     bundleNo: bundle.bundleNo,
     opNo: op.opNo,
     section: op.section,
@@ -327,6 +343,40 @@ export async function getGeneratedPairs(
     bundleNo: r.BundleNo,
     opNo: r.OpNo,
   }));
+}
+
+/**
+ * Resolves the persisted barcode payload for selected logical coupons.
+ * Reprint flows use this rather than deriving a code again, preserving
+ * labels generated before the department suffix was introduced.
+ */
+export async function getCouponCodesForPairs(
+  pool: sql.ConnectionPool,
+  workOrder: string,
+  department: CouponDepartment,
+  cards: CouponCard[],
+): Promise<Map<string, string>> {
+  if (cards.length === 0) return new Map();
+
+  const result = await pool
+    .request()
+    .input("workOrder", sql.NVarChar, workOrder)
+    .input("department", sql.NVarChar, department)
+    .query<{ CouponCode: string; BundleNo: string; OpNo: string }>(`
+      SELECT CouponCode, BundleNo, OpNo
+      FROM dbo.QrCode_Coupon
+      WHERE WorkOrder = @workOrder
+        AND Department = @department
+        AND IsDeleted = 0
+    `);
+  const requestedKeys = new Set(
+    cards.map((card) => `${card.bundle.bundleNo}|${card.op.opNo}`),
+  );
+  return new Map(
+    result.recordset
+      .filter((row) => requestedKeys.has(`${row.BundleNo}|${row.OpNo}`))
+      .map((row) => [`${row.BundleNo}|${row.OpNo}`, row.CouponCode]),
+  );
 }
 
 export interface CouponListRow {

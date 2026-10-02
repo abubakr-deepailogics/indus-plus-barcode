@@ -49,6 +49,13 @@ export function isCouponDepartment(value: string): value is CouponDepartment {
   return COUPON_DEPARTMENTS.has(value as CouponDepartment);
 }
 
+/** Departments whose coupon bundles are entered locally instead of read from ERP cut details. */
+export function usesManualCouponCutDetails(
+  department: string,
+): department is "washing" | "finishing" {
+  return department === "washing" || department === "finishing";
+}
+
 interface DepartmentSource {
   Department?: string | null;
 }

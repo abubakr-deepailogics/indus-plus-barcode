@@ -7,10 +7,7 @@ import {
   STYLE_BULLETIN_TABLE,
   OPERATIONS_CATALOG_TABLE,
 } from "@/lib/db";
-import {
-  classifyDepartment,
-  type CouponDepartment,
-} from "@/lib/department-classification";
+import { type CouponDepartment } from "@/lib/department-classification";
 import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import type {
   BundleReportItem,
@@ -81,8 +78,14 @@ function buildInClause(
     .join(", ");
 }
 
-async function fetchSewingRateTotalByWorkOrder(
+/**
+ * Returns the live total piece rate for each work order in the requested
+ * production department. This denominator drives reported quantity, so it
+ * must use the same department as the coupon rows being summarized.
+ */
+async function fetchRateTotalByWorkOrder(
   workOrders: string[],
+  department: CouponDepartment,
 ): Promise<Map<string, number>> {
   const map = new Map<string, number>();
   if (workOrders.length === 0) return map;
@@ -91,23 +94,20 @@ async function fetchSewingRateTotalByWorkOrder(
   for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
     const req = indusPool.request();
     const inClause = buildInClause(req, "wo", batch);
+    req.input("department", sql.NVarChar, department);
     const result = await req.query(`
       SELECT
         sb.[Order No] AS WorkOrder,
-        sb.[Operation Code] AS OpNo,
-        op.Department,
         TRY_CAST(sb.[Piece Rate] AS FLOAT) AS PieceRate
       FROM ${STYLE_BULLETIN_TABLE} sb
       LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op ON sb.[Operation Code] = op.OperationCode
       WHERE sb.[Order No] IN (${inClause})
+        AND LOWER(ISNULL(op.Department, '')) = @department
     `);
     for (const row of result.recordset as {
       WorkOrder: string;
-      OpNo: string;
-      Department: string | null;
       PieceRate: number | null;
     }[]) {
-      if (classifyDepartment(row) !== "sewing") continue;
       map.set(
         row.WorkOrder,
         (map.get(row.WorkOrder) ?? 0) + (Number(row.PieceRate) || 0),
@@ -387,13 +387,13 @@ export async function buildReportSummary(
   const enriched = await enrichCouponRows(rows, department);
 
   const distinctWorkOrders = [...new Set(enriched.map((row) => row.WorkOrder))];
-  const [sewingRateTotalByWo, orderQtyByWo] = await Promise.all([
-    fetchSewingRateTotalByWorkOrder(distinctWorkOrders),
+  const [rateTotalByWo, orderQtyByWo] = await Promise.all([
+    fetchRateTotalByWorkOrder(distinctWorkOrders, department),
     fetchOrderQtyByWorkOrder(distinctWorkOrders),
   ]);
 
   const qtyFromValue = (value: number | null, workOrder: string): number => {
-    const rateTotal = sewingRateTotalByWo.get(workOrder) ?? 0;
+    const rateTotal = rateTotalByWo.get(workOrder) ?? 0;
     return rateTotal > 0 ? (value ?? 0) / rateTotal : 0;
   };
 
