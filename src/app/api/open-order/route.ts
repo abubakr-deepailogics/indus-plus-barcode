@@ -65,6 +65,13 @@ export async function GET(request: Request) {
     // Fetch Style Bulletin Header (Metadata) — this app's own write data,
     // lives on pitSystem (see db/migrations/010_order_style_bulletin_header.sql),
     // not the read-only indusPlus/ERP connection.
+    if (department && styleBulletinResult.recordset.length === 0) {
+      return Response.json(
+        { error: "This Work Order has no operations for the selected department." },
+        { status: 404 },
+      );
+    }
+
     let metadata = null;
     try {
       const pitPool = await getPool("pitSystem");
