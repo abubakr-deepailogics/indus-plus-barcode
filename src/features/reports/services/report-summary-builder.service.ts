@@ -384,7 +384,7 @@ export async function buildReportSummary(
   ]);
 
   const rows = couponResult.recordset as RawCouponRow[];
-  const enriched = await enrichCouponRows(rows);
+  const enriched = await enrichCouponRows(rows, department);
 
   const distinctWorkOrders = [...new Set(enriched.map((row) => row.WorkOrder))];
   const [sewingRateTotalByWo, orderQtyByWo] = await Promise.all([

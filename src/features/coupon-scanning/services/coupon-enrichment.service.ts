@@ -4,6 +4,7 @@ import {
   cutDetailSnapshotByFilter,
   styleBulletinSnapshotByFilter,
 } from "@/lib/db";
+import type { CouponDepartment } from "@/lib/department-classification";
 
 // Bundle/op display data (size, rate, SMV, section name, cut, …) for a
 // scanned coupon is read from the pitSystem-owned snapshot tables (see
@@ -53,6 +54,7 @@ interface StyleBulletinRow {
 async function fetchCutDetailByBundle(
   workOrder: string,
   bundleNos: string[],
+  department: CouponDepartment,
 ): Promise<Map<string, CutDetailRow>> {
   const map = new Map<string, CutDetailRow>();
   const uniqueBundles = [...new Set(bundleNos)];
@@ -89,7 +91,9 @@ async function fetchCutDetailByBundle(
   const missingBundles = uniqueBundles.filter((b) => !map.has(b));
   if (missingBundles.length > 0) {
     for (const batch of chunk(missingBundles, IN_LIST_CHUNK_SIZE)) {
-      const req = pool.request().input("wo", sql.NVarChar, workOrder);
+      const req = pool.request()
+        .input("wo", sql.NVarChar, workOrder)
+        .input("department", sql.NVarChar, department);
       const placeholders = batch.map((b, i) => {
         req.input(`rb${i}`, sql.NVarChar, b);
         return `@rb${i}`;
@@ -104,7 +108,9 @@ async function fetchCutDetailByBundle(
           NULL AS Shade,
           Pcs AS Bundle_Qty
         FROM dbo.ReworkCouponEntry
-        WHERE WorkOrder = @wo AND BundleNo IN (${placeholders.join(", ")})
+        WHERE WorkOrder = @wo
+          AND Department = @department
+          AND BundleNo IN (${placeholders.join(", ")})
         ORDER BY RowId DESC
       `);
       for (const row of result.recordset as CutDetailRow[]) {
@@ -173,7 +179,10 @@ export interface EnrichmentFields {
 // fields rather than being dropped — same as the old OUTER APPLY semantics.
 export async function enrichCouponRows<
   T extends { WorkOrder: string; BundleNo: string; OpNo: string },
->(rows: T[]): Promise<(T & EnrichmentFields)[]> {
+>(
+  rows: T[],
+  department: CouponDepartment = "sewing",
+): Promise<(T & EnrichmentFields)[]> {
   if (rows.length === 0) return [];
 
   const workOrders = [...new Set(rows.map((r) => r.WorkOrder))];
@@ -187,6 +196,7 @@ export async function enrichCouponRows<
         fetchCutDetailByBundle(
           wo,
           woRows.map((r) => r.BundleNo),
+          department,
         ),
         fetchStyleBulletinByOp(
           wo,

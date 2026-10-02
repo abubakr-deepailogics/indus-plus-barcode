@@ -94,7 +94,10 @@ export async function GET(request: Request) {
           `,
       );
 
-    let records = await enrichCouponRows(result.recordset as CouponRow[]);
+    let records = await enrichCouponRows(
+      result.recordset as CouponRow[],
+      department as CouponDepartment,
+    );
 
     // Cut-range filter only applies to the wo/bundle/op (bulk/selection)
     // path — the barcode path never used it, same as the old query.

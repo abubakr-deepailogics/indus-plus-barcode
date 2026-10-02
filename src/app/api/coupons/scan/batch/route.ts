@@ -119,7 +119,10 @@ export async function POST(request: Request) {
     ];
     const scannedRows: ScannedRecord[] = recordsets[0] ?? [];
     const reasonRows = recordsets[1] ?? [];
-    const scanned = await enrichCouponRows(scannedRows);
+    const scanned = await enrichCouponRows(
+      scannedRows,
+      department as CouponDepartment,
+    );
     const failed = reasonRows.map((r) => ({ code: r.CouponCode, reason: r.Reason }));
 
     return Response.json({ scanned, failed });
