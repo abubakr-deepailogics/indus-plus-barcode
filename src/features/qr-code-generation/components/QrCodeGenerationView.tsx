@@ -4,12 +4,14 @@ import { useQrCodeGenerationFacade } from "../hooks/useQrCodeGenerationFacade";
 import { ParametersPanel } from "./ParametersPanel";
 import { OperationsDetailTable } from "./OperationsDetailTable";
 import { BundleDetailTable } from "./BundleDetailTable";
+import { ManualBundleDetailTable } from "./ManualBundleDetailTable";
 import { WorkOrderSearchModal } from "@/components/work-order-search-modal";
 import { PageSetupModal } from "./PageSetupModal";
 import { GenerateCouponsModal } from "./GenerateCouponsModal";
 import { CodeTypeSelectionModal } from "./CodeTypeSelectionModal";
 import { Loader2, QrCode } from "lucide-react";
 import { ModulePageHeader } from "@/components/ModulePageHeader";
+import { useDepartment } from "@/lib/department-context";
 
 function DetailTableSkeleton() {
   const rows = Array.from({ length: 6 });
@@ -49,6 +51,7 @@ function DetailTableSkeleton() {
 
 export function QrCodeGenerationView() {
   const facade = useQrCodeGenerationFacade();
+  const { department } = useDepartment();
 
   return (
     <>
@@ -82,15 +85,25 @@ export function QrCodeGenerationView() {
             </>
           ) : (
             <>
-              <BundleDetailTable
-                bundles={facade.activeStyle.bundles}
-                reworkQtyBundle={facade.activeStyle.reworkQtyBundle}
-                subTotal={facade.activeStyle.subTotal}
-                total={facade.activeStyle.total}
-                onBundleSelChange={facade.handleBundleSelChange}
-                onAllBundlesSelChange={facade.handleAllBundlesSelChange}
-                onReworkQtyBundleChange={facade.handleReworkQtyBundleChange}
-              />
+              {department === "washing" ? (
+                <ManualBundleDetailTable
+                  bundles={facade.activeStyle.bundles}
+                  subTotal={facade.activeStyle.subTotal}
+                  total={facade.activeStyle.total}
+                  onBundleChange={facade.handleManualBundleChange}
+                  onRemoveBundle={facade.handleRemoveManualBundle}
+                />
+              ) : (
+                <BundleDetailTable
+                  bundles={facade.activeStyle.bundles}
+                  reworkQtyBundle={facade.activeStyle.reworkQtyBundle}
+                  subTotal={facade.activeStyle.subTotal}
+                  total={facade.activeStyle.total}
+                  onBundleSelChange={facade.handleBundleSelChange}
+                  onAllBundlesSelChange={facade.handleAllBundlesSelChange}
+                  onReworkQtyBundleChange={facade.handleReworkQtyBundleChange}
+                />
+              )}
 
               <OperationsDetailTable
                 operations={facade.activeStyle.operations}

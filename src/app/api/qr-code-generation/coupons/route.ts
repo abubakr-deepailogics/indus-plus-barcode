@@ -3,6 +3,7 @@ import { getPool } from "@/lib/db";
 import { buildCouponCards } from "@/features/qr-code-generation/services/coupon-pairing.service";
 import { registerCoupons, countCoupons, listCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
 import { snapshotWorkOrderBulletin } from "@/features/order-style-bulletin/services/style-bulletin-snapshot.service";
+import { saveManualCouponCutDetails } from "@/features/qr-code-generation/services/manual-coupon-cut-detail.service";
 import {
   isCouponDepartment,
   type CouponDepartment,
@@ -18,6 +19,7 @@ interface GenerateCouponsRequestBody {
   operations: OperationsDetailRow[];
   generatedBy?: string;
   department?: string;
+  manualCutDetails?: boolean;
 }
 
 // Registers coupon identities in the DB only — no PDF render, no PDF
@@ -33,7 +35,7 @@ interface GenerateCouponsRequestBody {
 // response — the stream only starts once there's actually work to stream.
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<GenerateCouponsRequestBody>;
-  const { workOrder, bundles, operations, generatedBy } = body;
+  const { workOrder, bundles, operations, generatedBy, manualCutDetails } = body;
   const department = (body.department || "sewing").trim().toLowerCase();
 
   if (!workOrder || !Array.isArray(bundles) || !Array.isArray(operations)) {
@@ -58,6 +60,24 @@ export async function POST(request: Request) {
       { status: 400 },
     );
   }
+  if (manualCutDetails) {
+    const invalidBundle = selectedBundles.find(
+      (bundle) => !bundle.bundleNo?.trim() || !Number.isInteger(Number(bundle.pcs)) || Number(bundle.pcs) <= 0,
+    );
+    if (invalidBundle) {
+      return Response.json(
+        { error: "Every selected manual bundle needs a Bundle No. and Pcs greater than 0." },
+        { status: 400 },
+      );
+    }
+    const bundleNos = selectedBundles.map((bundle) => bundle.bundleNo.trim());
+    if (new Set(bundleNos).size !== bundleNos.length) {
+      return Response.json(
+        { error: "Manual Bundle No. values must be unique." },
+        { status: 400 },
+      );
+    }
+  }
 
   const cards = buildCouponCards(selectedBundles, selectedOperations);
   const encoder = new TextEncoder();
@@ -75,6 +95,14 @@ export async function POST(request: Request) {
         // style-bulletin/cut-detail snapshot row it touches, so all three
         // tables' rows from this one run can be found later by this one id.
         const generationId = randomUUID();
+        if (manualCutDetails) {
+          await saveManualCouponCutDetails(
+            pool,
+            workOrder,
+            department as CouponDepartment,
+            selectedBundles,
+          );
+        }
         const { insertedCount, newBundleNos, newOpNos } = await registerCoupons(
           pool,
           workOrder,
