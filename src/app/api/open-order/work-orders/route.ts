@@ -1,4 +1,10 @@
-import { getPool, sql, CUT_DETAIL_VIEW, STYLE_BULLETIN_TABLE, OPERATIONS_CATALOG_TABLE } from "@/lib/db";
+import {
+  getPool,
+  sql,
+  CUT_DETAIL_VIEW,
+  STYLE_BULLETIN_TABLE,
+  OPERATIONS_CATALOG_TABLE,
+} from "@/lib/db";
 import { isStyleBulletinDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +20,9 @@ export async function GET(request: Request) {
   const workOrder = (searchParams.get("work_order") || "").trim();
   const customer = (searchParams.get("customer") || "").trim();
   const saleOrderNo = (searchParams.get("sale_order_no") || "").trim();
-  const department = (searchParams.get("department") || "").trim().toLowerCase();
+  const department = (searchParams.get("department") || "")
+    .trim()
+    .toLowerCase();
 
   if (department && !isStyleBulletinDepartment(department)) {
     return Response.json({ error: "Invalid department." }, { status: 400 });
@@ -23,7 +31,9 @@ export async function GET(request: Request) {
   try {
     const pool = await getPool("indusPlus");
     const request_ = pool.request();
-    const conditions: string[] = [];
+    const conditions: string[] = [
+      "NULLIF(LTRIM(RTRIM(cd.[Work Order #])), '') IS NOT NULL",
+    ];
 
     if (workOrder) {
       request_.input("workOrder", sql.NVarChar, `%${workOrder}%`);
@@ -50,9 +60,9 @@ export async function GET(request: Request) {
 
     // No filters yet → most-recent-first default list, mirroring the same
     // empty-query fallback /api/open-order/suggestions already uses.
-    const where =
-      conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-    const orderDirection = conditions.length > 0 ? "ASC" : "DESC";
+    const where = `WHERE ${conditions.join(" AND ")}`;
+    const orderDirection =
+      workOrder || customer || saleOrderNo ? "ASC" : "DESC";
 
     const result = await request_.query(`
       SELECT DISTINCT TOP 40
