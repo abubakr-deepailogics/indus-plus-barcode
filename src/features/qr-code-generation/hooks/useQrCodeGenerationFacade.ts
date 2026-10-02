@@ -52,7 +52,9 @@ interface QrCodeGenerationFacade {
     field: "bundleNo" | "inseam" | "size" | "pcs",
     value: string,
   ) => void;
+  handleAllManualBundlesSelChange: (checked: boolean) => void;
   handleRemoveManualBundle: (id: number) => void;
+  handleAddManualBundle: () => void;
   handleGeneratePdf: () => Promise<void>;
   generatingPdf: boolean;
   handleGenerateCoupons: () => Promise<void>;
@@ -98,6 +100,34 @@ const emptyStyle: QrCodeStyleData = {
   operations: [],
   bundles: [],
 };
+
+function getSelectedBundlePcs(bundles: BundleDetailRow[]): number {
+  return bundles
+    .filter((bundle) => bundle.sel)
+    .reduce((sum, bundle) => sum + bundle.pcs, 0);
+}
+
+function isCompleteManualBundle(bundle: BundleDetailRow): boolean {
+  return Boolean(bundle.bundleNo.trim()) && Number.isInteger(bundle.pcs) && bundle.pcs > 0;
+}
+
+function createNextManualBundle(bundles: BundleDetailRow[]): BundleDetailRow {
+  const numericBundleNos = bundles
+    .map((bundle) => Number(bundle.bundleNo))
+    .filter((bundleNo) => Number.isInteger(bundleNo) && bundleNo >= 0);
+
+  return {
+    id: Math.min(0, ...bundles.map((bundle) => bundle.id)) - 1,
+    cutNo: "",
+    line: "1",
+    bundleNo: String(Math.max(0, ...numericBundleNos) + 1),
+    inseam: "",
+    size: "",
+    pcs: 0,
+    sel: false,
+    code: "",
+  };
+}
 
 export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   const { department } = useDepartment();
@@ -327,9 +357,9 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         inseam: cut.Inseam !== undefined ? String(cut.Inseam) : "",
         size: cut.Size !== undefined ? String(cut.Size) : "",
         pcs: Number(cut.Bundle_Qty ?? cut.Pcs ?? 0),
-        // Manual department rows follow the Rework model: populated rows are
-        // included automatically, while the trailing blank row is not.
-        sel: usesManualCouponCutDetails(department),
+        // Selection is always explicit, matching Sewing. A user can fill
+        // manual rows freely, then choose exactly which rows to generate.
+        sel: false,
         code: cut.Color || "",
         rPcs: cut.R_Pcs !== undefined ? String(cut.R_Pcs) : "-",
       }));
@@ -532,27 +562,36 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
           updated.pcs,
       );
       const bundles = prev.bundles.slice();
-      bundles[index] = { ...updated, sel: hasContent };
+      // Filling a row must not silently add it to generation. Selection is
+      // controlled solely by the row checkbox or Complete selection.
+      bundles[index] = { ...updated, sel: current.sel };
       if (index === prev.bundles.length - 1 && hasContent) {
-        const numericBundleNos = bundles
-          .map((bundle) => Number(bundle.bundleNo))
-          .filter((bundleNo) => Number.isInteger(bundleNo) && bundleNo >= 0);
-        const nextId = Math.min(0, ...bundles.map((bundle) => bundle.id)) - 1;
-        bundles.push({
-          id: nextId,
-          cutNo: "",
-          line: "1",
-          bundleNo: String(Math.max(0, ...numericBundleNos) + 1),
-          inseam: "",
-          size: "",
-          pcs: 0,
-          sel: false,
-          code: "",
-        });
+        bundles.push(createNextManualBundle(bundles));
       }
-      const selectedPcs = bundles
-        .filter((bundle) => bundle.sel)
-        .reduce((sum, bundle) => sum + bundle.pcs, 0);
+      const selectedPcs = getSelectedBundlePcs(bundles);
+      return { ...prev, bundles, subTotal: String(selectedPcs), total: String(selectedPcs) };
+    });
+  };
+
+  const handleAddManualBundle = () => {
+    setActiveStyle((prev) => {
+      const bundles = [...prev.bundles, createNextManualBundle(prev.bundles)];
+      return {
+        ...prev,
+        bundles,
+        subTotal: String(getSelectedBundlePcs(bundles)),
+        total: String(getSelectedBundlePcs(bundles)),
+      };
+    });
+  };
+
+  const handleAllManualBundlesSelChange = (checked: boolean) => {
+    setActiveStyle((prev) => {
+      const bundles = prev.bundles.map((bundle) => ({
+        ...bundle,
+        sel: checked && isCompleteManualBundle(bundle),
+      }));
+      const selectedPcs = getSelectedBundlePcs(bundles);
       return { ...prev, bundles, subTotal: String(selectedPcs), total: String(selectedPcs) };
     });
   };
@@ -561,14 +600,12 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     setActiveStyle((prev) => {
       if (prev.bundles.length > 1) {
         const bundles = prev.bundles.filter((bundle) => bundle.id !== id);
-        const selectedPcs = bundles
-          .filter((bundle) => bundle.sel)
-          .reduce((sum, bundle) => sum + bundle.pcs, 0);
+        const selectedPcs = getSelectedBundlePcs(bundles);
         return { ...prev, bundles, subTotal: String(selectedPcs), total: String(selectedPcs) };
       }
       return {
         ...prev,
-        bundles: [{ id: -1, cutNo: "", line: "1", bundleNo: "1", inseam: "", size: "", pcs: 0, sel: false, code: "" }],
+        bundles: [createNextManualBundle([])],
         subTotal: "0",
         total: "0",
       };
@@ -765,7 +802,9 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     handleAllOperationsSelChange,
     handleReworkQtyBundleChange,
     handleManualBundleChange,
+    handleAllManualBundlesSelChange,
     handleRemoveManualBundle,
+    handleAddManualBundle,
     handleGeneratePdf,
     generatingPdf,
     handleGenerateCoupons,

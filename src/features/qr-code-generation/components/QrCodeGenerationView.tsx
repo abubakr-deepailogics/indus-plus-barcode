@@ -92,6 +92,9 @@ export function QrCodeGenerationView() {
                   subTotal={facade.activeStyle.subTotal}
                   total={facade.activeStyle.total}
                   onBundleChange={facade.handleManualBundleChange}
+                  onBundleSelChange={facade.handleBundleSelChange}
+                  onAllManualBundlesSelChange={facade.handleAllManualBundlesSelChange}
+                  onAddBundle={facade.handleAddManualBundle}
                   onRemoveBundle={facade.handleRemoveManualBundle}
                 />
               ) : (
