@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState, useMemo, useEffect } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type {
   BundleDetailRow,
   OperationsDetailRow,
@@ -18,6 +18,53 @@ import type { WorkOrderSearchRow } from "@/components/work-order-search-modal";
 interface WorkerItem {
   EmployeeID: number;
   FirstName: string;
+}
+
+interface OpenOrderOperationRow {
+  RowId?: number;
+  Section?: string;
+  Operation_Sequence?: number | string;
+  Operation_Code?: string;
+  Operation_Name?: string;
+  Smv_Sam?: number | string;
+  Piece_Rate?: number | string;
+  SkillLevel?: string;
+  Incentive?: number | string;
+  Sdl_No?: string;
+  Style_Code?: string;
+}
+
+interface OpenOrderCutRow {
+  RowId?: number;
+  Sale_Order_No?: string;
+  Trans_Id?: string;
+  Cut?: number | string;
+  Char?: string;
+  Color?: string;
+  Line?: number | string;
+  Bundle_Id?: number | string;
+  BundleNo?: number | string;
+  Inseam?: string;
+  Size?: string;
+  Bundle_Qty?: number | string;
+  Pcs?: number | string;
+  R_Pcs?: number | string;
+  Customer_Name?: string;
+}
+
+interface OpenOrderResponse {
+  cutDetails?: OpenOrderCutRow[];
+  styleBulletins?: OpenOrderOperationRow[];
+}
+
+interface CouponGenerationStreamEvent {
+  status?: "error" | "complete" | "progress";
+  message?: string;
+  done?: number;
+  total?: number;
+  insertedCount?: number;
+  alreadyExistedCount?: number;
+  couponCount?: number;
 }
 
 function isZeroRateOp(op: OperationsDetailRow): boolean {
@@ -134,6 +181,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   const { user, can } = useAuth();
   const canGenerate = can("coupon-generation", "create");
   const [activeStyle, setActiveStyle] = useState<QrCodeStyleData>(emptyStyle);
+  const workOrderRequestId = useRef(0);
   const [isLoadingWorkOrder, setIsLoadingWorkOrder] = useState(false);
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
   const [showPageSetupModal, setShowPageSetupModal] = useState(false);
@@ -292,30 +340,41 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
 
   // Load details for a selected Work Order
   const fetchWorkOrderDetails = async (wo: string) => {
-    if (!wo) return;
+    const requestId = ++workOrderRequestId.current;
+    if (!wo) {
+      setActiveStyle(emptyStyle);
+      setGeneratedPairs(new Set());
+      setLastGeneratedSelectionKey("");
+      setIsLoadingWorkOrder(false);
+      return;
+    }
     setIsLoadingWorkOrder(true);
     try {
       const response = await fetch(
         `/api/open-order?work_order=${encodeURIComponent(wo)}&department=${encodeURIComponent(department)}&t=${Date.now()}`,
       );
-      if (!response.ok) return;
-      const data = await response.json();
+      if (!response.ok || requestId !== workOrderRequestId.current) return;
+      const data = (await response.json()) as OpenOrderResponse;
+      if (requestId !== workOrderRequestId.current) return;
 
-      let fetchedCuts = data.cutDetails || [];
+      let fetchedCuts: OpenOrderCutRow[] = data.cutDetails || [];
       if (usesManualCouponCutDetails(department)) {
         const manualDetailsResponse = await fetch(
           `/api/manual-coupon-cut-details?work_order=${encodeURIComponent(wo)}&department=${department}`,
         );
+        if (requestId !== workOrderRequestId.current) return;
         if (!manualDetailsResponse.ok) {
           throw new Error("Failed to load manual bundle details.");
         }
-        const manualDetails = await manualDetailsResponse.json();
+        const manualDetails = (await manualDetailsResponse.json()) as {
+          rows?: OpenOrderCutRow[];
+        };
         fetchedCuts = manualDetails.rows || [];
       }
       const fetchedOps = data.styleBulletins || [];
 
       // Map database operations to OperationsDetailRow
-      const operations = fetchedOps.map((op: any, index: number) => ({
+      const operations = fetchedOps.map((op, index: number) => ({
         id: op.RowId || index,
         section: op.Section || "",
         seqNo: String(op.Operation_Sequence || ""),
@@ -347,7 +406,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       });
 
       // Map database cuts to BundleDetailRow
-      const bundles: BundleDetailRow[] = fetchedCuts.map((cut: any, index: number) => ({
+      const bundles: BundleDetailRow[] = fetchedCuts.map((cut, index: number) => ({
         id: cut.RowId || index,
         transId: cut.Sale_Order_No || cut.Trans_Id || wo,
         cutNo: cut.Cut !== undefined ? String(cut.Cut) : "",
@@ -379,7 +438,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       }
 
       // // Sort bundles in sequence by Cut No and Bundle No
-      bundles.sort((a: any, b: any) => {
+      bundles.sort((a, b) => {
         const cutCompare = a.cutNo.localeCompare(b.cutNo, undefined, {
           numeric: true,
         });
@@ -395,6 +454,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         const countRes = await fetch(
           `/api/qr-code-generation/coupons?work_order=${encodeURIComponent(wo)}&page_size=1&department=${encodeURIComponent(department)}`,
         );
+        if (requestId !== workOrderRequestId.current) return;
         if (countRes.ok) {
           const countData = await countRes.json();
           couponCount = String(countData.total || 0);
@@ -410,6 +470,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         const pairsRes = await fetch(
           `/api/qr-code-generation/coupons/pairs?work_order=${encodeURIComponent(wo)}&department=${encodeURIComponent(department)}`,
         );
+        if (requestId !== workOrderRequestId.current) return;
         if (pairsRes.ok) {
           const pairsData = await pairsRes.json();
           pairs = new Set(
@@ -422,10 +483,8 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       } catch (e) {
         console.error("Error fetching generated pairs:", e);
       }
+      if (requestId !== workOrderRequestId.current) return;
       setGeneratedPairs(pairs);
-
-      // Compute total/subtotal sum of loaded bundle pieces
-      const totalPcs = bundles.reduce((acc: number, b: any) => acc + b.pcs, 0);
 
       setActiveStyle((prev) => ({
         ...prev,
@@ -442,9 +501,13 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       }));
       setLastGeneratedSelectionKey("");
     } catch (err) {
-      console.error("Error fetching work order details:", err);
+      if (requestId === workOrderRequestId.current) {
+        console.error("Error fetching work order details:", err);
+      }
     } finally {
-      setIsLoadingWorkOrder(false);
+      if (requestId === workOrderRequestId.current) {
+        setIsLoadingWorkOrder(false);
+      }
     }
   };
 
@@ -718,14 +781,19 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         buffer = lines.pop() ?? ""; // last element: partial line (or "") — held back for the next read
         for (const line of lines) {
           if (!line.trim()) continue;
-          const parsed = JSON.parse(line);
+          const parsed = JSON.parse(line) as CouponGenerationStreamEvent;
           if (parsed.status === "error") {
             throw new Error(parsed.message || "Failed to generate coupons.");
           }
           if (parsed.status === "complete") {
-            finalData = parsed;
+            finalData = {
+              cardCount: 0,
+              insertedCount: parsed.insertedCount ?? 0,
+              alreadyExistedCount: parsed.alreadyExistedCount ?? 0,
+              couponCount: parsed.couponCount ?? 0,
+            };
           }
-          setGenerateProgress({ done: parsed.done, total: parsed.total });
+          setGenerateProgress({ done: parsed.done ?? 0, total: parsed.total ?? 0 });
         }
       }
       // Decoder may still hold a trailing partial multi-byte char with
@@ -733,10 +801,17 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       // no-op unless that happened, so this is safe either way.
       buffer += decoder.decode();
       if (buffer.trim()) {
-        const parsed = JSON.parse(buffer);
+        const parsed = JSON.parse(buffer) as CouponGenerationStreamEvent;
         if (parsed.status === "error")
           throw new Error(parsed.message || "Failed to generate coupons.");
-        if (parsed.status === "complete") finalData = parsed;
+        if (parsed.status === "complete") {
+          finalData = {
+            cardCount: 0,
+            insertedCount: parsed.insertedCount ?? 0,
+            alreadyExistedCount: parsed.alreadyExistedCount ?? 0,
+            couponCount: parsed.couponCount ?? 0,
+          };
+        }
       }
 
       if (!finalData) {
@@ -762,9 +837,11 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         }
         return next;
       });
-    } catch (err: any) {
+    } catch (err: unknown) {
       setCouponModalError(
-        err.message || "An error occurred while generating coupons.",
+        err instanceof Error
+          ? err.message
+          : "An error occurred while generating coupons.",
       );
       setGenerateModalState("error");
     } finally {
