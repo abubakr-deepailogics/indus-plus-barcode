@@ -51,7 +51,10 @@ export async function POST(request: Request) {
   // coupon could later be rescanned into a different (unlocked) date and
   // paid a second time with nothing to catch it. Same hard rule as the scan
   // endpoints' lock, checked in bulk here instead of one date at a time.
-  const lockCheck = await findLockedDates(scanned.map((m) => m.ScannedAt));
+  const lockCheck = await findLockedDates(
+    scanned.map((m) => m.ScannedAt),
+    parsed.department,
+  );
   if (lockCheck) {
     const titles = lockCheck.locks
       .map((l) => `"${l.title}" (${l.from} to ${l.to})`)

@@ -87,7 +87,7 @@ export async function POST(request: Request) {
 
     // Distinct coupons registered for this work order so far (post-dedup) —
     // the real "coupons generated" count, not this batch's render size.
-    const couponCount = await countCoupons(pool, workOrder);
+    const couponCount = await countCoupons(pool, workOrder, department as CouponDepartment);
 
     // Counts travel as headers since the body is the PDF itself, not JSON —
     // the caller reads X-Card-Count/X-Coupon-Count off the response.
@@ -112,19 +112,24 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = searchParams.get("work_order") || "";
+  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
 
   if (!workOrder) {
     return Response.json({ error: "work_order is required." }, { status: 400 });
   }
+  if (!isCouponDepartment(department)) {
+    return Response.json({ error: "Invalid department." }, { status: 400 });
+  }
 
   try {
     const pool = await getPool("pitSystem");
-    const couponCount = await countCoupons(pool, workOrder);
+    const couponCount = await countCoupons(pool, workOrder, department as CouponDepartment);
     const origRes = await pool
       .request()
       .input("workOrder", sql.NVarChar, workOrder)
+      .input("department", sql.NVarChar, department)
       .query(
-        "SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0 AND BundleNo NOT LIKE 'RW%'",
+        "SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND Department = @department AND IsDeleted = 0 AND BundleNo NOT LIKE 'RW%'",
       );
     const originalCouponCount = origRes.recordset[0]?.total ?? 0;
 
@@ -135,8 +140,9 @@ export async function GET(request: Request) {
     const opRes = await pool
       .request()
       .input("workOrder", sql.NVarChar, workOrder)
+      .input("department", sql.NVarChar, department)
       .query(
-        "SELECT DISTINCT OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0 AND BundleNo NOT LIKE 'RW%'",
+        "SELECT DISTINCT OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND Department = @department AND IsDeleted = 0 AND BundleNo NOT LIKE 'RW%'",
       );
     const generatedOpCodes: string[] = opRes.recordset.map(
       (r: { OpNo: string }) => r.OpNo,

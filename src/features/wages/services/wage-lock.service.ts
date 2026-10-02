@@ -95,8 +95,9 @@ export interface LockedDatesResult {
 // nothing).
 export async function findLockedDates(
   dates: unknown[],
+  department: CouponDepartment = "sewing",
 ): Promise<LockedDatesResult | null> {
-  const ranges = await fetchLockedRanges();
+  const ranges = await fetchLockedRanges(department);
   if (ranges.length === 0) return null;
 
   let lockedCount = 0;

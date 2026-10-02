@@ -135,10 +135,11 @@ export default function CouponTracingPage() {
       if (filters.workOrder) params.set("work_order", filters.workOrder);
       if (filters.customer) params.set("customer", filters.customer);
       if (filters.saleOrderNo) params.set("sale_order_no", filters.saleOrderNo);
+      params.set("department", department);
       const res = await fetch(`/api/coupons/work-orders?${params.toString()}`);
       return res.ok ? res.json() : [];
     },
-    [],
+    [department],
   );
 
   const fetchOpSuggestions = async (
@@ -147,7 +148,7 @@ export default function CouponTracingPage() {
     if (!tracedWorkOrder) return [];
     try {
       const response = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=operation&query=${encodeURIComponent(query)}&only_generated=true`,
+        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=operation&query=${encodeURIComponent(query)}&only_generated=true&department=${encodeURIComponent(department)}`,
       );
       if (response.ok) {
         return await response.json();
@@ -162,7 +163,7 @@ export default function CouponTracingPage() {
     if (!tracedWorkOrder) return [];
     try {
       const response = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=bundle&query=${encodeURIComponent(query)}&only_generated=true`,
+        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=bundle&query=${encodeURIComponent(query)}&only_generated=true&department=${encodeURIComponent(department)}`,
       );
       if (response.ok) {
         return await response.json();
@@ -180,7 +181,7 @@ export default function CouponTracingPage() {
     }
     try {
       const response = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=section`,
+        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=section&department=${encodeURIComponent(department)}`,
       );
       setSectionOptions(response.ok ? await response.json() : []);
     } catch (err) {
@@ -338,7 +339,7 @@ export default function CouponTracingPage() {
     const response = await fetch("/api/coupons/unscan-or-delete/unscan", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...fields, actedBy }),
+      body: JSON.stringify({ ...fields, actedBy, department }),
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
@@ -356,7 +357,7 @@ export default function CouponTracingPage() {
     const response = await fetch("/api/coupons/unscan-or-delete/delete", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...fields, actedBy }),
+      body: JSON.stringify({ ...fields, actedBy, department }),
     });
     if (!response.ok) {
       const data = await response.json().catch(() => ({}));
@@ -1195,6 +1196,7 @@ export default function CouponTracingPage() {
         {showDeleteModal && (
           <UnscanOrDeleteCouponModal
             filters={couponActionFilters}
+            department={department}
             submitUnscan={submitUnscanCoupons}
             submitDelete={submitDeleteCoupons}
             onClose={() => setShowDeleteModal(false)}

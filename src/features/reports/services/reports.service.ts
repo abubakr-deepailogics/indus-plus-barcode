@@ -66,10 +66,11 @@ export async function fetchEmployeeSearchSuggestions(
 
 export async function fetchWorkOrderSearchSuggestions(
   query: string,
+  department: CouponDepartment = "sewing",
 ): Promise<ReportSearchSuggestion[]> {
   // Reuses the existing "work orders that actually have generated coupons"
   // lookup rather than a new endpoint — it's exactly the scope reports need.
-  const params = new URLSearchParams({ only_generated: "true", query });
+  const params = new URLSearchParams({ only_generated: "true", query, department });
   const response = await fetch(
     `/api/open-order/suggestions?${params.toString()}`,
   );
@@ -80,8 +81,9 @@ export async function fetchWorkOrderSearchSuggestions(
 
 export async function fetchOperationSearchSuggestions(
   query: string,
+  department: CouponDepartment = "sewing",
 ): Promise<ReportSearchSuggestion[]> {
-  const params = new URLSearchParams({ query });
+  const params = new URLSearchParams({ query, department });
   const response = await fetch(
     `/api/reports/operation-suggestions?${params.toString()}`,
   );
@@ -98,8 +100,9 @@ export async function fetchOperationSearchSuggestions(
 
 export async function fetchSectionSearchSuggestions(
   query: string,
+  department: CouponDepartment = "sewing",
 ): Promise<ReportSearchSuggestion[]> {
-  const params = new URLSearchParams({ query });
+  const params = new URLSearchParams({ query, department });
   const response = await fetch(
     `/api/reports/section-suggestions?${params.toString()}`,
   );

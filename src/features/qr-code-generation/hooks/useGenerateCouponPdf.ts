@@ -34,7 +34,7 @@ export function useGenerateCouponPdf(
       return;
     }
     let cancelled = false;
-    fetch(`/api/qr-code-generation/pdf?work_order=${encodeURIComponent(workOrder)}`)
+    fetch(`/api/qr-code-generation/pdf?work_order=${encodeURIComponent(workOrder)}&department=${encodeURIComponent(department)}`)
       .then((res) => res.json())
       .then((data) => {
         if (!cancelled) setCouponCount(typeof data.couponCount === "number" ? data.couponCount : 0);

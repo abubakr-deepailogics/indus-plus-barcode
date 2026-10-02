@@ -577,7 +577,7 @@ export default function OpenOrderPage() {
     setBulletinAttachmentError("");
     try {
       const res = await fetch(
-        `/api/style-bulletin/attachments?workOrder=${encodeURIComponent(workOrder)}`,
+        `/api/style-bulletin/attachments?workOrder=${encodeURIComponent(workOrder)}&department=${encodeURIComponent(department)}`,
       );
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to load attachments.");
@@ -589,7 +589,7 @@ export default function OpenOrderPage() {
     } finally {
       setBulletinAttachmentsLoading(false);
     }
-  }, []);
+  }, [department]);
 
   const handleUploadBulletinAttachment = async (file: File) => {
     const workOrder = cutDetails[0]?.Work_Order || activeSearchQuery;
@@ -602,6 +602,7 @@ export default function OpenOrderPage() {
     form.append("workOrder", workOrder);
     form.append("file", file);
     form.append("createdBy", user?.email || "");
+    form.append("department", department);
 
     try {
       const res = await fetch("/api/style-bulletin/attachments", {
@@ -622,7 +623,7 @@ export default function OpenOrderPage() {
   const handleDeleteBulletinAttachment = async (id: number) => {
     setBulletinAttachmentError("");
     try {
-      const res = await fetch(`/api/style-bulletin/attachments?id=${id}`, {
+      const res = await fetch(`/api/style-bulletin/attachments?id=${id}&department=${encodeURIComponent(department)}`, {
         method: "DELETE",
       });
       const data = await res.json();
@@ -1352,7 +1353,7 @@ export default function OpenOrderPage() {
                     className="flex items-center justify-between gap-2 border border-[#e2e8f0] rounded-xl px-3 py-2.5"
                   >
                     <a
-                      href={`/api/style-bulletin/attachments/${a.Id}`}
+                      href={`/api/style-bulletin/attachments/${a.Id}?department=${encodeURIComponent(department)}`}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="flex items-center gap-2 min-w-0 hover:text-[#4f46e5]"

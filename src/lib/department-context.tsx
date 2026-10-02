@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { usePathname } from "next/navigation";
 
 export type DepartmentKey = "sewing" | "washing" | "finishing" | "gdp";
 
@@ -52,7 +53,8 @@ const DepartmentContext = createContext<DepartmentContextValue | undefined>(
 );
 
 export function DepartmentProvider({ children }: { children: ReactNode }) {
-  const [department, setDepartmentState] = useState<DepartmentKey>(() => {
+  const pathname = usePathname();
+  const [storedDepartment, setDepartmentState] = useState<DepartmentKey>(() => {
     if (typeof window === "undefined") return "sewing";
     try {
       const saved = window.localStorage.getItem(
@@ -75,6 +77,15 @@ export function DepartmentProvider({ children }: { children: ReactNode }) {
       // ignore
     }
   }, []);
+
+  // Route scope wins synchronously over localStorage. Without this, opening
+  // /washing/... directly in a fresh tab could briefly expose the saved
+  // Sewing department before AppShell's effect corrected it.
+  const department: DepartmentKey = pathname.startsWith("/washing")
+    ? "washing"
+    : pathname.startsWith("/industrial-engineering")
+      ? "sewing"
+      : storedDepartment;
 
   return (
     <DepartmentContext.Provider

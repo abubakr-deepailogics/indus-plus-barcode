@@ -1,4 +1,5 @@
 import { getPool, sql } from "@/lib/db";
+import { isCouponDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -8,13 +9,16 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> },
 ) {
   const { id } = await params;
+  const department = (new URL(request.url).searchParams.get("department") || "sewing").trim().toLowerCase();
+  if (!isCouponDepartment(department)) return Response.json({ error: "Invalid department." }, { status: 400 });
 
   try {
     const pool = await getPool("pitSystem");
     const result = await pool
       .request()
       .input("id", sql.Int, Number(id))
-      .query(`SELECT FileName, ContentType, FileData FROM dbo.StyleBulletin_Attachment WHERE Id = @id`);
+      .input("department", sql.NVarChar, department)
+      .query(`SELECT FileName, ContentType, FileData FROM dbo.StyleBulletin_Attachment WHERE Id = @id AND Department = @department`);
 
     const row = result.recordset[0];
     if (!row) {

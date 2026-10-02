@@ -14,6 +14,7 @@ export async function GET(request: Request) {
     const couponCodesParam = searchParams.get("couponCodes");
     const parsed = readCouponFilter({
       workOrder: searchParams.get("workOrder"),
+      department: searchParams.get("department"),
       fromBundle: searchParams.get("fromBundle"),
       toBundle: searchParams.get("toBundle"),
       opNo: searchParams.get("opNo"),

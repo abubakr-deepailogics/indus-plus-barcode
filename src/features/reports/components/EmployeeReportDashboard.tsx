@@ -41,6 +41,7 @@ import {
   fetchSectionSearchSuggestions,
   fetchWorkOrderSearchSuggestions,
 } from "../services/reports.service";
+import { useDepartment } from "@/lib/department-context";
 import {
   currentPayCycleStart,
   useReportSearch,
@@ -493,6 +494,7 @@ function getCard2Config(summary: ReportSummary): Card2Config {
 }
 
 export function EmployeeReportDashboard() {
+  const { department } = useDepartment();
   const {
     mode,
     changeMode,
@@ -684,7 +686,15 @@ export function EmployeeReportDashboard() {
     [sectionRowGroups],
   );
 
-  const modeConfig = MODE_CONFIG[mode];
+  const modeConfig = useMemo(() => ({
+    ...MODE_CONFIG[mode],
+    fetchSuggestions: (query: string) => {
+      if (mode === "workOrder") return fetchWorkOrderSearchSuggestions(query, department);
+      if (mode === "operation") return fetchOperationSearchSuggestions(query, department);
+      if (mode === "section") return fetchSectionSearchSuggestions(query, department);
+      return fetchEmployeeSearchSuggestions(query);
+    },
+  }), [mode, department]);
 
   const handleSelect = useCallback(
     (suggestion: ReportSearchSuggestion) => {

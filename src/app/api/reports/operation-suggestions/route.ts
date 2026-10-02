@@ -1,4 +1,5 @@
 import { getPool, sql, STYLE_BULLETIN_TABLE } from "@/lib/db";
+import { isCouponDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -16,12 +17,14 @@ const IN_LIST_CHUNK_SIZE = 2000; // stays well under SQL Server's ~2100 paramete
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get("query") || "").trim().toLowerCase();
+  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
+  if (!isCouponDepartment(department)) return Response.json({ error: "Invalid department." }, { status: 400 });
 
   try {
     const pitPool = await getPool("pitSystem");
-    const opNoResult = await pitPool.request().query(`
+    const opNoResult = await pitPool.request().input("department", sql.NVarChar, department).query(`
       SELECT DISTINCT OpNo FROM dbo.QrCode_Coupon
-      WHERE IsScanned = 1 AND IsDeleted = 0 AND OpNo IS NOT NULL AND OpNo <> ''
+      WHERE IsScanned = 1 AND IsDeleted = 0 AND Department = @department AND OpNo IS NOT NULL AND OpNo <> ''
     `);
     const opNos = opNoResult.recordset.map((r) => r.OpNo as string).filter(Boolean);
     if (opNos.length === 0) return Response.json([]);

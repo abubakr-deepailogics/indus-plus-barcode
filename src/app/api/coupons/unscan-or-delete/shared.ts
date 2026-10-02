@@ -1,4 +1,5 @@
 import { getPool, sql } from "@/lib/db";
+import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
 
 // Shared by the three routes in this folder (GET status check, POST
 // .../unscan, POST .../delete). These filters intentionally mirror Coupon
@@ -6,6 +7,7 @@ import { getPool, sql } from "@/lib/db";
 // visible set the user narrowed down on the page.
 
 export interface CouponFilter {
+  department: CouponDepartment;
   workOrder: string;
   fromBundle: string;
   toBundle: string;
@@ -22,14 +24,17 @@ export function readCouponFilter(
   source: Record<string, unknown>,
 ): CouponFilter | { error: string } {
   const workOrder = String(source.workOrder ?? "").trim();
+  const department = String(source.department ?? "sewing").trim().toLowerCase();
   if (!workOrder) {
     return { error: "Missing required field: workOrder." };
   }
+  if (!isCouponDepartment(department)) return { error: "Invalid department." };
   const scannedValue = String(source.isScanned ?? "").trim();
   const couponCodes = Array.isArray(source.couponCodes)
     ? source.couponCodes.map((c) => String(c).trim()).filter(Boolean)
     : undefined;
   return {
+    department: department as CouponDepartment,
     workOrder,
     fromBundle: String(source.fromBundle ?? "").trim(),
     toBundle: String(source.toBundle ?? "").trim(),
@@ -92,7 +97,8 @@ export async function findMatchingCoupons(
     for (const batch of chunk(filter.couponCodes, IN_LIST_CHUNK_SIZE)) {
       const request = pool
         .request()
-        .input("workOrder", sql.NVarChar, filter.workOrder);
+        .input("workOrder", sql.NVarChar, filter.workOrder)
+        .input("department", sql.NVarChar, filter.department);
       const placeholders = batch.map((code, i) => {
         request.input(`code${i}`, sql.NVarChar, code);
         return `@code${i}`;
@@ -100,7 +106,7 @@ export async function findMatchingCoupons(
       const result = await request.query(`
         SELECT ${MATCH_COLUMNS}
         FROM dbo.QrCode_Coupon
-        WHERE WorkOrder = @workOrder AND IsDeleted = 0
+        WHERE WorkOrder = @workOrder AND Department = @department AND IsDeleted = 0
           AND CouponCode IN (${placeholders.join(", ")})
       `);
       rows.push(...(result.recordset as MatchedCoupon[]));
@@ -110,8 +116,9 @@ export async function findMatchingCoupons(
 
   const request = pool
     .request()
-    .input("workOrder", sql.NVarChar, filter.workOrder);
-  const conditions = ["WorkOrder = @workOrder", "IsDeleted = 0"];
+    .input("workOrder", sql.NVarChar, filter.workOrder)
+    .input("department", sql.NVarChar, filter.department);
+  const conditions = ["WorkOrder = @workOrder", "Department = @department", "IsDeleted = 0"];
   if (filter.fromBundle) {
     request.input("fromBundle", sql.NVarChar, filter.fromBundle);
     conditions.push(

@@ -1,4 +1,5 @@
-import { getPool, STYLE_BULLETIN_TABLE } from "@/lib/db";
+import { getPool, sql } from "@/lib/db";
+import { isCouponDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -12,13 +13,15 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get("query") || "").trim().toLowerCase();
+  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
+  if (!isCouponDepartment(department)) return Response.json({ error: "Invalid department." }, { status: 400 });
 
   try {
-    const indusPool = await getPool("indusPlus");
-    const result = await indusPool.request().query(`
+    const pitPool = await getPool("pitSystem");
+    const result = await pitPool.request().input("department", sql.NVarChar, department).query(`
       SELECT DISTINCT Section
-      FROM ${STYLE_BULLETIN_TABLE}
-      WHERE Section IS NOT NULL AND Section <> ''
+      FROM dbo.QrCode_Coupon
+      WHERE Department = @department AND IsDeleted = 0 AND Section IS NOT NULL AND Section <> ''
     `);
     const sections = result.recordset
       .map((r) => String(r.Section))

@@ -9,6 +9,7 @@ import {
   Trash2,
   X,
 } from "lucide-react";
+import type { CouponDepartment } from "@/lib/department-classification";
 
 export type CouponActionFilters = {
   workOrder: string;
@@ -37,6 +38,7 @@ interface MatchCounts {
 
 interface UnscanOrDeleteCouponModalProps {
   filters: CouponActionFilters;
+  department: CouponDepartment;
   onClose: () => void;
   onDone: () => void;
   submitUnscan: (
@@ -94,6 +96,7 @@ function filterEntries(filters: CouponActionFilters) {
 
 export function UnscanOrDeleteCouponModal({
   filters,
+  department,
   onClose,
   onDone,
   submitUnscan,
@@ -129,6 +132,7 @@ export function UnscanOrDeleteCouponModal({
       try {
         const params = new URLSearchParams({
           workOrder: filters.workOrder,
+          department,
           fromBundle: filters.fromBundle.trim(),
           toBundle: filters.toBundle.trim(),
           opNo: filters.opNo.trim(),
@@ -167,7 +171,7 @@ export function UnscanOrDeleteCouponModal({
     return () => {
       cancelled = true;
     };
-  }, [filters]);
+  }, [filters, department]);
 
   const confirmAction: "unscan" | "delete" | "unscan_then_delete" | null =
     matchCounts

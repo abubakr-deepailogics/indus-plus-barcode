@@ -1,4 +1,5 @@
 import { getPool, sql, CUT_DETAIL_VIEW } from "@/lib/db";
+import { isCouponDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +53,10 @@ export async function GET(request: Request) {
   const workOrder = (searchParams.get("work_order") || "").trim();
   const customer = (searchParams.get("customer") || "").trim();
   const saleOrderNo = (searchParams.get("sale_order_no") || "").trim();
+  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
+  if (!isCouponDepartment(department)) {
+    return Response.json({ error: "Invalid department." }, { status: 400 });
+  }
 
   try {
     const pitPool = await getPool("pitSystem");
@@ -92,6 +97,7 @@ export async function GET(request: Request) {
       );
 
       const pitRequest = pitPool.request();
+      pitRequest.input("department", sql.NVarChar, department);
       const placeholders = candidates.recordset.map((r, i) => {
         pitRequest.input(`wo${i}`, sql.NVarChar, r.workOrder);
         return `@wo${i}`;
@@ -99,7 +105,7 @@ export async function GET(request: Request) {
       const matched = await pitRequest.query(`
         SELECT DISTINCT TOP 40 WorkOrder
         FROM dbo.QrCode_Coupon
-        WHERE WorkOrder IN (${placeholders.join(", ")}) AND IsDeleted = 0
+        WHERE WorkOrder IN (${placeholders.join(", ")}) AND IsDeleted = 0 AND Department = @department
         ORDER BY WorkOrder DESC
       `);
 
@@ -115,13 +121,14 @@ export async function GET(request: Request) {
     }
 
     const request_ = pitPool.request();
+    request_.input("department", sql.NVarChar, department);
     if (workOrder) {
       request_.input("workOrder", sql.NVarChar, `%${workOrder}%`);
     }
     const result = await request_.query(`
       SELECT DISTINCT TOP 40 WorkOrder AS workOrder
       FROM dbo.QrCode_Coupon
-      WHERE ${workOrder ? "WorkOrder LIKE @workOrder AND " : ""}IsDeleted = 0
+      WHERE ${workOrder ? "WorkOrder LIKE @workOrder AND " : ""}IsDeleted = 0 AND Department = @department
       ORDER BY WorkOrder ${workOrder ? "ASC" : "DESC"}
     `);
 

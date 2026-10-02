@@ -1,4 +1,5 @@
-import { getPool, sql, CUT_DETAIL_VIEW } from "@/lib/db";
+import { getPool, sql, CUT_DETAIL_VIEW, STYLE_BULLETIN_TABLE, OPERATIONS_CATALOG_TABLE } from "@/lib/db";
+import { isStyleBulletinDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +14,11 @@ export async function GET(request: Request) {
   const workOrder = (searchParams.get("work_order") || "").trim();
   const customer = (searchParams.get("customer") || "").trim();
   const saleOrderNo = (searchParams.get("sale_order_no") || "").trim();
+  const department = (searchParams.get("department") || "").trim().toLowerCase();
+
+  if (department && !isStyleBulletinDepartment(department)) {
+    return Response.json({ error: "Invalid department." }, { status: 400 });
+  }
 
   try {
     const pool = await getPool("indusPlus");
@@ -21,15 +27,25 @@ export async function GET(request: Request) {
 
     if (workOrder) {
       request_.input("workOrder", sql.NVarChar, `%${workOrder}%`);
-      conditions.push("[Work Order #] LIKE @workOrder");
+      conditions.push("cd.[Work Order #] LIKE @workOrder");
     }
     if (customer) {
       request_.input("customer", sql.NVarChar, `%${customer}%`);
-      conditions.push("UPPER([Customer Name]) LIKE UPPER(@customer)");
+      conditions.push("UPPER(cd.[Customer Name]) LIKE UPPER(@customer)");
     }
     if (saleOrderNo) {
       request_.input("saleOrderNo", sql.NVarChar, `%${saleOrderNo}%`);
-      conditions.push("[Sale Order No] LIKE @saleOrderNo");
+      conditions.push("cd.[Sale Order No] LIKE @saleOrderNo");
+    }
+    if (department) {
+      request_.input("department", sql.NVarChar, department);
+      conditions.push(`EXISTS (
+        SELECT 1
+        FROM ${STYLE_BULLETIN_TABLE} sb
+        INNER JOIN ${OPERATIONS_CATALOG_TABLE} op ON op.OperationCode = sb.[Operation Code]
+        WHERE sb.[Order No] = cd.[Work Order #]
+          AND LOWER(ISNULL(op.Department, '')) = @department
+      )`);
     }
 
     // No filters yet → most-recent-first default list, mirroring the same
@@ -40,12 +56,12 @@ export async function GET(request: Request) {
 
     const result = await request_.query(`
       SELECT DISTINCT TOP 40
-        [Work Order #] AS workOrder,
-        [Customer Name] AS customer,
-        [Sale Order No] AS saleOrderNo
-      FROM ${CUT_DETAIL_VIEW}
+        cd.[Work Order #] AS workOrder,
+        cd.[Customer Name] AS customer,
+        cd.[Sale Order No] AS saleOrderNo
+      FROM ${CUT_DETAIL_VIEW} cd
       ${where}
-      ORDER BY [Work Order #] ${orderDirection}
+      ORDER BY cd.[Work Order #] ${orderDirection}
     `);
 
     return Response.json(result.recordset);
