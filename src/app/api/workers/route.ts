@@ -13,10 +13,6 @@ export async function GET(request: Request) {
   const query = searchParams.get("query") || "";
   const code = searchParams.get("code") || "";
 
-  if (!query && !code) {
-    return Response.json([]);
-  }
-
   try {
     // Cross-server: Workers lives in hrms (172.16.0.15), QrCode_Coupon in
     // pitSystem (localhost) — genuinely different SQL Server instances, not
@@ -89,7 +85,9 @@ export async function GET(request: Request) {
       });
     }
 
-    // 2. Fetch autocomplete suggestions matching EmployeeID or FirstName
+    // 2. Fetch autocomplete suggestions. On focus with an empty query, the
+    // bounded active-worker list lets the user choose immediately; typing
+    // narrows that same list by employee code or name.
     if (query) {
       const result = await hrmsPool
         .request()
@@ -103,6 +101,14 @@ export async function GET(request: Request) {
 
       return Response.json(result.recordset);
     }
+
+    const result = await hrmsPool.request().query(`
+      SELECT DISTINCT TOP 20 EmployeeID, FirstName, DesignationName, ParentDepartment, DepartmentName
+      FROM ${WORKERS_VIEW}
+      WHERE EmpStatus = 'Active'
+      ORDER BY EmployeeID
+    `);
+    return Response.json(result.recordset);
   } catch (err: unknown) {
     console.error("Workers API error:", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";

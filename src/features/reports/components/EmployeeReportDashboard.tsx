@@ -1100,7 +1100,7 @@ export function EmployeeReportDashboard() {
                   placeholder={modeConfig.placeholder}
                   inputClassName="h-10 w-full rounded-lg border border-slate-200 bg-white px-3.5 text-sm font-medium text-slate-800 placeholder-slate-400 transition focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100"
                   onKeyDown={handleKeyDown}
-                  minChars={1}
+                  minChars={0}
                 />
               </div>
               <div className="flex items-center gap-2 shrink-0">
