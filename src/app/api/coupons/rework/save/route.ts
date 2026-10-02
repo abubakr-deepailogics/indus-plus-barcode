@@ -134,10 +134,13 @@ export async function POST(request: Request) {
       .request()
       .input("wo", sql.NVarChar, workOrder)
       .input("prefix", sql.NVarChar, rwPrefix)
+      .input("department", sql.NVarChar, couponDepartment)
       .query(`
         SELECT MAX(TRY_CAST(SUBSTRING(BundleNo, LEN(@prefix) + 1, 20) AS INT)) AS maxNum
         FROM dbo.QrCode_Coupon
-        WHERE WorkOrder = @wo AND BundleNo LIKE @prefix + '%'
+        WHERE WorkOrder = @wo
+          AND Department = @department
+          AND BundleNo LIKE @prefix + '%'
       `);
     let nextSeq = (Number(maxRes.recordset[0]?.maxNum) || 0) + 1;
 

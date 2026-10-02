@@ -59,7 +59,9 @@ export async function GET(request: Request) {
     if (onlyGenerated) {
       const pool = await getPool("pitSystem");
       if (!query || query.trim().length < 2) {
-        const result = await pool.request().query(`
+        const result = await pool.request()
+          .input("department", sql.NVarChar, department)
+          .query(`
           SELECT DISTINCT TOP 12 WorkOrder
           FROM dbo.QrCode_Coupon
           WHERE IsDeleted = 0 AND Department = @department
