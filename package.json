@@ -7,7 +7,7 @@
     "build": "next build",
     "build:prod": "NODE_ENV=production next build",
     "start": "next start",
-    "prod:side": "NEXT_DIST_DIR=.next-prod2 npm run build:prod && NEXT_DIST_DIR=.next-prod2 NODE_ENV=production next start -p ${PORT:-3001}",
+    "prod:side": "node scripts/prod-side.mjs",
     "prod": "npm run build:prod && NODE_ENV=production next start",
     "lint": "eslint",
     "migrate": "node scripts/migrate.mjs"
