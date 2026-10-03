@@ -1,6 +1,8 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Lets a second build live beside the running one (see "prod:side" in package.json).
+  distDir: process.env.NEXT_DIST_DIR || ".next",
   // The qr-code-generation PDF route reads a vendored TTF via fs at
   // runtime (pdfkit needs a real font file, not its default .afm-backed
   // fonts, which go missing in bundled/serverless deploys). Declare it

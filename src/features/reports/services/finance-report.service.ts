@@ -7,9 +7,9 @@ import {
   STYLE_BULLETIN_SNAPSHOT_TABLE,
   CUT_DETAIL_SNAPSHOT_TABLE,
   STYLE_BULLETIN_TABLE,
-  OPERATIONS_CATALOG_TABLE,
 } from "@/lib/db";
-import { classifyDepartment, type Department } from "@/lib/department-classification";
+import type { Department } from "@/lib/department-classification";
+import { fetchDepartmentOpTotalsByWorkOrder } from "./department-op-totals.service";
 import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import type {
   FinanceReportPeriod,
@@ -128,22 +128,16 @@ async function fetchSewingOpCodesByWorkOrder(
   department: Department,
 ): Promise<Map<string, Set<string>>> {
   const map = new Map<string, Set<string>>();
-  const pool = await getPool("indusPlus");
+  const pool = await getPool("pitSystem");
   for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
-    const req = pool.request();
+    const req = pool.request().input("department", sql.NVarChar, department);
     const inClause = buildInClause(req, "wo", batch);
     const result = await req.query(`
-      SELECT DISTINCT sb.[Order No] AS WorkOrder, sb.[Operation Code] AS OpNo, op.Department
-      FROM ${STYLE_BULLETIN_TABLE} sb
-      LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op ON sb.[Operation Code] = op.OperationCode
-      WHERE sb.[Order No] IN (${inClause})
+      SELECT DISTINCT WorkOrder, OpNo
+      FROM dbo.QrCode_Coupon
+      WHERE IsDeleted = 0 AND Department = @department AND WorkOrder IN (${inClause})
     `);
-    for (const row of result.recordset as {
-      WorkOrder: string;
-      OpNo: string;
-      Department: string | null;
-    }[]) {
-      if (classifyDepartment(row) !== department) continue;
+    for (const row of result.recordset as { WorkOrder: string; OpNo: string }[]) {
       if (!map.has(row.WorkOrder)) map.set(row.WorkOrder, new Set());
       map.get(row.WorkOrder)!.add(row.OpNo);
     }
@@ -241,44 +235,13 @@ export async function buildOrderWiseReport(
 
   const pitPool = await getPool("pitSystem");
 
-  // Total SAM + Total Rate: sum of ALL sewing operations for the work order
-  // from the IndusPlus live style bulletin — no section restriction.
-  // Department is resolved via S_OperationsCatalog (same source as
-  // fetchSewingOpCodesByWorkOrder) — never inferred from the Section column.
-  // Total SAM excludes operations with a zero Piece Rate (matches the
-  // "Excl 0" total shown on the Style Bulletin page) — Total Rate still
-  // sums every operation, since zero-rate rows already contribute 0 to it.
-  const totalSamByWo = new Map<string, { sam: number; rate: number }>();
-  const indusPool = await getPool("indusPlus");
-  for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
-    const req = indusPool.request();
-    const inClause = buildInClause(req, "wo", batch);
-    req.input("department", sql.NVarChar, department);
-    const result = await req.query(`
-      SELECT
-        sb.[Order No]                               AS WorkOrder,
-        SUM(CASE
-          WHEN TRY_CAST(sb.[Piece Rate] AS FLOAT) <> 0
-          THEN TRY_CAST(sb.[Smv/Sam] AS FLOAT)
-          ELSE 0
-        END)                                         AS TotalSam,
-        SUM(TRY_CAST(sb.[Piece Rate] AS FLOAT))     AS TotalRate
-      FROM ${STYLE_BULLETIN_TABLE} sb
-      LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op ON sb.[Operation Code] = op.OperationCode
-      WHERE sb.[Order No] IN (${inClause})
-        AND LOWER(ISNULL(op.Department, '')) = @department
-      GROUP BY sb.[Order No]
-    `);
-    for (const row of result.recordset as {
-      WorkOrder: string;
-      TotalSam: number | null;
-      TotalRate: number | null;
-    }[]) {
-      const sam = Number(row.TotalSam) || 0;
-      const rate = Number(row.TotalRate) || 0;
-      if (sam > 0 || rate > 0) totalSamByWo.set(row.WorkOrder, { sam, rate });
-    }
-  }
+  // Total SAM + Total Rate: sum of the department's operations for the work
+  // order from the pitSystem style-bulletin snapshot (see
+  // fetchDepartmentOpTotalsByWorkOrder). Total SAM excludes zero-rate ops.
+  const totalSamByWo = await fetchDepartmentOpTotalsByWorkOrder(
+    workOrders,
+    department,
+  );
 
   // Wash Qty (legacy column name) = the order's overall cut quantity — a
   // per-order constant repeated on every cut-detail row (MAX() per work

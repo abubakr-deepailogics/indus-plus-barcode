@@ -1,4 +1,4 @@
-import { getPool, sql, STYLE_BULLETIN_TABLE } from "@/lib/db";
+import { getPool, sql, STYLE_BULLETIN_SNAPSHOT_TABLE } from "@/lib/db";
 import { isCouponDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
@@ -29,19 +29,18 @@ export async function GET(request: Request) {
     const opNos = opNoResult.recordset.map((r) => r.OpNo as string).filter(Boolean);
     if (opNos.length === 0) return Response.json([]);
 
-    const indusPool = await getPool("indusPlus");
-    const nameByCode = new Map<string, string | null>();
+        const nameByCode = new Map<string, string | null>();
     for (let i = 0; i < opNos.length; i += IN_LIST_CHUNK_SIZE) {
       const batch = opNos.slice(i, i + IN_LIST_CHUNK_SIZE);
-      const request2 = indusPool.request();
+      const request2 = pitPool.request();
       const placeholders = batch.map((code, idx) => {
         request2.input(`op${idx}`, sql.NVarChar, code);
         return `@op${idx}`;
       });
       const nameResult = await request2.query(`
         SELECT DISTINCT [Operation Code] AS Operation_Code, [Operation Name] AS Operation_Name
-        FROM ${STYLE_BULLETIN_TABLE}
-        WHERE [Operation Code] IN (${placeholders.join(", ")})
+        FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
+        WHERE IsDeleted = 0 AND [Operation Code] IN (${placeholders.join(", ")})
       `);
       for (const row of nameResult.recordset) {
         if (!nameByCode.has(row.Operation_Code)) nameByCode.set(row.Operation_Code, row.Operation_Name ?? null);

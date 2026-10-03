@@ -4,13 +4,9 @@ import {
   WORKERS_VIEW,
   CUT_DETAIL_SNAPSHOT_TABLE,
   STYLE_BULLETIN_SNAPSHOT_TABLE,
-  STYLE_BULLETIN_TABLE,
-  OPERATIONS_CATALOG_TABLE,
 } from "@/lib/db";
-import {
-  classifyDepartment,
-  type CouponDepartment,
-} from "@/lib/department-classification";
+import type { CouponDepartment } from "@/lib/department-classification";
+import { fetchDepartmentOpTotalsByWorkOrder } from "./department-op-totals.service";
 import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import type {
   BundleReportItem,
@@ -84,37 +80,8 @@ function buildInClause(
 async function fetchSewingRateTotalByWorkOrder(
   workOrders: string[],
 ): Promise<Map<string, number>> {
-  const map = new Map<string, number>();
-  if (workOrders.length === 0) return map;
-
-  const indusPool = await getPool("indusPlus");
-  for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
-    const req = indusPool.request();
-    const inClause = buildInClause(req, "wo", batch);
-    const result = await req.query(`
-      SELECT
-        sb.[Order No] AS WorkOrder,
-        sb.[Operation Code] AS OpNo,
-        op.Department,
-        TRY_CAST(sb.[Piece Rate] AS FLOAT) AS PieceRate
-      FROM ${STYLE_BULLETIN_TABLE} sb
-      LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op ON sb.[Operation Code] = op.OperationCode
-      WHERE sb.[Order No] IN (${inClause})
-    `);
-    for (const row of result.recordset as {
-      WorkOrder: string;
-      OpNo: string;
-      Department: string | null;
-      PieceRate: number | null;
-    }[]) {
-      if (classifyDepartment(row) !== "sewing") continue;
-      map.set(
-        row.WorkOrder,
-        (map.get(row.WorkOrder) ?? 0) + (Number(row.PieceRate) || 0),
-      );
-    }
-  }
-  return map;
+  const totals = await fetchDepartmentOpTotalsByWorkOrder(workOrders, "sewing");
+  return new Map([...totals].map(([wo, t]) => [wo, t.rate]));
 }
 
 // Order Qty is a per-work-order constant (repeated on every cut-detail row),
