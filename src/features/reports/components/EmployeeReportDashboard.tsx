@@ -2790,6 +2790,13 @@ export function EmployeeReportDashboard() {
               .print-ops-table td.text-right, .print-ops-table th.text-right {
                 text-align: right;
               }
+              /* Browsers repeat table-footer groups on every printed page.
+                 Render report totals after the body instead, so each grand
+                 total appears only once at the end of its report table. */
+              .print-ops-table tfoot {
+                display: table-row-group;
+                break-inside: avoid;
+              }
               .print-totals-row td {
                 font-weight: bold;
                 background-color: #f1f5f9 !important;
