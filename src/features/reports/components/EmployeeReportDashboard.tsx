@@ -1158,6 +1158,10 @@ export function EmployeeReportDashboard() {
                   <Calendar
                     mode="range"
                     captionLayout="dropdown"
+                    classNames={{
+                      selected:
+                        "bg-rose-50 text-rose-800 hover:bg-rose-100 hover:text-rose-800 shadow-sm font-bold rounded-lg scale-105 [&>button]:text-rose-800",
+                    }}
                     selected={
                       dateRange.from || dateRange.to
                         ? { from: dateRange.from, to: dateRange.to }
