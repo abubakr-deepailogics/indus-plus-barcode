@@ -156,6 +156,11 @@
   border-color: var(--client-brand-red-border) !important;
 }
 
+[data-client-brand][data-report-accent="red"] [class*="ring-emerald-"],
+[data-client-brand][data-report-accent="red"] [class*="ring-teal-"] {
+  --tw-ring-color: rgb(177 16 22 / 0.16) !important;
+}
+
 [data-client-brand][data-report-accent="red"] [class~="bg-emerald-500"],
 [data-client-brand][data-report-accent="red"] [class~="bg-teal-500"],
 [data-client-brand][data-report-accent="red"] [class~="border-t-emerald-600"],
