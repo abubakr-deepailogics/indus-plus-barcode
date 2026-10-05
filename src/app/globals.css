@@ -191,7 +191,7 @@
   --tw-ring-color: rgb(177 16 22 / 0.16);
 }
 
-[data-client-brand] [class*="bg-slate-900"] {
+[data-client-brand] [class~="bg-slate-900"] {
   background-color: var(--client-brand-charcoal);
 }
 

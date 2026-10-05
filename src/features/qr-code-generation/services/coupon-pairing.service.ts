@@ -3,6 +3,8 @@ import type { BundleDetailRow, OperationsDetailRow } from "../types";
 export interface CouponCard {
   bundle: BundleDetailRow;
   op: OperationsDetailRow;
+  /** Existing persisted identity used when reprinting a previously generated coupon. */
+  couponCode?: string;
 }
 
 /**

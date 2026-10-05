@@ -78,8 +78,9 @@ export async function GET(request: Request) {
       const metadataResult = await pitPool
         .request()
         .input("wo", sql.NVarChar, workOrder)
+        .input("department", sql.NVarChar, department || "sewing")
         .query(
-          "SELECT * FROM dbo.Order_StyleBulletin_Header WHERE Work_Order = @wo",
+          "SELECT * FROM dbo.Order_StyleBulletin_Header WHERE Work_Order = @wo AND Department = @department",
         );
       if (metadataResult.recordset.length > 0) {
         metadata = metadataResult.recordset[0];
@@ -124,13 +125,18 @@ export async function POST(request: Request) {
       appBy,
       status,
       forwardForApproval,
+      department: rawDepartment,
     } = body;
+    const department = String(rawDepartment || "sewing").trim().toLowerCase();
 
     if (!workOrder) {
       return Response.json(
         { error: "Work Order (workOrder) is required." },
         { status: 400 },
       );
+    }
+    if (!isStyleBulletinDepartment(department)) {
+      return Response.json({ error: "Invalid department." }, { status: 400 });
     }
 
     // App-owned write data — lives on pitSystem (see
@@ -142,6 +148,7 @@ export async function POST(request: Request) {
     await pool
       .request()
       .input("wo", sql.NVarChar, workOrder)
+      .input("department", sql.NVarChar, department)
       .input("desc", sql.NVarChar, description || "")
       .input("styleDesc", sql.NVarChar, styleDescription || "")
       .input("styleCat", sql.NVarChar, styleCategory || "")
@@ -159,8 +166,8 @@ export async function POST(request: Request) {
       .input("forwardForApproval", sql.NVarChar, forwardForApproval || "No")
       .query(`
         MERGE INTO dbo.Order_StyleBulletin_Header AS target
-        USING (SELECT @wo AS Work_Order) AS source
-        ON (target.Work_Order = source.Work_Order)
+        USING (SELECT @wo AS Work_Order, @department AS Department) AS source
+        ON (target.Work_Order = source.Work_Order AND target.Department = source.Department)
         WHEN MATCHED THEN
             UPDATE SET 
                 Description = @desc,
@@ -180,8 +187,8 @@ export async function POST(request: Request) {
                 Forward_For_Approval = @forwardForApproval,
                 UpdatedAt = GETDATE()
         WHEN NOT MATCHED THEN
-            INSERT (Work_Order, Description, Style_Description, Style_Category, Smd_No, Final_Smd_No, Target, Target_Unit_Min, Start_Time, Poc_Sam, Poc_Piece_Rate, Head_Reqd, App_Date, App_By, Status, Forward_For_Approval)
-            VALUES (source.Work_Order, @desc, @styleDesc, @styleCat, @smdNo, @finalSmdNo, @target, @targetUnitMin, @startTime, @pocSam, @pocPieceRate, @headReqd, @appDate, @appBy, @status, @forwardForApproval);
+            INSERT (Work_Order, Department, Description, Style_Description, Style_Category, Smd_No, Final_Smd_No, Target, Target_Unit_Min, Start_Time, Poc_Sam, Poc_Piece_Rate, Head_Reqd, App_Date, App_By, Status, Forward_For_Approval)
+            VALUES (source.Work_Order, source.Department, @desc, @styleDesc, @styleCat, @smdNo, @finalSmdNo, @target, @targetUnitMin, @startTime, @pocSam, @pocPieceRate, @headReqd, @appDate, @appBy, @status, @forwardForApproval);
       `);
 
     return Response.json({

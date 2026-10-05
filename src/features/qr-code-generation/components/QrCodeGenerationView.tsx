@@ -12,6 +12,7 @@ import { CodeTypeSelectionModal } from "./CodeTypeSelectionModal";
 import { Loader2, QrCode } from "lucide-react";
 import { ModulePageHeader } from "@/components/ModulePageHeader";
 import { useDepartment } from "@/lib/department-context";
+import { usesManualCouponCutDetails } from "@/lib/department-classification";
 
 function DetailTableSkeleton() {
   const rows = Array.from({ length: 6 });
@@ -85,12 +86,15 @@ export function QrCodeGenerationView() {
             </>
           ) : (
             <>
-              {department === "washing" ? (
+              {usesManualCouponCutDetails(department) ? (
                 <ManualBundleDetailTable
                   bundles={facade.activeStyle.bundles}
                   subTotal={facade.activeStyle.subTotal}
                   total={facade.activeStyle.total}
                   onBundleChange={facade.handleManualBundleChange}
+                  onBundleSelChange={facade.handleBundleSelChange}
+                  onAllManualBundlesSelChange={facade.handleAllManualBundlesSelChange}
+                  onAddBundle={facade.handleAddManualBundle}
                   onRemoveBundle={facade.handleRemoveManualBundle}
                 />
               ) : (

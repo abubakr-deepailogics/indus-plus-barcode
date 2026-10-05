@@ -1,6 +1,6 @@
 import { ProductionDepartmentModulePage } from "@/features/department-routing/components/ProductionDepartmentModulePage";
 
-export default async function WashingModulePage({
+export default async function FinishingModulePage({
   params,
 }: {
   params: Promise<{ module?: string[] }>;

@@ -34,16 +34,20 @@ export async function saveManualCouponCutDetails(
   department: CouponDepartment,
   bundles: BundleDetailRow[],
 ): Promise<void> {
-  for (const bundle of bundles) {
-    const request = pool.request();
-    await request
-      .input("workOrder", sql.NVarChar, workOrder)
-      .input("department", sql.NVarChar, department)
-      .input("bundleNo", sql.NVarChar, bundle.bundleNo.trim())
-      .input("inseam", sql.NVarChar, bundle.inseam.trim() || null)
-      .input("size", sql.NVarChar, bundle.size.trim() || null)
-      .input("pcs", sql.Int, bundle.pcs)
-      .query(`
+  const transaction = new sql.Transaction(pool);
+  let transactionStarted = false;
+  try {
+    await transaction.begin();
+    transactionStarted = true;
+    for (const bundle of bundles) {
+      const request = new sql.Request(transaction);
+      await request
+        .input("workOrder", sql.NVarChar, workOrder)
+        .input("department", sql.NVarChar, department)
+        .input("bundleNo", sql.NVarChar, bundle.bundleNo.trim())
+        .input("inseam", sql.NVarChar, bundle.inseam.trim() || null)
+        .input("size", sql.NVarChar, bundle.size.trim() || null)
+        .input("pcs", sql.Int, bundle.pcs).query(`
         MERGE dbo.ManualCouponCutDetail WITH (HOLDLOCK) AS target
         USING (
           SELECT @workOrder AS WorkOrder, @department AS Department, @bundleNo AS BundleNo
@@ -57,5 +61,10 @@ export async function saveManualCouponCutDetails(
           INSERT (WorkOrder, Department, BundleNo, Inseam, Size, Pcs)
           VALUES (@workOrder, @department, @bundleNo, @inseam, @size, @pcs);
       `);
+    }
+    await transaction.commit();
+  } catch (error) {
+    if (transactionStarted) await transaction.rollback();
+    throw error;
   }
 }

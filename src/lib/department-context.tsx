@@ -35,8 +35,8 @@ export const DEPARTMENTS: readonly DepartmentConfig[] = [
   {
     id: "finishing",
     label: "Finishing",
-    badge: "Planned",
-    description: "Pre-finishing, finishing bulletins, packing & final audit",
+    badge: "Active",
+    description: "Finishing bulletins, coupons, scanning, tracing & reports",
   },
 ] as const;
 
@@ -83,6 +83,8 @@ export function DepartmentProvider({ children }: { children: ReactNode }) {
   // Sewing department before AppShell's effect corrected it.
   const department: DepartmentKey = pathname.startsWith("/washing")
     ? "washing"
+    : pathname.startsWith("/finishing")
+      ? "finishing"
     : pathname.startsWith("/industrial-engineering")
       ? "sewing"
       : storedDepartment;

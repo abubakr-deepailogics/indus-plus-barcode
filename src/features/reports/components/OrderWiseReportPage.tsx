@@ -107,7 +107,7 @@ export function OrderWiseReportPage() {
             <CsvExportButton
               label="Export"
               className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-700 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
-              filename={`order-wise-report-${format(new Date(), "yyyyMMdd-HHmm")}`}
+              filename={`${department}-order-wise-report-${format(new Date(), "yyyyMMdd-HHmm")}`}
               headers={[
                 "W/O",
                 "Total SAM",

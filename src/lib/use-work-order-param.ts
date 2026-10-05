@@ -17,9 +17,9 @@ const PARAM = "wo";
  * Reads `window.location.search` directly (rather than `useSearchParams`)
  * so this doesn't require a Suspense boundary around these pages.
  *
- * `onWorkOrder` fires once, on mount, with the resolved Work Order (URL
- * param wins over the global value) — the page uses it to seed and trigger
- * its own search. Call the returned `setWorkOrder` from the page's own
+ * `onWorkOrder` receives the resolved Work Order on mount and browser
+ * history navigation (the URL is authoritative). The page uses it to seed
+ * and trigger its own search. Call the returned `setWorkOrder` from the page's own
  * "commit search" handler(s) to propagate a newly searched Work Order.
  */
 export function useWorkOrderParam(onWorkOrder: (workOrder: string) => void) {
@@ -29,32 +29,34 @@ export function useWorkOrderParam(onWorkOrder: (workOrder: string) => void) {
     useWorkOrder();
 
   const onWorkOrderRef = useRef(onWorkOrder);
+  const globalWorkOrderRef = useRef(globalWorkOrder);
   useEffect(() => {
     onWorkOrderRef.current = onWorkOrder;
   });
-
-  // Resolve once per page mount. Deliberately not re-run when
-  // globalWorkOrder changes afterwards — once the user is on this page,
-  // their own searches here are the source of truth, not a search that
-  // just happened to fire on another page while this one stayed mounted.
   useEffect(() => {
-    const urlWorkOrder = new URLSearchParams(window.location.search).get(PARAM);
-    // The URL is authoritative. An absent `wo` is an explicit clear, never
-    // an invitation to silently restore an old value from local storage.
-    if (urlWorkOrder === null) {
-      if (globalWorkOrder) setGlobalWorkOrder("");
-      return;
-    }
-    const resolved = urlWorkOrder;
-    if (!resolved) {
-      if (globalWorkOrder) setGlobalWorkOrder("");
-      return;
-    }
+    globalWorkOrderRef.current = globalWorkOrder;
+  }, [globalWorkOrder]);
 
-    if (resolved !== globalWorkOrder) setGlobalWorkOrder(resolved);
-    onWorkOrderRef.current(resolved);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Resolve on mount and browser history navigation. Page-owned searches
+  // already update their local view and the URL; this listener covers
+  // Back/Forward, where the page may remain mounted while `?wo=` changes.
+  useEffect(() => {
+    const syncFromUrl = () => {
+      const resolved =
+        new URLSearchParams(window.location.search).get(PARAM)?.trim() || "";
+
+      // The URL is authoritative. An absent `wo` is an explicit clear,
+      // never an invitation to restore an old department-local value.
+      if (resolved !== globalWorkOrderRef.current) {
+        setGlobalWorkOrder(resolved);
+      }
+      onWorkOrderRef.current(resolved);
+    };
+
+    syncFromUrl();
+    window.addEventListener("popstate", syncFromUrl);
+    return () => window.removeEventListener("popstate", syncFromUrl);
+  }, [setGlobalWorkOrder]);
 
   const setWorkOrder = useCallback(
     (workOrder: string) => {

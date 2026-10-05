@@ -10,6 +10,7 @@ import type {
 import { buildCouponCards, type CouponCard } from "./coupon-pairing.service";
 import { buildCouponCode, trimBundleNo } from "./coupon-code";
 import { getBundleDisplayNos } from "./bundle-display";
+import type { CouponDepartment } from "@/lib/department-classification";
 
 // pdfkit's built-in "standard" fonts (Helvetica etc.) read .afm metric
 // files from node_modules at runtime via fs.readFileSync — bundlers that
@@ -156,13 +157,19 @@ function formatShortDate(date: Date = new Date()): string {
 // available. Faux-bold by re-stroking the glyphs a hair to the right,
 // which thickens strokes enough to read as bold on a printed label
 // without pulling in a second embedded font just for this.
-function boldText(doc: any, text: string, x: number, y: number, options: any) {
+function boldText(
+  doc: PDFKit.PDFDocument,
+  text: string,
+  x: number,
+  y: number,
+  options: PDFKit.Mixins.TextOptions,
+) {
   doc.text(text, x, y, options);
   doc.text(text, x + 0.3, y, options);
 }
 
 function drawBarcode(
-  doc: any,
+  doc: PDFKit.PDFDocument,
   x: number,
   y: number,
   width: number,
@@ -210,7 +217,7 @@ function drawBarcode(
 // and a handful of fill operators — each row's dark modules are merged
 // into runs, and every rect across the whole code shares one fill() call.
 function drawQrCode(
-  doc: any,
+  doc: PDFKit.PDFDocument,
   x: number,
   y: number,
   size: number,
@@ -245,6 +252,8 @@ function drawQrCode(
 
 interface GeneratePdfParams {
   workOrder: string;
+  /** Must match the registered coupon identity being rendered. */
+  department?: CouponDepartment;
   saleOrderNo: string;
   styleCode: string;
   bundles: BundleDetailRow[];
@@ -334,6 +343,7 @@ const GRID_ROWS = 18;
 
 export async function generateCouponPdf({
   workOrder,
+  department = "sewing",
   bundles,
   operations,
   cards: precomputedCards,
@@ -448,7 +458,7 @@ export async function generateCouponPdf({
       await new Promise((resolve) => setImmediate(resolve));
     }
 
-    const { bundle, op } = cards[i];
+    const { bundle, op, couponCode: persistedCouponCode } = cards[i];
     const { page, col, row } = slots[i];
 
     if (i > 0 && page !== slots[i - 1].page) {
@@ -467,7 +477,9 @@ export async function generateCouponPdf({
     const rsVal = Math.round(rateNum * qtyNum);
     // Coupon code is the scannable payload for both formats below (scan/rework
     // routes match on it) — not printed as text, per the smaller box's space budget.
-    const couponCode = buildCouponCode(workOrder, bundle.bundleNo, op.opNo);
+    const couponCode =
+      persistedCouponCode ??
+      buildCouponCode(workOrder, bundle.bundleNo, op.opNo, department);
     // What's printed as B# is the display-only per-cut rank (1, 2, 3...),
     // not the real bundle number — same rank shown in BundleDetailTable, so
     // the printed coupon matches what the user saw on screen when they

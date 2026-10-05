@@ -30,7 +30,7 @@ export function Autocomplete<T>({
   className = "",
   inputClassName = "",
   dropdownClassName = "",
-  minChars = 1,
+  minChars = 0,
   debounceMs = 200,
   onKeyDown,
   onFocus,
@@ -38,6 +38,7 @@ export function Autocomplete<T>({
 }: AutocompleteProps<T>) {
   const [suggestions, setSuggestions] = useState<T[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [activeIndex, setActiveIndex] = useState(-1);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -54,32 +55,37 @@ export function Autocomplete<T>({
   });
 
   useEffect(() => {
-    if (disabled || value.trim().length < minChars) {
-      setSuggestions([]);
-      setActiveIndex(-1);
+    if (disabled || !isFocused || value.trim().length < minChars) {
       return;
     }
 
-    setIsLoading(true);
+    let cancelled = false;
     const delayDebounceFn = setTimeout(async () => {
+      setIsLoading(true);
       try {
         const data = await fetchSuggestionsRef.current(value);
+        if (cancelled) return;
         setSuggestions(data || []);
         setActiveIndex(-1);
       } catch (err) {
-        console.error("Autocomplete fetch error:", err);
+        if (!cancelled) console.error("Autocomplete fetch error:", err);
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     }, debounceMs);
 
-    return () => clearTimeout(delayDebounceFn);
-  }, [value, minChars, debounceMs, disabled]);
+    return () => {
+      cancelled = true;
+      clearTimeout(delayDebounceFn);
+    };
+  }, [value, minChars, debounceMs, disabled, isFocused]);
 
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
         setShowSuggestions(false);
+        setIsFocused(false);
+        setIsLoading(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -113,6 +119,8 @@ export function Autocomplete<T>({
           const item = suggestions[activeIndex];
           onSelect(item);
           setShowSuggestions(false);
+          setIsFocused(false);
+          setIsLoading(false);
           setActiveIndex(-1);
           return;
         }
@@ -120,6 +128,8 @@ export function Autocomplete<T>({
       if (e.key === "Escape") {
         e.preventDefault();
         setShowSuggestions(false);
+        setIsFocused(false);
+        setIsLoading(false);
         setActiveIndex(-1);
         return;
       }
@@ -143,10 +153,12 @@ export function Autocomplete<T>({
         onChange={(e) => {
           onChange(e.target.value);
           setShowSuggestions(true);
+          setIsFocused(true);
         }}
         onFocus={() => {
           if (disabled) return;
           setShowSuggestions(true);
+          setIsFocused(true);
           if (onFocus) onFocus();
         }}
         onKeyDown={handleKeyDown}
@@ -158,7 +170,7 @@ export function Autocomplete<T>({
           <div className="h-3.5 w-3.5 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
         </div>
       )}
-      {showSuggestions && !isLoading && value.trim().length >= minChars && (
+      {showSuggestions && isFocused && !disabled && !isLoading && value.trim().length >= minChars && (
         <div
           ref={dropdownRef}
           className={`absolute top-[calc(100%+4px)] left-0 w-full bg-white border border-[#e2e8f0] shadow-xl rounded-xl py-1 z-50 max-h-48 overflow-y-auto ${dropdownClassName}`}
@@ -175,6 +187,8 @@ export function Autocomplete<T>({
                 onClick={() => {
                   onSelect(item);
                   setShowSuggestions(false);
+                  setIsFocused(false);
+                  setIsLoading(false);
                 }}
                 className={`w-full text-left px-3 py-1.5 hover:bg-slate-50 transition-colors text-xs font-semibold text-slate-700 flex items-center justify-between border-b border-slate-50 last:border-0 cursor-pointer ${
                   idx === activeIndex ? "bg-indigo-50 text-indigo-700" : ""

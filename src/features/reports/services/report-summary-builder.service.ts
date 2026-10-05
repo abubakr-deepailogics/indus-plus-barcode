@@ -77,10 +77,16 @@ function buildInClause(
     .join(", ");
 }
 
-async function fetchSewingRateTotalByWorkOrder(
+/**
+ * Returns the live total piece rate for each work order in the requested
+ * production department. This denominator drives reported quantity, so it
+ * must use the same department as the coupon rows being summarized.
+ */
+async function fetchRateTotalByWorkOrder(
   workOrders: string[],
+  department: CouponDepartment,
 ): Promise<Map<string, number>> {
-  const totals = await fetchDepartmentOpTotalsByWorkOrder(workOrders, "sewing");
+  const totals = await fetchDepartmentOpTotalsByWorkOrder(workOrders, department);
   return new Map([...totals].map(([wo, t]) => [wo, t.rate]));
 }
 
@@ -354,13 +360,13 @@ export async function buildReportSummary(
   const enriched = await enrichCouponRows(rows, department);
 
   const distinctWorkOrders = [...new Set(enriched.map((row) => row.WorkOrder))];
-  const [sewingRateTotalByWo, orderQtyByWo] = await Promise.all([
-    fetchSewingRateTotalByWorkOrder(distinctWorkOrders),
+  const [rateTotalByWo, orderQtyByWo] = await Promise.all([
+    fetchRateTotalByWorkOrder(distinctWorkOrders, department),
     fetchOrderQtyByWorkOrder(distinctWorkOrders),
   ]);
 
   const qtyFromValue = (value: number | null, workOrder: string): number => {
-    const rateTotal = sewingRateTotalByWo.get(workOrder) ?? 0;
+    const rateTotal = rateTotalByWo.get(workOrder) ?? 0;
     return rateTotal > 0 ? (value ?? 0) / rateTotal : 0;
   };
 

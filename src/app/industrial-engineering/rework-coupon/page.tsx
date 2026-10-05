@@ -78,7 +78,7 @@ export default function ReworkCouponPage() {
   // name, Sale Order No, and the Operations Detail table)
   const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
   const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const workOrderLoadId = useRef(0);
   const [errorMsg, setErrorMsg] = useState("");
 
   // Cutting Detail — fully manual, see ReworkBundleRow above. Always shows
@@ -124,12 +124,9 @@ export default function ReworkCouponPage() {
   // Generation or Coupon Tracing) on mount, and propagates a search
   // committed here to those other pages — same sync pattern used
   // everywhere else in Industrial Engineering.
-  const { setWorkOrder: setGlobalWorkOrder } = useWorkOrderParam(
-    useCallback((wo: string) => {
-      loadWorkOrder(wo);
-      // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []),
-  );
+  const { setWorkOrder: setGlobalWorkOrder } = useWorkOrderParam((wo: string) => {
+    loadWorkOrder(wo);
+  });
 
   const fetchWorkOrderRows = useCallback(
     async (filters: {
@@ -152,8 +149,21 @@ export default function ReworkCouponPage() {
 
   async function loadWorkOrder(wo: string) {
     const trimmedWo = wo.trim();
-    if (!trimmedWo || isLoading) return;
-    setIsLoading(true);
+    const loadId = ++workOrderLoadId.current;
+    if (!trimmedWo) {
+      setWorkOrderState("");
+      setCutDetails([]);
+      setStyleBulletins([]);
+      setOperations([]);
+      setBundles([makeBlankRow()]);
+      setSavedBundles(null);
+      setReworkQty("");
+      setValidationError(null);
+      setErrorMsg("");
+      setHasCouponsGenerated(true);
+      setGenerateResult(null);
+      return;
+    }
     setErrorMsg("");
     setWorkOrderState(trimmedWo);
     setGlobalWorkOrder(trimmedWo);
@@ -166,6 +176,7 @@ export default function ReworkCouponPage() {
         throw new Error(errData?.error || "Failed to fetch work order data.");
       }
       const data = await response.json();
+      if (loadId !== workOrderLoadId.current) return;
 
       const loadedCuts: CutDetailRow[] = data.cutDetails || [];
       const loadedBulletins: StyleBulletinRow[] = data.styleBulletins || [];
@@ -187,6 +198,7 @@ export default function ReworkCouponPage() {
       const countRes = await fetch(
         `/api/qr-code-generation/pdf?work_order=${encodeURIComponent(trimmedWo)}&department=${encodeURIComponent(department)}`,
       );
+      if (loadId !== workOrderLoadId.current) return;
       let generatedOpCodes: string[] | null = null;
       if (countRes.ok) {
         const countData = await countRes.json();
@@ -241,6 +253,7 @@ export default function ReworkCouponPage() {
       setValidationError(null);
       setIsOpenLookup(false);
     } catch (err: unknown) {
+      if (loadId !== workOrderLoadId.current) return;
       console.error("Rework coupon fetch error:", err);
       setCutDetails([]);
       setStyleBulletins([]);
@@ -251,7 +264,6 @@ export default function ReworkCouponPage() {
         err instanceof Error ? err.message : "An unexpected error occurred.",
       );
     } finally {
-      setIsLoading(false);
     }
   }
 

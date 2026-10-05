@@ -242,7 +242,7 @@ export function InformationPanel(props: Facade) {
                 placeholder="Enter Employee Code"
                 inputClassName="w-full px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
                 onKeyDown={handleEmployeeCodeKeyDown}
-                minChars={1}
+                minChars={0}
               />
             </div>
 

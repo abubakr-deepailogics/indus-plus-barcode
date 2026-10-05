@@ -15,7 +15,10 @@ import type { CouponLayout, QrCodeStyleData } from "../types";
 //   never persisted — it's streamed back in the same request and handed
 //   to the browser as a local blob: URL.
 export function useGenerateCouponPdf(
-  activeStyle: Pick<QrCodeStyleData, "workOrder" | "saleOrderNo" | "styleCode" | "bundles" | "operations"> & {
+  activeStyle: Pick<
+    QrCodeStyleData,
+    "workOrder" | "saleOrderNo" | "styleCode" | "bundles" | "operations"
+  > & {
     generateBy?: string;
   },
 ) {
@@ -30,14 +33,18 @@ export function useGenerateCouponPdf(
   // shown next to the Generate button. Refetched after every generate.
   useEffect(() => {
     if (!workOrder) {
-      setCouponCount(null);
       return;
     }
     let cancelled = false;
-    fetch(`/api/qr-code-generation/pdf?work_order=${encodeURIComponent(workOrder)}&department=${encodeURIComponent(department)}`)
+    fetch(
+      `/api/qr-code-generation/pdf?work_order=${encodeURIComponent(workOrder)}&department=${encodeURIComponent(department)}`,
+    )
       .then((res) => res.json())
       .then((data) => {
-        if (!cancelled) setCouponCount(typeof data.couponCount === "number" ? data.couponCount : 0);
+        if (!cancelled)
+          setCouponCount(
+            typeof data.couponCount === "number" ? data.couponCount : 0,
+          );
       })
       .catch(() => {
         if (!cancelled) setCouponCount(null);
@@ -45,7 +52,7 @@ export function useGenerateCouponPdf(
     return () => {
       cancelled = true;
     };
-  }, [workOrder]);
+  }, [workOrder, department]);
 
   const handleGenerateCoupons = async () => {
     setGeneratingCoupons(true);
@@ -87,20 +94,24 @@ export function useGenerateCouponPdf(
         for (const line of lines) {
           if (!line.trim()) continue;
           const parsed = JSON.parse(line);
-          if (parsed.status === "error") throw new Error(parsed.message || "Failed to generate coupons.");
+          if (parsed.status === "error")
+            throw new Error(parsed.message || "Failed to generate coupons.");
           if (parsed.status === "complete") finalData = parsed;
         }
       }
       buffer += decoder.decode();
       if (buffer.trim()) {
         const parsed = JSON.parse(buffer);
-        if (parsed.status === "error") throw new Error(parsed.message || "Failed to generate coupons.");
+        if (parsed.status === "error")
+          throw new Error(parsed.message || "Failed to generate coupons.");
         if (parsed.status === "complete") finalData = parsed;
       }
       if (!finalData) throw new Error("Failed to generate coupons.");
 
       setCouponCount(finalData.couponCount);
-      alert(`Coupons generated: ${finalData.couponCount} total for this work order.`);
+      alert(
+        `Coupons generated: ${finalData.couponCount} total for this work order.`,
+      );
     } catch (err) {
       alert(err instanceof Error ? err.message : "Failed to generate coupons.");
     } finally {
@@ -152,5 +163,11 @@ export function useGenerateCouponPdf(
     }
   };
 
-  return { handleGenerateCoupons, generatingCoupons, handleDownloadPdf, generatingPdf, couponCount };
+  return {
+    handleGenerateCoupons,
+    generatingCoupons,
+    handleDownloadPdf,
+    generatingPdf,
+    couponCount: workOrder ? couponCount : null,
+  };
 }

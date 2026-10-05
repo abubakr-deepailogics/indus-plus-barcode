@@ -2,12 +2,20 @@ import { randomUUID } from "crypto";
 import { getPool, sql } from "@/lib/db";
 import { generateCouponPdf } from "@/features/qr-code-generation/services/pdf-generation.service";
 import { buildCouponCards } from "@/features/qr-code-generation/services/coupon-pairing.service";
-import { registerCoupons, countCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
+import {
+  countCoupons,
+  getCouponCodesForPairs,
+  registerCoupons,
+} from "@/features/qr-code-generation/services/coupon-registration.service";
 import {
   isCouponDepartment,
   type CouponDepartment,
 } from "@/lib/department-classification";
-import type { BundleDetailRow, CouponLayout, OperationsDetailRow } from "@/features/qr-code-generation/types";
+import type {
+  BundleDetailRow,
+  CouponLayout,
+  OperationsDetailRow,
+} from "@/features/qr-code-generation/types";
 
 interface GenerateRequestBody {
   workOrder: string;
@@ -28,7 +36,17 @@ interface GenerateRequestBody {
 // rendered bytes themselves are print-and-discard, regenerated on demand.
 export async function POST(request: Request) {
   const body = (await request.json()) as Partial<GenerateRequestBody>;
-  const { workOrder, saleOrderNo, styleCode, bundles, operations, layout, margins, codeType, generatedBy } = body;
+  const {
+    workOrder,
+    saleOrderNo,
+    styleCode,
+    bundles,
+    operations,
+    layout,
+    margins,
+    codeType,
+    generatedBy,
+  } = body;
   const department = (body.department || "sewing").trim().toLowerCase();
 
   // styleCode is only a display label in the PDF header — some sources
@@ -43,7 +61,10 @@ export async function POST(request: Request) {
 
   if (!isCouponDepartment(department)) {
     return Response.json(
-      { error: "department must be one of: cutting, sewing, washing, finishing, gdp." },
+      {
+        error:
+          "department must be one of: cutting, sewing, washing, finishing, gdp.",
+      },
       { status: 400 },
     );
   }
@@ -58,36 +79,58 @@ export async function POST(request: Request) {
   }
 
   try {
-    const { buffer, cardCount } = await generateCouponPdf({
-      workOrder,
-      saleOrderNo: saleOrderNo ?? "",
-      styleCode: styleCode ?? "",
-      bundles: selectedBundles,
-      operations: selectedOperations,
-      layout,
-      margins,
-      codeType,
-    });
-
     const pool = await getPool("pitSystem");
 
     // Register each card's coupon identity, skipping ones already
     // generated for this work order/bundle/operation — reprints never
     // add rows. Batched (see coupon-registration.service) so thousands
     // of coupons don't mean thousands of round trips.
+    const cards = buildCouponCards(selectedBundles, selectedOperations);
     await registerCoupons(
       pool,
       workOrder,
-      buildCouponCards(selectedBundles, selectedOperations),
+      cards,
       generatedBy || "system",
       randomUUID(),
       undefined,
       department as CouponDepartment,
     );
 
+    const persistedCodes = await getCouponCodesForPairs(
+      pool,
+      workOrder,
+      department as CouponDepartment,
+      cards,
+    );
+    const cardsForPdf = cards.map((card) => ({
+      ...card,
+      couponCode: persistedCodes.get(`${card.bundle.bundleNo}|${card.op.opNo}`),
+    }));
+    if (cardsForPdf.some((card) => !card.couponCode)) {
+      throw new Error(
+        "A registered coupon identity could not be resolved for printing.",
+      );
+    }
+    const { buffer, cardCount } = await generateCouponPdf({
+      workOrder,
+      department: department as CouponDepartment,
+      saleOrderNo: saleOrderNo ?? "",
+      styleCode: styleCode ?? "",
+      bundles: selectedBundles,
+      operations: selectedOperations,
+      cards: cardsForPdf,
+      layout,
+      margins,
+      codeType,
+    });
+
     // Distinct coupons registered for this work order so far (post-dedup) —
     // the real "coupons generated" count, not this batch's render size.
-    const couponCount = await countCoupons(pool, workOrder, department as CouponDepartment);
+    const couponCount = await countCoupons(
+      pool,
+      workOrder,
+      department as CouponDepartment,
+    );
 
     // Counts travel as headers since the body is the PDF itself, not JSON —
     // the caller reads X-Card-Count/X-Coupon-Count off the response.
@@ -101,7 +144,8 @@ export async function POST(request: Request) {
     });
   } catch (err: unknown) {
     console.error("PDF generation error:", err);
-    const message = err instanceof Error ? err.message : "Internal Server Error";
+    const message =
+      err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
 }
@@ -112,7 +156,9 @@ export async function POST(request: Request) {
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = searchParams.get("work_order") || "";
-  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
+  const department = (searchParams.get("department") || "sewing")
+    .trim()
+    .toLowerCase();
 
   if (!workOrder) {
     return Response.json({ error: "work_order is required." }, { status: 400 });
@@ -123,7 +169,11 @@ export async function GET(request: Request) {
 
   try {
     const pool = await getPool("pitSystem");
-    const couponCount = await countCoupons(pool, workOrder, department as CouponDepartment);
+    const couponCount = await countCoupons(
+      pool,
+      workOrder,
+      department as CouponDepartment,
+    );
     const origRes = await pool
       .request()
       .input("workOrder", sql.NVarChar, workOrder)
@@ -148,10 +198,15 @@ export async function GET(request: Request) {
       (r: { OpNo: string }) => r.OpNo,
     );
 
-    return Response.json({ couponCount, originalCouponCount, generatedOpCodes });
+    return Response.json({
+      couponCount,
+      originalCouponCount,
+      generatedOpCodes,
+    });
   } catch (err: unknown) {
     console.error("Coupon count lookup error:", err);
-    const message = err instanceof Error ? err.message : "Internal Server Error";
+    const message =
+      err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
 }

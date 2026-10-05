@@ -205,7 +205,7 @@ export function useCouponScanning() {
         console.error("WO suggestions fetch error:", err);
         return [];
       });
-  }, []);
+  }, [activeDepartment]);
 
   const fetchBundleSuggestions = useCallback(
     (query: string) => {
