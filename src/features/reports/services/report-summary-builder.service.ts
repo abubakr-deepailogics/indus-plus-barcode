@@ -86,7 +86,10 @@ async function fetchRateTotalByWorkOrder(
   workOrders: string[],
   department: CouponDepartment,
 ): Promise<Map<string, number>> {
-  const totals = await fetchDepartmentOpTotalsByWorkOrder(workOrders, department);
+  const totals = await fetchDepartmentOpTotalsByWorkOrder(
+    workOrders,
+    department,
+  );
   return new Map([...totals].map(([wo, t]) => [wo, t.rate]));
 }
 
@@ -296,7 +299,11 @@ export async function buildReportSummary(
       })
       .join(", ");
 
-  const couponConditions = ["IsScanned = 1", "IsDeleted = 0", "Department = @department"];
+  const couponConditions = [
+    "IsScanned = 1",
+    "IsDeleted = 0",
+    "Department = @department",
+  ];
   const couponRequest = pitPool.request();
   couponRequest.input("department", sql.NVarChar, department);
   if (mode === "section" && !isAll) {

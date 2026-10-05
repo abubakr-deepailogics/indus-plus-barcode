@@ -6,6 +6,7 @@ import {
   WORKERS_VIEW,
   CUT_DETAIL_SNAPSHOT_TABLE,
   STYLE_BULLETIN_TABLE,
+  OPERATIONS_CATALOG_TABLE,
 } from "@/lib/db";
 import type { Department } from "@/lib/department-classification";
 import { fetchDepartmentOpTotalsByWorkOrder } from "./department-op-totals.service";

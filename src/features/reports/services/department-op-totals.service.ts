@@ -1,5 +1,5 @@
 import { getPool, sql, STYLE_BULLETIN_SNAPSHOT_TABLE } from "@/lib/db";
-import type { Department } from "@/lib/department-classification";
+import type { CouponDepartment } from "@/lib/department-classification";
 
 const IN_LIST_CHUNK_SIZE = 2000; // stays well under SQL Server's ~2100 parameter cap
 
@@ -15,7 +15,7 @@ export interface DepartmentOpTotals {
 // snapshot row for that (work order, op). No indusPlus / S_OperationsCatalog.
 export async function fetchDepartmentOpTotalsByWorkOrder(
   workOrders: string[],
-  department: Department,
+  department: CouponDepartment,
 ): Promise<Map<string, DepartmentOpTotals>> {
   const map = new Map<string, DepartmentOpTotals>();
   if (workOrders.length === 0) return map;
