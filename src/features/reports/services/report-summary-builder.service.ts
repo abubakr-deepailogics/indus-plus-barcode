@@ -2,10 +2,14 @@ import {
   getPool,
   sql,
   WORKERS_VIEW,
+  CUT_DETAIL_VIEW,
   CUT_DETAIL_SNAPSHOT_TABLE,
   STYLE_BULLETIN_SNAPSHOT_TABLE,
 } from "@/lib/db";
-import type { CouponDepartment } from "@/lib/department-classification";
+import {
+  usesManualCouponCutDetails,
+  type CouponDepartment,
+} from "@/lib/department-classification";
 import { fetchDepartmentOpTotalsByWorkOrder } from "./department-op-totals.service";
 import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import type {
@@ -119,6 +123,56 @@ async function fetchOrderQtyByWorkOrder(
       OrderQty: number | null;
     }[]) {
       if (row.OrderQty != null) map.set(row.WorkOrder, Number(row.OrderQty));
+    }
+  }
+  return map;
+}
+
+// A Work Order's report column is intended to show the quantity actually
+// distributed into bundles, rather than its ERP order quantity. Washing and
+// Finishing store those bundles locally in CutReport; other departments use
+// the live ERP cut-detail view. This deliberately matches the Cut Report,
+// so its visible Bundle Qty total and this report's Total Qty cannot diverge
+// just because a work order has not been coupon-snapshotted yet.
+async function fetchBundleQtyByWorkOrder(
+  workOrders: string[],
+  department: CouponDepartment,
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (workOrders.length === 0) return map;
+
+  const pool = await getPool(
+    usesManualCouponCutDetails(department) ? "pitSystem" : "indusPlus",
+  );
+  for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
+    const req = pool.request();
+    const inClause = buildInClause(req, "wo", batch);
+    const result = usesManualCouponCutDetails(department)
+      ? await req.input("department", sql.NVarChar, department).query(`
+          SELECT
+            WorkOrder,
+            SUM(TRY_CONVERT(decimal(18, 2), BundleQty)) AS BundleQty
+          FROM dbo.CutReport
+          WHERE IsDeleted = 0
+            AND Department = @department
+            AND WorkOrder IN (${inClause})
+          GROUP BY WorkOrder
+        `)
+      : await req.query(`
+          SELECT
+            [Work Order #] AS WorkOrder,
+            SUM(TRY_CONVERT(decimal(18, 2), [Bundle Qty])) AS BundleQty
+          FROM ${CUT_DETAIL_VIEW}
+          WHERE [Work Order #] IN (${inClause})
+          GROUP BY [Work Order #]
+        `);
+
+    for (const row of result.recordset as {
+      WorkOrder: string;
+      BundleQty: number | null;
+    }[]) {
+      const qty = Number(row.BundleQty);
+      if (Number.isFinite(qty)) map.set(row.WorkOrder, qty);
     }
   }
   return map;
@@ -367,9 +421,10 @@ export async function buildReportSummary(
   const enriched = await enrichCouponRows(rows, department);
 
   const distinctWorkOrders = [...new Set(enriched.map((row) => row.WorkOrder))];
-  const [rateTotalByWo, orderQtyByWo] = await Promise.all([
+  const [rateTotalByWo, orderQtyByWo, bundleQtyByWo] = await Promise.all([
     fetchRateTotalByWorkOrder(distinctWorkOrders, department),
     fetchOrderQtyByWorkOrder(distinctWorkOrders),
+    fetchBundleQtyByWorkOrder(distinctWorkOrders, department),
   ]);
 
   const qtyFromValue = (value: number | null, workOrder: string): number => {
@@ -493,6 +548,7 @@ export async function buildReportSummary(
         workOrder: row.WorkOrder,
         couponCount: 1,
         totalQty: impliedQty,
+        bundleQty: null, // resolved from bundleQtyByWo in the final projection below
         orderQty: null, // resolved from orderQtyByWo in the final projection below
         totalSam: (qty || 0) * (smv || 0),
         totalAmount: val || 0,
@@ -622,6 +678,7 @@ export async function buildReportSummary(
   const workOrders = Array.from(woMap.values())
     .map((w) => {
       const orderQty = orderQtyByWo.get(w.workOrder) ?? null;
+      const bundleQty = bundleQtyByWo.get(w.workOrder) ?? null;
       // Sum of each distinct scanned operation's own piece rate (once per
       // op code, not per coupon) — NOT the whole department's bulletin
       // total, so it only reflects operations actually scanned on this WO.
@@ -633,6 +690,7 @@ export async function buildReportSummary(
         workOrder: w.workOrder,
         couponCount: w.couponCount,
         totalQty: Math.round(w.totalQty),
+        bundleQty,
         orderQty,
         totalSam: w.totalSam,
         totalAmount: w.totalAmount,

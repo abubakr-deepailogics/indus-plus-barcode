@@ -67,6 +67,7 @@ export interface WorkOrderReportItem {
   workOrder: string;
   couponCount: number;
   totalQty: number; // scanned/produced qty within the report's date range (used by CSV export as "Output (Pcs)")
+  bundleQty: number | null; // total quantity across the work order's saved bundles, not date-scoped
   orderQty: number | null; // the work order's overall ERP order quantity (cut-detail snapshot), not scanned/date-scoped
   totalSam: number;
   totalAmount: number;

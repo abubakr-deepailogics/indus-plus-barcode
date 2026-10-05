@@ -809,7 +809,7 @@ export function EmployeeReportDashboard() {
         wo.workOrder,
         wo.operationsCount,
         wo.couponCount,
-        wo.orderQty ?? "",
+        wo.bundleQty ?? "",
         wo.pieceRate != null ? Number(wo.pieceRate.toFixed(2)) : "",
         wo.plan != null ? Number(wo.plan.toFixed(2)) : "",
         Number(wo.totalAmount.toFixed(2)),
@@ -1864,8 +1864,8 @@ export function EmployeeReportDashboard() {
                               {wo.couponCount.toLocaleString()}
                             </td>
                             <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
-                              {wo.orderQty != null
-                                ? wo.orderQty.toLocaleString()
+                              {wo.bundleQty != null
+                                ? wo.bundleQty.toLocaleString()
                                 : "—"}
                             </td>
                             <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
@@ -1894,7 +1894,7 @@ export function EmployeeReportDashboard() {
                           </td>
                           <td className="py-2.5 px-3 text-center text-[#4f46e5]">
                             {summary.workOrders
-                              .reduce((acc, wo) => acc + (wo.orderQty ?? 0), 0)
+                              .reduce((acc, wo) => acc + (wo.bundleQty ?? 0), 0)
                               .toLocaleString()}
                           </td>
                           <td className="py-2.5 px-3 text-right text-slate-700">
@@ -3292,8 +3292,8 @@ export function EmployeeReportDashboard() {
                                     {wo.couponCount.toLocaleString()}
                                   </td>
                                   <td className="text-center font-bold">
-                                    {wo.orderQty != null
-                                      ? wo.orderQty.toLocaleString()
+                                    {wo.bundleQty != null
+                                      ? wo.bundleQty.toLocaleString()
                                       : "—"}
                                   </td>
                                   <td className="text-right">
@@ -3326,7 +3326,7 @@ export function EmployeeReportDashboard() {
                                 <td className="text-center">
                                   {summary.workOrders
                                     .reduce(
-                                      (acc, wo) => acc + (wo.orderQty ?? 0),
+                                      (acc, wo) => acc + (wo.bundleQty ?? 0),
                                       0,
                                     )
                                     .toLocaleString()}
