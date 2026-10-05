@@ -5,6 +5,11 @@ import {
   chunk,
   listAllCoupons,
 } from "@/features/qr-code-generation/services/coupon-registration.service";
+import { listManualCouponCutDetails } from "@/features/qr-code-generation/services/manual-coupon-cut-detail.service";
+import {
+  isCouponDepartment,
+  type CouponDepartment,
+} from "@/lib/department-classification";
 import type {
   BundleDetailRow,
   CouponLayout,
@@ -44,9 +49,13 @@ export async function GET(request: Request) {
   const employeeCode = searchParams.get("employee_code") || undefined;
   const codeTypeParam = searchParams.get("code_type");
   const codeType = codeTypeParam === "barcode" ? "barcode" : "qr";
+  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
 
   if (!workOrder) {
     return Response.json({ error: "work_order is required." }, { status: 400 });
+  }
+  if (!isCouponDepartment(department)) {
+    return Response.json({ error: "Invalid department." }, { status: 400 });
   }
 
   try {
@@ -64,6 +73,7 @@ export async function GET(request: Request) {
       fromCut,
       toCut,
       employeeCode,
+      department: department as CouponDepartment,
     });
     if (coupons.length === 0) {
       return Response.json(
@@ -100,6 +110,27 @@ export async function GET(request: Request) {
       cutRecordsets.push(result.recordset);
     }
     const cutRows = { recordset: cutRecordsets.flat() };
+    const manualRows = await listManualCouponCutDetails(
+      pool,
+      workOrder,
+      department as CouponDepartment,
+    );
+    const erpBundleNos = new Set(
+      cutRows.recordset.map((row) => String(row.Bundle_Id ?? "")),
+    );
+    cutRows.recordset.push(
+      ...manualRows
+        .filter((row) => !erpBundleNos.has(row.BundleNo))
+        .map((row) => ({
+          RowId: row.RowId,
+          Cut: "",
+          Bundle_Id: row.BundleNo,
+          Inseam: row.Inseam,
+          Size: row.Size,
+          Bundle_Qty: row.Pcs,
+          Color: "",
+        })),
+    );
 
     const opRequest = indusPlusPool.request().input("wo", sql.NVarChar, workOrder);
     opNos.forEach((o, i) => opRequest.input(`op${i}`, sql.NVarChar, o));

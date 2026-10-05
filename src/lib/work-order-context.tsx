@@ -7,13 +7,13 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { useDepartment, type DepartmentKey } from "./department-context";
 
-const STORAGE_KEY = "indus-plus:active-work-order";
+const storageKeyFor = (department: DepartmentKey) =>
+  `indus-plus:active-work-order:${department}`;
 
 interface WorkOrderContextValue {
-  /** The most recently searched Work Order, shared across every page that
-   * searches by Work Order (Cut Report, Style Bulletin, Coupon Generation,
-   * Coupon Tracing). */
+  /** The most recently searched Work Order for the active department only. */
   workOrder: string;
   setWorkOrder: (workOrder: string) => void;
 }
@@ -28,33 +28,44 @@ const WorkOrderContext = createContext<WorkOrderContextValue | undefined>(
  * each page additionally syncs this against its own `?wo=` URL param via
  * `useWorkOrderParam`. */
 export function WorkOrderProvider({ children }: { children: ReactNode }) {
+  const { department } = useDepartment();
   // Lazy-initialize from localStorage (client only — guarded for SSR) so
   // hydrating this value doesn't require a setState-in-effect round trip;
   // nothing renders off this value directly, so there's nothing for a
   // server/client mismatch to affect.
-  const [workOrder, setWorkOrderState] = useState<string>(() => {
-    if (typeof window === "undefined") return "";
+  const [workOrders, setWorkOrders] = useState<
+    Partial<Record<DepartmentKey, string>>
+  >(() => {
+    if (typeof window === "undefined") return {};
     try {
-      return window.localStorage.getItem(STORAGE_KEY) || "";
+      return {
+        sewing: window.localStorage.getItem(storageKeyFor("sewing")) || "",
+        washing: window.localStorage.getItem(storageKeyFor("washing")) || "",
+        finishing: window.localStorage.getItem(storageKeyFor("finishing")) || "",
+        gdp: window.localStorage.getItem(storageKeyFor("gdp")) || "",
+      };
     } catch {
       // localStorage unavailable (private browsing, etc.) — fall back to
       // in-memory-only state for this session.
-      return "";
+      return {};
     }
   });
 
   const setWorkOrder = useCallback((next: string) => {
-    setWorkOrderState(next);
+    setWorkOrders((previous) => ({ ...previous, [department]: next }));
     try {
-      if (next) window.localStorage.setItem(STORAGE_KEY, next);
-      else window.localStorage.removeItem(STORAGE_KEY);
+      const key = storageKeyFor(department);
+      if (next) window.localStorage.setItem(key, next);
+      else window.localStorage.removeItem(key);
     } catch {
       // ignore — non-fatal if storage isn't available
     }
-  }, []);
+  }, [department]);
 
   return (
-    <WorkOrderContext.Provider value={{ workOrder, setWorkOrder }}>
+    <WorkOrderContext.Provider
+      value={{ workOrder: workOrders[department] || "", setWorkOrder }}
+    >
       {children}
     </WorkOrderContext.Provider>
   );

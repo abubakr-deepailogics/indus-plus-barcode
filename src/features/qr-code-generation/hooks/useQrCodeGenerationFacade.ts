@@ -2,6 +2,7 @@
 
 import { useCallback, useState, useMemo, useEffect } from "react";
 import type {
+  BundleDetailRow,
   OperationsDetailRow,
   QrCodeStyleData,
   PageSetupConfig,
@@ -45,6 +46,12 @@ interface QrCodeGenerationFacade {
   handleAllBundlesSelChange: (checked: boolean) => void;
   handleAllOperationsSelChange: (checked: boolean) => void;
   handleReworkQtyBundleChange: (value: string) => void;
+  handleManualBundleChange: (
+    id: number,
+    field: "bundleNo" | "inseam" | "size" | "pcs",
+    value: string,
+  ) => void;
+  handleRemoveManualBundle: (id: number) => void;
   handleGeneratePdf: () => Promise<void>;
   generatingPdf: boolean;
   handleGenerateCoupons: () => Promise<void>;
@@ -263,7 +270,17 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       if (!response.ok) return;
       const data = await response.json();
 
-      const fetchedCuts = data.cutDetails || [];
+      let fetchedCuts = data.cutDetails || [];
+      if (department === "washing") {
+        const manualDetailsResponse = await fetch(
+          `/api/manual-coupon-cut-details?work_order=${encodeURIComponent(wo)}&department=${department}`,
+        );
+        if (!manualDetailsResponse.ok) {
+          throw new Error("Failed to load manual bundle details.");
+        }
+        const manualDetails = await manualDetailsResponse.json();
+        fetchedCuts = manualDetails.rows || [];
+      }
       const fetchedOps = data.styleBulletins || [];
 
       // Map database operations to OperationsDetailRow
@@ -299,20 +316,36 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       });
 
       // Map database cuts to BundleDetailRow
-      const bundles = fetchedCuts.map((cut: any, index: number) => ({
+      const bundles: BundleDetailRow[] = fetchedCuts.map((cut: any, index: number) => ({
         id: cut.RowId || index,
         transId: cut.Sale_Order_No || cut.Trans_Id || wo,
         cutNo: cut.Cut !== undefined ? String(cut.Cut) : "",
         char: cut.Char || cut.Color || "",
         line: cut.Line !== undefined ? String(cut.Line) : "1",
-        bundleNo: cut.Bundle_Id !== undefined ? String(cut.Bundle_Id) : "",
+        bundleNo: cut.Bundle_Id !== undefined ? String(cut.Bundle_Id) : String(cut.BundleNo ?? ""),
         inseam: cut.Inseam !== undefined ? String(cut.Inseam) : "",
         size: cut.Size !== undefined ? String(cut.Size) : "",
-        pcs: Number(cut.Bundle_Qty || cut.Pcs || 0),
-        sel: false, // Default to false
+        pcs: Number(cut.Bundle_Qty ?? cut.Pcs ?? 0),
+        // Manual Washing rows follow the Rework model: populated rows are
+        // included automatically, while the trailing blank row is not.
+        sel: department === "washing",
         code: cut.Color || "",
         rPcs: cut.R_Pcs !== undefined ? String(cut.R_Pcs) : "-",
       }));
+
+      if (department === "washing" && bundles.length === 0) {
+        bundles.push({
+          id: -1,
+          cutNo: "",
+          line: "1",
+          bundleNo: "1",
+          inseam: "",
+          size: "",
+          pcs: 0,
+          sel: false,
+          code: "",
+        });
+      }
 
       // // Sort bundles in sequence by Cut No and Bundle No
       bundles.sort((a: any, b: any) => {
@@ -478,6 +511,69 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     setActiveStyle((prev) => ({ ...prev, reworkQtyBundle: value }));
   };
 
+  const handleManualBundleChange = (
+    id: number,
+    field: "bundleNo" | "inseam" | "size" | "pcs",
+    value: string,
+  ) => {
+    setActiveStyle((prev) => {
+      const index = prev.bundles.findIndex((bundle) => bundle.id === id);
+      if (index === -1) return prev;
+      const current = prev.bundles[index];
+      const updated = {
+        ...current,
+        [field]: field === "pcs" ? Number(value) || 0 : value,
+      };
+      const hasContent = Boolean(
+        updated.bundleNo.trim() ||
+          updated.inseam.trim() ||
+          updated.size.trim() ||
+          updated.pcs,
+      );
+      const bundles = prev.bundles.slice();
+      bundles[index] = { ...updated, sel: hasContent };
+      if (index === prev.bundles.length - 1 && hasContent) {
+        const numericBundleNos = bundles
+          .map((bundle) => Number(bundle.bundleNo))
+          .filter((bundleNo) => Number.isInteger(bundleNo) && bundleNo >= 0);
+        const nextId = Math.min(0, ...bundles.map((bundle) => bundle.id)) - 1;
+        bundles.push({
+          id: nextId,
+          cutNo: "",
+          line: "1",
+          bundleNo: String(Math.max(0, ...numericBundleNos) + 1),
+          inseam: "",
+          size: "",
+          pcs: 0,
+          sel: false,
+          code: "",
+        });
+      }
+      const selectedPcs = bundles
+        .filter((bundle) => bundle.sel)
+        .reduce((sum, bundle) => sum + bundle.pcs, 0);
+      return { ...prev, bundles, subTotal: String(selectedPcs), total: String(selectedPcs) };
+    });
+  };
+
+  const handleRemoveManualBundle = (id: number) => {
+    setActiveStyle((prev) => {
+      if (prev.bundles.length > 1) {
+        const bundles = prev.bundles.filter((bundle) => bundle.id !== id);
+        const selectedPcs = bundles
+          .filter((bundle) => bundle.sel)
+          .reduce((sum, bundle) => sum + bundle.pcs, 0);
+        return { ...prev, bundles, subTotal: String(selectedPcs), total: String(selectedPcs) };
+      }
+      return {
+        ...prev,
+        bundles: [{ id: -1, cutNo: "", line: "1", bundleNo: "1", inseam: "", size: "", pcs: 0, sel: false, code: "" }],
+        subTotal: "0",
+        total: "0",
+      };
+    });
+  };
+
   const handleGenerateCoupons = async () => {
     if (!activeStyle.workOrder) {
       alert("Please enter or search a Work Order.");
@@ -489,6 +585,20 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         "Please select at least one bundle check box under Cutting Detail.",
       );
       return;
+    }
+    if (department === "washing") {
+      const invalidBundle = selectedBundles.find(
+        (bundle) => !bundle.bundleNo.trim() || !Number.isInteger(bundle.pcs) || bundle.pcs <= 0,
+      );
+      if (invalidBundle) {
+        alert("Every selected manual bundle needs a Bundle No. and Pcs greater than 0.");
+        return;
+      }
+      const bundleNos = selectedBundles.map((bundle) => bundle.bundleNo.trim());
+      if (new Set(bundleNos).size !== bundleNos.length) {
+        alert("Manual Bundle No. values must be unique.");
+        return;
+      }
     }
     const selectedOperations = activeStyle.operations.filter(
       (op) => op.lastOpSection,
@@ -527,6 +637,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         body: JSON.stringify({
           workOrder: activeStyle.workOrder,
           department,
+          manualCutDetails: department === "washing",
           bundles: activeStyle.bundles,
           operations: operationsToSend,
           generatedBy: activeStyle.generateBy,
@@ -650,6 +761,8 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     handleAllBundlesSelChange,
     handleAllOperationsSelChange,
     handleReworkQtyBundleChange,
+    handleManualBundleChange,
+    handleRemoveManualBundle,
     handleGeneratePdf,
     generatingPdf,
     handleGenerateCoupons,

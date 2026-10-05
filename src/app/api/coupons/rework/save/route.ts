@@ -158,6 +158,7 @@ export async function POST(request: Request) {
       const req = pool.request();
       req.input("batchId", sql.UniqueIdentifier, batchId);
       req.input("workOrder", sql.NVarChar, workOrder);
+      req.input("department", sql.NVarChar, couponDepartment);
       req.input("saleOrderNo", sql.NVarChar, saleOrderNo ?? null);
       req.input("customerName", sql.NVarChar, customerName ?? null);
       req.input("reworkQty", sql.Int, reworkQtyNum);
@@ -171,12 +172,12 @@ export async function POST(request: Request) {
         req.input(`inseam${i}`, sql.NVarChar, bundle.inseam ? String(bundle.inseam) : null);
         req.input(`size${i}`, sql.NVarChar, bundle.size ? String(bundle.size) : null);
         req.input(`pcs${i}`, sql.Int, bundle.pcs);
-        return `(@batchId, @workOrder, @saleOrderNo, @customerName, @cutNo${i}, @char${i}, @bundleNo${i}, @inseam${i}, @size${i}, @pcs${i}, @reworkQty, @remarks, @insertedBy)`;
+        return `(@batchId, @workOrder, @department, @saleOrderNo, @customerName, @cutNo${i}, @char${i}, @bundleNo${i}, @inseam${i}, @size${i}, @pcs${i}, @reworkQty, @remarks, @insertedBy)`;
       });
 
       await req.query(`
         INSERT INTO dbo.ReworkCouponEntry
-          (Id, WorkOrder, SaleOrderNo, CustomerName, CutNo, [Char], BundleNo, Inseam, Size, Pcs,
+          (Id, WorkOrder, Department, SaleOrderNo, CustomerName, CutNo, [Char], BundleNo, Inseam, Size, Pcs,
            ReworkQty, Remarks, InsertedBy)
         VALUES ${values.join(", ")}
       `);

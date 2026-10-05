@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/features/auth/context/auth-context";
 import { useDepartment, type DepartmentKey } from "@/lib/department-context";
+import { useWorkOrder } from "@/lib/work-order-context";
 import {
   ChevronDown,
   Scissors,
@@ -71,6 +72,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const { user, logout } = useAuth();
   const router = useRouter();
   const { department, setDepartment, departments } = useDepartment();
+  const { workOrder } = useWorkOrder();
+
+  const workOrderHref = (href: string) =>
+    workOrder ? `${href}?wo=${encodeURIComponent(workOrder)}` : href;
 
   // Sync route with active department
   useEffect(() => {
@@ -241,7 +246,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 {currentNavTabs.map((tab, idx) => (
                   <Link
                     key={idx}
-                    href={tab.href}
+                    href={workOrderHref(tab.href)}
                     onClick={() => setMobileMenuOpen(false)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between ${
                       pathname === tab.href
@@ -291,7 +296,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 return (
                   <div key={idx} className="relative">
                     {tab.href !== "#" ? (
-                      <Link href={tab.href} className={className}>
+                      <Link href={workOrderHref(tab.href)} className={className}>
                         {content}
                       </Link>
                     ) : (

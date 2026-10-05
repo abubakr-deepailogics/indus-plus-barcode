@@ -38,18 +38,20 @@ export function useWorkOrderParam(onWorkOrder: (workOrder: string) => void) {
   // their own searches here are the source of truth, not a search that
   // just happened to fire on another page while this one stayed mounted.
   useEffect(() => {
-    const urlWorkOrder =
-      new URLSearchParams(window.location.search).get(PARAM) || "";
-    const resolved = urlWorkOrder || globalWorkOrder;
-    if (!resolved) return;
+    const urlWorkOrder = new URLSearchParams(window.location.search).get(PARAM);
+    // The URL is authoritative. An absent `wo` is an explicit clear, never
+    // an invitation to silently restore an old value from local storage.
+    if (urlWorkOrder === null) {
+      if (globalWorkOrder) setGlobalWorkOrder("");
+      return;
+    }
+    const resolved = urlWorkOrder;
+    if (!resolved) {
+      if (globalWorkOrder) setGlobalWorkOrder("");
+      return;
+    }
 
     if (resolved !== globalWorkOrder) setGlobalWorkOrder(resolved);
-    if (resolved !== urlWorkOrder) {
-      router.replace(
-        `${pathname}?${PARAM}=${encodeURIComponent(resolved)}`,
-        { scroll: false },
-      );
-    }
     onWorkOrderRef.current(resolved);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);

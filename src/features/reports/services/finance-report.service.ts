@@ -120,7 +120,7 @@ async function fetchScansInRange(fromDate: Date, toDate: Date, department: Depar
         AND ScannedAt >= @from AND ScannedAt < DATEADD(day, 1, @to)
     `);
   const rows = result.recordset as RawScanRow[];
-  return enrichCouponRows(rows);
+  return enrichCouponRows(rows, department);
 }
 
 async function fetchSewingOpCodesByWorkOrder(
