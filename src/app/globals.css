@@ -137,6 +137,38 @@
   --client-brand-charcoal: #211f20;
 }
 
+/* Reports use the standard company-red palette consistently, including
+   financial values and controls that previously used green/teal utilities. */
+[data-client-brand][data-report-accent="red"] [class*="text-emerald-"],
+[data-client-brand][data-report-accent="red"] [class*="text-teal-"] {
+  color: var(--client-brand-red) !important;
+}
+
+[data-client-brand][data-report-accent="red"] [class*="bg-emerald-"],
+[data-client-brand][data-report-accent="red"] [class*="bg-teal-"] {
+  background-color: var(--client-brand-red-soft) !important;
+}
+
+[data-client-brand][data-report-accent="red"] [class*="border-emerald-"],
+[data-client-brand][data-report-accent="red"] [class*="border-teal-"],
+[data-client-brand][data-report-accent="red"] [class*="border-t-emerald-"],
+[data-client-brand][data-report-accent="red"] [class*="border-t-teal-"] {
+  border-color: var(--client-brand-red-border) !important;
+}
+
+[data-client-brand][data-report-accent="red"] [class~="bg-emerald-500"],
+[data-client-brand][data-report-accent="red"] [class~="bg-teal-500"],
+[data-client-brand][data-report-accent="red"] [class~="border-t-emerald-600"],
+[data-client-brand][data-report-accent="red"] [class~="border-t-teal-500"] {
+  background-color: var(--client-brand-red) !important;
+  border-color: var(--client-brand-red) !important;
+}
+
+[data-client-brand][data-report-accent="red"] [class*="hover:bg-emerald-"]:hover,
+[data-client-brand][data-report-accent="red"] [class*="hover:bg-teal-"]:hover {
+  background-color: var(--client-brand-red-soft) !important;
+}
+
 [data-client-brand] [class*="text-indigo-"]:not(table *, td *, th *),
 [data-client-brand] [class*="text-[#4f46e5]"]:not(table *, td *, th *),
 [data-client-brand] [class*="text-[#4338ca]"]:not(table *, td *, th *) {
