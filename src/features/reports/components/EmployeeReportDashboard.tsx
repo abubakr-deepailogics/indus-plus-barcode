@@ -172,7 +172,7 @@ import type {
 interface SectionGroupedItem {
   workOrder: string;
   operationsCount: number;
-  couponCount: number;
+  totalQty: number;
   totalAmount: number;
 }
 
@@ -185,7 +185,7 @@ interface SectionGrouped {
   // section. Derived from the (already globally-deduped) operations
   // breakdown instead, filtered to this section.
   totalOperations: number;
-  totalCoupons: number;
+  totalQty: number;
   totalAmount: number;
 }
 
@@ -204,7 +204,7 @@ function groupSectionData(
     const item: SectionGroupedItem = {
       workOrder: sec.workOrder,
       operationsCount: sec.operationsCount,
-      couponCount: sec.couponCount,
+      totalQty: sec.totalQty,
       totalAmount: sec.totalAmount,
     };
     const existing = map.get(sec.section);
@@ -213,12 +213,12 @@ function groupSectionData(
         section: sec.section,
         items: [item],
         totalOperations: 0,
-        totalCoupons: sec.couponCount,
+        totalQty: sec.totalQty,
         totalAmount: sec.totalAmount,
       });
     } else {
       existing.items.push(item);
-      existing.totalCoupons += sec.couponCount;
+      existing.totalQty += sec.totalQty;
       existing.totalAmount += sec.totalAmount;
     }
   }
@@ -669,13 +669,13 @@ export function EmployeeReportDashboard() {
     [summary],
   );
 
-  // Grand totals (coupon count + amount) for the nested Work Orders /
+  // Grand totals (quantity + amount) for the nested Work Orders /
   // Operations / Sections tabs' tfoot row — same "sum of every group's
   // subtotal" shape as grandTotalBundles/Qty/Pay above, for whichever of the
   // three row-group datasets is currently on screen.
   const workOrderRowGrandTotals = useMemo(
     () => ({
-      coupons: workOrderRowGroups.reduce((acc, g) => acc + g.totalCoupons, 0),
+      qty: workOrderRowGroups.reduce((acc, g) => acc + g.totalQty, 0),
       amount: workOrderRowGroups.reduce((acc, g) => acc + g.totalAmount, 0),
     }),
     [workOrderRowGroups],
@@ -690,14 +690,14 @@ export function EmployeeReportDashboard() {
         (acc, g) => acc + sumField(g.rows, (r) => r.sam),
         0,
       ),
-      coupons: operationRowGroups.reduce((acc, g) => acc + g.totalCoupons, 0),
+      qty: operationRowGroups.reduce((acc, g) => acc + g.totalQty, 0),
       amount: operationRowGroups.reduce((acc, g) => acc + g.totalAmount, 0),
     }),
     [operationRowGroups],
   );
   const sectionRowGrandTotals = useMemo(
     () => ({
-      coupons: sectionRowGroups.reduce((acc, g) => acc + g.totalCoupons, 0),
+      qty: sectionRowGroups.reduce((acc, g) => acc + g.totalQty, 0),
       amount: sectionRowGroups.reduce((acc, g) => acc + g.totalAmount, 0),
     }),
     [sectionRowGroups],
@@ -796,14 +796,14 @@ export function EmployeeReportDashboard() {
 
     if (effectiveTab === "workOrders" && searchDimension !== "workOrder") {
       const groupHeader = DIMENSION_META[searchDimension].columnLabel;
-      headers = [groupHeader, "Work Order #", "Coupons", "Total Amount"];
+      headers = [groupHeader, "Work Order #", "Qty", "Total Amount"];
       rows = [];
       for (const g of workOrderRowGroups) {
         for (const row of g.rows) {
           rows.push([
             g.groupLabel,
             row.label,
-            row.couponCount,
+            row.totalQty,
             Number(row.totalAmount.toFixed(2)),
           ]);
         }
@@ -812,8 +812,7 @@ export function EmployeeReportDashboard() {
       headers = [
         "Work Order #",
         "Operations",
-        "Coupons",
-        "Total Qty",
+        "Qty",
         "Piece Rate",
         "Plan",
         "Total Amount",
@@ -821,8 +820,7 @@ export function EmployeeReportDashboard() {
       rows = summary.workOrders.map((wo) => [
         wo.workOrder,
         wo.operationsCount,
-        wo.couponCount,
-        wo.bundleQty ?? "",
+        wo.totalQty,
         wo.pieceRate != null ? Number(wo.pieceRate.toFixed(2)) : "",
         wo.plan != null ? Number(wo.plan.toFixed(2)) : "",
         Number(wo.totalAmount.toFixed(2)),
@@ -900,8 +898,7 @@ export function EmployeeReportDashboard() {
         "Operation",
         "Piece Rate",
         "SAM",
-        "Coupons",
-        "Output (Pcs)",
+        "Qty",
         "Total Amount",
       ];
       rows = [];
@@ -912,7 +909,6 @@ export function EmployeeReportDashboard() {
             row.label,
             row.rate != null ? Number(row.rate.toFixed(2)) : "",
             row.sam != null ? Number(row.sam.toFixed(2)) : "",
-            row.couponCount,
             row.totalQty,
             Number(row.totalAmount.toFixed(2)),
           ]);
@@ -924,7 +920,7 @@ export function EmployeeReportDashboard() {
         "Section",
         "Piece Rate",
         "SAM",
-        "Coupons",
+        "Qty",
         "Total Amount",
       ];
       rows = summary.operations.map((op) => [
@@ -932,19 +928,19 @@ export function EmployeeReportDashboard() {
         op.section,
         op.rate != null ? Number(op.rate.toFixed(2)) : "",
         op.smv != null ? Number(op.smv.toFixed(2)) : "",
-        op.couponCount,
+        op.totalQty,
         Number(op.totalAmount.toFixed(2)),
       ]);
     } else if (effectiveTab === "sections" && searchDimension !== "section") {
       const groupHeader = DIMENSION_META[searchDimension].columnLabel;
-      headers = [groupHeader, "Section", "Coupons", "Total Amount"];
+      headers = [groupHeader, "Section", "Qty", "Total Amount"];
       rows = [];
       for (const g of sectionRowGroups) {
         for (const row of g.rows) {
           rows.push([
             g.groupLabel,
             row.label,
-            row.couponCount,
+            row.totalQty,
             Number(row.totalAmount.toFixed(2)),
           ]);
         }
@@ -954,7 +950,7 @@ export function EmployeeReportDashboard() {
         "Section",
         "Work Order",
         "Operations",
-        "Coupons",
+        "Qty",
         "Total Amount",
       ];
       rows = [];
@@ -964,7 +960,7 @@ export function EmployeeReportDashboard() {
             group.section,
             item.workOrder,
             item.operationsCount,
-            item.couponCount,
+            item.totalQty,
             Number(item.totalAmount.toFixed(2)),
           ]);
         }
@@ -1754,7 +1750,7 @@ export function EmployeeReportDashboard() {
                             Work Order #
                           </th>
                           <th className="py-2.5 px-3 text-center border-r border-slate-200">
-                            Coupons
+                            Qty
                           </th>
                           <th className="py-2.5 px-3 text-right">
                             Total Amount
@@ -1788,7 +1784,7 @@ export function EmployeeReportDashboard() {
                                     </span>
                                   </td>
                                   <td className="py-2 px-3 text-center font-bold text-slate-800 text-[11px] border-r border-slate-200">
-                                    {row.couponCount.toLocaleString()}
+                                    {row.totalQty.toLocaleString()}
                                   </td>
                                   <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono text-[11px]">
                                     {formatAmount(row.totalAmount)}
@@ -1804,7 +1800,7 @@ export function EmployeeReportDashboard() {
                                   {DIMENSION_META[searchDimension].totalLabel} :
                                 </td>
                                 <td className="py-2 px-3 text-center border-r border-slate-200">
-                                  {g.totalCoupons.toLocaleString()}
+                                  {g.totalQty.toLocaleString()}
                                 </td>
                                 <td className="py-2 px-3 text-right font-mono text-emerald-800">
                                   {formatAmount(g.totalAmount)}
@@ -1824,7 +1820,7 @@ export function EmployeeReportDashboard() {
                               Grand Total :
                             </td>
                             <td className="py-2.5 px-3 text-center border-r border-slate-300">
-                              {workOrderRowGrandTotals.coupons.toLocaleString()}
+                              {workOrderRowGrandTotals.qty.toLocaleString()}
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
                               Rs. {formatAmount(workOrderRowGrandTotals.amount)}
@@ -1846,8 +1842,7 @@ export function EmployeeReportDashboard() {
                       <tr className="bg-slate-50 border-b border-slate-200 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
                         <th className="py-2.5 px-3">Work Order #</th>
                         <th className="py-2.5 px-3 text-center">Operations</th>
-                        <th className="py-2.5 px-3 text-center">Coupons</th>
-                        <th className="py-2.5 px-3 text-center">Total Qty</th>
+                        <th className="py-2.5 px-3 text-center">Qty</th>
                         <th className="py-2.5 px-3 text-right">Piece Rate</th>
                         <th className="py-2.5 px-3 text-right">Plan</th>
                         <th className="py-2.5 px-3 text-right">Total Amount</th>
@@ -1878,12 +1873,7 @@ export function EmployeeReportDashboard() {
                               {wo.operationsCount}
                             </td>
                             <td className="py-2.5 px-3 text-center font-bold text-slate-800">
-                              {wo.couponCount.toLocaleString()}
-                            </td>
-                            <td className="py-2.5 px-3 text-center font-extrabold text-[#4f46e5]">
-                              {wo.bundleQty != null
-                                ? wo.bundleQty.toLocaleString()
-                                : "—"}
+                              {wo.totalQty.toLocaleString()}
                             </td>
                             <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
                               {wo.pieceRate != null
@@ -1907,15 +1897,15 @@ export function EmployeeReportDashboard() {
                             Total ({summary.workOrders.length} Work Orders)
                           </td>
                           <td className="py-2.5 px-3 text-center text-slate-900">
-                            {summary.totalCoupons.toLocaleString()}
-                          </td>
-                          <td className="py-2.5 px-3 text-center text-[#4f46e5]">
-                            {summary.workOrders
-                              .reduce((acc, wo) => acc + (wo.bundleQty ?? 0), 0)
-                              .toLocaleString()}
+                            {summary.totalQty.toLocaleString()}
                           </td>
                           <td className="py-2.5 px-3 text-right text-slate-700">
-                            —
+                            {formatAmount(
+                              summary.workOrders.reduce(
+                                (acc, wo) => acc + (wo.pieceRate ?? 0),
+                                0,
+                              ),
+                            )}
                           </td>
                           <td className="py-2.5 px-3 text-right text-slate-700">
                             {formatAmount(
@@ -1960,10 +1950,7 @@ export function EmployeeReportDashboard() {
                             SAM
                           </th>
                           <th className="py-2.5 px-3 text-center border-r border-slate-200">
-                            Coupons
-                          </th>
-                          <th className="py-2.5 px-3 text-center border-r border-slate-200">
-                            Output (Pcs)
+                            Qty
                           </th>
                           <th className="py-2.5 px-3 text-right">
                             Total Amount
@@ -1974,7 +1961,7 @@ export function EmployeeReportDashboard() {
                         {operationRowGroups.length === 0 ? (
                           <tr>
                             <td
-                              colSpan={7}
+                              colSpan={6}
                               className="py-8 text-center text-slate-400 font-medium"
                             >
                               No operations recorded for this period.
@@ -2003,9 +1990,6 @@ export function EmployeeReportDashboard() {
                                     {row.sam != null ? row.sam.toFixed(2) : "—"}
                                   </td>
                                   <td className="py-2 px-3 text-center font-bold text-slate-800 text-[11px] border-r border-slate-200">
-                                    {row.couponCount.toLocaleString()}
-                                  </td>
-                                  <td className="py-2 px-3 text-center font-extrabold text-[#4f46e5] text-[11px] border-r border-slate-200">
                                     {row.totalQty.toLocaleString()}
                                   </td>
                                   <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono text-[11px]">
@@ -2029,9 +2013,8 @@ export function EmployeeReportDashboard() {
                                   {formatAmount(sumField(g.rows, (r) => r.sam))}
                                 </td>
                                 <td className="py-2 px-3 text-center border-r border-slate-200">
-                                  {g.totalCoupons.toLocaleString()}
+                                  {g.totalQty.toLocaleString()}
                                 </td>
-                                <td className="py-2 px-3 border-r border-slate-200" />
                                 <td className="py-2 px-3 text-right font-mono text-emerald-800">
                                   {formatAmount(g.totalAmount)}
                                 </td>
@@ -2056,9 +2039,8 @@ export function EmployeeReportDashboard() {
                               {formatAmount(operationRowGrandTotals.sam)}
                             </td>
                             <td className="py-2.5 px-3 text-center border-r border-slate-300">
-                              {operationRowGrandTotals.coupons.toLocaleString()}
+                              {operationRowGrandTotals.qty.toLocaleString()}
                             </td>
-                            <td className="py-2.5 px-3 border-r border-slate-300" />
                             <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
                               Rs. {formatAmount(operationRowGrandTotals.amount)}
                             </td>
@@ -2081,7 +2063,7 @@ export function EmployeeReportDashboard() {
                         <th className="py-2.5 px-3">Section</th>
                         <th className="py-2.5 px-3 text-right">Piece Rate</th>
                         <th className="py-2.5 px-3 text-right">SAM</th>
-                        <th className="py-2.5 px-3 text-center">Coupons</th>
+                        <th className="py-2.5 px-3 text-center">Qty</th>
                         <th className="py-2.5 px-3 text-right">Total Amount</th>
                       </tr>
                     </thead>
@@ -2118,7 +2100,7 @@ export function EmployeeReportDashboard() {
                               {op.smv != null ? op.smv.toFixed(2) : "—"}
                             </td>
                             <td className="py-2.5 px-3 text-center font-bold text-slate-800">
-                              {op.couponCount.toLocaleString()}
+                              {op.totalQty.toLocaleString()}
                             </td>
                             <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
                               Rs. {formatAmount(op.totalAmount)}
@@ -2134,7 +2116,7 @@ export function EmployeeReportDashboard() {
                             Total ({summary.operations.length} Operations)
                           </td>
                           <td className="py-2.5 px-3 text-center text-slate-900">
-                            {summary.totalCoupons.toLocaleString()}
+                            {summary.totalQty.toLocaleString()}
                           </td>
                           <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                             Rs. {formatAmount(summary.totalAmount)}
@@ -2164,7 +2146,7 @@ export function EmployeeReportDashboard() {
                           Section
                         </th>
                         <th className="py-2.5 px-3 text-center border-r border-slate-200">
-                          Coupons
+                          Qty
                         </th>
                         <th className="py-2.5 px-3 text-right">Total Amount</th>
                       </tr>
@@ -2194,7 +2176,7 @@ export function EmployeeReportDashboard() {
                                   {row.label}
                                 </td>
                                 <td className="py-2 px-3 text-center font-bold text-slate-800 text-[11px] border-r border-slate-200">
-                                  {row.couponCount.toLocaleString()}
+                                  {row.totalQty.toLocaleString()}
                                 </td>
                                 <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono text-[11px]">
                                   {formatAmount(row.totalAmount)}
@@ -2210,7 +2192,7 @@ export function EmployeeReportDashboard() {
                                 {DIMENSION_META[searchDimension].totalLabel} :
                               </td>
                               <td className="py-2 px-3 text-center border-r border-slate-200">
-                                {g.totalCoupons.toLocaleString()}
+                                {g.totalQty.toLocaleString()}
                               </td>
                               <td className="py-2 px-3 text-right font-mono text-emerald-800">
                                 {formatAmount(g.totalAmount)}
@@ -2230,7 +2212,7 @@ export function EmployeeReportDashboard() {
                             Grand Total :
                           </td>
                           <td className="py-2.5 px-3 text-center border-r border-slate-300">
-                            {sectionRowGrandTotals.coupons.toLocaleString()}
+                            {sectionRowGrandTotals.qty.toLocaleString()}
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
                             Rs. {formatAmount(sectionRowGrandTotals.amount)}
@@ -2258,7 +2240,7 @@ export function EmployeeReportDashboard() {
                       <th className="py-2.5 px-3">Section</th>
                       <th className="py-2.5 px-3">Work Order</th>
                       <th className="py-2.5 px-3 text-center">Operations</th>
-                      <th className="py-2.5 px-3 text-center">Coupons</th>
+                      <th className="py-2.5 px-3 text-center">Qty</th>
                       <th className="py-2.5 px-3 text-right">Total Amount</th>
                     </tr>
                   </thead>
@@ -2296,7 +2278,7 @@ export function EmployeeReportDashboard() {
                               {item.operationsCount}
                             </td>
                             <td className="py-2.5 px-3 text-center font-bold text-slate-800">
-                              {item.couponCount.toLocaleString()}
+                              {item.totalQty.toLocaleString()}
                             </td>
                             <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
                               Rs. {formatAmount(item.totalAmount)}
@@ -2306,6 +2288,21 @@ export function EmployeeReportDashboard() {
                       )
                     )}
                   </tbody>
+                  {sectionGroupedData.length > 0 && (
+                    <tfoot>
+                      <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
+                        <td className="py-2.5 px-3" colSpan={3}>
+                          Grand Total
+                        </td>
+                        <td className="py-2.5 px-3 text-center">
+                          {summary.totalQty.toLocaleString()}
+                        </td>
+                        <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
+                          Rs. {formatAmount(summary.totalAmount)}
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
                 </table>
               </div>
             )}
@@ -3215,7 +3212,7 @@ export function EmployeeReportDashboard() {
                                 {DIMENSION_META[searchDimension].columnLabel}
                               </th>
                               <th>WORK ORDER #</th>
-                              <th className="text-center w-20">COUPONS</th>
+                              <th className="text-center w-20">QTY</th>
                               <th className="text-right w-28">
                                 TOTAL AMOUNT (RS.)
                               </th>
@@ -3240,7 +3237,7 @@ export function EmployeeReportDashboard() {
                                         {row.label}
                                       </td>
                                       <td className="text-center font-bold">
-                                        {row.couponCount.toLocaleString()}
+                                        {row.totalQty.toLocaleString()}
                                       </td>
                                       <td className="text-right font-bold">
                                         Rs. {formatAmount(row.totalAmount)}
@@ -3259,7 +3256,7 @@ export function EmployeeReportDashboard() {
                                       :
                                     </td>
                                     <td className="text-center font-bold">
-                                      {g.totalCoupons.toLocaleString()}
+                                      {g.totalQty.toLocaleString()}
                                     </td>
                                     <td className="text-right font-bold">
                                       Rs. {formatAmount(g.totalAmount)}
@@ -3276,7 +3273,7 @@ export function EmployeeReportDashboard() {
                                   Grand Total :
                                 </td>
                                 <td className="text-center">
-                                  {workOrderRowGrandTotals.coupons.toLocaleString()}
+                                  {workOrderRowGrandTotals.qty.toLocaleString()}
                                 </td>
                                 <td className="text-right font-mono">
                                   Rs.{" "}
@@ -3292,8 +3289,7 @@ export function EmployeeReportDashboard() {
                             <tr>
                               <th>WORK ORDER #</th>
                               <th className="text-center w-20">OPERATIONS</th>
-                              <th className="text-center w-20">COUPONS</th>
-                              <th className="text-center w-24">TOTAL QTY</th>
+                              <th className="text-center w-20">QTY</th>
                               <th className="text-right w-24">PIECE RATE</th>
                               <th className="text-right w-24">PLAN</th>
                               <th className="text-right w-28">
@@ -3318,12 +3314,7 @@ export function EmployeeReportDashboard() {
                                     {wo.operationsCount}
                                   </td>
                                   <td className="text-center font-bold">
-                                    {wo.couponCount.toLocaleString()}
-                                  </td>
-                                  <td className="text-center font-bold">
-                                    {wo.bundleQty != null
-                                      ? wo.bundleQty.toLocaleString()
-                                      : "—"}
+                                    {wo.totalQty.toLocaleString()}
                                   </td>
                                   <td className="text-right">
                                     {wo.pieceRate != null
@@ -3350,17 +3341,16 @@ export function EmployeeReportDashboard() {
                                   Orders)
                                 </td>
                                 <td className="text-center">
-                                  {summary.totalCoupons.toLocaleString()}
+                                  {summary.totalQty.toLocaleString()}
                                 </td>
-                                <td className="text-center">
-                                  {summary.workOrders
-                                    .reduce(
-                                      (acc, wo) => acc + (wo.bundleQty ?? 0),
+                                <td className="text-right">
+                                  {formatAmount(
+                                    summary.workOrders.reduce(
+                                      (acc, wo) => acc + (wo.pieceRate ?? 0),
                                       0,
-                                    )
-                                    .toLocaleString()}
+                                    ),
+                                  )}
                                 </td>
-                                <td className="text-right">—</td>
                                 <td className="text-right">
                                   {formatAmount(
                                     summary.workOrders.reduce(
@@ -3398,8 +3388,7 @@ export function EmployeeReportDashboard() {
                               <th>OPERATION</th>
                               <th className="text-right w-20">PIECE RATE</th>
                               <th className="text-right w-16">SAM</th>
-                              <th className="text-center w-20">COUPONS</th>
-                              <th className="text-center w-24">OUTPUT (PCS)</th>
+                              <th className="text-center w-20">QTY</th>
                               <th className="text-right w-28">
                                 TOTAL AMOUNT (RS.)
                               </th>
@@ -3408,7 +3397,7 @@ export function EmployeeReportDashboard() {
                           <tbody>
                             {operationRowGroups.length === 0 ? (
                               <tr>
-                                <td colSpan={7} className="text-center">
+                                <td colSpan={6} className="text-center">
                                   No operations recorded for this period.
                                 </td>
                               </tr>
@@ -3434,9 +3423,6 @@ export function EmployeeReportDashboard() {
                                         {row.sam != null
                                           ? row.sam.toFixed(2)
                                           : "—"}
-                                      </td>
-                                      <td className="text-center font-bold">
-                                        {row.couponCount.toLocaleString()}
                                       </td>
                                       <td className="text-center font-bold">
                                         {row.totalQty.toLocaleString()}
@@ -3468,9 +3454,8 @@ export function EmployeeReportDashboard() {
                                       )}
                                     </td>
                                     <td className="text-center font-bold">
-                                      {g.totalCoupons.toLocaleString()}
+                                      {g.totalQty.toLocaleString()}
                                     </td>
-                                    <td className="text-center"></td>
                                     <td className="text-right font-bold">
                                       Rs. {formatAmount(g.totalAmount)}
                                     </td>
@@ -3492,9 +3477,8 @@ export function EmployeeReportDashboard() {
                                   {formatAmount(operationRowGrandTotals.sam)}
                                 </td>
                                 <td className="text-center">
-                                  {operationRowGrandTotals.coupons.toLocaleString()}
+                                  {operationRowGrandTotals.qty.toLocaleString()}
                                 </td>
-                                <td className="text-center"></td>
                                 <td className="text-right font-mono">
                                   Rs.{" "}
                                   {formatAmount(operationRowGrandTotals.amount)}
@@ -3511,7 +3495,7 @@ export function EmployeeReportDashboard() {
                               <th>SECTION</th>
                               <th className="text-right w-20">PIECE RATE</th>
                               <th className="text-right w-16">SAM</th>
-                              <th className="text-center w-20">COUPONS</th>
+                              <th className="text-center w-20">QTY</th>
                               <th className="text-right w-28">
                                 TOTAL AMOUNT (RS.)
                               </th>
@@ -3540,7 +3524,7 @@ export function EmployeeReportDashboard() {
                                     {op.smv != null ? op.smv.toFixed(2) : "—"}
                                   </td>
                                   <td className="text-center font-bold">
-                                    {op.couponCount.toLocaleString()}
+                                    {op.totalQty.toLocaleString()}
                                   </td>
                                   <td className="text-right font-bold">
                                     Rs. {formatAmount(op.totalAmount)}
@@ -3556,7 +3540,7 @@ export function EmployeeReportDashboard() {
                                   Total ({summary.operations.length} Operations)
                                 </td>
                                 <td className="text-center">
-                                  {summary.totalCoupons.toLocaleString()}
+                                  {summary.totalQty.toLocaleString()}
                                 </td>
                                 <td className="text-right">
                                   Rs. {formatAmount(summary.totalAmount)}
@@ -3585,7 +3569,7 @@ export function EmployeeReportDashboard() {
                                 {DIMENSION_META[searchDimension].columnLabel}
                               </th>
                               <th>SECTION</th>
-                              <th className="text-center w-20">COUPONS</th>
+                              <th className="text-center w-20">QTY</th>
                               <th className="text-right w-28">
                                 TOTAL AMOUNT (RS.)
                               </th>
@@ -3610,7 +3594,7 @@ export function EmployeeReportDashboard() {
                                         {row.label}
                                       </td>
                                       <td className="text-center font-bold">
-                                        {row.couponCount.toLocaleString()}
+                                        {row.totalQty.toLocaleString()}
                                       </td>
                                       <td className="text-right font-bold">
                                         Rs. {formatAmount(row.totalAmount)}
@@ -3629,7 +3613,7 @@ export function EmployeeReportDashboard() {
                                       :
                                     </td>
                                     <td className="text-center font-bold">
-                                      {g.totalCoupons.toLocaleString()}
+                                      {g.totalQty.toLocaleString()}
                                     </td>
                                     <td className="text-right font-bold">
                                       Rs. {formatAmount(g.totalAmount)}
@@ -3646,7 +3630,7 @@ export function EmployeeReportDashboard() {
                                   Grand Total :
                                 </td>
                                 <td className="text-center">
-                                  {sectionRowGrandTotals.coupons.toLocaleString()}
+                                  {sectionRowGrandTotals.qty.toLocaleString()}
                                 </td>
                                 <td className="text-right font-mono">
                                   Rs.{" "}
@@ -3663,7 +3647,7 @@ export function EmployeeReportDashboard() {
                               <th>SECTION</th>
                               <th>WORK ORDER</th>
                               <th className="text-center w-20">OPERATIONS</th>
-                              <th className="text-center w-20">COUPONS</th>
+                              <th className="text-center w-20">QTY</th>
                               <th className="text-right w-28">
                                 TOTAL AMOUNT (RS.)
                               </th>
@@ -3692,7 +3676,7 @@ export function EmployeeReportDashboard() {
                                       {item.operationsCount}
                                     </td>
                                     <td className="text-center font-bold">
-                                      {item.couponCount.toLocaleString()}
+                                      {item.totalQty.toLocaleString()}
                                     </td>
                                     <td className="text-right font-bold">
                                       Rs. {formatAmount(item.totalAmount)}
@@ -3707,7 +3691,7 @@ export function EmployeeReportDashboard() {
                               <tr className="print-totals-row font-bold">
                                 <td colSpan={3}>Grand Total :</td>
                                 <td className="text-center">
-                                  {summary.totalCoupons.toLocaleString()}
+                                  {summary.totalQty.toLocaleString()}
                                 </td>
                                 <td className="text-right font-mono">
                                   Rs. {formatAmount(summary.totalAmount)}
