@@ -275,6 +275,8 @@ export interface DimensionRow {
   label: string;
   couponCount: number;
   totalQty: number;
+  // totalQty minus coupons whose piece rate is 0 — what group totals add up
+  countedQty: number;
   totalAmount: number;
   // Operation rows only — piece rate and SAM (Standard Allowed Minute), the
   // operation's own per-unit values (same source fields as
@@ -340,6 +342,7 @@ export function groupRowsByDimension(
           label: rowDimensionLabel(c, rowDimension),
           couponCount: 1,
           totalQty: qty,
+          countedQty: rate === 0 ? 0 : qty,
           totalAmount: amount,
           rate: rowDimension === "operation" ? rate : null,
           sam: rowDimension === "operation" ? sam : null,
@@ -347,6 +350,7 @@ export function groupRowsByDimension(
       } else {
         existing.couponCount += 1;
         existing.totalQty += qty;
+        if (rate !== 0) existing.countedQty += qty;
         existing.totalAmount += amount;
         if (rowDimension === "operation") {
           if (existing.rate == null && rate != null) existing.rate = rate;
@@ -359,7 +363,7 @@ export function groupRowsByDimension(
       (a, b) => b.totalAmount - a.totalAmount,
     );
     const totalCoupons = rows.reduce((acc, r) => acc + r.couponCount, 0);
-    const totalQty = rows.reduce((acc, r) => acc + r.totalQty, 0);
+    const totalQty = rows.reduce((acc, r) => acc + r.countedQty, 0);
     const totalAmount = rows.reduce((acc, r) => acc + r.totalAmount, 0);
 
     return {

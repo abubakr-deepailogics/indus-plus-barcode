@@ -958,6 +958,24 @@ export function EmployeeReportDashboard() {
             Number(row.totalAmount.toFixed(2)),
           ]);
         }
+        rows.push([
+          `${DIMENSION_META[operationGroupDimension].totalLabel} :`,
+          "",
+          Number(sumField(g.rows, (r) => r.rate).toFixed(2)),
+          Number(sumField(g.rows, (r) => r.sam).toFixed(2)),
+          g.totalQty,
+          Number(g.totalAmount.toFixed(2)),
+        ]);
+      }
+      if (operationRowGroups.length > 0) {
+        rows.push([
+          "Grand Total :",
+          "",
+          Number(operationRowGrandTotals.rate.toFixed(2)),
+          Number(operationRowGrandTotals.sam.toFixed(2)),
+          operationRowGrandTotals.qty,
+          Number(operationRowGrandTotals.amount.toFixed(2)),
+        ]);
       }
     } else if (effectiveTab === "operations") {
       headers = [
@@ -976,6 +994,16 @@ export function EmployeeReportDashboard() {
         op.totalQty,
         Number(op.totalAmount.toFixed(2)),
       ]);
+      if (summary.operations.length > 0) {
+        rows.push([
+          `Total (${summary.operations.length} Operations)`,
+          "",
+          Number(sumField(summary.operations, (op) => op.rate).toFixed(2)),
+          Number(sumField(summary.operations, (op) => op.smv).toFixed(2)),
+          sumField(summary.operations, (op) => (op.rate === 0 ? 0 : op.totalQty)),
+          Number(summary.totalAmount.toFixed(2)),
+        ]);
+      }
     } else if (effectiveTab === "sections" && searchDimension !== "section") {
       const groupHeader = DIMENSION_META[searchDimension].columnLabel;
       headers = [groupHeader, "Section", "Qty", "Total Amount"];
@@ -2169,7 +2197,7 @@ export function EmployeeReportDashboard() {
                             {formatAmount(sumField(summary.operations, (op) => op.smv))}
                           </td>
                           <td className="py-2.5 px-3 text-center text-slate-900">
-                            {sumField(summary.operations, (op) => op.totalQty).toLocaleString()}
+                            {sumField(summary.operations, (op) => (op.rate === 0 ? 0 : op.totalQty)).toLocaleString()}
                           </td>
                           <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                             Rs. {formatAmount(summary.totalAmount)}
@@ -3674,7 +3702,7 @@ export function EmployeeReportDashboard() {
                                   {formatAmount(sumField(summary.operations, (op) => op.smv))}
                                 </td>
                                 <td className="text-center">
-                                  {sumField(summary.operations, (op) => op.totalQty).toLocaleString()}
+                                  {sumField(summary.operations, (op) => (op.rate === 0 ? 0 : op.totalQty)).toLocaleString()}
                                 </td>
                                 <td className="text-right">
                                   Rs. {formatAmount(summary.totalAmount)}
