@@ -685,6 +685,25 @@ export function EmployeeReportDashboard() {
     ],
   );
 
+  // Operations tab (Operation mode) rows: each operation's Qty is the sum of
+  // its coupons' quantities, leaving out coupons whose piece rate is 0 — same
+  // rule as the grouped tabs, derived here from the coupon list so every
+  // total on this tab agrees with them.
+  const flatOperations = useMemo(() => {
+    const ops = summary?.operations ?? [];
+    if (!couponsList || couponsList.length === 0) return ops;
+    const qtyByOp = new Map<string, number>();
+    for (const c of couponsList) {
+      if (c.rate === 0) continue;
+      const key = c.operationCode || c.operationName || "—";
+      qtyByOp.set(key, (qtyByOp.get(key) ?? 0) + (c.qty || 0));
+    }
+    return ops.map((op) => ({
+      ...op,
+      totalQty: qtyByOp.get(op.operationCode) ?? 0,
+    }));
+  }, [summary, couponsList]);
+
   const sectionGroupedData = useMemo(
     () => groupSectionData(summary?.sections, summary?.operations),
     [summary],
@@ -986,7 +1005,7 @@ export function EmployeeReportDashboard() {
         "Qty",
         "Total Amount",
       ];
-      rows = summary.operations.map((op) => [
+      rows = flatOperations.map((op) => [
         op.operationName || op.operationCode,
         op.section,
         op.rate != null ? Number(op.rate.toFixed(2)) : "",
@@ -994,13 +1013,13 @@ export function EmployeeReportDashboard() {
         op.totalQty,
         Number(op.totalAmount.toFixed(2)),
       ]);
-      if (summary.operations.length > 0) {
+      if (flatOperations.length > 0) {
         rows.push([
-          `Total (${summary.operations.length} Operations)`,
+          `Total (${flatOperations.length} Operations)`,
           "",
-          Number(sumField(summary.operations, (op) => op.rate).toFixed(2)),
-          Number(sumField(summary.operations, (op) => op.smv).toFixed(2)),
-          sumField(summary.operations, (op) => (op.rate === 0 ? 0 : op.totalQty)),
+          Number(sumField(flatOperations, (op) => op.rate).toFixed(2)),
+          Number(sumField(flatOperations, (op) => op.smv).toFixed(2)),
+          sumField(flatOperations, (op) => (op.rate === 0 ? 0 : op.totalQty)),
           Number(summary.totalAmount.toFixed(2)),
         ]);
       }
@@ -2143,7 +2162,7 @@ export function EmployeeReportDashboard() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {summary.operations.length === 0 ? (
+                      {flatOperations.length === 0 ? (
                         <tr>
                           <td
                             colSpan={6}
@@ -2153,7 +2172,7 @@ export function EmployeeReportDashboard() {
                           </td>
                         </tr>
                       ) : (
-                        summary.operations.map((op, idx) => (
+                        flatOperations.map((op, idx) => (
                           <tr
                             key={idx}
                             className="hover:bg-slate-50/70 transition-colors"
@@ -2184,20 +2203,20 @@ export function EmployeeReportDashboard() {
                         ))
                       )}
                     </tbody>
-                    {summary.operations.length > 0 && (
+                    {flatOperations.length > 0 && (
                       <tfoot>
                         <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
                           <td className="py-2.5 px-3" colSpan={2}>
-                            Total ({summary.operations.length} Operations)
+                            Total ({flatOperations.length} Operations)
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono text-slate-700">
-                            {formatAmount(sumField(summary.operations, (op) => op.rate))}
+                            {formatAmount(sumField(flatOperations, (op) => op.rate))}
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono text-slate-700">
-                            {formatAmount(sumField(summary.operations, (op) => op.smv))}
+                            {formatAmount(sumField(flatOperations, (op) => op.smv))}
                           </td>
                           <td className="py-2.5 px-3 text-center text-slate-900">
-                            {sumField(summary.operations, (op) => (op.rate === 0 ? 0 : op.totalQty)).toLocaleString()}
+                            {sumField(flatOperations, (op) => (op.rate === 0 ? 0 : op.totalQty)).toLocaleString()}
                           </td>
                           <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                             Rs. {formatAmount(summary.totalAmount)}
@@ -3658,14 +3677,14 @@ export function EmployeeReportDashboard() {
                             </tr>
                           </thead>
                           <tbody>
-                            {summary.operations.length === 0 ? (
+                            {flatOperations.length === 0 ? (
                               <tr>
                                 <td colSpan={6} className="text-center">
                                   No operations recorded for this period.
                                 </td>
                               </tr>
                             ) : (
-                              summary.operations.map((op, idx) => (
+                              flatOperations.map((op, idx) => (
                                 <tr key={idx}>
                                   <td className="font-semibold">
                                     {op.operationName || op.operationCode}
@@ -3689,20 +3708,20 @@ export function EmployeeReportDashboard() {
                               ))
                             )}
                           </tbody>
-                          {summary.operations.length > 0 && (
+                          {flatOperations.length > 0 && (
                             <tfoot>
                               <tr className="print-totals-row font-bold">
                                 <td colSpan={2}>
-                                  Total ({summary.operations.length} Operations)
+                                  Total ({flatOperations.length} Operations)
                                 </td>
                                 <td className="text-right font-mono">
-                                  {formatAmount(sumField(summary.operations, (op) => op.rate))}
+                                  {formatAmount(sumField(flatOperations, (op) => op.rate))}
                                 </td>
                                 <td className="text-right font-mono">
-                                  {formatAmount(sumField(summary.operations, (op) => op.smv))}
+                                  {formatAmount(sumField(flatOperations, (op) => op.smv))}
                                 </td>
                                 <td className="text-center">
-                                  {sumField(summary.operations, (op) => (op.rate === 0 ? 0 : op.totalQty)).toLocaleString()}
+                                  {sumField(flatOperations, (op) => (op.rate === 0 ? 0 : op.totalQty)).toLocaleString()}
                                 </td>
                                 <td className="text-right">
                                   Rs. {formatAmount(summary.totalAmount)}
