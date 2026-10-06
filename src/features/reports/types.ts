@@ -73,7 +73,7 @@ export interface WorkOrderReportItem {
   totalAmount: number;
   operationsCount: number;
   pieceRate: number | null; // sum of Sewing piece-rate across all this WO's operations, from the live style bulletin — same source as finance-report.service.ts's totalRate
-  plan: number | null; // pieceRate * totalQty (the displayed Total Qty); null when no piece rate
+  plan: number | null; // pieceRate * bundleQty (the displayed Total Qty column); null when either is missing
 }
 
 export interface SectionReportItem {
