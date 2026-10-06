@@ -554,7 +554,7 @@ export async function buildReportSummary(
         totalAmount: val || 0,
         operationsCount: 0,
         pieceRate: null, // resolved from operationRates in the final projection below
-        plan: null, // resolved from pieceRate * orderQty in the final projection below
+        plan: null, // resolved from pieceRate * totalQty in the final projection below
         operations: new Set([opCode]),
         operationRates: new Map(rate != null ? [[opCode, rate]] : []),
       });
@@ -696,8 +696,7 @@ export async function buildReportSummary(
         totalAmount: w.totalAmount,
         operationsCount: w.operations.size,
         pieceRate,
-        plan:
-          pieceRate != null && orderQty != null ? pieceRate * orderQty : null,
+        plan: pieceRate != null ? pieceRate * Math.round(w.totalQty) : null,
       };
     })
     .sort((a, b) => b.totalAmount - a.totalAmount);
