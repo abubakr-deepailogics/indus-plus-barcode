@@ -233,6 +233,11 @@ function groupSectionData(
   return groups.sort((a, b) => b.totalAmount - a.totalAmount);
 }
 
+// Sum of a nullable per-row numeric field (rate / sam) — null rows count as 0.
+function sumField<T>(rows: T[], pick: (r: T) => number | null): number {
+  return rows.reduce((acc, r) => acc + (pick(r) ?? 0), 0);
+}
+
 function formatAmount(value: number): string {
   return value.toLocaleString("en-US", {
     minimumFractionDigits: 2,
@@ -677,6 +682,14 @@ export function EmployeeReportDashboard() {
   );
   const operationRowGrandTotals = useMemo(
     () => ({
+      rate: operationRowGroups.reduce(
+        (acc, g) => acc + sumField(g.rows, (r) => r.rate),
+        0,
+      ),
+      sam: operationRowGroups.reduce(
+        (acc, g) => acc + sumField(g.rows, (r) => r.sam),
+        0,
+      ),
       coupons: operationRowGroups.reduce((acc, g) => acc + g.totalCoupons, 0),
       amount: operationRowGroups.reduce((acc, g) => acc + g.totalAmount, 0),
     }),
@@ -2004,10 +2017,16 @@ export function EmployeeReportDashboard() {
                                 blank: per user request, this column isn't summed. */}
                               <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
                                 <td
-                                  colSpan={4}
+                                  colSpan={2}
                                   className="py-2 px-3 text-right border-r border-slate-200"
                                 >
                                   {DIMENSION_META[searchDimension].totalLabel} :
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
+                                  {formatAmount(sumField(g.rows, (r) => r.rate))}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
+                                  {formatAmount(sumField(g.rows, (r) => r.sam))}
                                 </td>
                                 <td className="py-2 px-3 text-center border-r border-slate-200">
                                   {g.totalCoupons.toLocaleString()}
@@ -2025,10 +2044,16 @@ export function EmployeeReportDashboard() {
                         <tfoot>
                           <tr className="bg-slate-100 border-t-2 border-slate-400 font-black text-xs text-slate-900">
                             <td
-                              colSpan={4}
+                              colSpan={2}
                               className="py-2.5 px-3 text-right border-r border-slate-300"
                             >
                               Grand Total :
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300">
+                              {formatAmount(operationRowGrandTotals.rate)}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300">
+                              {formatAmount(operationRowGrandTotals.sam)}
                             </td>
                             <td className="py-2.5 px-3 text-center border-r border-slate-300">
                               {operationRowGrandTotals.coupons.toLocaleString()}
@@ -3423,7 +3448,7 @@ export function EmployeeReportDashboard() {
                                   ))}
                                   <tr className="print-totals-row">
                                     <td
-                                      colSpan={4}
+                                      colSpan={2}
                                       className="text-right font-bold"
                                     >
                                       {
@@ -3431,6 +3456,16 @@ export function EmployeeReportDashboard() {
                                           .totalLabel
                                       }{" "}
                                       :
+                                    </td>
+                                    <td className="text-right font-mono font-bold">
+                                      {formatAmount(
+                                        sumField(g.rows, (r) => r.rate),
+                                      )}
+                                    </td>
+                                    <td className="text-right font-mono font-bold">
+                                      {formatAmount(
+                                        sumField(g.rows, (r) => r.sam),
+                                      )}
                                     </td>
                                     <td className="text-center font-bold">
                                       {g.totalCoupons.toLocaleString()}
@@ -3447,8 +3482,14 @@ export function EmployeeReportDashboard() {
                           {operationRowGroups.length > 0 && (
                             <tfoot>
                               <tr className="print-totals-row font-bold">
-                                <td colSpan={4} className="text-right">
+                                <td colSpan={2} className="text-right">
                                   Grand Total :
+                                </td>
+                                <td className="text-right font-mono">
+                                  {formatAmount(operationRowGrandTotals.rate)}
+                                </td>
+                                <td className="text-right font-mono">
+                                  {formatAmount(operationRowGrandTotals.sam)}
                                 </td>
                                 <td className="text-center">
                                   {operationRowGrandTotals.coupons.toLocaleString()}
