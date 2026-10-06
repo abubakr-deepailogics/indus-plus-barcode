@@ -57,6 +57,7 @@ export function groupEmployeeData(
             date: "—",
             operation: "—",
             rate: null as number | null,
+            sam: null as number | null,
             bundleCount: emp.couponCount || 0,
             qty: emp.totalQty || 0,
             totalPay: emp.totalAmount || 0,
@@ -81,7 +82,8 @@ export function groupEmployeeData(
         c.bundleNo,
       );
       const rate = c.rate != null ? Number(c.rate) : null;
-      const key = `${wo}__${dateStr}__${op}__${rate}`;
+      const sam = c.smv != null ? Number(c.smv) : null;
+      const key = `${wo}__${dateStr}__${op}__${rate}__${sam}`;
 
       const existing = groupMap.get(key);
       const qty = c.qty || 0;
@@ -94,6 +96,7 @@ export function groupEmployeeData(
           date: dateStr,
           operation: op,
           rate,
+          sam,
           bundleCount: 1,
           qty,
           totalPay: pay,
@@ -102,6 +105,7 @@ export function groupEmployeeData(
         existing.bundleCount += 1;
         existing.qty += qty;
         existing.totalPay += pay;
+        if (existing.sam == null && sam != null) existing.sam = sam;
       }
     }
 
@@ -139,6 +143,7 @@ export interface DimensionGroupedItem {
   date: string;
   operation: string;
   rate: number | null;
+  sam: number | null;
   bundleCount: number;
   qty: number;
   totalPay: number;
@@ -206,7 +211,8 @@ export function groupByDimension(
         c.bundleNo,
       );
       const rate = c.rate != null ? Number(c.rate) : null;
-      const mapKey = `${empCode}__${wo}__${dateStr}__${op}__${rate}`;
+      const sam = c.smv != null ? Number(c.smv) : null;
+      const mapKey = `${empCode}__${wo}__${dateStr}__${op}__${rate}__${sam}`;
 
       const existing = groupMap.get(mapKey);
       const qty = c.qty || 0;
@@ -221,6 +227,7 @@ export function groupByDimension(
           date: dateStr,
           operation: op,
           rate,
+          sam,
           bundleCount: 1,
           qty,
           totalPay: pay,
@@ -229,6 +236,7 @@ export function groupByDimension(
         existing.bundleCount += 1;
         existing.qty += qty;
         existing.totalPay += pay;
+        if (existing.sam == null && sam != null) existing.sam = sam;
       }
     }
 

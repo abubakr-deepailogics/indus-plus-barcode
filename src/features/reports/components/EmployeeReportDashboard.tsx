@@ -781,6 +781,26 @@ export function EmployeeReportDashboard() {
         : employeeGroupedData.reduce((acc, eg) => acc + eg.totalPay, 0),
     [employeeGroupDimension, dimensionGroupedData, employeeGroupedData],
   );
+  const grandEmployeeRate = useMemo(
+    () =>
+      sumField(
+        employeeGroupDimension
+          ? dimensionGroupedData.flatMap((group) => group.items)
+          : employeeGroupedData.flatMap((group) => group.items),
+        (item) => item.rate,
+      ),
+    [employeeGroupDimension, dimensionGroupedData, employeeGroupedData],
+  );
+  const grandEmployeeSam = useMemo(
+    () =>
+      sumField(
+        employeeGroupDimension
+          ? dimensionGroupedData.flatMap((group) => group.items)
+          : employeeGroupedData.flatMap((group) => group.items),
+        (item) => item.sam,
+      ),
+    [employeeGroupDimension, dimensionGroupedData, employeeGroupedData],
+  );
 
   const card2 = summary ? getCard2Config(summary) : null;
 
@@ -834,7 +854,8 @@ export function EmployeeReportDashboard() {
         ...(employeeGroupDimension === "workOrder" ? [] : ["W/O"]),
         "Date",
         "Operation",
-        "Rate",
+        "Piece Rate",
+        "SAM",
         "Bundle",
         "Quantity",
         "Total Pay",
@@ -851,6 +872,7 @@ export function EmployeeReportDashboard() {
             item.date,
             item.operation,
             item.rate != null ? Number(item.rate.toFixed(2)) : "",
+            item.sam != null ? Number(item.sam.toFixed(2)) : "",
             item.bundleCount,
             item.qty,
             Number(item.totalPay.toFixed(2)),
@@ -865,7 +887,8 @@ export function EmployeeReportDashboard() {
         "W/O",
         "Date",
         "Operation",
-        "Rate",
+        "Piece Rate",
+        "SAM",
         "Bundle",
         "Quantity",
         "Total Pay",
@@ -881,6 +904,7 @@ export function EmployeeReportDashboard() {
             item.date,
             item.operation,
             item.rate != null ? Number(item.rate.toFixed(2)) : "",
+            item.sam != null ? Number(item.sam.toFixed(2)) : "",
             item.bundleCount,
             item.qty,
             Number(item.totalPay.toFixed(2)),
@@ -974,7 +998,8 @@ export function EmployeeReportDashboard() {
         "Qty (Pcs)",
         "Operation",
         ...(showEmployeeColumn ? ["Employee"] : []),
-        "Rate",
+        "Piece Rate",
+        "SAM",
         "Value",
         "Scanned At",
       ];
@@ -989,6 +1014,7 @@ export function EmployeeReportDashboard() {
           ? [formatEmployeeLabel(c.employeeCode, c.employeeName)]
           : []),
         c.rate,
+        c.smv,
         c.value,
         c.scannedAt
           ? format(new Date(c.scannedAt), "dd MMM yyyy, hh:mm a")
@@ -2340,7 +2366,10 @@ export function EmployeeReportDashboard() {
                           Operation
                         </th>
                         <th className="py-2.5 px-3 text-right border-r border-slate-200">
-                          Rate
+                          Piece Rate
+                        </th>
+                        <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                          SAM
                         </th>
                         <th className="py-2.5 px-3 text-center border-r border-slate-200">
                           Bundle
@@ -2361,7 +2390,7 @@ export function EmployeeReportDashboard() {
                         <tr>
                           <td
                             colSpan={
-                              employeeGroupDimension === "workOrder" ? 10 : 11
+                              employeeGroupDimension === "workOrder" ? 11 : 12
                             }
                             className="py-8 text-center text-slate-400 font-medium"
                           >
@@ -2409,6 +2438,9 @@ export function EmployeeReportDashboard() {
                                     ? item.rate.toFixed(2).replace(/\.00$/, "")
                                     : "—"}
                                 </td>
+                                <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
+                                  {item.sam != null ? item.sam.toFixed(2) : "—"}
+                                </td>
                                 <td className="py-2 px-3 text-center font-semibold text-slate-700 text-[11px] border-r border-slate-200">
                                   {item.bundleCount}
                                 </td>
@@ -2427,7 +2459,7 @@ export function EmployeeReportDashboard() {
                             <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
                               <td
                                 colSpan={
-                                  employeeGroupDimension === "workOrder" ? 6 : 7
+                                  employeeGroupDimension === "workOrder" ? 5 : 6
                                 }
                                 className="py-2 px-3 text-right border-r border-slate-200"
                               >
@@ -2436,6 +2468,12 @@ export function EmployeeReportDashboard() {
                                     .totalLabel
                                 }{" "}
                                 :
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
+                                {formatAmount(sumField(g.items, (item) => item.rate))}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
+                                {formatAmount(sumField(g.items, (item) => item.sam))}
                               </td>
                               <td className="py-2 px-3 text-center border-r border-slate-200">
                                 {g.totalBundles.toLocaleString()}
@@ -2457,11 +2495,17 @@ export function EmployeeReportDashboard() {
                         <tr className="bg-slate-100 border-t-2 border-slate-400 font-black text-xs text-slate-900">
                           <td
                             colSpan={
-                              employeeGroupDimension === "workOrder" ? 6 : 7
+                              employeeGroupDimension === "workOrder" ? 5 : 6
                             }
                             className="py-2.5 px-3 text-right border-r border-slate-300"
                           >
                             Grand Total :
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300">
+                            {formatAmount(grandEmployeeRate)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300">
+                            {formatAmount(grandEmployeeSam)}
                           </td>
                           <td className="py-2.5 px-3 text-center border-r border-slate-300">
                             {grandTotalBundles.toLocaleString()}
@@ -2505,7 +2549,10 @@ export function EmployeeReportDashboard() {
                           Operation
                         </th>
                         <th className="py-2.5 px-3 text-right border-r border-slate-200">
-                          Rate
+                          Piece Rate
+                        </th>
+                        <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                          SAM
                         </th>
                         <th className="py-2.5 px-3 text-center border-r border-slate-200">
                           Bundle
@@ -2525,7 +2572,7 @@ export function EmployeeReportDashboard() {
                       {employeeGroupedData.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={10}
+                            colSpan={11}
                             className="py-8 text-center text-slate-400 font-medium"
                           >
                             No employees recorded for this period.
@@ -2559,6 +2606,9 @@ export function EmployeeReportDashboard() {
                                     ? item.rate.toFixed(2).replace(/\.00$/, "")
                                     : "—"}
                                 </td>
+                                <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
+                                  {item.sam != null ? item.sam.toFixed(2) : "—"}
+                                </td>
                                 <td className="py-2 px-3 text-center font-semibold text-slate-700 text-[11px] border-r border-slate-200">
                                   {item.bundleCount}
                                 </td>
@@ -2576,10 +2626,16 @@ export function EmployeeReportDashboard() {
                             {/* Employee wise Total row */}
                             <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
                               <td
-                                colSpan={6}
+                                colSpan={5}
                                 className="py-2 px-3 text-right border-r border-slate-200"
                               >
                                 Employee wise Total :
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
+                                {formatAmount(sumField(eg.items, (item) => item.rate))}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
+                                {formatAmount(sumField(eg.items, (item) => item.sam))}
                               </td>
                               <td className="py-2 px-3 text-center border-r border-slate-200">
                                 {eg.totalBundles.toLocaleString()}
@@ -2600,10 +2656,16 @@ export function EmployeeReportDashboard() {
                       <tfoot>
                         <tr className="bg-slate-100 border-t-2 border-slate-400 font-black text-xs text-slate-900">
                           <td
-                            colSpan={6}
+                            colSpan={5}
                             className="py-2.5 px-3 text-right border-r border-slate-300"
                           >
                             Grand Total :
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300">
+                            {formatAmount(grandEmployeeRate)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300">
+                            {formatAmount(grandEmployeeSam)}
                           </td>
                           <td className="py-2.5 px-3 text-center border-r border-slate-300">
                             {grandTotalBundles.toLocaleString()}
@@ -2639,7 +2701,8 @@ export function EmployeeReportDashboard() {
                         {showEmployeeColumn && (
                           <th className="py-2.5 px-3">Employee</th>
                         )}
-                        <th className="py-2.5 px-3 text-right">Rate</th>
+                        <th className="py-2.5 px-3 text-right">Piece Rate</th>
+                        <th className="py-2.5 px-3 text-right">SAM</th>
                         <th className="py-2.5 px-3 text-right">Value</th>
                         <th className="py-2.5 px-3 text-right">Scanned At</th>
                       </tr>
@@ -2648,7 +2711,7 @@ export function EmployeeReportDashboard() {
                       {paginatedCoupons.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={showEmployeeColumn ? 10 : 9}
+                            colSpan={showEmployeeColumn ? 11 : 10}
                             className="py-8 text-center text-slate-400 font-medium"
                           >
                             No matching coupons found.
@@ -2698,6 +2761,9 @@ export function EmployeeReportDashboard() {
                                 ? `Rs. ${c.rate.toFixed(2)}`
                                 : "—"}
                             </td>
+                            <td className="py-2 px-3 text-right font-mono text-slate-600">
+                              {c.smv != null ? c.smv.toFixed(2) : "—"}
+                            </td>
                             <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono">
                               {c.value != null
                                 ? `Rs. ${c.value.toFixed(2)}`
@@ -2715,6 +2781,31 @@ export function EmployeeReportDashboard() {
                         ))
                       )}
                     </tbody>
+                    {filteredCoupons.length > 0 && (
+                      <tfoot>
+                        <tr className="bg-slate-50/80 border-t-2 border-slate-200 font-bold text-slate-800 text-xs">
+                          <td className="py-2.5 px-3 text-right" colSpan={4}>
+                            Total ({filteredCoupons.length} Coupons)
+                          </td>
+                          <td className="py-2.5 px-3 text-center">
+                            {filteredCoupons
+                              .reduce((sum, coupon) => sum + (coupon.qty ?? 0), 0)
+                              .toLocaleString()}
+                          </td>
+                          <td colSpan={showEmployeeColumn ? 2 : 1} />
+                          <td className="py-2.5 px-3 text-right font-mono">
+                            {formatAmount(sumField(filteredCoupons, (coupon) => coupon.rate ?? null))}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono">
+                            {formatAmount(sumField(filteredCoupons, (coupon) => coupon.smv ?? null))}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-emerald-700">
+                            Rs. {formatAmount(sumField(filteredCoupons, (coupon) => coupon.value ?? null))}
+                          </td>
+                          <td />
+                        </tr>
+                      </tfoot>
+                    )}
                   </table>
                 </div>
 
@@ -3104,7 +3195,8 @@ export function EmployeeReportDashboard() {
                       <th className="text-center">QTY (PCS)</th>
                       <th>OPERATION</th>
                       {showEmployeeColumn && <th>EMPLOYEE</th>}
-                      <th className="text-right">RATE (RS.)</th>
+                      <th className="text-right">PIECE RATE (RS.)</th>
+                      <th className="text-right">SAM</th>
                       <th className="text-right">VALUE (RS.)</th>
                       <th className="text-right">SCANNED AT</th>
                     </tr>
@@ -3113,7 +3205,7 @@ export function EmployeeReportDashboard() {
                     {filteredCoupons.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={showEmployeeColumn ? 11 : 10}
+                          colSpan={showEmployeeColumn ? 12 : 11}
                           className="text-center"
                         >
                           No matching coupons found.
@@ -3149,6 +3241,9 @@ export function EmployeeReportDashboard() {
                           <td className="text-right">
                             {c.rate != null ? `Rs. ${c.rate.toFixed(2)}` : "—"}
                           </td>
+                          <td className="text-right">
+                            {c.smv != null ? c.smv.toFixed(2) : "—"}
+                          </td>
                           <td className="text-right font-bold">
                             {c.value != null
                               ? `Rs. ${c.value.toFixed(2)}`
@@ -3177,7 +3272,13 @@ export function EmployeeReportDashboard() {
                             .reduce((sum, c) => sum + (c.qty ?? 0), 0)
                             .toLocaleString()}
                         </td>
-                        <td colSpan={showEmployeeColumn ? 3 : 2}></td>
+                        <td colSpan={showEmployeeColumn ? 2 : 1}></td>
+                        <td className="text-right font-mono">
+                          {formatAmount(sumField(filteredCoupons, (coupon) => coupon.rate ?? null))}
+                        </td>
+                        <td className="text-right font-mono">
+                          {formatAmount(sumField(filteredCoupons, (coupon) => coupon.smv ?? null))}
+                        </td>
                         <td className="text-right font-mono">
                           Rs.{" "}
                           {formatAmount(
@@ -3728,7 +3829,8 @@ export function EmployeeReportDashboard() {
                             )}
                             <th className="text-center">DATE</th>
                             <th>OPERATION</th>
-                            <th className="text-right">RATE</th>
+                            <th className="text-right">PIECE RATE</th>
+                            <th className="text-right">SAM</th>
                             <th className="text-center">BUNDLE</th>
                             <th className="text-center">QUANTITY</th>
                             <th className="text-right">TOTAL PAY</th>
@@ -3741,8 +3843,8 @@ export function EmployeeReportDashboard() {
                               <td
                                 colSpan={
                                   employeeGroupDimension !== "workOrder"
-                                    ? 11
-                                    : 10
+                                    ? 12
+                                    : 11
                                 }
                                 className="text-center"
                               >
@@ -3779,6 +3881,9 @@ export function EmployeeReportDashboard() {
                                             .replace(/\.00$/, "")
                                         : "—"}
                                     </td>
+                                    <td className="text-right font-mono">
+                                      {item.sam != null ? item.sam.toFixed(2) : "—"}
+                                    </td>
                                     <td className="text-center">
                                       {item.bundleCount}
                                     </td>
@@ -3795,8 +3900,8 @@ export function EmployeeReportDashboard() {
                                   <td
                                     colSpan={
                                       employeeGroupDimension !== "workOrder"
-                                        ? 7
-                                        : 6
+                                        ? 6
+                                        : 5
                                     }
                                     className="text-right font-bold"
                                   >
@@ -3805,6 +3910,12 @@ export function EmployeeReportDashboard() {
                                         .totalLabel
                                     }{" "}
                                     :
+                                  </td>
+                                  <td className="text-right font-mono font-bold">
+                                    {formatAmount(sumField(group.items, (item) => item.rate))}
+                                  </td>
+                                  <td className="text-right font-mono font-bold">
+                                    {formatAmount(sumField(group.items, (item) => item.sam))}
                                   </td>
                                   <td className="text-center font-bold">
                                     {group.totalBundles.toLocaleString()}
@@ -3826,11 +3937,17 @@ export function EmployeeReportDashboard() {
                             <tr className="print-totals-row font-bold">
                               <td
                                 colSpan={
-                                  employeeGroupDimension !== "workOrder" ? 7 : 6
+                                  employeeGroupDimension !== "workOrder" ? 6 : 5
                                 }
                                 className="text-right"
                               >
                                 Grand Total :
+                              </td>
+                              <td className="text-right font-mono">
+                                {formatAmount(grandEmployeeRate)}
+                              </td>
+                              <td className="text-right font-mono">
+                                {formatAmount(grandEmployeeSam)}
                               </td>
                               <td className="text-center">
                                 {grandTotalBundles.toLocaleString()}
@@ -3855,7 +3972,8 @@ export function EmployeeReportDashboard() {
                             <th>W/O</th>
                             <th className="text-center">DATE</th>
                             <th>OPERATION</th>
-                            <th className="text-right">RATE</th>
+                            <th className="text-right">PIECE RATE</th>
+                            <th className="text-right">SAM</th>
                             <th className="text-center">BUNDLE</th>
                             <th className="text-center">QUANTITY</th>
                             <th className="text-right">TOTAL PAY</th>
@@ -3865,7 +3983,7 @@ export function EmployeeReportDashboard() {
                         <tbody>
                           {employeeGroupedData.length === 0 ? (
                             <tr>
-                              <td colSpan={10} className="text-center">
+                              <td colSpan={11} className="text-center">
                                 No employees recorded for this period.
                               </td>
                             </tr>
@@ -3894,6 +4012,9 @@ export function EmployeeReportDashboard() {
                                             .replace(/\.00$/, "")
                                         : "—"}
                                     </td>
+                                    <td className="text-right font-mono">
+                                      {item.sam != null ? item.sam.toFixed(2) : "—"}
+                                    </td>
                                     <td className="text-center">
                                       {item.bundleCount}
                                     </td>
@@ -3908,10 +4029,16 @@ export function EmployeeReportDashboard() {
                                 ))}
                                 <tr className="print-totals-row">
                                   <td
-                                    colSpan={6}
+                                    colSpan={5}
                                     className="text-right font-bold"
                                   >
                                     Employee wise Total :
+                                  </td>
+                                  <td className="text-right font-mono font-bold">
+                                    {formatAmount(sumField(eg.items, (item) => item.rate))}
+                                  </td>
+                                  <td className="text-right font-mono font-bold">
+                                    {formatAmount(sumField(eg.items, (item) => item.sam))}
                                   </td>
                                   <td className="text-center font-bold">
                                     {eg.totalBundles.toLocaleString()}
@@ -3931,8 +4058,14 @@ export function EmployeeReportDashboard() {
                         {employeeGroupedData.length > 0 && (
                           <tfoot>
                             <tr className="print-totals-row font-bold">
-                              <td colSpan={6} className="text-right">
+                              <td colSpan={5} className="text-right">
                                 Grand Total :
+                              </td>
+                              <td className="text-right font-mono">
+                                {formatAmount(grandEmployeeRate)}
+                              </td>
+                              <td className="text-right font-mono">
+                                {formatAmount(grandEmployeeSam)}
                               </td>
                               <td className="text-center">
                                 {grandTotalBundles.toLocaleString()}

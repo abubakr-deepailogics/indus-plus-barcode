@@ -9,6 +9,7 @@ export interface EmployeeGroupedItem {
   date: string;
   operation: string;
   rate: number | null;
+  sam: number | null;
   bundleCount: number;
   qty: number;
   totalPay: number;
