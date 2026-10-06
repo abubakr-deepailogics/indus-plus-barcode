@@ -649,6 +649,22 @@ export function EmployeeReportDashboard() {
     [searchDimension, searchGroups, couponsList],
   );
 
+  // A Section can cover multiple work orders. In its Operations tab, keep
+  // those orders separate (the same layout used by the Work Order report)
+  // rather than merging equal operation codes across orders.
+  const operationGroupDimension: SearchDimension =
+    searchDimension === "section" ? "workOrder" : searchDimension;
+  const operationSearchGroups = useMemo(
+    () =>
+      searchDimension === "section"
+        ? (summary?.workOrders ?? []).map((workOrder) => ({
+            key: workOrder.workOrder,
+            label: workOrder.workOrder,
+          }))
+        : searchGroups,
+    [searchDimension, searchGroups, summary],
+  );
+
   // Operations tab: only nests when the search subject isn't already the
   // operation.
   const operationRowGroups = useMemo(
@@ -656,12 +672,17 @@ export function EmployeeReportDashboard() {
       searchDimension === "operation"
         ? []
         : groupRowsByDimension(
-            searchDimension,
+            operationGroupDimension,
             "operation",
-            searchGroups,
+            operationSearchGroups,
             couponsList,
           ),
-    [searchDimension, searchGroups, couponsList],
+    [
+      searchDimension,
+      operationGroupDimension,
+      operationSearchGroups,
+      couponsList,
+    ],
   );
 
   const sectionGroupedData = useMemo(
@@ -918,7 +939,7 @@ export function EmployeeReportDashboard() {
       effectiveTab === "operations" &&
       searchDimension !== "operation"
     ) {
-      const groupHeader = DIMENSION_META[searchDimension].columnLabel;
+      const groupHeader = DIMENSION_META[operationGroupDimension].columnLabel;
       headers = [
         groupHeader,
         "Operation",
@@ -1980,7 +2001,7 @@ export function EmployeeReportDashboard() {
                       <thead>
                         <tr className="bg-slate-50 border-b border-slate-300 text-[#475569] font-bold text-[10px] uppercase tracking-wider">
                           <th className="py-2.5 px-3 border-r border-slate-200">
-                            {DIMENSION_META[searchDimension].columnLabel}
+                            {DIMENSION_META[operationGroupDimension].columnLabel}
                           </th>
                           <th className="py-2.5 px-3 border-r border-slate-200">
                             Operation
@@ -2046,7 +2067,7 @@ export function EmployeeReportDashboard() {
                                   colSpan={2}
                                   className="py-2 px-3 text-right border-r border-slate-200"
                                 >
-                                  {DIMENSION_META[searchDimension].totalLabel} :
+                                  {DIMENSION_META[operationGroupDimension].totalLabel} :
                                 </td>
                                 <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
                                   {formatAmount(sumField(g.rows, (r) => r.rate))}
@@ -3520,7 +3541,7 @@ export function EmployeeReportDashboard() {
                           <thead>
                             <tr>
                               <th>
-                                {DIMENSION_META[searchDimension].columnLabel}
+                                {DIMENSION_META[operationGroupDimension].columnLabel}
                               </th>
                               <th>OPERATION</th>
                               <th className="text-right w-20">PIECE RATE</th>
@@ -3575,7 +3596,7 @@ export function EmployeeReportDashboard() {
                                       className="text-right font-bold"
                                     >
                                       {
-                                        DIMENSION_META[searchDimension]
+                                        DIMENSION_META[operationGroupDimension]
                                           .totalLabel
                                       }{" "}
                                       :
