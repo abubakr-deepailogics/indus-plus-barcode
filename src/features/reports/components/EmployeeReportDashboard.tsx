@@ -2169,7 +2169,7 @@ export function EmployeeReportDashboard() {
                             {formatAmount(sumField(summary.operations, (op) => op.smv))}
                           </td>
                           <td className="py-2.5 px-3 text-center text-slate-900">
-                            {summary.totalQty.toLocaleString()}
+                            {sumField(summary.operations, (op) => op.totalQty).toLocaleString()}
                           </td>
                           <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                             Rs. {formatAmount(summary.totalAmount)}
@@ -3674,7 +3674,7 @@ export function EmployeeReportDashboard() {
                                   {formatAmount(sumField(summary.operations, (op) => op.smv))}
                                 </td>
                                 <td className="text-center">
-                                  {summary.totalQty.toLocaleString()}
+                                  {sumField(summary.operations, (op) => op.totalQty).toLocaleString()}
                                 </td>
                                 <td className="text-right">
                                   Rs. {formatAmount(summary.totalAmount)}
