@@ -855,7 +855,6 @@ export function EmployeeReportDashboard() {
         "Operations",
         "Qty",
         "Piece Rate",
-        "SAM",
         "Plan",
         "Total Amount",
       ];
@@ -864,7 +863,6 @@ export function EmployeeReportDashboard() {
         wo.operationsCount,
         wo.totalQty,
         wo.pieceRate != null ? Number(wo.pieceRate.toFixed(2)) : "",
-        wo.totalSam != null ? Number(wo.totalSam.toFixed(2)) : "",
         wo.plan != null ? Number(wo.plan.toFixed(2)) : "",
         Number(wo.totalAmount.toFixed(2)),
       ]);
@@ -1893,7 +1891,6 @@ export function EmployeeReportDashboard() {
                         <th className="py-2.5 px-3 text-center">Operations</th>
                         <th className="py-2.5 px-3 text-center">Qty</th>
                         <th className="py-2.5 px-3 text-right">Piece Rate</th>
-                        <th className="py-2.5 px-3 text-right">SAM</th>
                         <th className="py-2.5 px-3 text-right">Plan</th>
                         <th className="py-2.5 px-3 text-right">Total Amount</th>
                       </tr>
@@ -1931,11 +1928,6 @@ export function EmployeeReportDashboard() {
                                 : "—"}
                             </td>
                             <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
-                              {wo.totalSam != null
-                                ? formatAmount(wo.totalSam)
-                                : "—"}
-                            </td>
-                            <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
                               {wo.plan != null ? formatAmount(wo.plan) : "—"}
                             </td>
                             <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
@@ -1958,14 +1950,6 @@ export function EmployeeReportDashboard() {
                             {formatAmount(
                               summary.workOrders.reduce(
                                 (acc, wo) => acc + (wo.pieceRate ?? 0),
-                                0,
-                              ),
-                            )}
-                          </td>
-                          <td className="py-2.5 px-3 text-right text-slate-700">
-                            {formatAmount(
-                              summary.workOrders.reduce(
-                                (acc, wo) => acc + (wo.totalSam ?? 0),
                                 0,
                               ),
                             )}
@@ -3435,7 +3419,6 @@ export function EmployeeReportDashboard() {
                               <th className="text-center w-20">OPERATIONS</th>
                               <th className="text-center w-20">QTY</th>
                               <th className="text-right w-24">PIECE RATE</th>
-                              <th className="text-right w-20">SAM</th>
                               <th className="text-right w-24">PLAN</th>
                               <th className="text-right w-28">
                                 TOTAL AMOUNT (RS.)
@@ -3467,11 +3450,6 @@ export function EmployeeReportDashboard() {
                                       : "—"}
                                   </td>
                                   <td className="text-right">
-                                    {wo.totalSam != null
-                                      ? formatAmount(wo.totalSam)
-                                      : "—"}
-                                  </td>
-                                  <td className="text-right">
                                     {wo.plan != null
                                       ? formatAmount(wo.plan)
                                       : "—"}
@@ -3497,14 +3475,6 @@ export function EmployeeReportDashboard() {
                                   {formatAmount(
                                     summary.workOrders.reduce(
                                       (acc, wo) => acc + (wo.pieceRate ?? 0),
-                                      0,
-                                    ),
-                                  )}
-                                </td>
-                                <td className="text-right">
-                                  {formatAmount(
-                                    summary.workOrders.reduce(
-                                      (acc, wo) => acc + (wo.totalSam ?? 0),
                                       0,
                                     ),
                                   )}
