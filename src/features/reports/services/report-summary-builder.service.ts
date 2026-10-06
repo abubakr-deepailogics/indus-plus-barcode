@@ -528,13 +528,13 @@ export async function buildReportSummary(
         rate,
         smv,
         couponCount: 1,
-        totalQty: qty || 0, // the qty printed on the coupon, not value / rate
+        totalQty: rate === 0 ? 0 : qty || 0, // qty printed on the coupon (not value / rate); zero-rate coupons aren't added
         totalSam: (qty || 0) * (smv || 0),
         totalAmount: val || 0,
       });
     } else {
       existingOp.couponCount += 1;
-      existingOp.totalQty += qty || 0;
+      if (rate !== 0) existingOp.totalQty += qty || 0;
       existingOp.totalSam += (qty || 0) * (smv || 0);
       existingOp.totalAmount += val || 0;
       if (!existingOp.rate && rate) existingOp.rate = rate;
