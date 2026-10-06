@@ -117,7 +117,11 @@ export function groupEmployeeData(
     });
 
     const totalBundles = items.reduce((acc, it) => acc + it.bundleCount, 0);
-    const totalQty = items.reduce((acc, it) => acc + it.qty, 0);
+    // zero piece-rate lines aren't added into the quantity total
+    const totalQty = items.reduce(
+      (acc, it) => acc + (it.rate === 0 ? 0 : it.qty),
+      0,
+    );
     const totalPay = items.reduce((acc, it) => acc + it.totalPay, 0);
 
     return {
@@ -248,7 +252,11 @@ export function groupByDimension(
     });
 
     const totalBundles = items.reduce((acc, it) => acc + it.bundleCount, 0);
-    const totalQty = items.reduce((acc, it) => acc + it.qty, 0);
+    // zero piece-rate lines aren't added into the quantity total
+    const totalQty = items.reduce(
+      (acc, it) => acc + (it.rate === 0 ? 0 : it.qty),
+      0,
+    );
     const totalPay = items.reduce((acc, it) => acc + it.totalPay, 0);
 
     return {
