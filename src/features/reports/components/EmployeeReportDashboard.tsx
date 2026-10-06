@@ -977,14 +977,6 @@ export function EmployeeReportDashboard() {
             Number(row.totalAmount.toFixed(2)),
           ]);
         }
-        rows.push([
-          `${DIMENSION_META[operationGroupDimension].totalLabel} :`,
-          "",
-          Number(sumField(g.rows, (r) => r.rate).toFixed(2)),
-          Number(sumField(g.rows, (r) => r.sam).toFixed(2)),
-          g.totalQty,
-          Number(g.totalAmount.toFixed(2)),
-        ]);
       }
       if (operationRowGroups.length > 0) {
         rows.push([
@@ -1015,7 +1007,7 @@ export function EmployeeReportDashboard() {
       ]);
       if (flatOperations.length > 0) {
         rows.push([
-          `Total (${flatOperations.length} Operations)`,
+          "Grand Total :",
           "",
           Number(sumField(flatOperations, (op) => op.rate).toFixed(2)),
           Number(sumField(flatOperations, (op) => op.smv).toFixed(2)),
