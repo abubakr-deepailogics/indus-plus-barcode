@@ -503,7 +503,7 @@ export function EmployeeReportDashboard() {
   const reportsBasePath =
     department === "washing" || department === "finishing"
       ? `/${department}/reports`
-      : "/industrial-engineering/reports";
+      : "/sewing/reports";
   const {
     mode,
     changeMode,

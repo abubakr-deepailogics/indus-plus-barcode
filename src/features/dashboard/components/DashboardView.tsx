@@ -1,29 +1,263 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
-import { Activity, ArrowRight, BriefcaseBusiness, Calendar as CalendarIcon, CheckCircle2, ChevronRight, CircleAlert, Clock3, Factory, Loader2, QrCode, Sparkles } from "lucide-react";
-import { format, formatDistanceToNow } from "date-fns";
-import { useAuth } from "@/features/auth/context/auth-context";
-import { recentPayCycles } from "@/features/reports/utils/pay-cycle";
+import { format } from "date-fns";
+import type { DateRange } from "react-day-picker";
+import {
+  Activity,
+  AlertTriangle,
+  CalendarDays,
+  CheckCircle2,
+  ClipboardList,
+  Loader2,
+  PackageCheck,
+  QrCode,
+  RefreshCw,
+} from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { fetchDashboardInsights } from "../services/dashboard.service";
-import type { DashboardDepartment, DashboardInsights } from "../types";
+import type { DashboardActivity, DashboardInsights, WorkOrderInsight } from "../types";
 
-const n = new Intl.NumberFormat();
-const dept: Record<DashboardDepartment, { label: string; dot: string; badge: string; root: string }> = { sewing: { label: "Sewing", dot: "bg-indigo-500", badge: "border-indigo-100 bg-indigo-50 text-indigo-700", root: "/industrial-engineering" }, washing: { label: "Washing", dot: "bg-sky-500", badge: "border-sky-100 bg-sky-50 text-sky-700", root: "/washing" }, finishing: { label: "Finishing", dot: "bg-emerald-500", badge: "border-emerald-100 bg-emerald-50 text-emerald-700", root: "/finishing" } };
+type Range = { from: Date; to: Date };
 
-function Metric({ label, value, detail, icon }: { label: string; value: number; detail: string; icon: React.ReactNode }) { return <div className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex justify-between"><p className="text-sm font-medium text-slate-500">{label}</p><span className="rounded-xl bg-slate-50 p-2 text-slate-600">{icon}</span></div><p className="mt-5 text-3xl font-bold tracking-tight text-slate-950">{n.format(value)}</p><p className="mt-2 text-xs text-slate-500">{detail}</p></div>; }
-function Chart({ values, cycleStart, onCycleChange }: { values: DashboardInsights["dailyOutput"]; cycleStart: string; onCycleChange: (cycleStart: string) => void }) { const selectedCycle = recentPayCycles(24).find((cycle) => cycle.value === cycleStart); const cycleLabel = selectedCycle?.isLive ? `${format(new Date(`${cycleStart}T00:00:00`), "d MMM yyyy")} – ${format(new Date(), "d MMM yyyy")}` : selectedCycle?.label ?? "Selected pay cycle"; const totals = values.map((v) => v.sewing + v.washing + v.finishing); const outputTotal = totals.reduce((sum, value) => sum + value, 0); const max = Math.max(1, ...totals); const points = totals.map((value, i) => `${i / Math.max(1, totals.length - 1) * 100},${90 - value / max * 70}`).join(" "); const selectedDate = new Date(`${cycleStart}T00:00:00`); const applyCycleDate = (date: Date) => { const cycleMonth = date.getDate() >= 24 ? date.getMonth() : date.getMonth() - 1; onCycleChange(format(new Date(date.getFullYear(), cycleMonth, 24), "yyyy-MM-dd")); }; return <div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex flex-wrap items-start justify-between gap-3"><div><span className="inline-flex rounded-full bg-indigo-50 px-3 py-1 text-xs font-semibold text-indigo-700">Live coupon data</span><h2 className="mt-3 text-sm font-semibold text-slate-950">Pay-cycle scan output</h2><p className="mt-1 text-xs text-slate-500">{cycleLabel} · all production departments</p></div><Popover><PopoverTrigger className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-indigo-100"><CalendarIcon className="h-4 w-4 text-indigo-500"/>{cycleLabel}</PopoverTrigger><PopoverContent className="w-auto bg-white p-0" align="end"><Calendar mode="single" captionLayout="dropdown" selected={selectedDate} onSelect={(date) => { if (date) applyCycleDate(date); }} disabled={(date) => date > new Date()} /></PopoverContent></Popover></div>{outputTotal === 0 ? <div className="mt-5 flex h-48 flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-center"><Activity className="h-5 w-5 text-slate-400"/><p className="mt-2 text-sm font-semibold text-slate-600">No scans recorded for this pay cycle</p><p className="mt-1 text-xs text-slate-400">Choose another cycle to review past output.</p></div> : <><div className="mt-5 h-48"><svg viewBox="0 0 100 100" preserveAspectRatio="none" className="h-full w-full"><defs><linearGradient id="chart" x1="0" x2="0" y1="0" y2="1"><stop stopColor="#6366f1" stopOpacity=".26"/><stop offset="1" stopColor="#6366f1" stopOpacity="0"/></linearGradient></defs>{[20,45,70,95].map((y) => <line key={y} x1="0" x2="100" y1={y} y2={y} stroke="#e2e8f0" strokeDasharray="2 2"/>)}<polygon points={`0,100 ${points} 100,100`} fill="url(#chart)"/><polyline points={points} fill="none" stroke="#4f46e5" strokeWidth="2" vectorEffect="non-scaling-stroke"/></svg></div><div className="flex justify-between text-[10px] text-slate-400">{values.filter((_, i) => i % 7 === 0 || i === values.length - 1).map((item) => <span key={item.date}>{format(new Date(item.date), "MMM d")}</span>)}</div></>}</div>; }
+const number = new Intl.NumberFormat();
+const brand = "#b11016";
+
+function currentPayCycle(): Range {
+  const today = new Date();
+  const startMonth = today.getDate() >= 24 ? today.getMonth() : today.getMonth() - 1;
+
+  return { from: new Date(today.getFullYear(), startMonth, 24), to: today };
+}
+
+function formatRange(range: Range) {
+  return `${format(range.from, "d MMM yyyy")} – ${format(range.to, "d MMM yyyy")}`;
+}
+
+function percent(value: number, total: number) {
+  return total > 0 ? Math.round((value / total) * 100) : 0;
+}
+
+function chartDateLabel(value: string) {
+  const dateOnly = value.slice(0, 10);
+  const date = new Date(`${dateOnly}T00:00:00`);
+
+  return Number.isNaN(date.getTime()) ? value : format(date, "d MMM");
+}
+
+function smoothLinePath(points: Array<{ x: number; y: number }>) {
+  if (points.length === 0) return "";
+  if (points.length === 1) return `M ${points[0].x} ${points[0].y}`;
+
+  return points.slice(1).reduce((path, point, index) => {
+    const previous = points[index];
+    const controlX = (previous.x + point.x) / 2;
+    return `${path} C ${controlX} ${previous.y}, ${controlX} ${point.y}, ${point.x} ${point.y}`;
+  }, `M ${points[0].x} ${points[0].y}`);
+}
+
+function MetricCard({ label, value, detail, icon: Icon }: { label: string; value: number; detail: string; icon: typeof QrCode }) {
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+      <div className="flex items-start justify-between">
+        <div>
+          <p className="text-xs font-medium text-slate-500">{label}</p>
+          <p className="mt-2 text-3xl font-bold tracking-tight text-[#211f20]">{number.format(value)}</p>
+        </div>
+        <span className="rounded-xl bg-[#fff1f2] p-2.5 text-[#b11016]"><Icon className="h-5 w-5" /></span>
+      </div>
+      <p className="mt-3 border-t border-slate-100 pt-3 text-xs text-slate-500">{detail}</p>
+    </article>
+  );
+}
+
+function RangePicker({ value, onChange }: { value: Range; onChange: (range: Range) => void }) {
+  const [draft, setDraft] = useState<DateRange | undefined>(value);
+
+  function handleSelection(next: DateRange | undefined) {
+    setDraft(next);
+    if (next?.from && next.to) onChange({ from: next.from, to: next.to });
+  }
+
+  return (
+    <Popover>
+      <PopoverTrigger className="flex min-w-[208px] items-center justify-center gap-2 whitespace-nowrap rounded-xl border border-[#efc3c6] bg-[#fff1f2] px-3 py-2.5 text-xs font-bold text-[#b11016] transition hover:bg-[#fee2e2]">
+        <CalendarDays className="h-4 w-4" />
+        {formatRange(value)}
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-auto border-0 bg-transparent p-0 shadow-none">
+        <Calendar
+          mode="range"
+          captionLayout="dropdown"
+          defaultMonth={value.from}
+          disabled={{ after: new Date() }}
+          selected={draft}
+          onSelect={handleSelection}
+          classNames={{
+            day: "h-8 w-8 text-center text-xs p-0 relative flex items-center justify-center rounded-lg cursor-pointer transition-all hover:bg-[#fff1f2] hover:text-[#b11016]",
+            selected: "bg-[#b11016] text-white hover:bg-[#b11016] hover:text-white shadow-md font-bold rounded-lg scale-105 [&>button]:text-white",
+            range_start: "bg-[#b11016] text-white rounded-l-lg [&>button]:text-white",
+            range_end: "bg-[#b11016] text-white rounded-r-lg [&>button]:text-white",
+            range_middle: "bg-[#fff1f2] text-[#b11016] rounded-none [&>button]:text-[#b11016]",
+            today: "bg-[#fff1f2] text-[#b11016] border border-[#efc3c6] font-extrabold rounded-lg",
+            dropdown: "px-2 py-0.5 rounded-md border border-[#efc3c6] bg-white text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-[#b11016]/10 focus:border-[#b11016] cursor-pointer hover:bg-[#fff1f2] transition-all shadow-sm",
+          }}
+        />
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+function DailyOutputChart({ data }: { data: DashboardInsights["dailyOutput"] }) {
+  const values = data.map((item) => item.sewing + item.washing + item.finishing);
+  const maximum = Math.max(1, ...values);
+  const coordinates = values.map((value, index) => ({
+    x: 8 + (index / Math.max(values.length - 1, 1)) * 88,
+    y: 82 - (value / maximum) * 62,
+  }));
+  const line = smoothLinePath(coordinates);
+  const area = coordinates.length ? `${line} L 96 82 L 8 82 Z` : "";
+  const highlightedPoints = new Set([0, values.length - 1, values.indexOf(Math.max(...values))]);
+  const labels = data.filter((_, index) => index === 0 || index === data.length - 1 || index % 7 === 0);
+
+  return (
+    <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h2 className="font-semibold text-[#211f20]">Daily scanned coupon output</h2>
+          <p className="mt-1 text-xs text-slate-500">Scans completed each day in the selected range.</p>
+        </div>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fff1f2] px-2.5 py-1 text-[11px] font-semibold text-[#b11016]"><i className="h-2 w-2 rounded-full bg-[#b11016]" /> Daily scans</span>
+      </div>
+      {data.length === 0 ? <EmptyChart /> : <div className="mt-5 grid grid-cols-[32px_1fr] gap-2">
+        <div className="flex h-48 flex-col justify-between pb-5 text-right text-[10px] font-medium text-slate-400"><span>{number.format(maximum)}</span><span>{number.format(Math.ceil(maximum / 2))}</span><span>0</span></div>
+        <div>
+          <svg viewBox="0 0 104 90" preserveAspectRatio="none" className="h-48 w-full overflow-visible" aria-label="Daily scanned coupons line chart">
+            <defs>
+              <linearGradient id="daily-output-area" x1="0%" x2="0%" y1="0%" y2="100%">
+                <stop offset="0%" stopColor="#b11016" stopOpacity="0.22" />
+                <stop offset="100%" stopColor="#b11016" stopOpacity="0.01" />
+              </linearGradient>
+              <linearGradient id="daily-output-line" x1="0%" x2="100%" y1="0%" y2="0%">
+                <stop offset="0%" stopColor="#8f1117" />
+                <stop offset="100%" stopColor="#d65a5e" />
+              </linearGradient>
+            </defs>
+            {[20, 51, 82].map((y) => <line key={y} x1="8" x2="96" y1={y} y2={y} stroke="#f1f5f9" strokeDasharray="2 2" vectorEffect="non-scaling-stroke" />)}
+            <path d={area} fill="url(#daily-output-area)" />
+            <path d={line} fill="none" stroke="url(#daily-output-line)" strokeWidth="3" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
+            {coordinates.map((point, index) => {
+              if (!highlightedPoints.has(index)) return null;
+              return <g key={`${point.x}-${point.y}`}><circle cx={point.x} cy={point.y} r="3.1" fill="white" vectorEffect="non-scaling-stroke" /><circle cx={point.x} cy={point.y} r="1.65" fill={brand} vectorEffect="non-scaling-stroke" /></g>;
+            })}
+          </svg>
+          <div className="mt-1 flex justify-between text-[10px] text-slate-400">
+            {labels.map((item) => <span key={item.date}>{chartDateLabel(item.date)}</span>)}
+          </div>
+        </div>
+      </div>}
+    </article>
+  );
+}
+
+function EmptyChart() {
+  return <div className="mt-5 flex h-48 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">No scan activity for this date range.</div>;
+}
+
+function DepartmentMix({ data }: { data: DashboardInsights["departments"] }) {
+  const total = data.reduce((sum, item) => sum + item.scannedCoupons, 0);
+  const colors = ["#b11016", "#d65a5e", "#f1c6c8"];
+  let cursor = 0;
+  const stops = data.map((item, index) => {
+    const end = cursor + (total ? (item.scannedCoupons / total) * 100 : 0);
+    const stop = `${colors[index]} ${cursor}% ${end}%`;
+    cursor = end;
+    return stop;
+  }).join(", ");
+
+  return <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <h2 className="font-semibold text-[#211f20]">Department output mix</h2>
+    <p className="mt-1 text-xs text-slate-500">Share of scanned active coupons by department.</p>
+    <div className="mt-5 flex items-center gap-5">
+      <div className="grid h-36 w-36 shrink-0 place-items-center rounded-full" style={{ background: total ? `conic-gradient(${stops})` : "#f1f5f9" }}>
+        <div className="grid h-24 w-24 place-items-center rounded-full bg-white text-center"><b className="text-xl text-[#211f20]">{number.format(total)}</b><span className="text-[10px] text-slate-500">scanned</span></div>
+      </div>
+      <div className="min-w-0 flex-1 space-y-3">
+        {data.map((item, index) => <div key={item.department} className="flex items-center justify-between gap-2 text-xs"><span className="flex items-center gap-2 capitalize text-slate-600"><i className="h-2.5 w-2.5 rounded-full" style={{ background: colors[index] }} />{item.department}</span><b className="text-[#211f20]">{percent(item.scannedCoupons, total)}%</b></div>)}
+      </div>
+    </div>
+  </article>;
+}
+
+function Pipeline({ data }: { data: DashboardInsights }) {
+  const scanned = percent(data.scannedCoupons, data.generatedCoupons);
+  const pending = percent(data.pendingCoupons, data.generatedCoupons);
+  return <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-[#211f20]">Coupon pipeline</h2><p className="mt-1 text-xs text-slate-500">Current state of active generated coupons.</p></div><PackageCheck className="h-5 w-5 text-[#b11016]" /></div>
+    <div className="mt-7 flex h-4 overflow-hidden rounded-full bg-slate-100">
+      <span className="bg-[#b11016]" style={{ width: `${scanned}%` }} />
+      <span className="bg-[#d65a5e]" style={{ width: `${pending}%` }} />
+    </div>
+    <div className="mt-5 grid grid-cols-3 gap-2 text-center">
+      {[['Generated', data.generatedCoupons, '#211f20'], ['Scanned', data.scannedCoupons, '#b11016'], ['Pending', data.pendingCoupons, '#d65a5e']].map(([label, value, color]) => <div key={String(label)}><p className="text-[11px] text-slate-500">{label}</p><b className="text-base" style={{ color: String(color) }}>{number.format(Number(value))}</b></div>)}
+    </div>
+  </article>;
+}
+
+function Backlog({ items, title = "Work-order backlog", description = "Open coupon volume requiring scan completion." }: { items: WorkOrderInsight[]; title?: string; description?: string }) {
+  const max = Math.max(1, ...items.map((item) => item.pendingCoupons));
+  return <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+    <div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-[#211f20]">{title}</h2><p className="mt-1 text-xs text-slate-500">{description}</p></div><ClipboardList className="h-5 w-5 text-[#b11016]" /></div>
+    <div className="mt-5 space-y-4">
+      {items.slice(0, 5).map((item) => <div key={`${item.department}-${item.workOrder}`}><div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="font-semibold text-[#211f20]">{item.workOrder}</span><span className="text-slate-500">{number.format(item.pendingCoupons)} pending</span></div><div className="h-2 overflow-hidden rounded-full bg-[#fff1f2]"><div className="h-full rounded-full bg-[#b11016]" style={{ width: `${(item.pendingCoupons / max) * 100}%` }} /></div></div>)}
+      {items.length === 0 && <p className="py-6 text-center text-sm text-slate-500">No work orders are awaiting scans.</p>}
+    </div>
+  </article>;
+}
+
+function ActivityFeed({ activities }: { activities: DashboardActivity[] }) {
+  return <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><div className="flex items-center justify-between"><div><h2 className="font-semibold text-[#211f20]">Live coupon activity</h2><p className="mt-1 text-xs text-slate-500">Most recent generation and scan events.</p></div><Activity className="h-5 w-5 text-[#b11016]" /></div><div className="mt-4 divide-y divide-slate-100">{activities.slice(0, 6).map((item) => <div key={item.id} className="flex items-center gap-3 py-3"><span className="rounded-full bg-[#fff1f2] p-2 text-[#b11016]">{item.type === "scan" ? <CheckCircle2 className="h-3.5 w-3.5" /> : <QrCode className="h-3.5 w-3.5" />}</span><p className="min-w-0 flex-1 truncate text-sm text-[#211f20]"><b className="capitalize">{item.department}</b> · {item.type === "scan" ? "Coupon scanned" : `${item.couponCount ?? 0} coupons generated`} · {item.workOrder}</p><time className="shrink-0 text-[11px] text-slate-400">{format(new Date(item.occurredAt), "d MMM, HH:mm")}</time></div>)}{activities.length === 0 && <p className="py-8 text-center text-sm text-slate-500">No recent activity is available.</p>}</div></article>;
+}
 
 export function DashboardView() {
-  const { user } = useAuth(); const [cycleStart, setCycleStart] = useState(() => recentPayCycles(1)[0].value); const [data, setData] = useState<DashboardInsights | null>(null); const [error, setError] = useState<string | null>(null);
-  useEffect(() => { let live = true; void fetchDashboardInsights(cycleStart).then((next) => { if (live) { setData(next); setError(null); } }).catch((reason: unknown) => { if (live) setError(reason instanceof Error ? reason.message : "Unable to load dashboard."); }); return () => { live = false; }; }, [cycleStart]);
-  const name = user?.displayName?.trim() || user?.email?.split("@")[0] || "there"; const totalOutput = useMemo(() => data?.departments.reduce((sum, item) => sum + item.scannedCoupons, 0) || 0, [data]);
-  if (!data && !error) return <div className="flex min-h-[420px] items-center justify-center text-sm text-slate-500"><Loader2 className="mr-2 h-5 w-5 animate-spin"/>Loading production cockpit…</div>; if (!data) return <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5 text-sm text-rose-700">{error}</div>;
-  return <div className="mx-auto flex max-w-[1400px] flex-col gap-6 pb-8"><section className="relative overflow-hidden rounded-3xl border border-indigo-100 bg-gradient-to-br from-white via-indigo-50/70 to-violet-50 px-6 py-8 shadow-sm sm:px-8"><div className="absolute -right-12 -top-16 h-64 w-64 rounded-full bg-indigo-200/40 blur-3xl"/><div className="relative flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between"><div><span className="inline-flex items-center gap-2 rounded-full border border-indigo-100 bg-white px-3 py-1 text-xs font-semibold text-indigo-700 shadow-sm"><Sparkles className="h-3.5 w-3.5"/>Production command center</span><h1 className="mt-4 text-3xl font-bold tracking-tight text-slate-950 sm:text-4xl">Good morning, {name}.</h1><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600">Sewing, Washing and Finishing in one live, decision-ready overview.</p></div><div className="grid grid-cols-2 gap-6 rounded-2xl border border-indigo-100 bg-white/80 p-4 shadow-sm"><div><p className="text-xs text-slate-500">Today&apos;s scans</p><p className="mt-1 text-xl font-semibold text-slate-950">{n.format(data.todayScans)}</p></div><div><p className="text-xs text-slate-500">This month</p><p className="mt-1 text-xl font-semibold text-slate-950">{n.format(data.monthScans)}</p></div></div></div></section>
-    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Generated" value={data.generatedCoupons} detail="Active production coupons" icon={<QrCode className="h-5 w-5"/>}/><Metric label="Scanned output" value={data.scannedCoupons} detail={`${data.completionRate}% coupon completion`} icon={<CheckCircle2 className="h-5 w-5 text-emerald-600"/>}/><Metric label="Pending" value={data.pendingCoupons} detail="Coupons awaiting scan" icon={<Clock3 className="h-5 w-5 text-amber-600"/>}/><Metric label="Active work orders" value={data.activeWorkOrders} detail="Orders with live coupons" icon={<BriefcaseBusiness className="h-5 w-5 text-indigo-600"/>}/></section>
-    <section className="grid gap-6 xl:grid-cols-[1.6fr_1fr]"><Chart values={data.dailyOutput} cycleStart={cycleStart} onCycleChange={setCycleStart}/><div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex justify-between"><div><h2 className="text-sm font-semibold text-slate-950">Department pulse</h2><p className="mt-1 text-xs text-slate-500">Completion and contribution to scanned output</p></div><Factory className="h-5 w-5 text-slate-400"/></div><div className="mt-6 space-y-5">{data.departments.map((item) => { const config = dept[item.department]; const share = totalOutput ? Math.round(item.scannedCoupons / totalOutput * 100) : 0; return <div key={item.department}><div className="flex justify-between"><span className="flex items-center gap-2 text-sm font-semibold text-slate-700"><i className={`h-2.5 w-2.5 rounded-full ${config.dot}`}/>{config.label}</span><span className="text-xs font-semibold text-slate-500">{item.completionRate}% complete</span></div><div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-100"><div className={`h-full rounded-full ${config.dot}`} style={{ width: `${item.completionRate}%` }}/></div><p className="mt-2 flex justify-between text-[11px] text-slate-500"><span>{n.format(item.scannedCoupons)} scanned · {n.format(item.pendingCoupons)} pending</span><span>{share}% share</span></p></div>; })}</div></div></section>
-    <section className="grid gap-6 xl:grid-cols-[1.4fr_1fr]"><div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex justify-between"><div><h2 className="text-sm font-semibold text-slate-950">Attention queue</h2><p className="mt-1 text-xs text-slate-500">Work orders with the largest pending coupon backlog</p></div><CircleAlert className="h-5 w-5 text-amber-500"/></div><div className="mt-5 divide-y divide-slate-100">{data.workOrders.map((item) => { const config = dept[item.department]; return <Link key={`${item.department}-${item.workOrder}`} href={`${config.root}/coupon-tracing`} className="group flex items-center gap-3 py-4 first:pt-0"><span className={`rounded-lg border px-2 py-1 text-[10px] font-bold uppercase ${config.badge}`}>{config.label}</span><div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-slate-800">{item.workOrder}</p><p className="mt-0.5 text-xs text-slate-500">{n.format(item.pendingCoupons)} waiting · {item.completionRate}% complete</p></div><ChevronRight className="h-4 w-4 text-slate-300 group-hover:text-slate-700"/></Link>; })}</div></div><div className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="flex justify-between"><div><h2 className="text-sm font-semibold text-slate-950">Live activity</h2><p className="mt-1 text-xs text-slate-500">Recent scans and generation runs</p></div><Activity className="h-5 w-5 text-indigo-500"/></div><div className="mt-5 space-y-4">{data.recentActivities.slice(0,5).map((item) => { const config = dept[item.department]; return <div key={item.id} className="flex gap-3"><i className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${config.dot}`}/><div><p className="text-xs font-medium leading-5 text-slate-700"><b>{config.label}</b> {item.type === "scan" ? `scanned a coupon for ${item.workOrder}` : `generated ${n.format(item.couponCount || 0)} coupons for ${item.workOrder}`}</p><p className="mt-0.5 text-[11px] text-slate-400">{formatDistanceToNow(new Date(item.occurredAt), { addSuffix: true })}</p></div></div>; })}</div><Link href="/industrial-engineering/coupon-tracing" className="mt-5 inline-flex items-center gap-1 text-xs font-semibold text-indigo-600">Open coupon tracing <ArrowRight className="h-3.5 w-3.5"/></Link></div></section><p className="text-center text-xs text-slate-400">Data uses active, non-deleted coupons. Completion means scanned ÷ generated coupons, not factory line efficiency.</p></div>;
+  const [range, setRange] = useState<Range>(currentPayCycle);
+  const [data, setData] = useState<DashboardInsights | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void fetchDashboardInsights(range.from, range.to).then((result) => { if (active) { setData(result); setError(null); } }).catch((reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : "Unable to load dashboard insights."); });
+    return () => { active = false; };
+  }, [range]);
+
+  const attentionItems = useMemo(() => data?.workOrders.filter((item) => item.pendingCoupons > 0).slice(0, 5) ?? [], [data]);
+
+  function handleRangeChange(nextRange: Range) {
+    setRange((currentRange) => (
+      currentRange.from.getTime() === nextRange.from.getTime() && currentRange.to.getTime() === nextRange.to.getTime()
+        ? currentRange
+        : nextRange
+    ));
+  }
+
+  if (!data && error) return <div className="flex min-h-[420px] flex-col items-center justify-center rounded-2xl border border-[#efc3c6] bg-white px-6 text-center"><AlertTriangle className="h-7 w-7 text-[#b11016]" /><p className="mt-3 font-semibold text-[#211f20]">Dashboard insights could not be loaded.</p><p className="mt-1 text-sm text-slate-500">{error}</p></div>;
+  if (!data) return <div className="flex min-h-[420px] items-center justify-center rounded-2xl border border-slate-200 bg-white text-sm text-slate-500"><Loader2 className="mr-2 h-5 w-5 animate-spin text-[#b11016]" /> Loading production insights…</div>;
+
+  return <main data-client-brand className="mx-auto max-w-[1440px] space-y-5 px-4 pb-8 pt-4 sm:px-6">
+    <header className="flex flex-col gap-4 rounded-2xl border border-[#efc3c6] bg-white p-5 shadow-sm lg:flex-row lg:items-center lg:justify-between">
+      <div><p className="text-xs font-bold uppercase tracking-wide text-[#b11016]">IndusPlus production dashboard</p><h1 className="mt-1 text-2xl font-bold tracking-tight text-[#211f20]">Coupon performance</h1><p className="mt-1 text-sm text-slate-500">A live consolidated view of Sewing, Washing and Finishing.</p></div>
+      <RangePicker value={range} onChange={handleRangeChange} />
+    </header>
+    {error && <div className="flex items-center gap-2 rounded-xl border border-[#efc3c6] bg-[#fff1f2] px-4 py-3 text-sm text-[#b11016]"><AlertTriangle className="h-4 w-4" />{error}</div>}
+    <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <MetricCard label="Generated" value={data.generatedCoupons} detail="Active coupons issued" icon={QrCode} />
+      <MetricCard label="Scanned" value={data.scannedCoupons} detail={`${data.completionRate}% completion rate`} icon={CheckCircle2} />
+      <MetricCard label="Pending" value={data.pendingCoupons} detail="Awaiting scan completion" icon={RefreshCw} />
+      <MetricCard label="Today’s scans" value={data.todayScans} detail={`${number.format(data.monthScans)} scans this month`} icon={Activity} />
+    </section>
+    <section className="grid gap-5 xl:grid-cols-[1.45fr_0.95fr]"><DailyOutputChart data={data.dailyOutput} /><DepartmentMix data={data.departments} /></section>
+    <section className="grid gap-5 xl:grid-cols-2"><Pipeline data={data} /><Backlog items={data.workOrders} /></section>
+    <section className="grid gap-5 xl:grid-cols-[1.35fr_0.95fr]"><ActivityFeed activities={data.recentActivities} /><Backlog items={attentionItems} title="Work-order attention queue" description="The five work orders with the most coupons still pending." /></section>
+  </main>;
 }

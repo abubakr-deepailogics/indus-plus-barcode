@@ -85,7 +85,7 @@ export function DepartmentProvider({ children }: { children: ReactNode }) {
     ? "washing"
     : pathname.startsWith("/finishing")
       ? "finishing"
-    : pathname.startsWith("/industrial-engineering")
+      : pathname.startsWith("/sewing") || pathname.startsWith("/industrial-engineering")
       ? "sewing"
       : storedDepartment;
 

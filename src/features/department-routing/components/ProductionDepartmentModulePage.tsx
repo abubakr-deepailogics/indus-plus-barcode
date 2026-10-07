@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import CutReportPage from "@/app/industrial-engineering/cut-report/page";
 import StyleBulletinPage from "@/app/industrial-engineering/style-bulletin/page";
 import CouponGenerationPage from "@/app/industrial-engineering/coupon-generation/page";
 import CouponScanningPage from "@/app/industrial-engineering/coupon-scanning/page";
@@ -13,6 +14,7 @@ import OperatorWiseReportPage from "@/app/industrial-engineering/reports/operato
 // implementations. DepartmentContext derives ownership from the URL, so all
 // API calls stay department-scoped without copying feature code per module.
 const PRODUCTION_MODULE_PAGES: Record<string, React.ComponentType> = {
+  "cut-report": CutReportPage,
   "style-bulletin": StyleBulletinPage,
   "coupon-generation": CouponGenerationPage,
   "coupon-scanning": CouponScanningPage,

@@ -18,7 +18,7 @@ import {
   Users
 } from "lucide-react";
 
-function productionModuleTabs(basePath: "/washing" | "/finishing") {
+function productionModuleTabs(basePath: "/sewing" | "/washing" | "/finishing") {
   return [
     { label: "Style Bulletin", href: `${basePath}/style-bulletin`, hasDropdown: false },
     { label: "Coupon Generation", href: `${basePath}/coupon-generation`, hasDropdown: false },
@@ -96,7 +96,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     } else if (pathname.startsWith("/finishing") && department !== "finishing") {
       setDepartment("finishing");
     } else if (
-      (pathname.startsWith("/industrial-engineering") || pathname === "/manage-users") &&
+      (pathname.startsWith("/sewing") || pathname.startsWith("/industrial-engineering") || pathname === "/manage-users") &&
       department !== "sewing"
     ) {
       setDepartment("sewing");
@@ -111,7 +111,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       deptId === "sewing" &&
       (pathname.startsWith("/washing") || pathname.startsWith("/finishing"))
     ) {
-      router.push("/industrial-engineering/cut-report");
+      router.push("/sewing/cut-report");
     }
   };
 
@@ -119,30 +119,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const initials = displayName.slice(0, 2).toUpperCase();
 
   // Top navigation tabs
-  const navTabs = [
-    // { label: "Industrial Engineering", href: "#", hasDropdown: true },
-    { label: "Cut Report", href: "/industrial-engineering/cut-report", hasDropdown: false },
-    { label: "Style Bulletin", href: "/industrial-engineering/style-bulletin", hasDropdown: false },
-    { label: "Coupon Generation", href: "/industrial-engineering/coupon-generation", hasDropdown: false },
-    { label: "Coupon Scanning", href: "/industrial-engineering/coupon-scanning", hasDropdown: false },
-    { label: "Coupon Tracing", href: "/industrial-engineering/coupon-tracing", hasDropdown: false },
-    { label: "Rework Coupon", href: "/industrial-engineering/rework-coupon", hasDropdown: false },
-    { label: "Reports", href: "/industrial-engineering/reports", hasDropdown: false },
-    { label: "Wages", href: "/industrial-engineering/reports/wages", hasDropdown: false },
-    ...(user?.isAdmin
-      ? [{ label: "Manage Users", href: "/manage-users", hasDropdown: false }]
-      : []),
-  ];
-
   const currentNavTabs = useMemo(() => {
     if (department === "washing" || department === "finishing") {
       return productionModuleTabs(`/${department}`);
     }
     if (department === "sewing") {
-      return navTabs;
+      return [
+        { label: "Cut Report", href: "/sewing/cut-report", hasDropdown: false },
+        ...productionModuleTabs("/sewing"),
+        ...(user?.isAdmin
+          ? [{ label: "Manage Users", href: "/manage-users", hasDropdown: false }]
+          : []),
+      ];
     }
     return [];
-  }, [department, navTabs]);
+  }, [department, user?.isAdmin]);
 
   return (
     <div data-client-brand className="min-h-screen bg-[#f8fafc] text-[#1e293b] flex flex-col font-sans selection:bg-indigo-100 selection:text-indigo-900">

@@ -12,6 +12,15 @@ const nextConfig: NextConfig = {
     "/api/qr-code-generation/pdf/*": ["src/assets/fonts/**/*"],
   },
   allowedDevOrigins: ["172.16.0.21"],
+  async redirects() {
+    return [
+      {
+        source: "/industrial-engineering/:path*",
+        destination: "/sewing/:path*",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

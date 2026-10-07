@@ -11,20 +11,24 @@ type ActivityRow = { Id: string; Type: "scan" | "generation"; Department: Depart
 const asNumber = (value: number | null | undefined) => Number(value) || 0;
 
 export async function GET(request: Request) {
-  const cycleStart = new URL(request.url).searchParams.get("cycleStart") || "";
-  if (!/^\d{4}-(0[1-9]|1[0-2])-24$/.test(cycleStart)) {
-    return Response.json({ error: "A valid pay-cycle start date (YYYY-MM-24) is required." }, { status: 400 });
+  const params = new URL(request.url).searchParams;
+  const from = params.get("from") || "";
+  const to = params.get("to") || "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to) || from > to) {
+    return Response.json({ error: "A valid date range is required." }, { status: 400 });
   }
-  const [year, monthNumber] = cycleStart.split("-").map(Number);
-  const nextCycleStart = monthNumber === 12 ? `${year + 1}-01-24` : `${year}-${String(monthNumber + 1).padStart(2, "0")}-24`;
+  const rangeLength = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / 86_400_000;
+  if (!Number.isFinite(rangeLength) || rangeLength > 365) {
+    return Response.json({ error: "The dashboard supports date ranges of up to 366 days." }, { status: 400 });
+  }
   try {
     const pool = await getPool("pitSystem");
     // One optimized round-trip for every dashboard panel; no per-card reads.
-    const result = await pool.request().input("from", sql.Date, cycleStart).input("to", sql.Date, nextCycleStart).query(`
-      DECLARE @today DATE = CAST(GETDATE() AS DATE); DECLARE @periodTo DATE = CASE WHEN @to > DATEADD(day,1,@today) THEN DATEADD(day,1,@today) ELSE @to END;
+    const result = await pool.request().input("from", sql.Date, from).input("to", sql.Date, to).query(`
+      DECLARE @today DATE = CAST(GETDATE() AS DATE); DECLARE @periodTo DATE = CASE WHEN DATEADD(day,1,@to) > DATEADD(day,1,@today) THEN DATEADD(day,1,@today) ELSE DATEADD(day,1,@to) END;
       SELECT COUNT(*) GeneratedCoupons,SUM(CASE WHEN IsScanned=1 THEN 1 ELSE 0 END) ScannedCoupons,SUM(CASE WHEN IsScanned=0 THEN 1 ELSE 0 END) PendingCoupons,COUNT(DISTINCT WorkOrder) ActiveWorkOrders,SUM(CASE WHEN IsScanned=1 AND ScannedAt>=@today THEN 1 ELSE 0 END) TodayScans,SUM(CASE WHEN IsScanned=1 AND ScannedAt>=DATEADD(day,-1,@today) AND ScannedAt<@today THEN 1 ELSE 0 END) YesterdayScans,SUM(CASE WHEN IsScanned=1 AND ScannedAt>=DATEFROMPARTS(YEAR(@today),MONTH(@today),1) THEN 1 ELSE 0 END) MonthScans FROM dbo.QrCode_Coupon WHERE Department IN ('sewing','washing','finishing') AND IsDeleted=0;
       SELECT Department,COUNT(*) GeneratedCoupons,SUM(CASE WHEN IsScanned=1 THEN 1 ELSE 0 END) ScannedCoupons,SUM(CASE WHEN IsScanned=0 THEN 1 ELSE 0 END) PendingCoupons,COUNT(DISTINCT WorkOrder) ActiveWorkOrders FROM dbo.QrCode_Coupon WHERE Department IN ('sewing','washing','finishing') AND IsDeleted=0 GROUP BY Department;
-      WITH Days AS (SELECT @from ScanDate UNION ALL SELECT DATEADD(day,1,ScanDate) FROM Days WHERE ScanDate < DATEADD(day,-1,@periodTo)) SELECT d.ScanDate,SUM(CASE WHEN c.Department='sewing' THEN 1 ELSE 0 END) Sewing,SUM(CASE WHEN c.Department='washing' THEN 1 ELSE 0 END) Washing,SUM(CASE WHEN c.Department='finishing' THEN 1 ELSE 0 END) Finishing FROM Days d LEFT JOIN dbo.QrCode_Coupon c ON c.IsDeleted=0 AND c.IsScanned=1 AND c.Department IN ('sewing','washing','finishing') AND c.ScannedAt>=d.ScanDate AND c.ScannedAt<DATEADD(day,1,d.ScanDate) GROUP BY d.ScanDate ORDER BY d.ScanDate OPTION (MAXRECURSION 31);
+      WITH Days AS (SELECT @from ScanDate UNION ALL SELECT DATEADD(day,1,ScanDate) FROM Days WHERE ScanDate < DATEADD(day,-1,@periodTo)) SELECT d.ScanDate,SUM(CASE WHEN c.Department='sewing' THEN 1 ELSE 0 END) Sewing,SUM(CASE WHEN c.Department='washing' THEN 1 ELSE 0 END) Washing,SUM(CASE WHEN c.Department='finishing' THEN 1 ELSE 0 END) Finishing FROM Days d LEFT JOIN dbo.QrCode_Coupon c ON c.IsDeleted=0 AND c.IsScanned=1 AND c.Department IN ('sewing','washing','finishing') AND c.ScannedAt>=d.ScanDate AND c.ScannedAt<DATEADD(day,1,d.ScanDate) GROUP BY d.ScanDate ORDER BY d.ScanDate OPTION (MAXRECURSION 366);
       SELECT TOP(6) Department,WorkOrder,COUNT(*) GeneratedCoupons,SUM(CASE WHEN IsScanned=1 THEN 1 ELSE 0 END) ScannedCoupons,SUM(CASE WHEN IsScanned=0 THEN 1 ELSE 0 END) PendingCoupons FROM dbo.QrCode_Coupon WHERE Department IN ('sewing','washing','finishing') AND IsDeleted=0 GROUP BY Department,WorkOrder ORDER BY SUM(CASE WHEN IsScanned=0 THEN 1 ELSE 0 END) DESC,COUNT(*) DESC;
       WITH Scans AS (SELECT TOP(8) CONCAT('scan:',Department,':',CouponCode) Id,'scan' Type,Department,WorkOrder,CAST(NULL AS INT) CouponCount,COALESCE(SystemScannedAt,ScannedAt) OccurredAt FROM dbo.QrCode_Coupon WHERE Department IN ('sewing','washing','finishing') AND IsDeleted=0 AND IsScanned=1 AND COALESCE(SystemScannedAt,ScannedAt) IS NOT NULL ORDER BY COALESCE(SystemScannedAt,ScannedAt) DESC), Generations AS (SELECT TOP(8) CONCAT('generation:',Department,':',COALESCE(CONVERT(NVARCHAR(36),Id),CouponCode)) Id,'generation' Type,Department,MAX(WorkOrder) WorkOrder,COUNT(*) CouponCount,MAX(InsertedAt) OccurredAt FROM dbo.QrCode_Coupon WHERE Department IN ('sewing','washing','finishing') AND IsDeleted=0 GROUP BY Department,COALESCE(CONVERT(NVARCHAR(36),Id),CouponCode) ORDER BY MAX(InsertedAt) DESC) SELECT TOP(8) Id,Type,Department,WorkOrder,CouponCount,OccurredAt FROM (SELECT * FROM Scans UNION ALL SELECT * FROM Generations) Recent ORDER BY OccurredAt DESC;
     `);
