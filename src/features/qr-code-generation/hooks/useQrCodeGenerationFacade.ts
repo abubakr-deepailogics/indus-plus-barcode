@@ -132,6 +132,7 @@ const emptyStyle: QrCodeStyleData = {
   saleOrderNo: "",
   customer: "",
   styleCode: "",
+  workOrderQty: "",
   generateBy: "",
   generateDatetime: "",
   totalWash: "",
@@ -152,6 +153,13 @@ function getSelectedBundlePcs(bundles: BundleDetailRow[]): number {
   return bundles
     .filter((bundle) => bundle.sel)
     .reduce((sum, bundle) => sum + bundle.pcs, 0);
+}
+
+function getTotalBundleQty(cutDetails: OpenOrderCutRow[]): number {
+  return cutDetails.reduce((total, cut) => {
+    const quantity = Number(cut.Bundle_Qty ?? cut.Pcs ?? 0);
+    return total + (Number.isFinite(quantity) && quantity > 0 ? quantity : 0);
+  }, 0);
 }
 
 function isCompleteManualBundle(bundle: BundleDetailRow): boolean {
@@ -357,7 +365,9 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       const data = (await response.json()) as OpenOrderResponse;
       if (requestId !== workOrderRequestId.current) return;
 
-      let fetchedCuts: OpenOrderCutRow[] = data.cutDetails || [];
+      const sourceCutDetails = data.cutDetails || [];
+      const workOrderQty = getTotalBundleQty(sourceCutDetails);
+      let fetchedCuts: OpenOrderCutRow[] = sourceCutDetails;
       if (usesManualCouponCutDetails(department)) {
         const manualDetailsResponse = await fetch(
           `/api/manual-coupon-cut-details?work_order=${encodeURIComponent(wo)}&department=${department}`,
@@ -492,6 +502,9 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         saleOrderNo: wo,
         customer: fetchedCuts[0]?.Customer_Name || "",
         styleCode: fetchedOps[0]?.Style_Code || "",
+        workOrderQty: usesManualCouponCutDetails(department)
+          ? String(workOrderQty)
+          : "",
         generatedCoupons: couponCount,
         generatedBundle: String(bundles.length),
         subTotal: "0",

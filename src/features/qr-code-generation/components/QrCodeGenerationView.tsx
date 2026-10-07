@@ -75,6 +75,13 @@ export function QrCodeGenerationView() {
           customersList={facade.customersList}
           workersList={facade.workersList}
           isSelectionGenerated={facade.isSelectionGenerated}
+          upstreamQtyLabel={
+            department === "washing"
+              ? "Stitch Qty"
+              : department === "finishing"
+                ? "Washed Qty"
+                : undefined
+          }
         />
 
         {/* Main Grid: Bundle Detail (left) + Operations (right) */}

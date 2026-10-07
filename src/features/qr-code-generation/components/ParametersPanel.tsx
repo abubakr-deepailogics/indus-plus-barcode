@@ -18,6 +18,7 @@ interface ParametersPanelProps {
   customersList: string[];
   workersList: WorkerItem[];
   isSelectionGenerated: boolean;
+  upstreamQtyLabel?: "Stitch Qty" | "Washed Qty";
 }
 export function ParametersPanel({
   activeStyle,
@@ -29,12 +30,17 @@ export function ParametersPanel({
   customersList = [],
   workersList = [],
   isSelectionGenerated,
+  upstreamQtyLabel,
 }: ParametersPanelProps) {
   return (
     <div className="bg-white border border-[#e2e8f0] rounded-2xl p-5 shadow-sm grid grid-cols-1 lg:grid-cols-12 gap-6 items-center">
       {/* Left Input Fields Column (9 cols) */}
       <div className="lg:col-span-9">
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
+        <div
+          className={`grid grid-cols-1 sm:grid-cols-2 gap-4 ${
+            upstreamQtyLabel ? "md:grid-cols-5" : "md:grid-cols-4"
+          }`}
+        >
            <div className="flex flex-col gap-1.5">
             <label className="font-bold text-[#475569] text-[11px]">
               Work Order
@@ -75,6 +81,21 @@ export function ParametersPanel({
               className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
             />
           </div>
+
+          {upstreamQtyLabel && (
+            <div className="flex flex-col gap-1.5">
+              <label className="font-bold text-[#475569] text-[11px]">
+                {upstreamQtyLabel}
+              </label>
+              <input
+                type="text"
+                value={activeStyle.workOrderQty || "0"}
+                readOnly
+                placeholder="0"
+                className="w-full px-3 py-2 rounded-xl border border-[#e2e8f0] text-xs bg-slate-50 text-slate-500 font-semibold focus:outline-none cursor-not-allowed"
+              />
+            </div>
+          )}
 
           <div className="flex flex-col gap-1.5">
             <label className="font-bold text-[#475569] text-[11px]">

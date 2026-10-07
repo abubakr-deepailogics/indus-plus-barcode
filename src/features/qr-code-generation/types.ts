@@ -32,6 +32,7 @@ export interface QrCodeStyleData {
   saleOrderNo: string;
   customer: string;
   styleCode: string;
+  workOrderQty?: string;
   generateBy: string;
   generateDatetime: string;
   totalWash: string;
