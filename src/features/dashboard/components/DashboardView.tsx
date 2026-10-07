@@ -12,7 +12,6 @@ import {
   Loader2,
   PackageCheck,
   QrCode,
-  RefreshCw,
 } from "lucide-react";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -191,27 +190,25 @@ function DepartmentMix({ data }: { data: DashboardInsights["departments"] }) {
 }
 
 function Pipeline({ data }: { data: DashboardInsights }) {
-  const scanned = percent(data.scannedCoupons, data.generatedCoupons);
-  const pending = percent(data.pendingCoupons, data.generatedCoupons);
+  const scanCompletion = percent(data.scannedCoupons, data.generatedCoupons);
   return <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-    <div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-[#211f20]">Coupon pipeline</h2><p className="mt-1 text-xs text-slate-500">Current state of active generated coupons.</p></div><PackageCheck className="h-5 w-5 text-[#b11016]" /></div>
+    <div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-[#211f20]">Coupon completion</h2><p className="mt-1 text-xs text-slate-500">Scan completion across active generated coupons.</p></div><PackageCheck className="h-5 w-5 text-[#b11016]" /></div>
     <div className="mt-7 flex h-4 overflow-hidden rounded-full bg-slate-100">
-      <span className="bg-[#b11016]" style={{ width: `${scanned}%` }} />
-      <span className="bg-[#d65a5e]" style={{ width: `${pending}%` }} />
+      <span className="bg-[#b11016]" style={{ width: `${scanCompletion}%` }} />
     </div>
     <div className="mt-5 grid grid-cols-3 gap-2 text-center">
-      {[['Generated', data.generatedCoupons, '#211f20'], ['Scanned', data.scannedCoupons, '#b11016'], ['Pending', data.pendingCoupons, '#d65a5e']].map(([label, value, color]) => <div key={String(label)}><p className="text-[11px] text-slate-500">{label}</p><b className="text-base" style={{ color: String(color) }}>{number.format(Number(value))}</b></div>)}
+      {[['Generated', data.generatedCoupons, '#211f20'], ['Scanned', data.scannedCoupons, '#b11016'], ['Completed W/O', data.completedWorkOrders, '#d65a5e']].map(([label, value, color]) => <div key={String(label)}><p className="text-[11px] text-slate-500">{label}</p><b className="text-base" style={{ color: String(color) }}>{number.format(Number(value))}</b></div>)}
     </div>
   </article>;
 }
 
-function Backlog({ items, title = "Work-order backlog", description = "Open coupon volume requiring scan completion." }: { items: WorkOrderInsight[]; title?: string; description?: string }) {
-  const max = Math.max(1, ...items.map((item) => item.pendingCoupons));
+function Backlog({ items, title = "Work-order scan output", description = "Coupons scanned by work order." }: { items: WorkOrderInsight[]; title?: string; description?: string }) {
+  const max = Math.max(1, ...items.map((item) => item.scannedCoupons));
   return <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
     <div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-[#211f20]">{title}</h2><p className="mt-1 text-xs text-slate-500">{description}</p></div><ClipboardList className="h-5 w-5 text-[#b11016]" /></div>
     <div className="mt-5 space-y-4">
-      {items.slice(0, 5).map((item) => <div key={`${item.department}-${item.workOrder}`}><div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="font-semibold text-[#211f20]">{item.workOrder}</span><span className="text-slate-500">{number.format(item.pendingCoupons)} pending</span></div><div className="h-2 overflow-hidden rounded-full bg-[#fff1f2]"><div className="h-full rounded-full bg-[#b11016]" style={{ width: `${(item.pendingCoupons / max) * 100}%` }} /></div></div>)}
-      {items.length === 0 && <p className="py-6 text-center text-sm text-slate-500">No work orders are awaiting scans.</p>}
+      {items.slice(0, 5).map((item) => <div key={`${item.department}-${item.workOrder}`}><div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="font-semibold text-[#211f20]">{item.workOrder}</span><span className="text-slate-500">{number.format(item.scannedCoupons)} scanned</span></div><div className="h-2 overflow-hidden rounded-full bg-[#fff1f2]"><div className="h-full rounded-full bg-[#b11016]" style={{ width: `${(item.scannedCoupons / max) * 100}%` }} /></div></div>)}
+      {items.length === 0 && <p className="py-6 text-center text-sm text-slate-500">No work orders have scanned coupons yet.</p>}
     </div>
   </article>;
 }
@@ -231,7 +228,7 @@ export function DashboardView() {
     return () => { active = false; };
   }, [range]);
 
-  const attentionItems = useMemo(() => data?.workOrders.filter((item) => item.pendingCoupons > 0).slice(0, 5) ?? [], [data]);
+  const attentionItems = useMemo(() => data?.workOrders.filter((item) => item.scannedCoupons > 0).slice(0, 5) ?? [], [data]);
 
   function handleRangeChange(nextRange: Range) {
     setRange((currentRange) => (
@@ -253,11 +250,11 @@ export function DashboardView() {
     <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
       <MetricCard label="Generated" value={data.generatedCoupons} detail="Active coupons issued" icon={QrCode} />
       <MetricCard label="Scanned" value={data.scannedCoupons} detail={`${data.completionRate}% completion rate`} icon={CheckCircle2} />
-      <MetricCard label="Pending" value={data.pendingCoupons} detail="Awaiting scan completion" icon={RefreshCw} />
+      <MetricCard label="Completed W/O" value={data.completedWorkOrders} detail="All active coupons scanned" icon={PackageCheck} />
       <MetricCard label="Today’s scans" value={data.todayScans} detail={`${number.format(data.monthScans)} scans this month`} icon={Activity} />
     </section>
     <section className="grid gap-5 xl:grid-cols-[1.45fr_0.95fr]"><DailyOutputChart data={data.dailyOutput} /><DepartmentMix data={data.departments} /></section>
     <section className="grid gap-5 xl:grid-cols-2"><Pipeline data={data} /><Backlog items={data.workOrders} /></section>
-    <section className="grid gap-5 xl:grid-cols-[1.35fr_0.95fr]"><ActivityFeed activities={data.recentActivities} /><Backlog items={attentionItems} title="Work-order attention queue" description="The five work orders with the most coupons still pending." /></section>
+    <section className="grid gap-5 xl:grid-cols-[1.35fr_0.95fr]"><ActivityFeed activities={data.recentActivities} /><Backlog items={attentionItems} title="Top work-order scan output" description="The five work orders with the most scanned coupons." /></section>
   </main>;
 }
