@@ -1,124 +1,42 @@
 import { getPool, sql } from "@/lib/db";
-import { isCouponDepartment } from "@/lib/department-classification";
-import type { DashboardActivity, DashboardDepartment, DashboardInsights } from "@/features/dashboard/types";
+import type { DashboardInsights } from "@/features/dashboard/types";
 
 export const dynamic = "force-dynamic";
 
-type DashboardSummaryRow = {
-  GeneratedCoupons: number;
-  ScannedCoupons: number;
-  PendingCoupons: number;
-  ActiveWorkOrders: number;
-  TodayScans: number;
-  YesterdayScans: number;
-  MonthScans: number;
-};
-
-type DashboardActivityRow = {
-  Id: string;
-  Type: DashboardActivity["type"];
-  WorkOrder: string;
-  CouponCode: string | null;
-  CouponCount: number | null;
-  OccurredAt: Date | string;
-};
+type SummaryRow = { GeneratedCoupons: number; ScannedCoupons: number; PendingCoupons: number; ActiveWorkOrders: number; TodayScans: number; YesterdayScans: number; MonthScans: number };
+type DepartmentRow = { Department: "sewing" | "washing" | "finishing"; GeneratedCoupons: number; ScannedCoupons: number; PendingCoupons: number; ActiveWorkOrders: number };
+type DayRow = { ScanDate: Date | string; Sewing: number; Washing: number; Finishing: number };
+type WorkOrderRow = Omit<DepartmentRow, "ActiveWorkOrders"> & { WorkOrder: string };
+type ActivityRow = { Id: string; Type: "scan" | "generation"; Department: DepartmentRow["Department"]; WorkOrder: string; CouponCount: number | null; OccurredAt: Date | string };
+const asNumber = (value: number | null | undefined) => Number(value) || 0;
 
 export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
-
-  if (!isCouponDepartment(department) || department === "cutting") {
-    return Response.json({ error: "Invalid department." }, { status: 400 });
+  const month = new URL(request.url).searchParams.get("month") || "";
+  if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) {
+    return Response.json({ error: "A valid month (YYYY-MM) is required." }, { status: 400 });
   }
-
+  const [year, monthNumber] = month.split("-").map(Number);
+  const from = `${month}-01`;
+  const to = `${year}-${String(monthNumber === 12 ? 1 : monthNumber + 1).padStart(2, "0")}-01`;
+  const nextMonth = monthNumber === 12 ? `${year + 1}-01-01` : to;
   try {
     const pool = await getPool("pitSystem");
-    const result = await pool.request()
-      .input("department", sql.NVarChar, department)
-      .query(`
-        DECLARE @today DATE = CAST(GETDATE() AS DATE);
-
-        SELECT
-          COUNT(*) AS GeneratedCoupons,
-          COALESCE(SUM(CASE WHEN IsScanned = 1 THEN 1 ELSE 0 END), 0) AS ScannedCoupons,
-          COALESCE(SUM(CASE WHEN IsScanned = 0 THEN 1 ELSE 0 END), 0) AS PendingCoupons,
-          COUNT(DISTINCT WorkOrder) AS ActiveWorkOrders,
-          COALESCE(SUM(CASE WHEN IsScanned = 1 AND ScannedAt >= @today THEN 1 ELSE 0 END), 0) AS TodayScans,
-          COALESCE(SUM(CASE WHEN IsScanned = 1 AND ScannedAt >= DATEADD(day, -1, @today) AND ScannedAt < @today THEN 1 ELSE 0 END), 0) AS YesterdayScans,
-          COALESCE(SUM(CASE WHEN IsScanned = 1 AND ScannedAt >= DATEFROMPARTS(YEAR(@today), MONTH(@today), 1) THEN 1 ELSE 0 END), 0) AS MonthScans
-        FROM dbo.QrCode_Coupon
-        WHERE Department = @department AND IsDeleted = 0;
-
-        WITH Events AS (
-          SELECT TOP (6)
-            CONCAT('scan:', CouponCode) AS Id,
-            'scan' AS Type,
-            WorkOrder,
-            CouponCode,
-            CAST(NULL AS INT) AS CouponCount,
-            COALESCE(SystemScannedAt, ScannedAt) AS OccurredAt
-          FROM dbo.QrCode_Coupon
-          WHERE Department = @department
-            AND IsDeleted = 0
-            AND IsScanned = 1
-            AND COALESCE(SystemScannedAt, ScannedAt) IS NOT NULL
-          ORDER BY COALESCE(SystemScannedAt, ScannedAt) DESC
-        ),
-        Generations AS (
-          SELECT TOP (6)
-            CONCAT('generation:', COALESCE(CONVERT(NVARCHAR(36), Id), CouponCode)) AS Id,
-            'generation' AS Type,
-            MAX(WorkOrder) AS WorkOrder,
-            CAST(NULL AS NVARCHAR(200)) AS CouponCode,
-            COUNT(*) AS CouponCount,
-            MAX(InsertedAt) AS OccurredAt
-          FROM dbo.QrCode_Coupon
-          WHERE Department = @department AND IsDeleted = 0
-          GROUP BY COALESCE(CONVERT(NVARCHAR(36), Id), CouponCode)
-          ORDER BY MAX(InsertedAt) DESC
-        )
-        SELECT TOP (6) Id, Type, WorkOrder, CouponCode, CouponCount, OccurredAt
-        FROM (
-          SELECT * FROM Events
-          UNION ALL
-          SELECT * FROM Generations
-        ) AS Recent
-        ORDER BY OccurredAt DESC;
-      `);
-
-    // This SQL batch deliberately returns exactly two result sets. mssql's
-    // general `recordsets` type also permits a keyed object, so narrow it
-    // locally to the known tuple before indexing either result set.
-    const [summaryRows, activityRows] = result.recordsets as unknown as [
-      DashboardSummaryRow[],
-      DashboardActivityRow[],
-    ];
-    const summary = summaryRows[0];
-    const generatedCoupons = Number(summary?.GeneratedCoupons) || 0;
-    const scannedCoupons = Number(summary?.ScannedCoupons) || 0;
-    const insights: DashboardInsights = {
-      department: department as DashboardDepartment,
-      generatedCoupons,
-      scannedCoupons,
-      pendingCoupons: Number(summary?.PendingCoupons) || 0,
-      activeWorkOrders: Number(summary?.ActiveWorkOrders) || 0,
-      todayScans: Number(summary?.TodayScans) || 0,
-      yesterdayScans: Number(summary?.YesterdayScans) || 0,
-      monthScans: Number(summary?.MonthScans) || 0,
-      completionRate: generatedCoupons === 0 ? 0 : Math.round((scannedCoupons / generatedCoupons) * 100),
-      recentActivities: activityRows.map((activity) => ({
-        id: activity.Id,
-        type: activity.Type,
-        workOrder: activity.WorkOrder,
-        couponCode: activity.CouponCode || undefined,
-        couponCount: activity.CouponCount ?? undefined,
-        occurredAt: new Date(activity.OccurredAt).toISOString(),
-      })),
-    };
-    return Response.json(insights);
+    // One optimized round-trip for every dashboard panel; no per-card reads.
+    const result = await pool.request().input("from", sql.Date, from).input("to", sql.Date, nextMonth).query(`
+      DECLARE @today DATE = CAST(GETDATE() AS DATE);
+      SELECT COUNT(*) GeneratedCoupons,SUM(CASE WHEN IsScanned=1 THEN 1 ELSE 0 END) ScannedCoupons,SUM(CASE WHEN IsScanned=0 THEN 1 ELSE 0 END) PendingCoupons,COUNT(DISTINCT WorkOrder) ActiveWorkOrders,SUM(CASE WHEN IsScanned=1 AND ScannedAt>=@today THEN 1 ELSE 0 END) TodayScans,SUM(CASE WHEN IsScanned=1 AND ScannedAt>=DATEADD(day,-1,@today) AND ScannedAt<@today THEN 1 ELSE 0 END) YesterdayScans,SUM(CASE WHEN IsScanned=1 AND ScannedAt>=DATEFROMPARTS(YEAR(@today),MONTH(@today),1) THEN 1 ELSE 0 END) MonthScans FROM dbo.QrCode_Coupon WHERE Department IN ('sewing','washing','finishing') AND IsDeleted=0;
+      SELECT Department,COUNT(*) GeneratedCoupons,SUM(CASE WHEN IsScanned=1 THEN 1 ELSE 0 END) ScannedCoupons,SUM(CASE WHEN IsScanned=0 THEN 1 ELSE 0 END) PendingCoupons,COUNT(DISTINCT WorkOrder) ActiveWorkOrders FROM dbo.QrCode_Coupon WHERE Department IN ('sewing','washing','finishing') AND IsDeleted=0 GROUP BY Department;
+      WITH Days AS (SELECT @from ScanDate UNION ALL SELECT DATEADD(day,1,ScanDate) FROM Days WHERE ScanDate < DATEADD(day,-1,@to)) SELECT d.ScanDate,SUM(CASE WHEN c.Department='sewing' THEN 1 ELSE 0 END) Sewing,SUM(CASE WHEN c.Department='washing' THEN 1 ELSE 0 END) Washing,SUM(CASE WHEN c.Department='finishing' THEN 1 ELSE 0 END) Finishing FROM Days d LEFT JOIN dbo.QrCode_Coupon c ON c.IsDeleted=0 AND c.IsScanned=1 AND c.Department IN ('sewing','washing','finishing') AND c.ScannedAt>=d.ScanDate AND c.ScannedAt<DATEADD(day,1,d.ScanDate) GROUP BY d.ScanDate ORDER BY d.ScanDate OPTION (MAXRECURSION 31);
+      SELECT TOP(6) Department,WorkOrder,COUNT(*) GeneratedCoupons,SUM(CASE WHEN IsScanned=1 THEN 1 ELSE 0 END) ScannedCoupons,SUM(CASE WHEN IsScanned=0 THEN 1 ELSE 0 END) PendingCoupons FROM dbo.QrCode_Coupon WHERE Department IN ('sewing','washing','finishing') AND IsDeleted=0 GROUP BY Department,WorkOrder ORDER BY SUM(CASE WHEN IsScanned=0 THEN 1 ELSE 0 END) DESC,COUNT(*) DESC;
+      WITH Scans AS (SELECT TOP(8) CONCAT('scan:',Department,':',CouponCode) Id,'scan' Type,Department,WorkOrder,CAST(NULL AS INT) CouponCount,COALESCE(SystemScannedAt,ScannedAt) OccurredAt FROM dbo.QrCode_Coupon WHERE Department IN ('sewing','washing','finishing') AND IsDeleted=0 AND IsScanned=1 AND COALESCE(SystemScannedAt,ScannedAt) IS NOT NULL ORDER BY COALESCE(SystemScannedAt,ScannedAt) DESC), Generations AS (SELECT TOP(8) CONCAT('generation:',Department,':',COALESCE(CONVERT(NVARCHAR(36),Id),CouponCode)) Id,'generation' Type,Department,MAX(WorkOrder) WorkOrder,COUNT(*) CouponCount,MAX(InsertedAt) OccurredAt FROM dbo.QrCode_Coupon WHERE Department IN ('sewing','washing','finishing') AND IsDeleted=0 GROUP BY Department,COALESCE(CONVERT(NVARCHAR(36),Id),CouponCode) ORDER BY MAX(InsertedAt) DESC) SELECT TOP(8) Id,Type,Department,WorkOrder,CouponCount,OccurredAt FROM (SELECT * FROM Scans UNION ALL SELECT * FROM Generations) Recent ORDER BY OccurredAt DESC;
+    `);
+    const [summaryRows, departmentRows, dayRows, workOrderRows, activityRows] = result.recordsets as unknown as [SummaryRow[], DepartmentRow[], DayRow[], WorkOrderRow[], ActivityRow[]];
+    const summary = summaryRows[0]; const generatedCoupons = asNumber(summary?.GeneratedCoupons); const scannedCoupons = asNumber(summary?.ScannedCoupons);
+    const departments = (["sewing","washing","finishing"] as const).map((department) => { const row = departmentRows.find((item) => item.Department === department); const generated = asNumber(row?.GeneratedCoupons); const scanned = asNumber(row?.ScannedCoupons); return { department, generatedCoupons: generated, scannedCoupons: scanned, pendingCoupons: asNumber(row?.PendingCoupons), activeWorkOrders: asNumber(row?.ActiveWorkOrders), completionRate: generated ? Math.round(scanned / generated * 100) : 0 }; });
+    const data: DashboardInsights = { generatedCoupons, scannedCoupons, pendingCoupons: asNumber(summary?.PendingCoupons), activeWorkOrders: asNumber(summary?.ActiveWorkOrders), todayScans: asNumber(summary?.TodayScans), yesterdayScans: asNumber(summary?.YesterdayScans), monthScans: asNumber(summary?.MonthScans), completionRate: generatedCoupons ? Math.round(scannedCoupons / generatedCoupons * 100) : 0, departments, dailyOutput: dayRows.map((r) => ({ date: new Date(r.ScanDate).toISOString(), sewing: asNumber(r.Sewing), washing: asNumber(r.Washing), finishing: asNumber(r.Finishing) })), workOrders: workOrderRows.map((r) => ({ department: r.Department, workOrder: r.WorkOrder, generatedCoupons: asNumber(r.GeneratedCoupons), scannedCoupons: asNumber(r.ScannedCoupons), pendingCoupons: asNumber(r.PendingCoupons), completionRate: asNumber(r.GeneratedCoupons) ? Math.round(asNumber(r.ScannedCoupons) / asNumber(r.GeneratedCoupons) * 100) : 0 })), recentActivities: activityRows.map((r) => ({ id: r.Id, type: r.Type, department: r.Department, workOrder: r.WorkOrder, couponCount: r.CouponCount ?? undefined, occurredAt: new Date(r.OccurredAt).toISOString() })) };
+    return Response.json(data);
   } catch (error: unknown) {
     console.error("Dashboard insights error:", error);
-    const message = error instanceof Error ? error.message : "Internal Server Error";
-    return Response.json({ error: message }, { status: 500 });
+    return Response.json({ error: error instanceof Error ? error.message : "Internal Server Error" }, { status: 500 });
   }
 }

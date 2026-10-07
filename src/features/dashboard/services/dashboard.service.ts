@@ -1,14 +1,8 @@
-import type { DashboardDepartment, DashboardInsights } from "../types";
+import type { DashboardInsights } from "../types";
 
-export async function fetchDashboardInsights(
-  department: DashboardDepartment,
-): Promise<DashboardInsights> {
-  const response = await fetch(`/api/dashboard/insights?department=${department}`, {
-    cache: "no-store",
-  });
+export async function fetchDashboardInsights(month: string): Promise<DashboardInsights> {
+  const response = await fetch(`/api/dashboard/insights?month=${encodeURIComponent(month)}`, { cache: "no-store" });
   const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error || "Unable to load dashboard insights.");
-  }
+  if (!response.ok) throw new Error(data.error || "Unable to load production insights.");
   return data as DashboardInsights;
 }
