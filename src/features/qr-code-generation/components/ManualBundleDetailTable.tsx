@@ -1,6 +1,6 @@
 "use client";
 
-import { Plus, Scissors, Trash2 } from "lucide-react";
+import { Plus, Trash2 } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -116,13 +116,11 @@ export function ManualBundleDetailTable({
                         aria-label={`Cut number for bundle ${bundle.bundleNo || "row"}`}
                         className="h-[30px] w-20 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-700 shadow-none transition-colors hover:border-[#efc3c6] hover:bg-[#fffafa] focus-visible:border-[#b11016] focus-visible:ring-[#b11016]/15"
                       >
-                        <Scissors className="size-3 text-[#b11016]" />
-                        <SelectValue placeholder="Choose" />
+                        <SelectValue placeholder="Select cut" />
                       </SelectTrigger>
                       <SelectContent className="overflow-hidden rounded-xl border border-[#efc3c6] bg-white p-1.5 shadow-xl">
                         <SelectGroup>
-                          <SelectLabel className="flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-[#b11016]">
-                            <Scissors className="size-3" />
+                          <SelectLabel className="px-2 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-[#b11016]">
                             Select Cut
                           </SelectLabel>
                           {cutNos.map((cutNo) => (
