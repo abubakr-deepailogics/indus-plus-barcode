@@ -1,6 +1,4 @@
-import type { CouponDepartment } from "@/lib/department-classification";
-
-export type DashboardDepartment = Exclude<CouponDepartment, "cutting" | "gdp">;
+export type DashboardDepartment = "sewing" | "washing" | "finishing" | "gdp";
 
 export interface DashboardActivity {
   id: string;

@@ -1,6 +1,6 @@
 import { getPool, sql } from "@/lib/db";
-import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
-import type { DashboardActivity, DashboardInsights } from "@/features/dashboard/types";
+import { isCouponDepartment } from "@/lib/department-classification";
+import type { DashboardActivity, DashboardDepartment, DashboardInsights } from "@/features/dashboard/types";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
 
-  if (!isCouponDepartment(department)) {
+  if (!isCouponDepartment(department) || department === "cutting") {
     return Response.json({ error: "Invalid department." }, { status: 400 });
   }
 
@@ -97,7 +97,7 @@ export async function GET(request: Request) {
     const generatedCoupons = Number(summary?.GeneratedCoupons) || 0;
     const scannedCoupons = Number(summary?.ScannedCoupons) || 0;
     const insights: DashboardInsights = {
-      department: department as CouponDepartment as DashboardInsights["department"],
+      department: department as DashboardDepartment,
       generatedCoupons,
       scannedCoupons,
       pendingCoupons: Number(summary?.PendingCoupons) || 0,
