@@ -84,6 +84,7 @@ export async function POST(request: Request) {
     }
     const invalidBundle = selectedBundles.find(
       (bundle) =>
+        !bundle.cutNo?.trim() ||
         !bundle.bundleNo?.trim() ||
         !Number.isInteger(Number(bundle.pcs)) ||
         Number(bundle.pcs) <= 0,
@@ -92,7 +93,7 @@ export async function POST(request: Request) {
       return Response.json(
         {
           error:
-            "Every selected manual bundle needs a Bundle No. and Pcs greater than 0.",
+            "Every selected manual bundle needs a Cut No., Bundle No., and Pcs greater than 0.",
         },
         { status: 400 },
       );

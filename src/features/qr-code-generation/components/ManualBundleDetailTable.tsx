@@ -1,15 +1,25 @@
 "use client";
 
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Scissors, Trash2 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { BundleDetailRow } from "../types";
 
 interface ManualBundleDetailTableProps {
   bundles: BundleDetailRow[];
+  cutNos: string[];
   subTotal: string;
   total: string;
   onBundleChange: (
     id: number,
-    field: "bundleNo" | "inseam" | "size" | "pcs",
+    field: "cutNo" | "bundleNo" | "inseam" | "size" | "pcs",
     value: string,
   ) => void;
   onBundleSelChange: (id: number, checked: boolean) => void;
@@ -20,6 +30,7 @@ interface ManualBundleDetailTableProps {
 
 export function ManualBundleDetailTable({
   bundles,
+  cutNos,
   subTotal,
   total,
   onBundleChange,
@@ -30,7 +41,10 @@ export function ManualBundleDetailTable({
 }: ManualBundleDetailTableProps) {
   const completeBundles = bundles.filter(
     (bundle) =>
-      Boolean(bundle.bundleNo.trim()) && Number.isInteger(bundle.pcs) && bundle.pcs > 0,
+      Boolean(bundle.cutNo.trim()) &&
+      Boolean(bundle.bundleNo.trim()) &&
+      Number.isInteger(bundle.pcs) &&
+      bundle.pcs > 0,
   );
   const areAllCompleteBundlesSelected =
     completeBundles.length > 0 && completeBundles.every((bundle) => bundle.sel);
@@ -65,17 +79,14 @@ export function ManualBundleDetailTable({
       </div>
 
       <div className="overflow-auto max-h-[420px] border border-slate-200/80 rounded-xl">
-        <table className="w-full text-left border-collapse min-w-[570px]">
+        <table className="w-full text-left border-collapse min-w-[500px]">
           <thead>
             <tr className="border-b border-slate-200 bg-slate-50/80">
               <th className="py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                Cut # <span className="text-red-500">*</span>
+              </th>
+              <th className="py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 Bundle # <span className="text-red-500">*</span>
-              </th>
-              <th className="py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                Inseam
-              </th>
-              <th className="py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                Size #
               </th>
               <th className="py-2.5 text-center text-[10px] font-semibold uppercase tracking-wider text-slate-500">
                 Pcs <span className="text-red-500">*</span>
@@ -93,30 +104,48 @@ export function ManualBundleDetailTable({
                 className="text-[11px] font-semibold text-slate-700"
               >
                 <td className="p-2 text-center">
+                  <div className="flex justify-center">
+                    <Select
+                      value={bundle.cutNo}
+                      onValueChange={(value) =>
+                        onBundleChange(bundle.id, "cutNo", value ?? "")
+                      }
+                    >
+                      <SelectTrigger
+                        size="sm"
+                        aria-label={`Cut number for bundle ${bundle.bundleNo || "row"}`}
+                        className="h-[30px] w-20 rounded-lg border border-slate-200 bg-white px-2 text-[11px] font-semibold text-slate-700 shadow-none transition-colors hover:border-[#efc3c6] hover:bg-[#fffafa] focus-visible:border-[#b11016] focus-visible:ring-[#b11016]/15"
+                      >
+                        <Scissors className="size-3 text-[#b11016]" />
+                        <SelectValue placeholder="Choose" />
+                      </SelectTrigger>
+                      <SelectContent className="overflow-hidden rounded-xl border border-[#efc3c6] bg-white p-1.5 shadow-xl">
+                        <SelectGroup>
+                          <SelectLabel className="flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-extrabold uppercase tracking-wider text-[#b11016]">
+                            <Scissors className="size-3" />
+                            Select Cut
+                          </SelectLabel>
+                          {cutNos.map((cutNo) => (
+                            <SelectItem
+                              key={cutNo}
+                              value={cutNo}
+                              className="my-0.5 rounded-lg px-2 py-2 text-[11px] font-bold focus:bg-[#fff1f2] data-[highlighted]:bg-[#fff1f2]"
+                            >
+                              <span className="!text-[#991b1b]">Cut {cutNo}</span>
+                            </SelectItem>
+                          ))}
+                        </SelectGroup>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </td>
+                <td className="p-2 text-center">
                   <input
                     value={bundle.bundleNo}
                     onChange={(event) =>
                       onBundleChange(bundle.id, "bundleNo", event.target.value)
                     }
                     className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-center font-mono focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  />
-                </td>
-                <td className="p-2 text-center">
-                  <input
-                    value={bundle.inseam}
-                    onChange={(event) =>
-                      onBundleChange(bundle.id, "inseam", event.target.value)
-                    }
-                    className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-center focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
-                  />
-                </td>
-                <td className="p-2 text-center">
-                  <input
-                    value={bundle.size}
-                    onChange={(event) =>
-                      onBundleChange(bundle.id, "size", event.target.value)
-                    }
-                    className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-center focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
                   />
                 </td>
                 <td className="p-2 text-center">

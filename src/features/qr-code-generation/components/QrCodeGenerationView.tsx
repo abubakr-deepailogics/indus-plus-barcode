@@ -96,6 +96,7 @@ export function QrCodeGenerationView() {
               {usesManualCouponCutDetails(department) ? (
                 <ManualBundleDetailTable
                   bundles={facade.activeStyle.bundles}
+                  cutNos={facade.activeStyle.cutNos ?? []}
                   subTotal={facade.activeStyle.subTotal}
                   total={facade.activeStyle.total}
                   onBundleChange={facade.handleManualBundleChange}

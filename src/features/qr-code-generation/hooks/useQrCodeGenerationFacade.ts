@@ -96,7 +96,7 @@ interface QrCodeGenerationFacade {
   handleReworkQtyBundleChange: (value: string) => void;
   handleManualBundleChange: (
     id: number,
-    field: "bundleNo" | "inseam" | "size" | "pcs",
+    field: "cutNo" | "bundleNo" | "inseam" | "size" | "pcs",
     value: string,
   ) => void;
   handleAllManualBundlesSelChange: (checked: boolean) => void;
@@ -133,6 +133,7 @@ const emptyStyle: QrCodeStyleData = {
   customer: "",
   styleCode: "",
   workOrderQty: "",
+  cutNos: [],
   generateBy: "",
   generateDatetime: "",
   totalWash: "",
@@ -367,6 +368,15 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
 
       const sourceCutDetails = data.cutDetails || [];
       const workOrderQty = getTotalBundleQty(sourceCutDetails);
+      const availableCutNos = Array.from(
+        new Set(
+          sourceCutDetails
+            .map((cut) =>
+              cut.Cut === undefined || cut.Cut === null ? "" : String(cut.Cut),
+            )
+            .filter(Boolean),
+        ),
+      ).sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
       let fetchedCuts: OpenOrderCutRow[] = sourceCutDetails;
       if (usesManualCouponCutDetails(department)) {
         const manualDetailsResponse = await fetch(
@@ -505,6 +515,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         workOrderQty: usesManualCouponCutDetails(department)
           ? String(workOrderQty)
           : "",
+        cutNos: availableCutNos,
         generatedCoupons: couponCount,
         generatedBundle: String(bundles.length),
         subTotal: "0",
@@ -620,7 +631,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
 
   const handleManualBundleChange = (
     id: number,
-    field: "bundleNo" | "inseam" | "size" | "pcs",
+    field: "cutNo" | "bundleNo" | "inseam" | "size" | "pcs",
     value: string,
   ) => {
     setActiveStyle((prev) => {
@@ -632,7 +643,8 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         [field]: field === "pcs" ? Number(value) || 0 : value,
       };
       const hasContent = Boolean(
-        updated.bundleNo.trim() ||
+        updated.cutNo.trim() ||
+          updated.bundleNo.trim() ||
           updated.inseam.trim() ||
           updated.size.trim() ||
           updated.pcs,
@@ -702,10 +714,14 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     }
     if (usesManualCouponCutDetails(department)) {
       const invalidBundle = selectedBundles.find(
-        (bundle) => !bundle.bundleNo.trim() || !Number.isInteger(bundle.pcs) || bundle.pcs <= 0,
+        (bundle) =>
+          !bundle.cutNo.trim() ||
+          !bundle.bundleNo.trim() ||
+          !Number.isInteger(bundle.pcs) ||
+          bundle.pcs <= 0,
       );
       if (invalidBundle) {
-        alert("Every selected manual bundle needs a Bundle No. and Pcs greater than 0.");
+        alert("Every selected manual bundle needs a Cut No., Bundle No., and Pcs greater than 0.");
         return;
       }
       const bundleNos = selectedBundles.map((bundle) =>

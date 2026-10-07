@@ -33,6 +33,8 @@ export interface QrCodeStyleData {
   customer: string;
   styleCode: string;
   workOrderQty?: string;
+  /** Unique cut numbers supplied by the work-order cut details. */
+  cutNos?: string[];
   generateBy: string;
   generateDatetime: string;
   totalWash: string;
