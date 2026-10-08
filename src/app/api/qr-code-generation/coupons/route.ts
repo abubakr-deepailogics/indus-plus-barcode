@@ -173,6 +173,7 @@ export async function POST(request: Request) {
               newBundleNos,
               insertedBy,
               generationId,
+              department as CouponDepartment,
             );
           } catch (snapshotErr) {
             console.error("Style bulletin snapshot error:", snapshotErr);

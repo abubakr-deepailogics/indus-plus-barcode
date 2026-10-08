@@ -149,6 +149,7 @@ export function styleBulletinByFilter(
         COALESCE(op.MachineType, sb.[Machine Type]) AS Machine_Type,
         COALESCE(op.PcRate, TRY_CAST(sb.[Piece Rate] AS FLOAT)) AS Piece_Rate,
         COALESCE(op.SAM, TRY_CAST(sb.[Smv/Sam] AS FLOAT)) AS Smv_Sam,
+        COALESCE(op.Commission, TRY_CAST(sb.[UD_Commission] AS FLOAT), 0) AS Incentive,
         [First Operation Section Wise] AS First_Operation_Section_Wise,
         [Last Operation Section Wise] AS Last_Operation_Section_Wise,
         op.SkillLevel,

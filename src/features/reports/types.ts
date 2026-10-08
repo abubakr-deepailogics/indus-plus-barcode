@@ -56,6 +56,7 @@ export interface OperationReportItem {
   operationName: string;
   section: string;
   rate: number | null;
+  incentive: number;
   smv: number | null;
   couponCount: number;
   totalQty: number;
@@ -121,6 +122,7 @@ export interface CouponReportItem {
   operationName?: string | null;
   smv?: number | null;
   rate?: number | null;
+  incentive?: number | null;
   value?: number | null;
   scannedAt?: string | null;
   employeeCode?: string | null;

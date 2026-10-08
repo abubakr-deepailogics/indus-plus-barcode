@@ -206,6 +206,7 @@ export async function POST(request: Request) {
         assignedBundles.map((b) => b.bundleNo),
         by,
         batchId,
+        couponDepartment,
       );
     } catch (snapshotErr) {
       console.warn("Rework operation snapshot warning:", snapshotErr);

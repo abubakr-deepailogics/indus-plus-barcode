@@ -4,6 +4,7 @@ import {
   styleBulletinByFilter,
   cutDetailByFilter,
 } from "@/lib/db";
+import type { CouponDepartment } from "@/lib/department-classification";
 
 // Captures the current indusPlus style-bulletin/cut-detail rows for exactly
 // the operations/bundles a coupon-generation run touched, into the
@@ -29,6 +30,7 @@ interface StyleBulletinIndusRow {
   Smv_Sam: unknown;
   First_Operation_Section_Wise: unknown;
   Last_Operation_Section_Wise: unknown;
+  Incentive: unknown;
 }
 
 interface CutDetailIndusRow {
@@ -120,6 +122,7 @@ function buildStyleBulletinRowsTable(rows: StyleBulletinIndusRow[], workOrder: s
   table.columns.add("SmvSam", sql.Float, { nullable: true });
   table.columns.add("FirstOpSectionWise", sql.NVarChar(50), { nullable: true });
   table.columns.add("LastOpSectionWise", sql.NVarChar(50), { nullable: true });
+  table.columns.add("Incentive", sql.Decimal(18, 4), { nullable: false });
   for (const row of rows) {
     table.rows.add(
       row.Sale_Order_No != null ? String(row.Sale_Order_No) : null,
@@ -134,6 +137,7 @@ function buildStyleBulletinRowsTable(rows: StyleBulletinIndusRow[], workOrder: s
       row.Smv_Sam != null ? Number(row.Smv_Sam) : null,
       row.First_Operation_Section_Wise != null ? String(row.First_Operation_Section_Wise) : null,
       row.Last_Operation_Section_Wise != null ? String(row.Last_Operation_Section_Wise) : null,
+      Number(row.Incentive) || 0,
     );
   }
   return table as unknown as sql.Table;
@@ -184,6 +188,7 @@ async function insertStyleBulletinSnapshot(
   workOrder: string,
   insertedBy: string,
   generationId: string,
+  department: CouponDepartment,
 ) {
   if (rows.length === 0) return;
   const pool = await getPool("pitSystem");
@@ -191,17 +196,18 @@ async function insertStyleBulletinSnapshot(
     .request()
     .input("insertedBy", sql.NVarChar, insertedBy)
     .input("generationId", sql.UniqueIdentifier, generationId)
+    .input("department", sql.NVarChar, department)
     .input("Rows", buildStyleBulletinRowsTable(rows, workOrder))
     .query(`
       INSERT INTO dbo.StyleBullettinInt (
         Id, [Sale order No], [Customer Name], [Order No], [Operation Code], [Operation Name],
         Section, [Operation Sequeance], [Machine Type], [Piece Rate], [Smv/Sam],
-        [First Operation Section Wise], [Last Operation Section Wise], InsertedBy
+        [First Operation Section Wise], [Last Operation Section Wise], Department, Incentive, IncentiveCaptured, InsertedBy
       )
       SELECT
         @generationId, source.SaleOrderNo, source.CustomerName, source.OrderNo, source.OperationCode, source.OperationName,
         source.Section, source.OperationSequence, source.MachineType, source.PieceRate, source.SmvSam,
-        source.FirstOpSectionWise, source.LastOpSectionWise, @insertedBy
+        source.FirstOpSectionWise, source.LastOpSectionWise, @department, source.Incentive, 1, @insertedBy
       FROM @Rows AS source;
     `);
 }
@@ -211,6 +217,7 @@ async function insertCutDetailSnapshot(
   workOrder: string,
   insertedBy: string,
   generationId: string,
+  department: CouponDepartment,
 ) {
   if (rows.length === 0) return;
   const pool = await getPool("pitSystem");
@@ -218,16 +225,17 @@ async function insertCutDetailSnapshot(
     .request()
     .input("insertedBy", sql.NVarChar, insertedBy)
     .input("generationId", sql.UniqueIdentifier, generationId)
+    .input("department", sql.NVarChar, department)
     .input("Rows", buildCutDetailRowsTable(rows, workOrder))
     .query(`
       INSERT INTO dbo.SaleOrderPOCutDetailViewV1 (
         Id, [Sale Order No], [Customer Name], [Work Order #], [Order Qty After % Add], Inseam, Size, Color,
-        [Fabric Code(Main Body)], Wash, [Cut #], [Bundle Id], [Bundle Qty], Shade, Shrinkage, InsertedBy
+        [Fabric Code(Main Body)], Wash, [Cut #], [Bundle Id], [Bundle Qty], Shade, Shrinkage, Department, InsertedBy
       )
       SELECT
         @generationId, source.SaleOrderNo, source.CustomerName, source.WorkOrder, source.OrderQtyAfterAdd, source.Inseam,
         source.Size, source.Color, source.FabricCodeMainBody, source.Wash, source.Cut, source.BundleId,
-        source.BundleQty, source.Shade, source.Shrinkage, @insertedBy
+        source.BundleQty, source.Shade, source.Shrinkage, @department, @insertedBy
       FROM @Rows AS source;
     `);
 }
@@ -258,6 +266,7 @@ export async function snapshotWorkOrderBulletin(
   bundleIds: string[],
   insertedBy: string,
   generationId: string,
+  department: CouponDepartment,
 ): Promise<void> {
   const by = insertedBy?.trim() || "system";
   const [styleBulletinRows, cutDetailRows] = await Promise.all([
@@ -265,7 +274,7 @@ export async function snapshotWorkOrderBulletin(
     fetchCutDetailRows(workOrder, bundleIds),
   ]);
   await Promise.all([
-    insertStyleBulletinSnapshot(styleBulletinRows, workOrder, by, generationId),
-    insertCutDetailSnapshot(cutDetailRows, workOrder, by, generationId),
+    insertStyleBulletinSnapshot(styleBulletinRows, workOrder, by, generationId, department),
+    insertCutDetailSnapshot(cutDetailRows, workOrder, by, generationId, department),
   ]);
 }

@@ -42,7 +42,9 @@ export async function fetchDepartmentOpTotalsByWorkOrder(
                TRY_CAST([Smv/Sam] AS FLOAT) AS Sam,
                ROW_NUMBER() OVER (PARTITION BY [Order No], [Operation Code] ORDER BY InsertedAt DESC) AS rn
         FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
-        WHERE IsDeleted = 0 AND [Order No] IN (${inClause})
+        WHERE IsDeleted = 0
+          AND Department = @department
+          AND [Order No] IN (${inClause})
       )
       SELECT o.WorkOrder,
              SUM(CASE WHEN l.PieceRate <> 0 THEN l.Sam ELSE 0 END) AS TotalSam,

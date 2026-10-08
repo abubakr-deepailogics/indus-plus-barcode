@@ -2148,6 +2148,7 @@ export function EmployeeReportDashboard() {
                         <th className="py-2.5 px-3">Operation</th>
                         <th className="py-2.5 px-3">Section</th>
                         <th className="py-2.5 px-3 text-right">Piece Rate</th>
+                        <th className="py-2.5 px-3 text-right">Incentive</th>
                         <th className="py-2.5 px-3 text-right">SAM</th>
                         <th className="py-2.5 px-3 text-center">Qty</th>
                         <th className="py-2.5 px-3 text-right">Total Amount</th>
@@ -2768,6 +2769,7 @@ export function EmployeeReportDashboard() {
                           <th className="py-2.5 px-3">Employee</th>
                         )}
                         <th className="py-2.5 px-3 text-right">Piece Rate</th>
+                        <th className="py-2.5 px-3 text-right">Incentive</th>
                         <th className="py-2.5 px-3 text-right">SAM</th>
                         <th className="py-2.5 px-3 text-right">Value</th>
                         <th className="py-2.5 px-3 text-right">Scanned At</th>
@@ -2777,7 +2779,7 @@ export function EmployeeReportDashboard() {
                       {paginatedCoupons.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={showEmployeeColumn ? 11 : 10}
+                            colSpan={showEmployeeColumn ? 12 : 11}
                             className="py-8 text-center text-slate-400 font-medium"
                           >
                             No matching coupons found.
@@ -2828,6 +2830,9 @@ export function EmployeeReportDashboard() {
                                 : "—"}
                             </td>
                             <td className="py-2 px-3 text-right font-mono text-slate-600">
+                              Rs. {(c.incentive ?? 0).toFixed(2)}
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono text-slate-600">
                               {c.smv != null ? c.smv.toFixed(2) : "—"}
                             </td>
                             <td className="py-2 px-3 text-right font-bold text-emerald-700 font-mono">
@@ -2861,6 +2866,9 @@ export function EmployeeReportDashboard() {
                           <td colSpan={showEmployeeColumn ? 2 : 1} />
                           <td className="py-2.5 px-3 text-right font-mono">
                             {formatAmount(sumField(filteredCoupons, (coupon) => coupon.rate ?? null))}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono">
+                            {formatAmount(sumField(filteredCoupons, (coupon) => coupon.incentive ?? null))}
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono">
                             {formatAmount(sumField(filteredCoupons, (coupon) => coupon.smv ?? null))}

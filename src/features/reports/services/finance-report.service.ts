@@ -5,8 +5,6 @@ import {
   currentPayCycleStart,
   WORKERS_VIEW,
   CUT_DETAIL_SNAPSHOT_TABLE,
-  STYLE_BULLETIN_TABLE,
-  OPERATIONS_CATALOG_TABLE,
 } from "@/lib/db";
 import type { Department } from "@/lib/department-classification";
 import { fetchDepartmentOpTotalsByWorkOrder } from "./department-op-totals.service";
@@ -145,40 +143,6 @@ async function fetchSewingOpCodesByWorkOrder(
   return map;
 }
 
-async function fetchOperationCommissionsByWorkOrderOp(
-  workOrders: string[],
-  department: Department,
-): Promise<Map<string, number>> {
-  const map = new Map<string, number>();
-  if (workOrders.length === 0) return map;
-
-  const pool = await getPool("indusPlus");
-  for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
-    const req = pool.request().input("department", sql.NVarChar, department);
-    const inClause = buildInClause(req, "wo", batch);
-    const result = await req.query(`
-      SELECT
-        sb.[Order No] AS WorkOrder,
-        sb.[Operation Code] AS OpNo,
-        MAX(COALESCE(op.Commission, TRY_CAST(sb.[UD_Commission] AS DECIMAL(18, 4)), 0)) AS OpInc
-      FROM ${STYLE_BULLETIN_TABLE} sb
-      INNER JOIN ${OPERATIONS_CATALOG_TABLE} op
-        ON op.OperationCode = sb.[Operation Code]
-      WHERE sb.[Order No] IN (${inClause})
-        AND LOWER(ISNULL(op.Department, '')) = @department
-      GROUP BY sb.[Order No], sb.[Operation Code]
-    `);
-    for (const row of result.recordset as {
-      WorkOrder: string;
-      OpNo: string;
-      OpInc: number | null;
-    }[]) {
-      map.set(`${row.WorkOrder}|${row.OpNo}`, Number(row.OpInc) || 0);
-    }
-  }
-  return map;
-}
-
 // ── Order Wise Finishing Payment (Audit) ────────────────────────────────────
 
 export async function buildOrderWiseReport(
@@ -199,8 +163,6 @@ export async function buildOrderWiseReport(
   const scans = allScans.filter((row) =>
     sewingOpsByWo.get(row.WorkOrder)?.has(row.OpNo),
   );
-  const operationCommissions =
-    await fetchOperationCommissionsByWorkOrderOp(scannedWorkOrders, department);
 
   const byWorkOrder = new Map<
     string,
@@ -214,8 +176,7 @@ export async function buildOrderWiseReport(
     const qty = Number(row.Qty) || 0;
     const rate = Number(row.Rate) || 0;
     const value = qty * rate;
-    const opInc =
-      qty * (operationCommissions.get(`${row.WorkOrder}|${row.OpNo}`) ?? 0);
+    const opInc = qty * (Number(row.Incentive) || 0);
     const isCurrentCycle = new Date(row.ScannedAt) >= currentStart;
 
     const existing = byWorkOrder.get(row.WorkOrder) ?? {
@@ -324,8 +285,6 @@ export async function buildOperatorWiseReport(
   const scans = allScans.filter((row) =>
     sewingOpsByWo.get(row.WorkOrder)?.has(row.OpNo),
   );
-  const operationCommissions =
-    await fetchOperationCommissionsByWorkOrderOp(scannedWorkOrders, department);
 
   const pieceRateByEmployee = new Map<string, number>();
   const opIncByEmployee = new Map<string, number>();
@@ -333,8 +292,7 @@ export async function buildOperatorWiseReport(
     if (!row.EmployeeCode) continue;
     const qty = Number(row.Qty) || 0;
     const rate = Number(row.Rate) || 0;
-    const opInc =
-      qty * (operationCommissions.get(`${row.WorkOrder}|${row.OpNo}`) ?? 0);
+    const opInc = qty * (Number(row.Incentive) || 0);
     pieceRateByEmployee.set(
       row.EmployeeCode,
       (pieceRateByEmployee.get(row.EmployeeCode) ?? 0) + qty * rate,

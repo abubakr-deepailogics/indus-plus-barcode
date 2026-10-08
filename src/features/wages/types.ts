@@ -9,6 +9,7 @@ export interface EmployeeGroupedItem {
   date: string;
   operation: string;
   rate: number | null;
+  incentive: number;
   sam: number | null;
   bundleCount: number;
   qty: number;
@@ -33,6 +34,7 @@ export interface WageRow {
   workDate?: string | null;
   operation?: string | null;
   rate?: number | null;
+  incentive?: number | null;
   bundleCount: number;
   qty: number;
   totalPay: number;

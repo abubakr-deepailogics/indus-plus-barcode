@@ -57,6 +57,7 @@ export function groupEmployeeData(
             date: "—",
             operation: "—",
             rate: null as number | null,
+            incentive: 0,
             sam: null as number | null,
             bundleCount: emp.couponCount || 0,
             qty: emp.totalQty || 0,
@@ -82,13 +83,14 @@ export function groupEmployeeData(
         c.bundleNo,
       );
       const rate = c.rate != null ? Number(c.rate) : null;
+      const incentive = Number(c.incentive) || 0;
       const sam = c.smv != null ? Number(c.smv) : null;
-      const key = `${wo}__${dateStr}__${op}__${rate}__${sam}`;
+      const key = `${wo}__${dateStr}__${op}__${rate}__${incentive}__${sam}`;
 
       const existing = groupMap.get(key);
       const qty = c.qty || 0;
       const pay =
-        c.value != null ? Number(c.value) : rate != null ? qty * rate : 0;
+        c.value != null ? Number(c.value) : rate != null ? qty * (rate + incentive) : 0;
 
       if (!existing) {
         groupMap.set(key, {
@@ -96,6 +98,7 @@ export function groupEmployeeData(
           date: dateStr,
           operation: op,
           rate,
+          incentive,
           sam,
           bundleCount: 1,
           qty,
@@ -147,6 +150,7 @@ export interface DimensionGroupedItem {
   date: string;
   operation: string;
   rate: number | null;
+  incentive: number;
   sam: number | null;
   bundleCount: number;
   qty: number;
@@ -215,13 +219,14 @@ export function groupByDimension(
         c.bundleNo,
       );
       const rate = c.rate != null ? Number(c.rate) : null;
+      const incentive = Number(c.incentive) || 0;
       const sam = c.smv != null ? Number(c.smv) : null;
-      const mapKey = `${empCode}__${wo}__${dateStr}__${op}__${rate}__${sam}`;
+      const mapKey = `${empCode}__${wo}__${dateStr}__${op}__${rate}__${incentive}__${sam}`;
 
       const existing = groupMap.get(mapKey);
       const qty = c.qty || 0;
       const pay =
-        c.value != null ? Number(c.value) : rate != null ? qty * rate : 0;
+        c.value != null ? Number(c.value) : rate != null ? qty * (rate + incentive) : 0;
 
       if (!existing) {
         groupMap.set(mapKey, {
@@ -231,6 +236,7 @@ export function groupByDimension(
           date: dateStr,
           operation: op,
           rate,
+          incentive,
           sam,
           bundleCount: 1,
           qty,

@@ -43,6 +43,7 @@ interface StyleBulletinRow {
   SkillLevel: unknown;
   Smv_Sam: unknown;
   Piece_Rate: unknown;
+  Incentive: unknown;
 }
 
 // Bundle/op numbers are only unique within their own work order (same
@@ -62,14 +63,16 @@ async function fetchCutDetailByBundle(
 
   const pool = await getPool("pitSystem");
   for (const batch of chunk(uniqueBundles, IN_LIST_CHUNK_SIZE)) {
-    const request = pool.request().input("wo", sql.NVarChar, workOrder);
+    const request = pool.request()
+      .input("wo", sql.NVarChar, workOrder)
+      .input("department", sql.NVarChar, department);
     const placeholders = batch.map((b, i) => {
       request.input(`b${i}`, sql.NVarChar, b);
       return `@b${i}`;
     });
     const result = await request.query(
       cutDetailSnapshotByFilter(
-        `[Work Order #] = @wo AND CAST([Bundle Id] AS NVARCHAR(50)) IN (${placeholders.join(", ")})`,
+        `[Work Order #] = @wo AND Department = @department AND CAST([Bundle Id] AS NVARCHAR(50)) IN (${placeholders.join(", ")})`,
       ),
     );
     // RowId is 1 = most recently inserted per (Work Order, Bundle Id) (see
@@ -126,6 +129,7 @@ async function fetchCutDetailByBundle(
 async function fetchStyleBulletinByOp(
   workOrder: string,
   opNos: string[],
+  department: CouponDepartment,
 ): Promise<Map<string, StyleBulletinRow>> {
   const map = new Map<string, StyleBulletinRow>();
   const uniqueOps = [...new Set(opNos)];
@@ -133,14 +137,16 @@ async function fetchStyleBulletinByOp(
 
   const pool = await getPool("pitSystem");
   for (const batch of chunk(uniqueOps, IN_LIST_CHUNK_SIZE)) {
-    const request = pool.request().input("wo", sql.NVarChar, workOrder);
+    const request = pool.request()
+      .input("wo", sql.NVarChar, workOrder)
+      .input("department", sql.NVarChar, department);
     const placeholders = batch.map((o, i) => {
       request.input(`o${i}`, sql.NVarChar, o);
       return `@o${i}`;
     });
     const result = await request.query(
       styleBulletinSnapshotByFilter(
-        `[Order No] = @wo AND [Operation Code] IN (${placeholders.join(", ")})`,
+        `[Order No] = @wo AND Department = @department AND [Operation Code] IN (${placeholders.join(", ")})`,
       ),
     );
     // RowId is 1 = most recently inserted per (Order No, Operation Code)
@@ -168,6 +174,7 @@ export interface EnrichmentFields {
   SkillCode: unknown;
   Smv: unknown;
   Rate: unknown;
+  Incentive: unknown;
   Value: number | null;
 }
 
@@ -201,6 +208,7 @@ export async function enrichCouponRows<
         fetchStyleBulletinByOp(
           wo,
           woRows.map((r) => r.OpNo),
+          department,
         ),
       ]);
       cutMaps.set(wo, cutMap);
@@ -227,14 +235,18 @@ export async function enrichCouponRows<
       SkillCode: op?.SkillLevel ?? null,
       Smv: op?.Smv_Sam ?? null,
       Rate: rate,
-      Value: qty != null && rate != null ? Number(qty) * Number(rate) : null,
+      Incentive: op?.Incentive ?? 0,
+      Value:
+        qty != null && rate != null
+          ? Number(qty) * (Number(rate) + (Number(op?.Incentive) || 0))
+          : null,
     };
   });
 }
 
 export async function fetchPieceRates<
   T extends { WorkOrder: string; OpNo: string },
->(rows: T[]): Promise<(T & { Rate: number | null })[]> {
+>(rows: T[], department: CouponDepartment = "sewing"): Promise<(T & { Rate: number | null; Incentive: number })[]> {
   if (rows.length === 0) return [];
 
   const workOrders = [...new Set(rows.map((r) => r.WorkOrder))];
@@ -247,6 +259,7 @@ export async function fetchPieceRates<
         await fetchStyleBulletinByOp(
           wo,
           woRows.map((r) => r.OpNo),
+          department,
         ),
       );
     }),
@@ -255,7 +268,7 @@ export async function fetchPieceRates<
   return rows.map((row) => {
     const op = opMaps.get(row.WorkOrder)?.get(row.OpNo);
     const rate = (op?.Piece_Rate as number | null | undefined) ?? null;
-    return { ...row, Rate: rate };
+    return { ...row, Rate: rate, Incentive: Number(op?.Incentive) || 0 };
   });
 }
 

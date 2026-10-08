@@ -40,6 +40,7 @@ export async function buildWageData(
       workDate: item.date !== "—" ? item.date : null,
       operation: item.operation !== "—" ? item.operation : null,
       rate: item.rate,
+      incentive: item.incentive,
       bundleCount: item.bundleCount,
       qty: item.qty,
       totalPay: item.totalPay,

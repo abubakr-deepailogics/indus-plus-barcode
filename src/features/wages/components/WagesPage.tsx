@@ -453,6 +453,9 @@ export function WagesPage() {
                 <th className="py-2.5 px-3 text-right border-r border-slate-200">
                   Rate
                 </th>
+                <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                  Incentive
+                </th>
                 <th className="py-2.5 px-3 text-center border-r border-slate-200">
                   Bundle
                 </th>
@@ -491,6 +494,9 @@ export function WagesPage() {
                       <td className="py-2 px-3 text-right font-mono border-r border-slate-100">
                         {item.rate != null ? item.rate.toFixed(2) : "—"}
                       </td>
+                      <td className="py-2 px-3 text-right font-mono border-r border-slate-100">
+                        {item.incentive != null ? item.incentive.toFixed(2) : "—"}
+                      </td>
                       <td className="py-2 px-3 text-center border-r border-slate-100">
                         {item.bundleCount}
                       </td>
@@ -506,7 +512,7 @@ export function WagesPage() {
                   <tr className="bg-slate-50/60 font-bold text-slate-800">
                     <td
                       className="py-2 px-3 border-r border-slate-100"
-                      colSpan={6}
+                      colSpan={7}
                     >
                       Employee wise Total :
                     </td>
@@ -526,7 +532,7 @@ export function WagesPage() {
             </tbody>
             <tfoot>
               <tr className="border-t-2 border-slate-300 bg-slate-900 font-semibold text-white">
-                <td className="border-r border-white/10 px-3 py-3" colSpan={6}>
+                <td className="border-r border-white/10 px-3 py-3" colSpan={7}>
                   Grand Total :
                 </td>
                 <td className="py-2.5 px-3 text-center border-r border-slate-200">

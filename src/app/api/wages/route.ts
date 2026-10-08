@@ -54,7 +54,7 @@ export async function GET(request: Request) {
           .query(`
             SELECT EmployeeCode AS employeeCode, EmployeeName AS employeeName,
                    WorkOrder AS workOrder, WorkDate AS workDate,
-                   Operation AS operation, Rate AS rate,
+                   Operation AS operation, Rate AS rate, Incentive AS incentive,
                    BundleCount AS bundleCount, Qty AS qty, TotalPay AS totalPay
             FROM dbo.EmployeeWageRows
             WHERE WageId = @wageId
@@ -124,7 +124,7 @@ export async function GET(request: Request) {
     const rowsRes = await req.query(`
       SELECT WageId, EmployeeCode AS employeeCode, EmployeeName AS employeeName,
              WorkOrder AS workOrder, WorkDate AS workDate,
-             Operation AS operation, Rate AS rate,
+             Operation AS operation, Rate AS rate, Incentive AS incentive,
              BundleCount AS bundleCount, Qty AS qty, TotalPay AS totalPay
       FROM dbo.EmployeeWageRows
       WHERE WageId IN (${placeholders.join(", ")})
@@ -260,18 +260,19 @@ export async function POST(request: Request) {
         detailReq.input(`wd${i}`, sql.NVarChar, r.workDate);
         detailReq.input(`op${i}`, sql.NVarChar, r.operation);
         detailReq.input(`rt${i}`, sql.Decimal(18, 4), r.rate);
+        detailReq.input(`in${i}`, sql.Decimal(18, 4), r.incentive ?? 0);
         detailReq.input(`bc${i}`, sql.Int, r.bundleCount);
         detailReq.input(`qt${i}`, sql.Int, r.qty);
         detailReq.input(`tp${i}`, sql.Decimal(18, 2), r.totalPay);
         values.push(
-          `(@wageId, @ec${i}, @en${i}, @wo${i}, @wd${i}, @op${i}, @rt${i}, @bc${i}, @qt${i}, @tp${i})`,
+          `(@wageId, @ec${i}, @en${i}, @wo${i}, @wd${i}, @op${i}, @rt${i}, @in${i}, @bc${i}, @qt${i}, @tp${i})`,
         );
       });
 
       await detailReq.query(`
         INSERT INTO dbo.EmployeeWageRows
           (WageId, EmployeeCode, EmployeeName, WorkOrder, WorkDate,
-           Operation, Rate, BundleCount, Qty, TotalPay)
+           Operation, Rate, Incentive, BundleCount, Qty, TotalPay)
         VALUES ${values.join(", ")};
       `);
     }
@@ -384,6 +385,7 @@ function mapRow(r: Record<string, unknown>) {
     workDate: (r.workDate as string | null) ?? null,
     operation: (r.operation as string | null) ?? null,
     rate: r.rate != null ? Number(r.rate) : null,
+    incentive: Number(r.incentive) || 0,
     bundleCount: Number(r.bundleCount) || 0,
     qty: Number(r.qty) || 0,
     totalPay: Number(r.totalPay) || 0,
