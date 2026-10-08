@@ -1,4 +1,10 @@
-import { getPool, sql, CUT_DETAIL_VIEW, STYLE_BULLETIN_TABLE } from "@/lib/db";
+import {
+  getPool,
+  sql,
+  CUT_DETAIL_VIEW,
+  OPERATIONS_CATALOG_TABLE,
+  STYLE_BULLETIN_TABLE,
+} from "@/lib/db";
 import { isCouponDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
@@ -74,9 +80,12 @@ export async function GET(request: Request) {
             .request()
             .input("wo", sql.NVarChar, wo.trim())
             .query(`
-              SELECT DISTINCT [Operation Code] AS Operation_Code, [Operation Name] AS Operation_Name
-              FROM ${STYLE_BULLETIN_TABLE}
-              WHERE [Order No] = @wo
+              SELECT DISTINCT sb.[Operation Code] AS Operation_Code,
+                COALESCE(op.OperationName, sb.[Operation Name]) AS Operation_Name
+              FROM ${STYLE_BULLETIN_TABLE} sb
+              LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op
+                ON op.OperationCode = sb.[Operation Code]
+              WHERE sb.[Order No] = @wo
             `),
         ]);
         const nameByOpNo = new Map(
@@ -103,10 +112,13 @@ export async function GET(request: Request) {
         .request()
         .input("wo", sql.NVarChar, wo.trim())
         .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
-          SELECT DISTINCT TOP 10 [Operation Code] AS Operation_Code, [Operation Name] AS Operation_Name
-          FROM ${STYLE_BULLETIN_TABLE}
-          WHERE [Order No] = @wo
-            AND ([Operation Code] LIKE @q OR [Operation Name] LIKE @q)
+          SELECT DISTINCT TOP 10 sb.[Operation Code] AS Operation_Code,
+            COALESCE(op.OperationName, sb.[Operation Name]) AS Operation_Name
+          FROM ${STYLE_BULLETIN_TABLE} sb
+          LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op
+            ON op.OperationCode = sb.[Operation Code]
+          WHERE sb.[Order No] = @wo
+            AND (sb.[Operation Code] LIKE @q OR COALESCE(op.OperationName, sb.[Operation Name]) LIKE @q)
           ORDER BY Operation_Code
         `);
 

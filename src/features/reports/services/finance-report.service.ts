@@ -160,7 +160,7 @@ async function fetchOperationCommissionsByWorkOrderOp(
       SELECT
         sb.[Order No] AS WorkOrder,
         sb.[Operation Code] AS OpNo,
-        MAX(COALESCE(TRY_CAST(sb.[UD_Commission] AS DECIMAL(18, 4)), 0)) AS OpInc
+        MAX(COALESCE(op.Commission, TRY_CAST(sb.[UD_Commission] AS DECIMAL(18, 4)), 0)) AS OpInc
       FROM ${STYLE_BULLETIN_TABLE} sb
       INNER JOIN ${OPERATIONS_CATALOG_TABLE} op
         ON op.OperationCode = sb.[Operation Code]

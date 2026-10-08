@@ -1,4 +1,10 @@
-import { sql, getPool, STYLE_BULLETIN_TABLE, WORKERS_VIEW } from "@/lib/db";
+import {
+  sql,
+  getPool,
+  OPERATIONS_CATALOG_TABLE,
+  STYLE_BULLETIN_TABLE,
+  WORKERS_VIEW,
+} from "@/lib/db";
 import { buildCouponCode } from "./coupon-code";
 import type { CouponCard } from "./coupon-pairing.service";
 import type { CouponDepartment } from "@/lib/department-classification";
@@ -487,9 +493,12 @@ async function fetchOpNamesByOpNo(
   const pool = await getPool("indusPlus");
   const result = await pool.request().input("wo", sql.NVarChar, workOrder)
     .query(`
-      SELECT DISTINCT [Operation Code] AS OpNo, [Operation Name] AS OpName
-      FROM ${STYLE_BULLETIN_TABLE}
-      WHERE [Order No] = @wo
+      SELECT DISTINCT sb.[Operation Code] AS OpNo,
+        COALESCE(op.OperationName, sb.[Operation Name]) AS OpName
+      FROM ${STYLE_BULLETIN_TABLE} sb
+      LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op
+        ON op.OperationCode = sb.[Operation Code]
+      WHERE sb.[Order No] = @wo
     `);
   return new Map(
     result.recordset.map((r) => [r.OpNo as string, r.OpName as string]),
