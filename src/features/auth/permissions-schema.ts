@@ -1,4 +1,4 @@
-import type { PageKey, PageOperation } from "@/features/auth/types";
+import type { PageKey, PageOperation, PermissionDepartment } from "@/features/auth/types";
 
 type OperationDef = { key: PageOperation; label: string };
 type SubcategoryDef = { key: PageKey; label: string; operations: OperationDef[] };
@@ -88,6 +88,19 @@ export const PAGE_PERMISSION_SCHEMA: Partial<Record<PageKey, PageDef>> = {
 // Only top-level pages — used to drive the permission editor's page list.
 // Subcategories are rendered nested under their parent, not as siblings.
 export const PAGE_KEYS = Object.keys(PAGE_PERMISSION_SCHEMA) as PageKey[];
+
+// A permission editor should only offer pages the selected department can
+// actually open. Cut Report is a Sewing-only workflow; the standalone
+// Washing Cut Report is not yet routed in the department application.
+export const PAGE_KEYS_BY_DEPARTMENT: Record<PermissionDepartment, PageKey[]> = {
+  sewing: PAGE_KEYS.filter((pageKey) => pageKey !== "washing-cut-report"),
+  washing: PAGE_KEYS.filter(
+    (pageKey) => pageKey !== "cut-report" && pageKey !== "washing-cut-report",
+  ),
+  finishing: PAGE_KEYS.filter(
+    (pageKey) => pageKey !== "cut-report" && pageKey !== "washing-cut-report",
+  ),
+};
 
 // Flattened page/subcategory -> allowed operations, for validating a
 // UserPermission row regardless of whether its pageKey is a top-level page

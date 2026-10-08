@@ -41,6 +41,7 @@ import {
 import {
   ALLOWED_OPERATIONS_BY_PAGE_KEY,
   PAGE_KEYS,
+  PAGE_KEYS_BY_DEPARTMENT,
   PAGE_PERMISSION_SCHEMA,
 } from "@/features/auth/permissions-schema";
 import {
@@ -103,11 +104,13 @@ const OPERATION_DESCRIPTIONS: Record<PageOperation, string> = {
   delete: "Remove records from this area.",
 };
 
-const ALL_PERMISSION_KEYS = PERMISSION_DEPARTMENTS.flatMap(({ id: department }) => Object.entries(
-  ALLOWED_OPERATIONS_BY_PAGE_KEY,
-).flatMap(([pageKey, operations]) =>
-  (operations ?? []).map((operation) => `${department}:${pageKey}:${operation}`),
-));
+const ALL_PERMISSION_KEYS = PERMISSION_DEPARTMENTS.flatMap(({ id: department }) =>
+  PAGE_KEYS_BY_DEPARTMENT[department].flatMap((pageKey) =>
+    (ALLOWED_OPERATIONS_BY_PAGE_KEY[pageKey] ?? []).map(
+      (operation) => `${department}:${pageKey}:${operation}`,
+    ),
+  ),
+);
 const ALL_PERMISSION_SET = new Set(ALL_PERMISSION_KEYS);
 
 function permissionKey(department: PermissionDepartment, pageKey: PageKey, operation: PageOperation): string {
@@ -252,7 +255,7 @@ export function UserPermissionsDialog({
   const departmentPermissionKeys = ALL_PERMISSION_KEYS.filter((key) => key.startsWith(`${selectedDepartment}:`));
   const departmentGrantedCount = departmentPermissionKeys.filter((key) => effectiveGranted.has(key)).length;
   const isDirty = !setsMatch(granted, original);
-  const filteredPages = PAGE_KEYS.filter((pageKey) =>
+  const filteredPages = PAGE_KEYS_BY_DEPARTMENT[selectedDepartment].filter((pageKey) =>
     matchesSearch(pageKey, search.trim().toLowerCase()),
   );
   const activePageKey = filteredPages.includes(selectedPage)
@@ -436,7 +439,10 @@ export function UserPermissionsDialog({
                   <button
                     key={id}
                     type="button"
-                    onClick={() => setSelectedDepartment(id)}
+                    onClick={() => {
+                      setSelectedDepartment(id);
+                      setSelectedPage(PAGE_KEYS_BY_DEPARTMENT[id][0]);
+                    }}
                     className={`rounded-md px-2 py-1.5 text-[10px] font-bold transition-colors ${
                       selectedDepartment === id
                         ? "bg-white text-indigo-700 shadow-sm"
@@ -765,7 +771,6 @@ function PermissionGroup({
         {operations.map((operation) => (
           <PermissionOption
             key={operation.key}
-            department={department}
             pageKey={pageKey}
             operation={operation}
             checked={granted.has(permissionKey(department, pageKey, operation.key))}
@@ -779,14 +784,12 @@ function PermissionGroup({
 }
 
 function PermissionOption({
-  department,
   pageKey,
   operation,
   checked,
   disabled,
   onChange,
 }: {
-  department: PermissionDepartment;
   pageKey: PageKey;
   operation: { key: PageOperation; label: string };
   checked: boolean;
