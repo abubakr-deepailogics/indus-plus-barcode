@@ -4,7 +4,9 @@ import {
   replacePermissionsForUser,
 } from "@/features/auth/services/user-permissions.service";
 import { ALLOWED_OPERATIONS_BY_PAGE_KEY } from "@/features/auth/permissions-schema";
-import type { UserPermission } from "@/features/auth/types";
+import type { PermissionDepartment, UserPermission } from "@/features/auth/types";
+
+const PERMISSION_DEPARTMENTS: readonly PermissionDepartment[] = ["sewing", "washing", "finishing"];
 
 export const dynamic = "force-dynamic";
 
@@ -52,6 +54,7 @@ export async function PUT(request: Request, { params }: { params: Promise<{ user
     const valid = permissions.every(
       (p) =>
         p &&
+        PERMISSION_DEPARTMENTS.includes(p.department as PermissionDepartment) &&
         typeof p.pageKey === "string" &&
         ALLOWED_OPERATIONS_BY_PAGE_KEY[p.pageKey as keyof typeof ALLOWED_OPERATIONS_BY_PAGE_KEY]?.includes(
           p.operation,

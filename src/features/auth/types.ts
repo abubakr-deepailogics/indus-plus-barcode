@@ -32,6 +32,11 @@ export type UpdateUserInput = {
 
 export type PageOperation = "create" | "read" | "update" | "delete";
 
+// User access is granted independently for each production department. Keep
+// this deliberately separate from the UI's broader DepartmentKey (which also
+// contains GDP) because only these three departments have this workflow.
+export type PermissionDepartment = "sewing" | "washing" | "finishing";
+
 export type PageKey =
   | "cut-report"
   | "washing-cut-report"
@@ -46,6 +51,7 @@ export type PageKey =
   | "manage-users";
 
 export type UserPermission = {
+  department: PermissionDepartment;
   pageKey: PageKey;
   operation: PageOperation;
 };

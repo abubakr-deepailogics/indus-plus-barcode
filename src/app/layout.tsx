@@ -33,13 +33,13 @@ export default function RootLayout({
       className={`${plusJakartaSans.variable} ${geistMono.variable} h-full antialiased`}
     >
       <body className="min-h-full flex flex-col bg-[#f8fafc]">
-        <AuthProvider>
-          <DepartmentProvider>
+        <DepartmentProvider>
+          <AuthProvider>
             <WorkOrderProvider>
               <AuthGuard>{children}</AuthGuard>
             </WorkOrderProvider>
-          </DepartmentProvider>
-        </AuthProvider>
+          </AuthProvider>
+        </DepartmentProvider>
       </body>
     </html>
   );

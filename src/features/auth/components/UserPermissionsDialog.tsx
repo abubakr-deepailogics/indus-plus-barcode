@@ -51,8 +51,15 @@ import type {
   ManagedUser,
   PageKey,
   PageOperation,
+  PermissionDepartment,
   UserPermission,
 } from "@/features/auth/types";
+
+const PERMISSION_DEPARTMENTS: { id: PermissionDepartment; label: string }[] = [
+  { id: "sewing", label: "Sewing" },
+  { id: "washing", label: "Washing" },
+  { id: "finishing", label: "Finishing" },
+];
 
 const PAGE_ICONS: Record<PageKey, LucideIcon> = {
   "cut-report": Scissors,
@@ -96,26 +103,26 @@ const OPERATION_DESCRIPTIONS: Record<PageOperation, string> = {
   delete: "Remove records from this area.",
 };
 
-const ALL_PERMISSION_KEYS = Object.entries(
+const ALL_PERMISSION_KEYS = PERMISSION_DEPARTMENTS.flatMap(({ id: department }) => Object.entries(
   ALLOWED_OPERATIONS_BY_PAGE_KEY,
 ).flatMap(([pageKey, operations]) =>
-  (operations ?? []).map((operation) => `${pageKey}:${operation}`),
-);
+  (operations ?? []).map((operation) => `${department}:${pageKey}:${operation}`),
+));
 const ALL_PERMISSION_SET = new Set(ALL_PERMISSION_KEYS);
 
-function permissionKey(pageKey: PageKey, operation: PageOperation): string {
-  return `${pageKey}:${operation}`;
+function permissionKey(department: PermissionDepartment, pageKey: PageKey, operation: PageOperation): string {
+  return `${department}:${pageKey}:${operation}`;
 }
 
-function allKeysForPage(pageKey: PageKey): string[] {
+function allKeysForPage(department: PermissionDepartment, pageKey: PageKey): string[] {
   const page = PAGE_PERMISSION_SCHEMA[pageKey];
   if (!page) return [];
   const own = page.operations.map((operation) =>
-    permissionKey(pageKey, operation.key),
+    permissionKey(department, pageKey, operation.key),
   );
   const nested = (page.subcategories ?? []).flatMap((subcategory) =>
     subcategory.operations.map((operation) =>
-      permissionKey(subcategory.key, operation.key),
+      permissionKey(department, subcategory.key, operation.key),
     ),
   );
   return [...own, ...nested];
@@ -190,6 +197,7 @@ export function UserPermissionsDialog({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [selectedPage, setSelectedPage] = useState<PageKey>(PAGE_KEYS[0]);
+  const [selectedDepartment, setSelectedDepartment] = useState<PermissionDepartment>("sewing");
 
   const userId = user?.id;
   useEffect(() => {
@@ -201,12 +209,13 @@ export function UserPermissionsDialog({
         if (!current) return;
         const next = new Set(
           permissions.map((permission) =>
-            permissionKey(permission.pageKey, permission.operation),
+            permissionKey(permission.department, permission.pageKey, permission.operation),
           ),
         );
         setGranted(next);
         setOriginal(next);
         setSelectedPage(PAGE_KEYS[0]);
+        setSelectedDepartment("sewing");
         setSearch("");
         setSaveError(null);
         setLoadError(null);
@@ -240,7 +249,8 @@ export function UserPermissionsDialog({
       : null;
   const isAdmin = user?.isAdmin ?? false;
   const effectiveGranted = isAdmin ? ALL_PERMISSION_SET : granted;
-  const grantedCount = effectiveGranted.size;
+  const departmentPermissionKeys = ALL_PERMISSION_KEYS.filter((key) => key.startsWith(`${selectedDepartment}:`));
+  const departmentGrantedCount = departmentPermissionKeys.filter((key) => effectiveGranted.has(key)).length;
   const isDirty = !setsMatch(granted, original);
   const filteredPages = PAGE_KEYS.filter((pageKey) =>
     matchesSearch(pageKey, search.trim().toLowerCase()),
@@ -251,7 +261,7 @@ export function UserPermissionsDialog({
   const activePage = activePageKey
     ? PAGE_PERMISSION_SCHEMA[activePageKey]
     : undefined;
-  const activePageKeys = activePageKey ? allKeysForPage(activePageKey) : [];
+  const activePageKeys = activePageKey ? allKeysForPage(selectedDepartment, activePageKey) : [];
   const activePageGranted = activePageKeys.filter((key) =>
     effectiveGranted.has(key),
   ).length;
@@ -265,7 +275,7 @@ export function UserPermissionsDialog({
     operation: PageOperation,
     checked: boolean,
   ) {
-    const key = permissionKey(pageKey, operation);
+    const key = permissionKey(selectedDepartment, pageKey, operation);
     setGranted((previous) => {
       const next = new Set(previous);
       if (checked) next.add(key);
@@ -277,7 +287,7 @@ export function UserPermissionsDialog({
   function setPagePermissions(pageKey: PageKey, checked: boolean) {
     setGranted((previous) => {
       const next = new Set(previous);
-      for (const key of allKeysForPage(pageKey)) {
+      for (const key of allKeysForPage(selectedDepartment, pageKey)) {
         if (checked) next.add(key);
         else next.delete(key);
       }
@@ -301,8 +311,8 @@ export function UserPermissionsDialog({
     setSaveError(null);
     try {
       const permissions: UserPermission[] = [...granted].map((key) => {
-        const [pageKey, operation] = key.split(":") as [PageKey, PageOperation];
-        return { pageKey, operation };
+        const [department, pageKey, operation] = key.split(":") as [PermissionDepartment, PageKey, PageOperation];
+        return { department, pageKey, operation };
       });
       await saveUserPermissionsRequest(user.id, permissions);
       setOriginal(new Set(granted));
@@ -406,20 +416,36 @@ export function UserPermissionsDialog({
                 />
               </div>
               <div className="mt-3 flex items-center justify-between text-[10px] font-semibold uppercase tracking-wider text-slate-500">
-                <span>Page access</span>
+                <span>{selectedDepartment} access</span>
                 <span className="tabular-nums">
                   {isAdmin
-                    ? `${ALL_PERMISSION_KEYS.length} / ${ALL_PERMISSION_KEYS.length}`
-                    : `${grantedCount} / ${ALL_PERMISSION_KEYS.length}`}
+                    ? `${departmentPermissionKeys.length} / ${departmentPermissionKeys.length}`
+                    : `${departmentGrantedCount} / ${departmentPermissionKeys.length}`}
                 </span>
               </div>
               <div className="mt-2 h-1 overflow-hidden rounded-full bg-slate-200">
                 <div
                   className="h-full rounded-full bg-indigo-600 transition-[width]"
                   style={{
-                    width: `${(grantedCount / Math.max(ALL_PERMISSION_KEYS.length, 1)) * 100}%`,
+                    width: `${(departmentGrantedCount / Math.max(departmentPermissionKeys.length, 1)) * 100}%`,
                   }}
                 />
+              </div>
+              <div className="mt-3 grid grid-cols-3 gap-1 rounded-lg bg-slate-100 p-1">
+                {PERMISSION_DEPARTMENTS.map(({ id, label }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setSelectedDepartment(id)}
+                    className={`rounded-md px-2 py-1.5 text-[10px] font-bold transition-colors ${
+                      selectedDepartment === id
+                        ? "bg-white text-indigo-700 shadow-sm"
+                        : "text-slate-500 hover:text-slate-800"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
               </div>
             </div>
 
@@ -430,7 +456,7 @@ export function UserPermissionsDialog({
               {filteredPages.map((pageKey) => {
                 const page = PAGE_PERMISSION_SCHEMA[pageKey];
                 if (!page) return null;
-                const keys = allKeysForPage(pageKey);
+                const keys = allKeysForPage(selectedDepartment, pageKey);
                 const count = keys.filter((key) =>
                   effectiveGranted.has(key),
                 ).length;
@@ -588,6 +614,7 @@ export function UserPermissionsDialog({
                 <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5 sm:px-7">
                   <PermissionGroup
                     title={`${activePage.label} actions`}
+                    department={selectedDepartment}
                     pageKey={activePageKey}
                     operations={activePage.operations}
                     granted={effectiveGranted}
@@ -599,6 +626,7 @@ export function UserPermissionsDialog({
                     <PermissionGroup
                       key={subcategory.key}
                       title={subcategory.label}
+                      department={selectedDepartment}
                       pageKey={subcategory.key}
                       operations={subcategory.operations}
                       granted={effectiveGranted}
@@ -633,7 +661,7 @@ export function UserPermissionsDialog({
             ) : (
               <span className="flex items-center gap-2 text-slate-500">
                 <CheckCircle2 className="size-4" />
-                {grantedCount} of {ALL_PERMISSION_KEYS.length} actions enabled
+                {departmentGrantedCount} of {departmentPermissionKeys.length} {selectedDepartment} actions enabled
               </span>
             )}
           </div>
@@ -696,6 +724,7 @@ export function UserPermissionsDialog({
 
 function PermissionGroup({
   title,
+  department,
   pageKey,
   operations,
   granted,
@@ -704,6 +733,7 @@ function PermissionGroup({
   nested = false,
 }: {
   title: string;
+  department: PermissionDepartment;
   pageKey: PageKey;
   operations: { key: PageOperation; label: string }[];
   granted: Set<string>;
@@ -735,9 +765,10 @@ function PermissionGroup({
         {operations.map((operation) => (
           <PermissionOption
             key={operation.key}
+            department={department}
             pageKey={pageKey}
             operation={operation}
-            checked={granted.has(permissionKey(pageKey, operation.key))}
+            checked={granted.has(permissionKey(department, pageKey, operation.key))}
             disabled={disabled}
             onChange={(checked) => onChange(pageKey, operation.key, checked)}
           />
@@ -748,12 +779,14 @@ function PermissionGroup({
 }
 
 function PermissionOption({
+  department,
   pageKey,
   operation,
   checked,
   disabled,
   onChange,
 }: {
+  department: PermissionDepartment;
   pageKey: PageKey;
   operation: { key: PageOperation; label: string };
   checked: boolean;

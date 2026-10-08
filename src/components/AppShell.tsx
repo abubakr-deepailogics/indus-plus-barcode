@@ -96,7 +96,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     } else if (pathname.startsWith("/finishing") && department !== "finishing") {
       setDepartment("finishing");
     } else if (
-      (pathname.startsWith("/sewing") || pathname.startsWith("/industrial-engineering") || pathname === "/manage-users") &&
+      (pathname.startsWith("/sewing") || pathname.startsWith("/industrial-engineering")) &&
       department !== "sewing"
     ) {
       setDepartment("sewing");
@@ -127,9 +127,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       return [
         { label: "Cut Report", href: "/sewing/cut-report", hasDropdown: false },
         ...productionModuleTabs("/sewing"),
-        ...(user?.isAdmin
-          ? [{ label: "Manage Users", href: "/manage-users", hasDropdown: false }]
-          : []),
       ];
     }
     return [];
@@ -178,6 +175,15 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* User Profile and Action Bar */}
         <div className="flex items-center gap-3 sm:gap-6 shrink-0">
+          {user?.isAdmin && (
+            <Link
+              href="/manage-users"
+              className="hidden sm:inline-flex items-center gap-2 rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700 transition-colors hover:bg-indigo-100"
+            >
+              <Users className="size-3.5" />
+              Manage Users
+            </Link>
+          )}
           {/* User Profile */}
           <div className="flex items-center gap-3 border-l border-[#f1f5f9] pl-4 sm:pl-6">
             <div className="w-9 h-9 rounded-full bg-[#1e293b] flex items-center justify-center font-semibold text-white text-xs shadow-inner">
@@ -236,6 +242,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               })}
             </div>
           </div>
+
+          {user?.isAdmin && (
+            <Link
+              href="/manage-users"
+              onClick={() => setMobileMenuOpen(false)}
+              className="flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700"
+            >
+              <span className="flex items-center gap-2"><Users className="size-3.5" />Manage Users</span>
+              <ChevronRight className="size-3.5" />
+            </Link>
+          )}
 
           {currentNavTabs.length > 0 && (
             <div className="pt-2 border-t border-slate-100">

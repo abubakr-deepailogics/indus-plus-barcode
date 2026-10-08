@@ -1,7 +1,8 @@
 import { getPool, sql } from "@/lib/db";
-import type { PageKey, PageOperation, UserPermission } from "@/features/auth/types";
+import type { PageKey, PageOperation, PermissionDepartment, UserPermission } from "@/features/auth/types";
 
 type PermissionRow = {
+  Department: string;
   PageKey: string;
   Operation: string;
 };
@@ -12,9 +13,10 @@ export async function getPermissionsForUser(userId: number): Promise<UserPermiss
     .request()
     .input("userId", sql.Int, userId)
     .query<PermissionRow>(
-      "SELECT PageKey, Operation FROM dbo.UserPermissions WHERE UserId = @userId",
+      "SELECT Department, PageKey, Operation FROM dbo.UserPermissions WHERE UserId = @userId",
     );
   return result.recordset.map((row) => ({
+    department: row.Department as PermissionDepartment,
     pageKey: row.PageKey as PageKey,
     operation: row.Operation as PageOperation,
   }));
@@ -37,10 +39,11 @@ export async function replacePermissionsForUser(
       await transaction
         .request()
         .input("userId", sql.Int, userId)
+        .input("department", sql.NVarChar, permission.department)
         .input("pageKey", sql.NVarChar, permission.pageKey)
         .input("operation", sql.NVarChar, permission.operation)
         .query(
-          "INSERT INTO dbo.UserPermissions (UserId, PageKey, Operation) VALUES (@userId, @pageKey, @operation)",
+          "INSERT INTO dbo.UserPermissions (UserId, Department, PageKey, Operation) VALUES (@userId, @department, @pageKey, @operation)",
         );
     }
 

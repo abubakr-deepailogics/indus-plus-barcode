@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import type { AuthUser, PageKey, PageOperation, UserPermission } from "@/features/auth/types";
+import { useDepartment } from "@/lib/department-context";
 
 type AuthContextValue = {
   user: AuthUser | null;
@@ -15,6 +16,7 @@ type AuthContextValue = {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const { department } = useDepartment();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [permissions, setPermissions] = useState<UserPermission[] | null>(null);
   const [loading, setLoading] = useState(true);
@@ -55,9 +57,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (pageKey: PageKey, operation: PageOperation) => {
       if (!user) return false;
       if (user.isAdmin) return true;
-      return !!permissions?.some((p) => p.pageKey === pageKey && p.operation === operation);
+      // GDP has no separately managed pages yet; retain the legacy Sewing
+      // grant for that route until GDP access is introduced.
+      const permissionDepartment = department === "gdp" ? "sewing" : department;
+      return !!permissions?.some(
+        (p) => p.department === permissionDepartment && p.pageKey === pageKey && p.operation === operation,
+      );
     },
-    [user, permissions],
+    [user, permissions, department],
   );
 
   return (

@@ -355,7 +355,7 @@ export default function ManageUsersPage() {
               Manage users
             </h1>
             <p className="mt-1 text-sm text-slate-500">
-              Manage accounts, access levels, and sign-in credentials.
+              Manage all accounts, sign-in credentials, and department-specific access.
             </p>
           </div>
         </div>
