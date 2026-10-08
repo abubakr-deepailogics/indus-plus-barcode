@@ -455,6 +455,7 @@ export async function buildReportSummary(
     WorkOrderReportItem & {
       operations: Set<string>;
       operationRates: Map<string, number>;
+      operationIncentives: Map<string, number>;
     }
   >();
   const empMap = new Map<
@@ -507,13 +508,13 @@ export async function buildReportSummary(
         incentive,
         smv,
         couponCount: 1,
-        totalQty: rate === 0 ? 0 : producedQty, // zero-rate coupons aren't added
+        totalQty: rate === 0 && incentive === 0 ? 0 : producedQty,
         totalSam: (qty || 0) * (smv || 0),
         totalAmount: val || 0,
       });
     } else {
       existingOp.couponCount += 1;
-      if (rate !== 0) existingOp.totalQty += qty || 0;
+      if (rate !== 0 || incentive !== 0) existingOp.totalQty += qty || 0;
       existingOp.totalSam += (qty || 0) * (smv || 0);
       existingOp.totalAmount += val || 0;
       if (!existingOp.rate && rate) existingOp.rate = rate;
@@ -535,8 +536,10 @@ export async function buildReportSummary(
         operationsCount: 0,
         pieceRate: null, // resolved from operationRates in the final projection below
         plan: null, // resolved from pieceRate * bundleQty in the final projection below
+        incentive: null,
         operations: new Set([opCode]),
         operationRates: new Map(rate != null ? [[opCode, rate]] : []),
+        operationIncentives: new Map([[opCode, incentive]]),
       });
     } else {
       existingWo.couponCount += 1;
@@ -546,6 +549,9 @@ export async function buildReportSummary(
       existingWo.operations.add(opCode);
       if (rate != null && !existingWo.operationRates.has(opCode)) {
         existingWo.operationRates.set(opCode, rate);
+      }
+      if (!existingWo.operationIncentives.has(opCode)) {
+        existingWo.operationIncentives.set(opCode, incentive);
       }
     }
 
@@ -667,6 +673,10 @@ export async function buildReportSummary(
         w.operationRates.size > 0
           ? Array.from(w.operationRates.values()).reduce((a, b) => a + b, 0)
           : null;
+      const incentive =
+        w.operationIncentives.size > 0
+          ? Array.from(w.operationIncentives.values()).reduce((a, b) => a + b, 0)
+          : null;
       return {
         workOrder: w.workOrder,
         couponCount: w.couponCount,
@@ -677,8 +687,11 @@ export async function buildReportSummary(
         totalAmount: w.totalAmount,
         operationsCount: w.operations.size,
         pieceRate,
+        incentive,
         plan:
-          pieceRate != null && bundleQty != null ? pieceRate * bundleQty : null,
+          pieceRate != null && incentive != null && bundleQty != null
+            ? (pieceRate + incentive) * bundleQty
+            : null,
       };
     })
     .sort((a, b) => b.totalAmount - a.totalAmount);

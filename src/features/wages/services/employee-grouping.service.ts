@@ -122,7 +122,8 @@ export function groupEmployeeData(
     const totalBundles = items.reduce((acc, it) => acc + it.bundleCount, 0);
     // zero piece-rate lines aren't added into the quantity total
     const totalQty = items.reduce(
-      (acc, it) => acc + (it.rate === 0 ? 0 : it.qty),
+      (acc, it) =>
+        acc + (it.rate === 0 && it.incentive === 0 ? 0 : it.qty),
       0,
     );
     const totalPay = items.reduce((acc, it) => acc + it.totalPay, 0);
@@ -260,7 +261,8 @@ export function groupByDimension(
     const totalBundles = items.reduce((acc, it) => acc + it.bundleCount, 0);
     // zero piece-rate lines aren't added into the quantity total
     const totalQty = items.reduce(
-      (acc, it) => acc + (it.rate === 0 ? 0 : it.qty),
+      (acc, it) =>
+        acc + (it.rate === 0 && it.incentive === 0 ? 0 : it.qty),
       0,
     );
     const totalPay = items.reduce((acc, it) => acc + it.totalPay, 0);
@@ -297,6 +299,7 @@ export interface DimensionRow {
   // OperationReportItem.rate/smv), not summed across coupons. Null for work
   // order/section rows, which have no single rate/smv of their own.
   rate: number | null;
+  incentive: number | null;
   sam: number | null;
 }
 
@@ -347,6 +350,7 @@ export function groupRowsByDimension(
       const qty = c.qty || 0;
       const amount = c.value != null ? Number(c.value) : 0;
       const rate = c.rate != null ? Number(c.rate) : null;
+      const incentive = c.incentive != null ? Number(c.incentive) : 0;
       const sam = c.smv != null ? Number(c.smv) : null;
 
       const existing = rowMap.get(rowKey);
@@ -356,18 +360,22 @@ export function groupRowsByDimension(
           label: rowDimensionLabel(c, rowDimension),
           couponCount: 1,
           totalQty: qty,
-          countedQty: rate === 0 ? 0 : qty,
+          countedQty: rate === 0 && incentive === 0 ? 0 : qty,
           totalAmount: amount,
           rate: rowDimension === "operation" ? rate : null,
+          incentive: rowDimension === "operation" ? incentive : null,
           sam: rowDimension === "operation" ? sam : null,
         });
       } else {
         existing.couponCount += 1;
         existing.totalQty += qty;
-        if (rate !== 0) existing.countedQty += qty;
+        if (rate !== 0 || incentive !== 0) existing.countedQty += qty;
         existing.totalAmount += amount;
         if (rowDimension === "operation") {
           if (existing.rate == null && rate != null) existing.rate = rate;
+          if (existing.incentive == null && incentive != null) {
+            existing.incentive = incentive;
+          }
           if (existing.sam == null && sam != null) existing.sam = sam;
         }
       }

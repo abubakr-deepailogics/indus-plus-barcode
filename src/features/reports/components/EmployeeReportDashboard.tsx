@@ -694,7 +694,7 @@ export function EmployeeReportDashboard() {
     if (!couponsList || couponsList.length === 0) return ops;
     const qtyByOp = new Map<string, number>();
     for (const c of couponsList) {
-      if (c.rate === 0) continue;
+      if (c.rate === 0 && (c.incentive ?? 0) === 0) continue;
       const key = c.operationCode || c.operationName || "—";
       qtyByOp.set(key, (qtyByOp.get(key) ?? 0) + (c.qty || 0));
     }
@@ -724,6 +724,10 @@ export function EmployeeReportDashboard() {
     () => ({
       rate: operationRowGroups.reduce(
         (acc, g) => acc + sumField(g.rows, (r) => r.rate),
+        0,
+      ),
+      incentive: operationRowGroups.reduce(
+        (acc, g) => acc + sumField(g.rows, (r) => r.incentive),
         0,
       ),
       sam: operationRowGroups.reduce(
@@ -841,6 +845,16 @@ export function EmployeeReportDashboard() {
       ),
     [employeeGroupDimension, dimensionGroupedData, employeeGroupedData],
   );
+  const grandEmployeeIncentive = useMemo(
+    () =>
+      sumField(
+        employeeGroupDimension
+          ? dimensionGroupedData.flatMap((group) => group.items)
+          : employeeGroupedData.flatMap((group) => group.items),
+        (item) => item.incentive,
+      ),
+    [employeeGroupDimension, dimensionGroupedData, employeeGroupedData],
+  );
 
   const card2 = summary ? getCard2Config(summary) : null;
 
@@ -874,6 +888,7 @@ export function EmployeeReportDashboard() {
         "Operations",
         "Qty",
         "Piece Rate",
+        "Incentive",
         "Plan",
         "Total Amount",
       ];
@@ -882,6 +897,7 @@ export function EmployeeReportDashboard() {
         wo.operationsCount,
         wo.totalQty,
         wo.pieceRate != null ? Number(wo.pieceRate.toFixed(2)) : "",
+        wo.incentive != null ? Number(wo.incentive.toFixed(2)) : "",
         wo.plan != null ? Number(wo.plan.toFixed(2)) : "",
         Number(wo.totalAmount.toFixed(2)),
       ]);
@@ -895,6 +911,7 @@ export function EmployeeReportDashboard() {
         "Date",
         "Operation",
         "Piece Rate",
+        "Incentive",
         "SAM",
         "Bundle",
         "Quantity",
@@ -912,6 +929,7 @@ export function EmployeeReportDashboard() {
             item.date,
             item.operation,
             item.rate != null ? Number(item.rate.toFixed(2)) : "",
+            Number(item.incentive.toFixed(2)),
             item.sam != null ? Number(item.sam.toFixed(2)) : "",
             item.bundleCount,
             item.qty,
@@ -928,6 +946,7 @@ export function EmployeeReportDashboard() {
         "Date",
         "Operation",
         "Piece Rate",
+        "Incentive",
         "SAM",
         "Bundle",
         "Quantity",
@@ -944,6 +963,7 @@ export function EmployeeReportDashboard() {
             item.date,
             item.operation,
             item.rate != null ? Number(item.rate.toFixed(2)) : "",
+            Number(item.incentive.toFixed(2)),
             item.sam != null ? Number(item.sam.toFixed(2)) : "",
             item.bundleCount,
             item.qty,
@@ -961,6 +981,7 @@ export function EmployeeReportDashboard() {
         groupHeader,
         "Operation",
         "Piece Rate",
+        "Incentive",
         "SAM",
         "Qty",
         "Total Amount",
@@ -972,6 +993,7 @@ export function EmployeeReportDashboard() {
             g.groupLabel,
             row.label,
             row.rate != null ? Number(row.rate.toFixed(2)) : "",
+            row.incentive != null ? Number(row.incentive.toFixed(2)) : "",
             row.sam != null ? Number(row.sam.toFixed(2)) : "",
             row.totalQty,
             Number(row.totalAmount.toFixed(2)),
@@ -983,6 +1005,7 @@ export function EmployeeReportDashboard() {
           "Grand Total :",
           "",
           Number(operationRowGrandTotals.rate.toFixed(2)),
+          Number(operationRowGrandTotals.incentive.toFixed(2)),
           Number(operationRowGrandTotals.sam.toFixed(2)),
           operationRowGrandTotals.qty,
           Number(operationRowGrandTotals.amount.toFixed(2)),
@@ -993,6 +1016,7 @@ export function EmployeeReportDashboard() {
         "Operation",
         "Section",
         "Piece Rate",
+        "Incentive",
         "SAM",
         "Qty",
         "Total Amount",
@@ -1001,6 +1025,7 @@ export function EmployeeReportDashboard() {
         op.operationName || op.operationCode,
         op.section,
         op.rate != null ? Number(op.rate.toFixed(2)) : "",
+        Number(op.incentive.toFixed(2)),
         op.smv != null ? Number(op.smv.toFixed(2)) : "",
         op.totalQty,
         Number(op.totalAmount.toFixed(2)),
@@ -1010,8 +1035,11 @@ export function EmployeeReportDashboard() {
           "Grand Total :",
           "",
           Number(sumField(flatOperations, (op) => op.rate).toFixed(2)),
+          Number(sumField(flatOperations, (op) => op.incentive).toFixed(2)),
           Number(sumField(flatOperations, (op) => op.smv).toFixed(2)),
-          sumField(flatOperations, (op) => (op.rate === 0 ? 0 : op.totalQty)),
+          sumField(flatOperations, (op) =>
+            op.rate === 0 && op.incentive === 0 ? 0 : op.totalQty,
+          ),
           Number(summary.totalAmount.toFixed(2)),
         ]);
       }
@@ -1059,6 +1087,7 @@ export function EmployeeReportDashboard() {
         "Operation",
         ...(showEmployeeColumn ? ["Employee"] : []),
         "Piece Rate",
+        "Incentive",
         "SAM",
         "Value",
         "Scanned At",
@@ -1074,6 +1103,7 @@ export function EmployeeReportDashboard() {
           ? [formatEmployeeLabel(c.employeeCode, c.employeeName)]
           : []),
         c.rate,
+        c.incentive,
         c.smv,
         c.value,
         c.scannedAt
@@ -1117,6 +1147,9 @@ export function EmployeeReportDashboard() {
     workOrderRowGroups,
     sectionRowGroups,
     operationRowGroups,
+    operationGroupDimension,
+    operationRowGrandTotals,
+    flatOperations,
   ]);
 
   return (
@@ -1930,6 +1963,7 @@ export function EmployeeReportDashboard() {
                         <th className="py-2.5 px-3 text-center">Operations</th>
                         <th className="py-2.5 px-3 text-center">Qty</th>
                         <th className="py-2.5 px-3 text-right">Piece Rate</th>
+                        <th className="py-2.5 px-3 text-right">Incentive</th>
                         <th className="py-2.5 px-3 text-right">Plan</th>
                         <th className="py-2.5 px-3 text-right">Total Amount</th>
                       </tr>
@@ -1967,6 +2001,11 @@ export function EmployeeReportDashboard() {
                                 : "—"}
                             </td>
                             <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
+                              {wo.incentive != null
+                                ? formatAmount(wo.incentive)
+                                : "—"}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
                               {wo.plan != null ? formatAmount(wo.plan) : "—"}
                             </td>
                             <td className="py-2.5 px-3 text-right font-bold text-emerald-700">
@@ -1989,6 +2028,14 @@ export function EmployeeReportDashboard() {
                             {formatAmount(
                               summary.workOrders.reduce(
                                 (acc, wo) => acc + (wo.pieceRate ?? 0),
+                                0,
+                              ),
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-slate-700">
+                            {formatAmount(
+                              summary.workOrders.reduce(
+                                (acc, wo) => acc + (wo.incentive ?? 0),
                                 0,
                               ),
                             )}
@@ -2033,6 +2080,9 @@ export function EmployeeReportDashboard() {
                             Piece Rate
                           </th>
                           <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                            Incentive
+                          </th>
+                          <th className="py-2.5 px-3 text-right border-r border-slate-200">
                             SAM
                           </th>
                           <th className="py-2.5 px-3 text-center border-r border-slate-200">
@@ -2073,6 +2123,11 @@ export function EmployeeReportDashboard() {
                                       : "—"}
                                   </td>
                                   <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
+                                    {row.incentive != null
+                                      ? row.incentive.toFixed(2).replace(/\.00$/, "")
+                                      : "—"}
+                                  </td>
+                                  <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
                                     {row.sam != null ? row.sam.toFixed(2) : "—"}
                                   </td>
                                   <td className="py-2 px-3 text-center font-bold text-slate-800 text-[11px] border-r border-slate-200">
@@ -2094,6 +2149,9 @@ export function EmployeeReportDashboard() {
                                 </td>
                                 <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
                                   {formatAmount(sumField(g.rows, (r) => r.rate))}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
+                                  {formatAmount(sumField(g.rows, (r) => r.incentive))}
                                 </td>
                                 <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
                                   {formatAmount(sumField(g.rows, (r) => r.sam))}
@@ -2120,6 +2178,9 @@ export function EmployeeReportDashboard() {
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300">
                               {formatAmount(operationRowGrandTotals.rate)}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300">
+                              {formatAmount(operationRowGrandTotals.incentive)}
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300">
                               {formatAmount(operationRowGrandTotals.sam)}
@@ -2158,7 +2219,7 @@ export function EmployeeReportDashboard() {
                       {flatOperations.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={6}
+                            colSpan={7}
                             className="py-8 text-center text-slate-400 font-medium"
                           >
                             No operations recorded for this period.
@@ -2184,6 +2245,9 @@ export function EmployeeReportDashboard() {
                                 : "—"}
                             </td>
                             <td className="py-2.5 px-3 text-right font-mono text-slate-700">
+                              Rs. {op.incentive.toFixed(2)}
+                            </td>
+                            <td className="py-2.5 px-3 text-right font-mono text-slate-700">
                               {op.smv != null ? op.smv.toFixed(2) : "—"}
                             </td>
                             <td className="py-2.5 px-3 text-center font-bold text-slate-800">
@@ -2206,10 +2270,15 @@ export function EmployeeReportDashboard() {
                             {formatAmount(sumField(flatOperations, (op) => op.rate))}
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono text-slate-700">
+                            {formatAmount(sumField(flatOperations, (op) => op.incentive))}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono text-slate-700">
                             {formatAmount(sumField(flatOperations, (op) => op.smv))}
                           </td>
                           <td className="py-2.5 px-3 text-center text-slate-900">
-                            {sumField(flatOperations, (op) => (op.rate === 0 ? 0 : op.totalQty)).toLocaleString()}
+                            {sumField(flatOperations, (op) =>
+                              op.rate === 0 && op.incentive === 0 ? 0 : op.totalQty,
+                            ).toLocaleString()}
                           </td>
                           <td className="py-2.5 px-3 text-right text-emerald-700 font-black">
                             Rs. {formatAmount(summary.totalAmount)}
@@ -2436,6 +2505,9 @@ export function EmployeeReportDashboard() {
                           Piece Rate
                         </th>
                         <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                          Incentive
+                        </th>
+                        <th className="py-2.5 px-3 text-right border-r border-slate-200">
                           SAM
                         </th>
                         <th className="py-2.5 px-3 text-center border-r border-slate-200">
@@ -2457,7 +2529,7 @@ export function EmployeeReportDashboard() {
                         <tr>
                           <td
                             colSpan={
-                              employeeGroupDimension === "workOrder" ? 11 : 12
+                              employeeGroupDimension === "workOrder" ? 12 : 13
                             }
                             className="py-8 text-center text-slate-400 font-medium"
                           >
@@ -2506,6 +2578,9 @@ export function EmployeeReportDashboard() {
                                     : "—"}
                                 </td>
                                 <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
+                                  {item.incentive.toFixed(2).replace(/\.00$/, "")}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
                                   {item.sam != null ? item.sam.toFixed(2) : "—"}
                                 </td>
                                 <td className="py-2 px-3 text-center font-semibold text-slate-700 text-[11px] border-r border-slate-200">
@@ -2536,10 +2611,13 @@ export function EmployeeReportDashboard() {
                                 }{" "}
                                 :
                               </td>
-                              <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
-                                {formatAmount(sumField(g.items, (item) => item.rate))}
-                              </td>
-                              <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
+                                <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
+                                  {formatAmount(sumField(g.items, (item) => item.rate))}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
+                                  {formatAmount(sumField(g.items, (item) => item.incentive))}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
                                 {formatAmount(sumField(g.items, (item) => item.sam))}
                               </td>
                               <td className="py-2 px-3 text-center border-r border-slate-200">
@@ -2570,6 +2648,9 @@ export function EmployeeReportDashboard() {
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300">
                             {formatAmount(grandEmployeeRate)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300">
+                            {formatAmount(grandEmployeeIncentive)}
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300">
                             {formatAmount(grandEmployeeSam)}
@@ -2619,6 +2700,9 @@ export function EmployeeReportDashboard() {
                           Piece Rate
                         </th>
                         <th className="py-2.5 px-3 text-right border-r border-slate-200">
+                          Incentive
+                        </th>
+                        <th className="py-2.5 px-3 text-right border-r border-slate-200">
                           SAM
                         </th>
                         <th className="py-2.5 px-3 text-center border-r border-slate-200">
@@ -2639,7 +2723,7 @@ export function EmployeeReportDashboard() {
                       {employeeGroupedData.length === 0 ? (
                         <tr>
                           <td
-                            colSpan={11}
+                            colSpan={12}
                             className="py-8 text-center text-slate-400 font-medium"
                           >
                             No employees recorded for this period.
@@ -2674,6 +2758,9 @@ export function EmployeeReportDashboard() {
                                     : "—"}
                                 </td>
                                 <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
+                                  {item.incentive.toFixed(2).replace(/\.00$/, "")}
+                                </td>
+                                <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
                                   {item.sam != null ? item.sam.toFixed(2) : "—"}
                                 </td>
                                 <td className="py-2 px-3 text-center font-semibold text-slate-700 text-[11px] border-r border-slate-200">
@@ -2700,6 +2787,9 @@ export function EmployeeReportDashboard() {
                               </td>
                               <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
                                 {formatAmount(sumField(eg.items, (item) => item.rate))}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
+                                {formatAmount(sumField(eg.items, (item) => item.incentive))}
                               </td>
                               <td className="py-2 px-3 text-right font-mono border-r border-slate-200">
                                 {formatAmount(sumField(eg.items, (item) => item.sam))}
@@ -2730,6 +2820,9 @@ export function EmployeeReportDashboard() {
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300">
                             {formatAmount(grandEmployeeRate)}
+                          </td>
+                          <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300">
+                            {formatAmount(grandEmployeeIncentive)}
                           </td>
                           <td className="py-2.5 px-3 text-right font-mono border-r border-slate-300">
                             {formatAmount(grandEmployeeSam)}
@@ -3270,6 +3363,7 @@ export function EmployeeReportDashboard() {
                       <th>OPERATION</th>
                       {showEmployeeColumn && <th>EMPLOYEE</th>}
                       <th className="text-right">PIECE RATE (RS.)</th>
+                      <th className="text-right">INCENTIVE (RS.)</th>
                       <th className="text-right">SAM</th>
                       <th className="text-right">VALUE (RS.)</th>
                       <th className="text-right">SCANNED AT</th>
@@ -3279,7 +3373,7 @@ export function EmployeeReportDashboard() {
                     {filteredCoupons.length === 0 ? (
                       <tr>
                         <td
-                          colSpan={showEmployeeColumn ? 12 : 11}
+                          colSpan={showEmployeeColumn ? 13 : 12}
                           className="text-center"
                         >
                           No matching coupons found.
@@ -3314,6 +3408,9 @@ export function EmployeeReportDashboard() {
                           )}
                           <td className="text-right">
                             {c.rate != null ? `Rs. ${c.rate.toFixed(2)}` : "—"}
+                          </td>
+                          <td className="text-right">
+                            Rs. {(c.incentive ?? 0).toFixed(2)}
                           </td>
                           <td className="text-right">
                             {c.smv != null ? c.smv.toFixed(2) : "—"}
@@ -3466,6 +3563,7 @@ export function EmployeeReportDashboard() {
                               <th className="text-center w-20">OPERATIONS</th>
                               <th className="text-center w-20">QTY</th>
                               <th className="text-right w-24">PIECE RATE</th>
+                              <th className="text-right w-24">INCENTIVE</th>
                               <th className="text-right w-24">PLAN</th>
                               <th className="text-right w-28">
                                 TOTAL AMOUNT (RS.)
@@ -3497,6 +3595,11 @@ export function EmployeeReportDashboard() {
                                       : "—"}
                                   </td>
                                   <td className="text-right">
+                                    {wo.incentive != null
+                                      ? formatAmount(wo.incentive)
+                                      : "—"}
+                                  </td>
+                                  <td className="text-right">
                                     {wo.plan != null
                                       ? formatAmount(wo.plan)
                                       : "—"}
@@ -3522,6 +3625,14 @@ export function EmployeeReportDashboard() {
                                   {formatAmount(
                                     summary.workOrders.reduce(
                                       (acc, wo) => acc + (wo.pieceRate ?? 0),
+                                      0,
+                                    ),
+                                  )}
+                                </td>
+                                <td className="text-right">
+                                  {formatAmount(
+                                    summary.workOrders.reduce(
+                                      (acc, wo) => acc + (wo.incentive ?? 0),
                                       0,
                                     ),
                                   )}
@@ -3562,6 +3673,7 @@ export function EmployeeReportDashboard() {
                               </th>
                               <th>OPERATION</th>
                               <th className="text-right w-20">PIECE RATE</th>
+                              <th className="text-right w-20">INCENTIVE</th>
                               <th className="text-right w-16">SAM</th>
                               <th className="text-center w-20">QTY</th>
                               <th className="text-right w-28">
@@ -3572,7 +3684,7 @@ export function EmployeeReportDashboard() {
                           <tbody>
                             {operationRowGroups.length === 0 ? (
                               <tr>
-                                <td colSpan={6} className="text-center">
+                                <td colSpan={7} className="text-center">
                                   No operations recorded for this period.
                                 </td>
                               </tr>
@@ -3592,6 +3704,11 @@ export function EmployeeReportDashboard() {
                                           ? row.rate
                                               .toFixed(2)
                                               .replace(/\.00$/, "")
+                                          : "—"}
+                                      </td>
+                                      <td className="text-right font-mono">
+                                        {row.incentive != null
+                                          ? row.incentive.toFixed(2).replace(/\.00$/, "")
                                           : "—"}
                                       </td>
                                       <td className="text-right font-mono">
@@ -3625,6 +3742,11 @@ export function EmployeeReportDashboard() {
                                     </td>
                                     <td className="text-right font-mono font-bold">
                                       {formatAmount(
+                                        sumField(g.rows, (r) => r.incentive),
+                                      )}
+                                    </td>
+                                    <td className="text-right font-mono font-bold">
+                                      {formatAmount(
                                         sumField(g.rows, (r) => r.sam),
                                       )}
                                     </td>
@@ -3649,6 +3771,9 @@ export function EmployeeReportDashboard() {
                                   {formatAmount(operationRowGrandTotals.rate)}
                                 </td>
                                 <td className="text-right font-mono">
+                                  {formatAmount(operationRowGrandTotals.incentive)}
+                                </td>
+                                <td className="text-right font-mono">
                                   {formatAmount(operationRowGrandTotals.sam)}
                                 </td>
                                 <td className="text-center">
@@ -3669,6 +3794,7 @@ export function EmployeeReportDashboard() {
                               <th>OPERATION</th>
                               <th>SECTION</th>
                               <th className="text-right w-20">PIECE RATE</th>
+                              <th className="text-right w-20">INCENTIVE</th>
                               <th className="text-right w-16">SAM</th>
                               <th className="text-center w-20">QTY</th>
                               <th className="text-right w-28">
@@ -3679,7 +3805,7 @@ export function EmployeeReportDashboard() {
                           <tbody>
                             {flatOperations.length === 0 ? (
                               <tr>
-                                <td colSpan={6} className="text-center">
+                                <td colSpan={7} className="text-center">
                                   No operations recorded for this period.
                                 </td>
                               </tr>
@@ -3694,6 +3820,9 @@ export function EmployeeReportDashboard() {
                                     {op.rate != null
                                       ? `Rs. ${op.rate.toFixed(2)}`
                                       : "—"}
+                                  </td>
+                                  <td className="text-right font-mono">
+                                    Rs. {op.incentive.toFixed(2)}
                                   </td>
                                   <td className="text-right font-mono">
                                     {op.smv != null ? op.smv.toFixed(2) : "—"}
@@ -3718,10 +3847,15 @@ export function EmployeeReportDashboard() {
                                   {formatAmount(sumField(flatOperations, (op) => op.rate))}
                                 </td>
                                 <td className="text-right font-mono">
+                                  {formatAmount(sumField(flatOperations, (op) => op.incentive))}
+                                </td>
+                                <td className="text-right font-mono">
                                   {formatAmount(sumField(flatOperations, (op) => op.smv))}
                                 </td>
                                 <td className="text-center">
-                                  {sumField(flatOperations, (op) => (op.rate === 0 ? 0 : op.totalQty)).toLocaleString()}
+                                  {sumField(flatOperations, (op) =>
+                                    op.rate === 0 && op.incentive === 0 ? 0 : op.totalQty,
+                                  ).toLocaleString()}
                                 </td>
                                 <td className="text-right">
                                   Rs. {formatAmount(summary.totalAmount)}
@@ -3910,6 +4044,7 @@ export function EmployeeReportDashboard() {
                             <th className="text-center">DATE</th>
                             <th>OPERATION</th>
                             <th className="text-right">PIECE RATE</th>
+                            <th className="text-right">INCENTIVE</th>
                             <th className="text-right">SAM</th>
                             <th className="text-center">BUNDLE</th>
                             <th className="text-center">QUANTITY</th>
@@ -3923,8 +4058,8 @@ export function EmployeeReportDashboard() {
                               <td
                                 colSpan={
                                   employeeGroupDimension !== "workOrder"
-                                    ? 12
-                                    : 11
+                                    ? 13
+                                    : 12
                                 }
                                 className="text-center"
                               >
@@ -3962,6 +4097,9 @@ export function EmployeeReportDashboard() {
                                         : "—"}
                                     </td>
                                     <td className="text-right font-mono">
+                                      {item.incentive.toFixed(2).replace(/\.00$/, "")}
+                                    </td>
+                                    <td className="text-right font-mono">
                                       {item.sam != null ? item.sam.toFixed(2) : "—"}
                                     </td>
                                     <td className="text-center">
@@ -3993,6 +4131,9 @@ export function EmployeeReportDashboard() {
                                   </td>
                                   <td className="text-right font-mono font-bold">
                                     {formatAmount(sumField(group.items, (item) => item.rate))}
+                                  </td>
+                                  <td className="text-right font-mono font-bold">
+                                    {formatAmount(sumField(group.items, (item) => item.incentive))}
                                   </td>
                                   <td className="text-right font-mono font-bold">
                                     {formatAmount(sumField(group.items, (item) => item.sam))}
@@ -4027,6 +4168,9 @@ export function EmployeeReportDashboard() {
                                 {formatAmount(grandEmployeeRate)}
                               </td>
                               <td className="text-right font-mono">
+                                {formatAmount(grandEmployeeIncentive)}
+                              </td>
+                              <td className="text-right font-mono">
                                 {formatAmount(grandEmployeeSam)}
                               </td>
                               <td className="text-center">
@@ -4053,6 +4197,7 @@ export function EmployeeReportDashboard() {
                             <th className="text-center">DATE</th>
                             <th>OPERATION</th>
                             <th className="text-right">PIECE RATE</th>
+                            <th className="text-right">INCENTIVE</th>
                             <th className="text-right">SAM</th>
                             <th className="text-center">BUNDLE</th>
                             <th className="text-center">QUANTITY</th>
@@ -4063,7 +4208,7 @@ export function EmployeeReportDashboard() {
                         <tbody>
                           {employeeGroupedData.length === 0 ? (
                             <tr>
-                              <td colSpan={11} className="text-center">
+                              <td colSpan={12} className="text-center">
                                 No employees recorded for this period.
                               </td>
                             </tr>
@@ -4093,6 +4238,9 @@ export function EmployeeReportDashboard() {
                                         : "—"}
                                     </td>
                                     <td className="text-right font-mono">
+                                      {item.incentive.toFixed(2).replace(/\.00$/, "")}
+                                    </td>
+                                    <td className="text-right font-mono">
                                       {item.sam != null ? item.sam.toFixed(2) : "—"}
                                     </td>
                                     <td className="text-center">
@@ -4116,6 +4264,9 @@ export function EmployeeReportDashboard() {
                                   </td>
                                   <td className="text-right font-mono font-bold">
                                     {formatAmount(sumField(eg.items, (item) => item.rate))}
+                                  </td>
+                                  <td className="text-right font-mono font-bold">
+                                    {formatAmount(sumField(eg.items, (item) => item.incentive))}
                                   </td>
                                   <td className="text-right font-mono font-bold">
                                     {formatAmount(sumField(eg.items, (item) => item.sam))}
@@ -4143,6 +4294,9 @@ export function EmployeeReportDashboard() {
                               </td>
                               <td className="text-right font-mono">
                                 {formatAmount(grandEmployeeRate)}
+                              </td>
+                              <td className="text-right font-mono">
+                                {formatAmount(grandEmployeeIncentive)}
                               </td>
                               <td className="text-right font-mono">
                                 {formatAmount(grandEmployeeSam)}
