@@ -108,8 +108,9 @@ function RangePicker({ value, onChange }: { value: Range; onChange: (range: Rang
   );
 }
 
-function DailyOutputChart({ data }: { data: DashboardInsights["dailyOutput"] }) {
+function DailyOutputChart({ data, range }: { data: DashboardInsights["dailyOutput"]; range: Range }) {
   const values = data.map((item) => item.sewing + item.washing + item.finishing);
+  const hasOutput = values.some((value) => value > 0);
   const maximum = Math.max(1, ...values);
   const coordinates = values.map((value, index) => ({
     x: 8 + (index / Math.max(values.length - 1, 1)) * 88,
@@ -129,7 +130,7 @@ function DailyOutputChart({ data }: { data: DashboardInsights["dailyOutput"] }) 
         </div>
         <span className="inline-flex items-center gap-1.5 rounded-full bg-[#fff1f2] px-2.5 py-1 text-[11px] font-semibold text-[#b11016]"><i className="h-2 w-2 rounded-full bg-[#b11016]" /> Daily scans</span>
       </div>
-      {data.length === 0 ? <EmptyChart /> : <div className="mt-5 grid grid-cols-[32px_1fr] gap-2">
+      {!hasOutput ? <EmptyChart range={range} /> : <div className="mt-5 grid grid-cols-[32px_1fr] gap-2">
         <div className="flex h-48 flex-col justify-between pb-5 text-right text-[10px] font-medium text-slate-400"><span>{number.format(maximum)}</span><span>{number.format(Math.ceil(maximum / 2))}</span><span>0</span></div>
         <div>
           <svg viewBox="0 0 104 90" preserveAspectRatio="none" className="h-48 w-full overflow-visible" aria-label="Daily scanned coupons line chart">
@@ -160,8 +161,8 @@ function DailyOutputChart({ data }: { data: DashboardInsights["dailyOutput"] }) 
   );
 }
 
-function EmptyChart() {
-  return <div className="mt-5 flex h-48 items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 text-sm text-slate-500">No scan activity for this date range.</div>;
+function EmptyChart({ range }: { range: Range }) {
+  return <div className="mt-5 flex h-48 flex-col items-center justify-center rounded-xl border border-dashed border-[#efc3c6] bg-[#fffafa] px-6 text-center"><Activity className="h-5 w-5 text-[#b11016]" /><p className="mt-2 text-sm font-semibold text-[#211f20]">No scanned coupons in this date range.</p><p className="mt-1 text-xs text-slate-500">No scan output was recorded from {formatRange(range)}. Select another range to view activity.</p></div>;
 }
 
 function DepartmentMix({ data }: { data: DashboardInsights["departments"] }) {
@@ -253,7 +254,7 @@ export function DashboardView() {
       <MetricCard label="Completed W/O" value={data.completedWorkOrders} detail="All active coupons scanned" icon={PackageCheck} />
       <MetricCard label="Today’s scans" value={data.todayScans} detail={`${number.format(data.monthScans)} scans this month`} icon={Activity} />
     </section>
-    <section className="grid gap-5 xl:grid-cols-[1.45fr_0.95fr]"><DailyOutputChart data={data.dailyOutput} /><DepartmentMix data={data.departments} /></section>
+    <section className="grid gap-5 xl:grid-cols-[1.45fr_0.95fr]"><DailyOutputChart data={data.dailyOutput} range={range} /><DepartmentMix data={data.departments} /></section>
     <section className="grid gap-5 xl:grid-cols-2"><Pipeline data={data} /><Backlog items={data.workOrders} /></section>
     <section className="grid gap-5 xl:grid-cols-[1.35fr_0.95fr]"><ActivityFeed activities={data.recentActivities} /><Backlog items={attentionItems} title="Top work-order scan output" description="The five work orders with the most scanned coupons." /></section>
   </main>;
