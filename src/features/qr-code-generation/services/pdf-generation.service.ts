@@ -250,34 +250,6 @@ function drawQrCode(
   doc.restore();
 }
 
-// Rework labels live inside the existing QR footprint rather than taking space
-// from the card's text fields or changing the label-sheet grid. The QR remains
-// a separate, intact code below the label so scanner payloads are unaffected.
-function drawReworkQrCode(
-  doc: PDFKit.PDFDocument,
-  x: number,
-  y: number,
-  size: number,
-  value: string,
-) {
-  const labelHeight = 4.5;
-  const gap = 0.6;
-  const qrSize = size - labelHeight - gap;
-
-  doc.save();
-  doc.rect(x, y, size, size).fill("#ffffff");
-  doc.roundedRect(x, y, size, labelHeight, 0.8).fill("#312e81");
-  doc.fillColor("#ffffff").fontSize(3.6).text("REWORK", x, y + 0.25, {
-    width: size,
-    height: labelHeight,
-    align: "center",
-    lineBreak: false,
-  });
-  doc.restore();
-
-  drawQrCode(doc, x + (size - qrSize) / 2, y + labelHeight + gap, qrSize, value);
-}
-
 interface GeneratePdfParams {
   workOrder: string;
   /** Must match the registered coupon identity being rendered. */
@@ -610,14 +582,22 @@ export async function generateCouponPdf({
       // Positioned to the right and resting right above the line below Inm.
       const qrX = cardX + cardW - qrSize - 2.5;
       const qrY = cardY + topH - 0.5 - qrSize;
-      if (isReworkCoupon) {
-        drawReworkQrCode(doc, qrX, qrY, qrSize, couponCode);
-      } else {
-        drawQrCode(doc, qrX, qrY, qrSize, couponCode);
-      }
+      drawQrCode(doc, qrX, qrY, qrSize, couponCode);
 
       const textW = qrX - cardX - 3;
       doc.fontSize(5).fillColor("#000000");
+      if (isReworkCoupon) {
+        const reworkBadgeWidth = 19;
+        const reworkBadgeX = cardX + cardW - reworkBadgeWidth;
+        doc.roundedRect(reworkBadgeX, cardY + 0.6, reworkBadgeWidth, 4.5, 0.8).fill("#312e81");
+        doc.fillColor("#ffffff").fontSize(3.6).text("REWORK", reworkBadgeX, cardY + 0.85, {
+          width: reworkBadgeWidth,
+          height: 4.5,
+          align: "center",
+          lineBreak: false,
+        });
+        doc.fillColor("#000000").fontSize(5);
+      }
       boldText(doc, "WO", cardX, cardY, {
         width: 9,
         height: headerLineH,
