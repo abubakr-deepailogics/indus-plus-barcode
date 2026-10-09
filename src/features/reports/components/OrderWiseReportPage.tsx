@@ -53,6 +53,10 @@ export function OrderWiseReportPage() {
     if (!data?.rows?.length) return null;
     return {
       washQty: data.rows.reduce((sum, r) => sum + (r.washQty ?? 0), 0),
+      totalIncentive: data.rows.reduce(
+        (sum, r) => sum + (r.totalIncentive ?? 0),
+        0,
+      ),
       plan: data.rows.reduce((sum, r) => sum + (r.plan ?? 0), 0),
       previousPaid: data.rows.reduce(
         (sum, r) => sum + (r.previousPaid ?? 0),
@@ -112,6 +116,7 @@ export function OrderWiseReportPage() {
                 "W/O",
                 "Total SAM",
                 "Total Rate",
+                "Incentive",
                 "Wash Qty",
                 "Plan (Rs.)",
                 "Previous Paid (Rs.)",
@@ -127,6 +132,7 @@ export function OrderWiseReportPage() {
                 r.workOrder,
                 r.totalSam,
                 r.totalRate,
+                r.totalIncentive,
                 r.washQty,
                 r.plan,
                 r.previousPaid,
@@ -203,6 +209,9 @@ export function OrderWiseReportPage() {
                     Total Rate
                   </th>
                   <th className="py-2 px-2 text-right border-r border-slate-200">
+                    Incentive
+                  </th>
+                  <th className="py-2 px-2 text-right border-r border-slate-200">
                     Qty
                   </th>
                   <th className="py-2 px-2 text-right border-r border-slate-200">
@@ -245,6 +254,11 @@ export function OrderWiseReportPage() {
                       {r.totalRate != null ? r.totalRate.toFixed(3) : "—"}
                     </td>
                     <td className="py-1.5 px-2 text-right border-r border-slate-100">
+                      {r.totalIncentive != null
+                        ? r.totalIncentive.toFixed(3)
+                        : "—"}
+                    </td>
+                    <td className="py-1.5 px-2 text-right border-r border-slate-100">
                       {r.washQty != null ? r.washQty.toLocaleString() : "—"}
                     </td>
                     <td className="py-1.5 px-2 text-right border-r border-slate-100">
@@ -285,6 +299,9 @@ export function OrderWiseReportPage() {
                     </td>
                     <td className="py-2 px-2 text-right border-r border-slate-300">
                       —
+                    </td>
+                    <td className="py-2 px-2 text-right border-r border-slate-300">
+                      {formatAmount(totals.totalIncentive)}
                     </td>
                     <td className="py-2 px-2 text-right border-r border-slate-300">
                       —

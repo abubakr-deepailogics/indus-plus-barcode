@@ -6,6 +6,7 @@ const IN_LIST_CHUNK_SIZE = 2000; // stays well under SQL Server's ~2100 paramete
 export interface DepartmentOpTotals {
   sam: number; // excludes zero-rate operations (matches the Style Bulletin "Excl 0" total)
   rate: number;
+  incentive: number;
 }
 
 // Per work order, the sum of Piece Rate / SAM across the department's
@@ -39,6 +40,7 @@ export async function fetchDepartmentOpTotalsByWorkOrder(
       Latest AS (
         SELECT [Order No] AS WorkOrder, [Operation Code] AS OpNo,
                TRY_CAST([Piece Rate] AS FLOAT) AS PieceRate,
+               TRY_CAST(Incentive AS FLOAT) AS Incentive,
                TRY_CAST([Smv/Sam] AS FLOAT) AS Sam,
                ROW_NUMBER() OVER (PARTITION BY [Order No], [Operation Code] ORDER BY InsertedAt DESC) AS rn
         FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
@@ -48,7 +50,8 @@ export async function fetchDepartmentOpTotalsByWorkOrder(
       )
       SELECT o.WorkOrder,
              SUM(CASE WHEN l.PieceRate <> 0 THEN l.Sam ELSE 0 END) AS TotalSam,
-             SUM(l.PieceRate) AS TotalRate
+             SUM(l.PieceRate) AS TotalRate,
+             SUM(l.Incentive) AS TotalIncentive
       FROM Ops o
       JOIN Latest l ON l.WorkOrder = o.WorkOrder AND l.OpNo = o.OpNo AND l.rn = 1
       GROUP BY o.WorkOrder
@@ -57,10 +60,14 @@ export async function fetchDepartmentOpTotalsByWorkOrder(
       WorkOrder: string;
       TotalSam: number | null;
       TotalRate: number | null;
+      TotalIncentive: number | null;
     }[]) {
       const sam = Number(row.TotalSam) || 0;
       const rate = Number(row.TotalRate) || 0;
-      if (sam > 0 || rate > 0) map.set(row.WorkOrder, { sam, rate });
+      const incentive = Number(row.TotalIncentive) || 0;
+      if (sam > 0 || rate > 0 || incentive > 0) {
+        map.set(row.WorkOrder, { sam, rate, incentive });
+      }
     }
   }
   return map;

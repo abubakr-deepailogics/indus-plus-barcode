@@ -221,6 +221,7 @@ export interface OrderWiseReportRow {
   workOrder: string; // ANL# in the legacy printout
   totalSam: number | null; // total Sewing SAM across ALL sections for this work order from the IndusPlus live style bulletin
   totalRate: number | null; // total Sewing piece-rate across ALL sections for this work order from the IndusPlus live style bulletin; Plan = totalRate × washQty
+  totalIncentive: number | null;
   washQty: number | null; // the order's overall cut quantity (cut-detail snapshot) — legacy column name, NOT department-scoped
   plan: number | null; // totalRate * washQty — total price to finish the whole order
   previousPaid: number; // sum(qty * rate) for this WO's Sewing coupons scanned during LAST pay-cycle

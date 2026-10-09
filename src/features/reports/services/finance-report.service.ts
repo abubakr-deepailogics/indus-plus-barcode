@@ -238,8 +238,11 @@ export async function buildOrderWiseReport(
       const washQty = washQtyByWo.get(workOrder) ?? null;
       const totalSam = bulletin?.sam ?? null;
       const totalRate = bulletin?.rate ?? null;
+      const totalIncentive = bulletin?.incentive ?? null;
       const plan =
-        totalRate != null && washQty != null ? totalRate * washQty : null;
+        totalRate != null && totalIncentive != null && washQty != null
+          ? (totalRate + totalIncentive) * washQty
+          : null;
       const totalClaim = scan.previousPaid + scan.currentClaim;
       const total = totalClaim + scan.opInc;
       // Qty Produced = Current Claim ÷ Total Rate (not a bundle-scan count) —
@@ -254,6 +257,7 @@ export async function buildOrderWiseReport(
         workOrder,
         totalSam,
         totalRate,
+        totalIncentive,
         washQty,
         plan,
         previousPaid: scan.previousPaid,
