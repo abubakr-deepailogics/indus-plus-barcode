@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
-import { Barcode, Loader2, Trash2, AlertTriangle, Printer } from "lucide-react";
+import { Barcode, Loader2, Trash2, AlertTriangle, Printer, Plus } from "lucide-react";
 import { useAuth } from "@/features/auth/context/auth-context";
 import { RequirePermission } from "@/features/auth/components/RequirePermission";
 import type {
@@ -19,6 +19,7 @@ import {
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { ModulePageHeader } from "@/components/ModulePageHeader";
 import { useDepartment } from "@/lib/department-context";
+import type { ReworkEntriesResponse } from "@/features/rework-coupon/types";
 
 interface CutDetailRow {
   RowId: number;
@@ -59,6 +60,8 @@ interface ReworkBundleRow {
   inseam: string;
   size: string;
   pcs: string;
+  isSaved?: boolean;
+  savedBundleNo?: string;
 }
 
 const cellInputClassName =
@@ -247,9 +250,31 @@ export default function ReworkCouponPage() {
       // Cutting Detail is fully manual — reset to a single blank row for
       // the newly loaded work order rather than carrying over rows from a
       // previous one.
-      setBundles([makeBlankRow()]);
+      const savedEntriesResponse = await fetch(
+        `/api/coupons/rework/entries?work_order=${encodeURIComponent(trimmedWo)}&department=${encodeURIComponent(department)}`,
+      );
+      if (loadId !== workOrderLoadId.current) return;
+      if (!savedEntriesResponse.ok) {
+        throw new Error("Failed to load saved rework cutting details.");
+      }
+      const savedEntries = (await savedEntriesResponse.json()) as ReworkEntriesResponse;
+      if (loadId !== workOrderLoadId.current) return;
+      const restoredRows: ReworkBundleRow[] = savedEntries.rows.map((row) => ({
+        id: row.rowId,
+        cutNo: row.cutNo,
+        inseam: row.inseam,
+        size: row.size,
+        pcs: String(row.pcs),
+        isSaved: true,
+        savedBundleNo: row.bundleNo,
+      }));
+      nextRowId.current = Math.max(
+        nextRowId.current,
+        ...restoredRows.map((row) => row.id + 1),
+      );
+      setBundles(restoredRows.length > 0 ? restoredRows : [makeBlankRow()]);
       setSavedBundles(null);
-      setReworkQty("");
+      setReworkQty(savedEntries.latestReworkQty ?? "");
       setValidationError(null);
       setIsOpenLookup(false);
     } catch (err: unknown) {
@@ -288,9 +313,15 @@ export default function ReworkCouponPage() {
   const removeBundleRow = (id: number) => {
     setSavedBundles(null);
     setBundles((prev) => {
+      if (prev.find((bundle) => bundle.id === id)?.isSaved) return prev;
       if (prev.length <= 1) return [makeBlankRow()];
       return prev.filter((b) => b.id !== id);
     });
+  };
+
+  const addBundleRow = () => {
+    setSavedBundles(null);
+    setBundles((prev) => [...prev, makeBlankRow()]);
   };
 
   // Typing into the last row's cell spawns a fresh blank row right below
@@ -306,6 +337,7 @@ export default function ReworkCouponPage() {
     setBundles((prev) => {
       const idx = prev.findIndex((b) => b.id === id);
       if (idx === -1) return prev;
+      if (prev[idx].isSaved) return prev;
       const updatedRow = { ...prev[idx], [field]: value };
       const next = prev.slice();
       next[idx] = updatedRow;
@@ -362,7 +394,7 @@ export default function ReworkCouponPage() {
   // pipeline expects (BundleDetailRow). If coupons were already saved/generated
   // for this session, use the sequentially assigned bundle numbers (e.g. RW001).
   const validBundles = useMemo(
-    () => bundles.filter((b) => b.cutNo.trim() || b.pcs),
+    () => bundles.filter((b) => !b.isSaved && (b.cutNo.trim() || b.pcs)),
     [bundles],
   );
 
@@ -708,9 +740,14 @@ export default function ReworkCouponPage() {
               <h3 className="text-sm font-extrabold text-[#4f46e5]">
                 Cutting Detail
               </h3>
-              <span className="text-[10px] text-slate-400 font-semibold">
-                Start typing in the last row to add another below it
-              </span>
+              <button
+                type="button"
+                onClick={addBundleRow}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[10px] font-bold text-indigo-700 transition-colors hover:bg-indigo-100"
+              >
+                <Plus className="size-3.5" />
+                Add row
+              </button>
             </div>
 
             <div className="overflow-auto max-h-[420px] border border-[#f1f5f9] rounded-xl">
@@ -742,53 +779,59 @@ export default function ReworkCouponPage() {
                         <input
                           type="text"
                           value={b.cutNo}
+                          readOnly={b.isSaved}
                           onChange={(e) =>
                             updateBundleCell(b.id, "cutNo", e.target.value)
                           }
                           placeholder="Cut #"
-                          className={cellInputClassName}
+                          className={`${cellInputClassName} ${b.isSaved ? "cursor-default bg-slate-50 text-slate-500" : ""}`}
                         />
                       </td>
                       <td className="p-0.5">
                         <input
                           type="text"
                           value={b.inseam}
+                          readOnly={b.isSaved}
                           onChange={(e) =>
                             updateBundleCell(b.id, "inseam", e.target.value)
                           }
                           placeholder="Inseam"
-                          className={cellInputClassName}
+                          className={`${cellInputClassName} ${b.isSaved ? "cursor-default bg-slate-50 text-slate-500" : ""}`}
                         />
                       </td>
                       <td className="p-0.5">
                         <input
                           type="text"
                           value={b.size}
+                          readOnly={b.isSaved}
                           onChange={(e) =>
                             updateBundleCell(b.id, "size", e.target.value)
                           }
                           placeholder="Size"
-                          className={cellInputClassName}
+                          className={`${cellInputClassName} ${b.isSaved ? "cursor-default bg-slate-50 text-slate-500" : ""}`}
                         />
                       </td>
                       <td className="p-0.5">
                         <input
                           type="number"
                           value={b.pcs}
+                          readOnly={b.isSaved}
                           onChange={(e) =>
                             updateBundleCell(b.id, "pcs", e.target.value)
                           }
                           onWheel={(e) => e.currentTarget.blur()}
                           placeholder="Pcs"
-                          className={cellInputClassName}
+                          className={`${cellInputClassName} ${b.isSaved ? "cursor-default bg-slate-50 text-slate-500" : ""}`}
                         />
                       </td>
                       <td className="p-0.5 text-center">
                         <button
                           type="button"
                           onClick={() => removeBundleRow(b.id)}
-                          className="text-slate-300 hover:text-red-500 cursor-pointer p-1"
-                          aria-label="Remove row"
+                          disabled={b.isSaved}
+                          className="text-slate-300 hover:text-red-500 disabled:cursor-not-allowed disabled:opacity-40 cursor-pointer p-1"
+                          aria-label={b.isSaved ? "Saved row" : "Remove row"}
+                          title={b.isSaved ? `Saved as ${b.savedBundleNo ?? "rework entry"}` : "Remove row"}
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
