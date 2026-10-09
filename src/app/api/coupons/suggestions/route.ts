@@ -4,6 +4,7 @@ import {
   CUT_DETAIL_VIEW,
   OPERATIONS_CATALOG_TABLE,
   STYLE_BULLETIN_TABLE,
+  STYLE_BULLETIN_SNAPSHOT_TABLE,
 } from "@/lib/db";
 import { isCouponDepartment } from "@/lib/department-classification";
 
@@ -70,22 +71,25 @@ export async function GET(request: Request) {
     if (type === "operation") {
       if (onlyGenerated) {
         const q = query.trim().toLowerCase();
+        const pitPool = await getPool("pitSystem");
         const [couponOps, opNames] = await Promise.all([
-          (await getPool("pitSystem"))
+          pitPool
             .request()
             .input("wo", sql.NVarChar, wo.trim())
             .input("department", sql.NVarChar, department)
             .query(`SELECT DISTINCT OpNo FROM dbo.QrCode_Coupon WHERE WorkOrder = @wo AND IsDeleted = 0 AND Department = @department`),
-          (await getPool("indusPlus"))
+          pitPool
             .request()
             .input("wo", sql.NVarChar, wo.trim())
+            .input("department", sql.NVarChar, department)
             .query(`
-              SELECT DISTINCT sb.[Operation Code] AS Operation_Code,
-                COALESCE(op.OperationName, sb.[Operation Name]) AS Operation_Name
-              FROM ${STYLE_BULLETIN_TABLE} sb
-              LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op
-                ON op.OperationCode = sb.[Operation Code]
-              WHERE sb.[Order No] = @wo
+              WITH Latest AS (
+                SELECT [Operation Code] AS Operation_Code, [Operation Name] AS Operation_Name,
+                  ROW_NUMBER() OVER (PARTITION BY [Operation Code] ORDER BY InsertedAt DESC) AS rn
+                FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
+                WHERE [Order No] = @wo AND Department = @department AND IsDeleted = 0
+              )
+              SELECT Operation_Code, Operation_Name FROM Latest WHERE rn = 1
             `),
         ]);
         const nameByOpNo = new Map(

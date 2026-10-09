@@ -124,15 +124,31 @@ export async function GET(request: Request) {
       workOrder,
       department as CouponDepartment,
     );
+    // Rework bundles never exist in ERP cut details or ManualCouponCutDetail.
+    // They are created locally with their coupons, so include their PIT-owned
+    // cut data when Coupon Tracing reprints a filtered/all-coupon PDF.
+    const reworkRowsResult = await pool
+      .request()
+      .input("workOrder", sql.NVarChar, workOrder)
+      .input("department", sql.NVarChar, department)
+      .query(`
+        SELECT RowId, CutNo, BundleNo, Inseam, Size, Pcs
+        FROM dbo.ReworkCouponEntry
+        WHERE WorkOrder = @workOrder AND Department = @department
+      `);
+    const requestedBundleNos = new Set(bundleNos);
+    const reworkRows = reworkRowsResult.recordset.filter((row) =>
+      requestedBundleNos.has(String(row.BundleNo)),
+    );
     const erpBundleNos = new Set(
       cutRows.recordset.map((row) => String(row.Bundle_Id ?? "")),
     );
     cutRows.recordset.push(
-      ...manualRows
+      ...[...manualRows, ...reworkRows]
         .filter((row) => !erpBundleNos.has(row.BundleNo))
         .map((row) => ({
           RowId: row.RowId,
-          Cut: "",
+          Cut: row.CutNo ?? "",
           Bundle_Id: row.BundleNo,
           Inseam: row.Inseam,
           Size: row.Size,

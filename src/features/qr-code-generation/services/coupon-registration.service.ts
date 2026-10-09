@@ -4,6 +4,7 @@ import {
   OPERATIONS_CATALOG_TABLE,
   STYLE_BULLETIN_TABLE,
   WORKERS_VIEW,
+  STYLE_BULLETIN_SNAPSHOT_TABLE,
 } from "@/lib/db";
 import { buildCouponCode } from "./coupon-code";
 import type { CouponCard } from "./coupon-pairing.service";
@@ -489,16 +490,22 @@ function applyCouponFilters(
 // query regardless of how many coupon rows are being paged/listed.
 async function fetchOpNamesByOpNo(
   workOrder: string,
+  department: CouponDepartment = "sewing",
 ): Promise<Map<string, string>> {
-  const pool = await getPool("indusPlus");
-  const result = await pool.request().input("wo", sql.NVarChar, workOrder)
+  const pool = await getPool("pitSystem");
+  const result = await pool.request()
+    .input("wo", sql.NVarChar, workOrder)
+    .input("department", sql.NVarChar, department)
     .query(`
-      SELECT DISTINCT sb.[Operation Code] AS OpNo,
-        COALESCE(op.OperationName, sb.[Operation Name]) AS OpName
-      FROM ${STYLE_BULLETIN_TABLE} sb
-      LEFT JOIN ${OPERATIONS_CATALOG_TABLE} op
-        ON op.OperationCode = sb.[Operation Code]
-      WHERE sb.[Order No] = @wo
+      WITH Latest AS (
+        SELECT [Operation Code] AS OpNo, [Operation Name] AS OpName,
+          ROW_NUMBER() OVER (
+            PARTITION BY [Operation Code] ORDER BY InsertedAt DESC
+          ) AS rn
+        FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
+        WHERE [Order No] = @wo AND Department = @department AND IsDeleted = 0
+      )
+      SELECT OpNo, OpName FROM Latest WHERE rn = 1
     `);
   return new Map(
     result.recordset.map((r) => [r.OpNo as string, r.OpName as string]),
@@ -589,7 +596,7 @@ export async function listCoupons(
     countRequest.query(
       `SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon c WHERE ${where}`,
     ),
-    fetchOpNamesByOpNo(workOrder),
+    fetchOpNamesByOpNo(workOrder, filters.department),
   ]);
   const employeeNames = await fetchEmployeeNamesById(
     distinctEmployeeCodes(dataResult.recordset),
@@ -619,7 +626,7 @@ export async function listAllCoupons(
       WHERE ${where}
       ORDER BY c.CouponCode
     `),
-    fetchOpNamesByOpNo(workOrder),
+    fetchOpNamesByOpNo(workOrder, filters.department),
   ]);
   const employeeNames = await fetchEmployeeNamesById(
     distinctEmployeeCodes(result.recordset),
