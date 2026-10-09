@@ -184,7 +184,7 @@ function DepartmentMix({ data }: { data: DashboardInsights["departments"] }) {
         <div className="grid h-24 w-24 place-items-center rounded-full bg-white text-center"><b className="text-xl text-[#211f20]">{number.format(total)}</b><span className="text-[10px] text-slate-500">scanned</span></div>
       </div>
       <div className="min-w-0 flex-1 space-y-3">
-        {data.map((item, index) => <div key={item.department} className="flex items-center justify-between gap-2 text-xs"><span className="flex items-center gap-2 capitalize text-slate-600"><i className="h-2.5 w-2.5 rounded-full" style={{ background: colors[index] }} />{item.department}</span><b className="text-[#211f20]">{percent(item.scannedCoupons, total)}%</b></div>)}
+        {data.map((item, index) => <div key={item.department} className="flex items-center justify-between gap-2 text-xs"><span className="flex items-center gap-2 capitalize text-slate-600"><i className="h-2.5 w-2.5 rounded-full" style={{ background: colors[index] }} />{item.department}</span><b className="text-[#211f20]">{number.format(item.scannedCoupons)} / {number.format(item.generatedCoupons)}</b></div>)}
       </div>
     </div>
   </article>;
@@ -208,7 +208,7 @@ function Backlog({ items, title = "Work-order scan output", description = "Coupo
   return <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
     <div className="flex items-start justify-between gap-3"><div><h2 className="font-semibold text-[#211f20]">{title}</h2><p className="mt-1 text-xs text-slate-500">{description}</p></div><ClipboardList className="h-5 w-5 text-[#b11016]" /></div>
     <div className="mt-5 space-y-4">
-      {items.slice(0, 5).map((item) => <div key={`${item.department}-${item.workOrder}`}><div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="font-semibold text-[#211f20]">{item.workOrder}</span><span className="text-slate-500">{number.format(item.scannedCoupons)} scanned</span></div><div className="h-2 overflow-hidden rounded-full bg-[#fff1f2]"><div className="h-full rounded-full bg-[#b11016]" style={{ width: `${(item.scannedCoupons / max) * 100}%` }} /></div></div>)}
+      {items.slice(0, 5).map((item) => <div key={`${item.department}-${item.workOrder}`}><div className="mb-1.5 flex items-center justify-between gap-3 text-xs"><span className="font-semibold text-[#211f20]">{item.workOrder}</span><span className="text-slate-500">{number.format(item.scannedCoupons)} / {number.format(item.generatedCoupons)} scanned</span></div><div className="h-2 overflow-hidden rounded-full bg-[#fff1f2]"><div className="h-full rounded-full bg-[#b11016]" style={{ width: `${(item.scannedCoupons / max) * 100}%` }} /></div></div>)}
       {items.length === 0 && <p className="py-6 text-center text-sm text-slate-500">No work orders have scanned coupons yet.</p>}
     </div>
   </article>;
