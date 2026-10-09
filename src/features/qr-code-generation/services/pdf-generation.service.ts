@@ -492,6 +492,7 @@ export async function generateCouponPdf({
       displayNo !== undefined
         ? String(displayNo)
         : trimBundleNo(workOrder, bundle.bundleNo);
+    const isReworkCoupon = /^RW/i.test(bundle.bundleNo.trim());
 
     if (codeType === "barcode") {
       // 3x3 Grid fields at the top
@@ -585,6 +586,18 @@ export async function generateCouponPdf({
 
       const textW = qrX - cardX - 3;
       doc.fontSize(5).fillColor("#000000");
+      if (isReworkCoupon) {
+        const reworkBadgeWidth = 19;
+        const reworkBadgeX = cardX + cardW - reworkBadgeWidth;
+        doc.roundedRect(reworkBadgeX, cardY + 0.6, reworkBadgeWidth, 4.5, 0.8).fill("#312e81");
+        doc.fillColor("#ffffff").fontSize(3.6).text("REWORK", reworkBadgeX, cardY + 0.85, {
+          width: reworkBadgeWidth,
+          height: 4.5,
+          align: "center",
+          lineBreak: false,
+        });
+        doc.fillColor("#000000").fontSize(5);
+      }
       boldText(doc, "WO", cardX, cardY, {
         width: 9,
         height: headerLineH,
