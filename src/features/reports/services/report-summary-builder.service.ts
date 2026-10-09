@@ -167,13 +167,14 @@ async function fetchBundleQtyByWorkOrder(
 // so this is a set rather than a single boundValue.
 async function fetchOperationCodesForSection(
   section: string,
+  department: CouponDepartment,
 ): Promise<string[]> {
   const pitPool = await getPool("pitSystem");
-  const result = await pitPool.request().input("section", sql.NVarChar, section)
+  const result = await pitPool.request().input("section", sql.NVarChar, section).input("department", sql.NVarChar, department)
     .query(`
       SELECT DISTINCT [Operation Code] AS Operation_Code
       FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
-      WHERE Section = @section AND IsDeleted = 0
+      WHERE Section = @section AND Department = @department AND IsDeleted = 0
     `);
   return result.recordset.map((r) => String(r.Operation_Code));
 }
@@ -181,12 +182,13 @@ async function fetchOperationCodesForSection(
 async function resolveSubject(
   mode: ReportSearchMode,
   value: string,
+  department: CouponDepartment,
 ): Promise<
   | { ok: true; subject: ReportSubject; boundValue: string; opCodes?: string[] }
   | { ok: false; status: number; error: string }
 > {
   if (mode === "section") {
-    const opCodes = await fetchOperationCodesForSection(value);
+    const opCodes = await fetchOperationCodesForSection(value, department);
     if (opCodes.length === 0) {
       return { ok: false, status: 404, error: "Section not found." };
     }
@@ -227,7 +229,7 @@ async function resolveSubject(
 
   if (mode === "workOrder") {
     const pitPool = await getPool("pitSystem");
-    const woResult = await pitPool.request().input("wo", sql.NVarChar, value)
+    const woResult = await pitPool.request().input("wo", sql.NVarChar, value).input("department", sql.NVarChar, department)
       .query(`
         SELECT TOP 1
           [Work Order #] AS Work_Order,
@@ -235,7 +237,7 @@ async function resolveSubject(
           [Sale Order No] AS Sale_Order_No,
           [Order Qty After % Add] AS Order_Qty
         FROM ${CUT_DETAIL_SNAPSHOT_TABLE}
-        WHERE [Work Order #] = @wo AND IsDeleted = 0
+        WHERE [Work Order #] = @wo AND Department = @department AND IsDeleted = 0
         ORDER BY InsertedAt DESC
       `);
     if (woResult.recordset.length === 0) {
@@ -260,12 +262,12 @@ async function resolveSubject(
   // indusPlus's S_OperationsCatalog, which isn't carried into the snapshot,
   // so they're null here — same as an unmatched LEFT JOIN would have been.
   const pitPool = await getPool("pitSystem");
-  const opResult = await pitPool.request().input("code", sql.NVarChar, value)
+    const opResult = await pitPool.request().input("code", sql.NVarChar, value).input("department", sql.NVarChar, department)
     .query(`
       SELECT TOP 1 [Operation Code] AS Operation_Code, [Operation Name] AS Operation_Name,
              CAST(NULL AS NVARCHAR(50)) AS Department, CAST(NULL AS NVARCHAR(50)) AS SkillLevel
       FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
-      WHERE [Operation Code] = @code AND IsDeleted = 0
+      WHERE [Operation Code] = @code AND Department = @department AND IsDeleted = 0
       ORDER BY InsertedAt DESC
     `);
   if (opResult.recordset.length === 0) {
@@ -314,7 +316,7 @@ export async function buildReportSummary(
             ? { mode: "operation", all: true }
             : { mode: "section", all: true };
   } else {
-    const subjectResult = await resolveSubject(mode, value);
+    const subjectResult = await resolveSubject(mode, value, options.department ?? "sewing");
     if (!subjectResult.ok) return subjectResult;
     subject = subjectResult.subject;
     boundValue = subjectResult.boundValue;
