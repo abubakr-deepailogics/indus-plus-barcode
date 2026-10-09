@@ -250,6 +250,34 @@ function drawQrCode(
   doc.restore();
 }
 
+// Rework labels live inside the existing QR footprint rather than taking space
+// from the card's text fields or changing the label-sheet grid. The QR remains
+// a separate, intact code below the label so scanner payloads are unaffected.
+function drawReworkQrCode(
+  doc: PDFKit.PDFDocument,
+  x: number,
+  y: number,
+  size: number,
+  value: string,
+) {
+  const labelHeight = 4.5;
+  const gap = 0.6;
+  const qrSize = size - labelHeight - gap;
+
+  doc.save();
+  doc.rect(x, y, size, size).fill("#ffffff");
+  doc.roundedRect(x, y, size, labelHeight, 0.8).fill("#312e81");
+  doc.fillColor("#ffffff").fontSize(3.6).text("REWORK", x, y + 0.25, {
+    width: size,
+    height: labelHeight,
+    align: "center",
+    lineBreak: false,
+  });
+  doc.restore();
+
+  drawQrCode(doc, x + (size - qrSize) / 2, y + labelHeight + gap, qrSize, value);
+}
+
 interface GeneratePdfParams {
   workOrder: string;
   /** Must match the registered coupon identity being rendered. */
@@ -492,6 +520,7 @@ export async function generateCouponPdf({
       displayNo !== undefined
         ? String(displayNo)
         : trimBundleNo(workOrder, bundle.bundleNo);
+    const isReworkCoupon = /^RW/i.test(bundle.bundleNo.trim());
 
     if (codeType === "barcode") {
       // 3x3 Grid fields at the top
@@ -581,7 +610,11 @@ export async function generateCouponPdf({
       // Positioned to the right and resting right above the line below Inm.
       const qrX = cardX + cardW - qrSize - 2.5;
       const qrY = cardY + topH - 0.5 - qrSize;
-      drawQrCode(doc, qrX, qrY, qrSize, couponCode);
+      if (isReworkCoupon) {
+        drawReworkQrCode(doc, qrX, qrY, qrSize, couponCode);
+      } else {
+        drawQrCode(doc, qrX, qrY, qrSize, couponCode);
+      }
 
       const textW = qrX - cardX - 3;
       doc.fontSize(5).fillColor("#000000");
