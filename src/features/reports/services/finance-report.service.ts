@@ -280,8 +280,25 @@ export async function buildOrderWiseReport(
 export async function buildOperatorWiseReport(
   cycleStartParam?: string,
   department: Department = "sewing",
+  customFrom?: string,
+  customTo?: string,
+  allTime = false,
 ): Promise<OperatorWiseReportResult> {
-  const { period, fromDate, toDate } = resolvePeriod(cycleStartParam);
+  const customFromDate = customFrom ? new Date(`${customFrom}T00:00:00`) : null;
+  const customToDate = customTo ? new Date(`${customTo}T00:00:00`) : null;
+  const hasCustomRange = customFromDate && customToDate
+    && !Number.isNaN(customFromDate.getTime())
+    && !Number.isNaN(customToDate.getTime())
+    && customFromDate <= customToDate;
+  const { period, fromDate, toDate } = allTime
+    ? { period: { from: "All time", to: "Present" }, fromDate: new Date(2000, 0, 1), toDate: new Date() }
+    : hasCustomRange
+    ? {
+        period: { from: format(customFromDate, "yyyy-MM-dd"), to: format(customToDate, "yyyy-MM-dd") },
+        fromDate: customFromDate,
+        toDate: customToDate,
+      }
+    : resolvePeriod(cycleStartParam);
   const allScans = await fetchScansInRange(fromDate, toDate, department);
 
   const scannedWorkOrders = [...new Set(allScans.map((r) => r.WorkOrder))];

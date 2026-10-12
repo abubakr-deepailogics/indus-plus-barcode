@@ -134,9 +134,15 @@ export async function fetchOrderWiseReport(
 export async function fetchOperatorWiseReport(
   cycleStart?: string,
   department: CouponDepartment = "sewing",
+  range?: ReportDateRange,
 ): Promise<{ ok: true; data: OperatorWiseReportResult } | { ok: false; error: string }> {
   const params = new URLSearchParams({ department });
-  if (cycleStart) params.set("cycleStart", cycleStart);
+  if (range?.from && range.to) {
+    params.set("from", format(range.from, "yyyy-MM-dd"));
+    params.set("to", format(range.to, "yyyy-MM-dd"));
+  } else if (range && !range.from && !range.to) {
+    params.set("all", "true");
+  } else if (cycleStart) params.set("cycleStart", cycleStart);
   const qp = `?${params.toString()}`;
   const response = await fetch(`/api/reports/operator-wise${qp}`);
   const data = await response.json();

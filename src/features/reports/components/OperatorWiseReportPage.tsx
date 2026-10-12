@@ -2,13 +2,15 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { format } from "date-fns";
-import { ArrowLeft, Loader2, Printer, Users } from "lucide-react";
+import { format, subDays } from "date-fns";
+import { ArrowLeft, Calendar as CalendarIcon, Loader2, Printer, Users } from "lucide-react";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
+import { Calendar } from "@/components/ui/calendar";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { fetchOperatorWiseReport } from "../services/reports.service";
 import { useDepartment } from "@/lib/department-context";
-import { recentPayCycles } from "../utils/pay-cycle";
-import type { OperatorWiseReportResult } from "../types";
+import { currentPayCycleStart } from "../hooks/useReportSearch";
+import type { OperatorWiseReportResult, ReportDateRange } from "../types";
 
 function formatAmount(value: number): string {
   return value.toLocaleString("en-US", {
@@ -16,6 +18,19 @@ function formatAmount(value: number): string {
     maximumFractionDigits: 2,
   });
 }
+
+function formatRangeLabel(range: ReportDateRange): string {
+  if (!range.from && !range.to) return "All time";
+  if (!range.from || !range.to) return format((range.from ?? range.to) as Date, "dd MMM yyyy");
+  return `${format(range.from, "dd MMM yyyy")} – ${format(range.to, "dd MMM yyyy")}`;
+}
+
+const PRESETS: { label: string; range: () => ReportDateRange }[] = [
+  { label: "Last 7 Days", range: () => ({ from: subDays(new Date(), 6), to: new Date() }) },
+  { label: "Last 30 Days", range: () => ({ from: subDays(new Date(), 29), to: new Date() }) },
+  { label: "This Month", range: () => ({ from: currentPayCycleStart(), to: new Date() }) },
+  { label: "All Time", range: () => ({}) },
+];
 
 // Standalone page, same reasoning as OrderWiseReportPage — its own screen
 // with a back arrow and a print button rather than a panel bolted onto the
@@ -29,15 +44,17 @@ export function OperatorWiseReportPage() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<OperatorWiseReportResult | null>(null);
 
-  const cycleOptions = useMemo(() => recentPayCycles(12), []);
-  const [cycleStart, setCycleStart] = useState("");
+  const [dateRange, setDateRange] = useState<ReportDateRange>(() => ({
+    from: currentPayCycleStart(),
+    to: new Date(),
+  }));
 
   useEffect(() => {
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
-      const res = await fetchOperatorWiseReport(cycleStart || undefined, department);
+      const res = await fetchOperatorWiseReport(undefined, department, dateRange);
       if (cancelled) return;
       if (!res.ok) setError(res.error);
       else setData(res.data);
@@ -46,7 +63,7 @@ export function OperatorWiseReportPage() {
     return () => {
       cancelled = true;
     };
-  }, [cycleStart, department]);
+  }, [dateRange, department]);
 
   const totals = useMemo(() => {
     if (!data?.rows?.length) return null;
@@ -75,24 +92,26 @@ export function OperatorWiseReportPage() {
             <ArrowLeft className="w-4 h-4" />
             Back
           </button>
-          <select
-            value={cycleStart}
-            onChange={(e) => setCycleStart(e.target.value)}
-            className="h-9 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-200"
-            title="Pay-cycle month"
-          >
-            {cycleOptions.map((opt) => (
-              <option key={opt.value} value={opt.isLive ? "" : opt.value}>
-                {opt.isLive ? `${opt.label} (Current)` : opt.label}
-              </option>
-            ))}
-          </select>
+          <Popover>
+            <PopoverTrigger className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:border-rose-300 hover:bg-rose-50/40 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100">
+              <CalendarIcon className="size-4 shrink-0 text-slate-400" />
+              <span>{formatRangeLabel(dateRange)}</span>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto bg-white p-0" align="start">
+              <div className="flex flex-col gap-2 p-2.5">
+                <div className="flex flex-wrap gap-1.5">
+                  {PRESETS.map((preset) => <button key={preset.label} type="button" onClick={() => setDateRange(preset.range())} className="rounded-md bg-rose-50 px-2.5 py-1 text-[10px] font-semibold text-rose-800 transition-colors hover:bg-rose-100">{preset.label}</button>)}
+                </div>
+                <Calendar mode="range" captionLayout="dropdown" selected={dateRange.from || dateRange.to ? { from: dateRange.from, to: dateRange.to } : undefined} onSelect={(range) => setDateRange({ from: range?.from, to: range?.to })} disabled={(date) => date > new Date()} classNames={{ selected: "bg-rose-50 text-rose-800 hover:bg-rose-100 hover:text-rose-800 shadow-sm font-bold rounded-lg scale-105 [&>button]:text-rose-800" }} />
+              </div>
+            </PopoverContent>
+          </Popover>
         </div>
         {data && data.rows.length > 0 && (
           <div className="flex items-center gap-2">
             <CsvExportButton
               label="Export"
-              className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-700 transition-colors hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-800 disabled:cursor-not-allowed disabled:opacity-50"
+              className="flex h-9 items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3.5 text-xs font-semibold text-slate-700 transition-colors hover:border-rose-200 hover:bg-rose-50 hover:text-rose-800 disabled:cursor-not-allowed disabled:opacity-50"
               filename={`${department}-operator-wise-report-${format(new Date(), "yyyyMMdd-HHmm")}`}
               headers={[
                 "Code",
@@ -206,7 +225,7 @@ export function OperatorWiseReportPage() {
                     <td className="py-1.5 px-2 text-right border-r border-slate-100 font-bold text-slate-800">
                       {formatAmount(r.opInc)}
                     </td>
-                    <td className="py-1.5 px-2 text-right font-bold text-emerald-700">
+                    <td className="py-1.5 px-2 text-right font-bold text-[#b11016]">
                       {formatAmount(r.total)}
                     </td>
                   </tr>
@@ -227,7 +246,7 @@ export function OperatorWiseReportPage() {
                     <td className="py-2 px-2 text-right border-r border-slate-300">
                       {formatAmount(totals.opInc)}
                     </td>
-                    <td className="py-2 px-2 text-right text-emerald-800">
+                    <td className="py-2 px-2 text-right text-[#8f1117]">
                       {formatAmount(totals.total)}
                     </td>
                   </tr>

@@ -9,11 +9,14 @@ export const dynamic = "force-dynamic";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const cycleStart = searchParams.get("cycleStart") || undefined;
+  const from = searchParams.get("from") || undefined;
+  const to = searchParams.get("to") || undefined;
+  const all = searchParams.get("all") === "true";
   const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
   if (!isStyleBulletinDepartment(department)) return Response.json({ error: "Invalid department." }, { status: 400 });
 
   try {
-    const data = await buildOperatorWiseReport(cycleStart, department as Department);
+    const data = await buildOperatorWiseReport(cycleStart, department as Department, from, to, all);
     return Response.json(data);
   } catch (err: unknown) {
     console.error("Operator-wise report error:", err);
