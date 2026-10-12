@@ -58,40 +58,70 @@ export async function GET(request: Request) {
       .query(`
         DECLARE @rangeEnd DATETIME2 = DATEADD(day, 1, CAST(@to AS DATETIME2));
 
-        -- All cards, department output, pipeline, and work-order rows use
-        -- exactly this coupon population: coupons generated in the chosen range.
-        SELECT
-          COUNT(*) AS GeneratedCoupons,
-          SUM(CASE WHEN IsScanned = 1 THEN 1 ELSE 0 END) AS ScannedCoupons,
-          SUM(CASE WHEN IsScanned = 0 THEN 1 ELSE 0 END) AS PendingCoupons,
-          COUNT(DISTINCT WorkOrder) AS ActiveWorkOrders
+        -- The selected tenure is production activity, so it is defined by
+        -- ScannedAt. Coupons can be generated later than a deliberately
+        -- backdated scan, and must still appear in this dashboard.
+        CREATE TABLE #SelectedScans (
+          CouponCode NVARCHAR(200) NOT NULL,
+          Department NVARCHAR(50) NOT NULL,
+          WorkOrder NVARCHAR(100) NOT NULL,
+          ScannedAt DATETIME2 NOT NULL
+        );
+
+        INSERT INTO #SelectedScans (CouponCode, Department, WorkOrder, ScannedAt)
+        SELECT CouponCode, Department, WorkOrder, ScannedAt
         FROM dbo.QrCode_Coupon
         WHERE IsDeleted = 0
+          AND IsScanned = 1
           AND Department IN ('sewing', 'washing', 'finishing')
-          AND InsertedAt >= @from
-          AND InsertedAt < @rangeEnd;
+          AND ScannedAt >= @from
+          AND ScannedAt < @rangeEnd;
+
+        -- The denominator is every coupon belonging to a department/work
+        -- order that had a scan in the selected tenure. This keeps
+        -- "scanned / total coupons" meaningful even when generation and
+        -- scanning happen in different months.
+        CREATE TABLE #ScopedCoupons (
+          CouponCode NVARCHAR(200) NOT NULL,
+          Department NVARCHAR(50) NOT NULL,
+          WorkOrder NVARCHAR(100) NOT NULL,
+          IsScanned BIT NOT NULL
+        );
+
+        INSERT INTO #ScopedCoupons (CouponCode, Department, WorkOrder, IsScanned)
+        SELECT coupons.CouponCode, coupons.Department, coupons.WorkOrder, coupons.IsScanned
+        FROM dbo.QrCode_Coupon AS coupons
+        INNER JOIN (
+          SELECT DISTINCT Department, WorkOrder
+          FROM #SelectedScans
+        ) AS activeWorkOrders
+          ON activeWorkOrders.Department = coupons.Department
+          AND activeWorkOrders.WorkOrder = coupons.WorkOrder
+        WHERE coupons.IsDeleted = 0;
 
         SELECT
-          Department,
           COUNT(*) AS GeneratedCoupons,
-          SUM(CASE WHEN IsScanned = 1 THEN 1 ELSE 0 END) AS ScannedCoupons,
+          (SELECT COUNT(*) FROM #SelectedScans) AS ScannedCoupons,
           SUM(CASE WHEN IsScanned = 0 THEN 1 ELSE 0 END) AS PendingCoupons,
-          COUNT(DISTINCT WorkOrder) AS ActiveWorkOrders
-        FROM dbo.QrCode_Coupon
-        WHERE IsDeleted = 0
-          AND Department IN ('sewing', 'washing', 'finishing')
-          AND InsertedAt >= @from
-          AND InsertedAt < @rangeEnd
-        GROUP BY Department;
+          COUNT(DISTINCT CONCAT(Department, '|', WorkOrder)) AS ActiveWorkOrders
+        FROM #ScopedCoupons;
+
+        SELECT
+          coupons.Department,
+          COUNT(*) AS GeneratedCoupons,
+          COUNT(scans.CouponCode) AS ScannedCoupons,
+          SUM(CASE WHEN coupons.IsScanned = 0 THEN 1 ELSE 0 END) AS PendingCoupons,
+          COUNT(DISTINCT coupons.WorkOrder) AS ActiveWorkOrders
+        FROM #ScopedCoupons AS coupons
+        LEFT JOIN #SelectedScans AS scans
+          ON scans.Department = coupons.Department
+          AND scans.CouponCode = coupons.CouponCode
+        GROUP BY coupons.Department;
 
         SELECT COUNT(*) AS CompletedWorkOrders
         FROM (
           SELECT Department, WorkOrder
-          FROM dbo.QrCode_Coupon
-          WHERE IsDeleted = 0
-            AND Department IN ('sewing', 'washing', 'finishing')
-            AND InsertedAt >= @from
-            AND InsertedAt < @rangeEnd
+          FROM #ScopedCoupons
           GROUP BY Department, WorkOrder
           HAVING SUM(CASE WHEN IsScanned = 0 THEN 1 ELSE 0 END) = 0
         ) AS completed;
@@ -121,50 +151,29 @@ export async function GET(request: Request) {
         OPTION (MAXRECURSION 366);
 
         SELECT TOP (6)
-          Department,
-          WorkOrder,
+          coupons.Department,
+          coupons.WorkOrder,
           COUNT(*) AS GeneratedCoupons,
-          SUM(CASE WHEN IsScanned = 1 THEN 1 ELSE 0 END) AS ScannedCoupons,
-          SUM(CASE WHEN IsScanned = 0 THEN 1 ELSE 0 END) AS PendingCoupons
-        FROM dbo.QrCode_Coupon
-        WHERE IsDeleted = 0
-          AND Department IN ('sewing', 'washing', 'finishing')
-          AND InsertedAt >= @from
-          AND InsertedAt < @rangeEnd
-        GROUP BY Department, WorkOrder
-        ORDER BY SUM(CASE WHEN IsScanned = 1 THEN 1 ELSE 0 END) DESC, WorkOrder;
+          COUNT(scans.CouponCode) AS ScannedCoupons,
+          SUM(CASE WHEN coupons.IsScanned = 0 THEN 1 ELSE 0 END) AS PendingCoupons
+        FROM #ScopedCoupons AS coupons
+        LEFT JOIN #SelectedScans AS scans
+          ON scans.Department = coupons.Department
+          AND scans.CouponCode = coupons.CouponCode
+        GROUP BY coupons.Department, coupons.WorkOrder
+        ORDER BY COUNT(scans.CouponCode) DESC, coupons.WorkOrder;
 
-        -- Both kinds of activity are restricted to the selected range.
+        -- These scan events are the same selected-tenure population used by
+        -- every dashboard calculation above.
         WITH Activities AS (
           SELECT
-            CONCAT('generation-', Department, '-', WorkOrder) AS Id,
-            'generation' AS ActivityType,
-            Department,
-            WorkOrder,
-            COUNT(*) AS CouponCount,
-            MAX(InsertedAt) AS OccurredAt
-          FROM dbo.QrCode_Coupon
-          WHERE IsDeleted = 0
-            AND Department IN ('sewing', 'washing', 'finishing')
-            AND InsertedAt >= @from
-            AND InsertedAt < @rangeEnd
-          GROUP BY Department, WorkOrder
-
-          UNION ALL
-
-          SELECT
-            CONCAT('scan-', Id) AS Id,
+            CONCAT('scan-', CouponCode) AS Id,
             'scan' AS ActivityType,
             Department,
             WorkOrder,
             NULL AS CouponCount,
             ScannedAt AS OccurredAt
-          FROM dbo.QrCode_Coupon
-          WHERE IsDeleted = 0
-            AND IsScanned = 1
-            AND Department IN ('sewing', 'washing', 'finishing')
-            AND ScannedAt >= @from
-            AND ScannedAt < @rangeEnd
+          FROM #SelectedScans
         )
         SELECT TOP (6) Id, ActivityType, Department, WorkOrder, CouponCount, OccurredAt
         FROM Activities
