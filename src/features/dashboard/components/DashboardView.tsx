@@ -109,6 +109,7 @@ function RangePicker({ value, onChange }: { value: Range; onChange: (range: Rang
 }
 
 function DailyOutputChart({ data, range }: { data: DashboardInsights["dailyOutput"]; range: Range }) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const values = data.map((item) => item.sewing + item.washing + item.finishing);
   const hasOutput = values.some((value) => value > 0);
   const maximum = Math.max(1, ...values);
@@ -124,7 +125,7 @@ function DailyOutputChart({ data, range }: { data: DashboardInsights["dailyOutpu
   return (
     <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
+        <div className="relative">
           <h2 className="font-semibold text-[#211f20]">Daily scanned coupon output</h2>
           <p className="mt-1 text-xs text-slate-500">Scans completed each day in the selected range.</p>
         </div>
@@ -148,10 +149,12 @@ function DailyOutputChart({ data, range }: { data: DashboardInsights["dailyOutpu
             <path d={area} fill="url(#daily-output-area)" />
             <path d={line} fill="none" stroke="url(#daily-output-line)" strokeWidth="3" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" />
             {coordinates.map((point, index) => {
-              if (!highlightedPoints.has(index)) return null;
-              return <g key={`${point.x}-${point.y}`}><circle cx={point.x} cy={point.y} r="3.1" fill="white" vectorEffect="non-scaling-stroke" /><circle cx={point.x} cy={point.y} r="1.65" fill={brand} vectorEffect="non-scaling-stroke" /></g>;
+              const active = hoveredIndex === index;
+              if (!highlightedPoints.has(index) && !active) return <circle key={`${point.x}-${point.y}`} cx={point.x} cy={point.y} r="4" fill="transparent" className="cursor-pointer" onMouseEnter={() => setHoveredIndex(index)} onFocus={() => setHoveredIndex(index)} />;
+              return <g key={`${point.x}-${point.y}`} className="cursor-pointer" onMouseEnter={() => setHoveredIndex(index)} onFocus={() => setHoveredIndex(index)}><circle cx={point.x} cy={point.y} r={active ? "4.2" : "3.1"} fill="white" vectorEffect="non-scaling-stroke" /><circle cx={point.x} cy={point.y} r={active ? "2.2" : "1.65"} fill={brand} vectorEffect="non-scaling-stroke" /></g>;
             })}
           </svg>
+          {hoveredIndex != null && data[hoveredIndex] && <div className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-full rounded-lg border border-[#efc3c6] bg-white px-3 py-2 text-[11px] shadow-lg" style={{ left: `${(coordinates[hoveredIndex].x / 104) * 100}%`, top: `${(coordinates[hoveredIndex].y / 90) * 100}%` }}><p className="font-bold text-[#211f20]">{chartDateLabel(data[hoveredIndex].date)}</p><p className="text-[#b11016]">{number.format(values[hoveredIndex])} scanned</p><p className="text-slate-500">S {data[hoveredIndex].sewing} · W {data[hoveredIndex].washing} · F {data[hoveredIndex].finishing}</p></div>}
           <div className="mt-1 flex justify-between text-[10px] text-slate-400">
             {labels.map((item) => <span key={item.date}>{chartDateLabel(item.date)}</span>)}
           </div>
@@ -166,6 +169,7 @@ function EmptyChart({ range }: { range: Range }) {
 }
 
 function DepartmentMix({ data }: { data: DashboardInsights["departments"] }) {
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const total = data.reduce((sum, item) => sum + item.scannedCoupons, 0);
   const colors = ["#b11016", "#d65a5e", "#f1c6c8"];
   let cursor = 0;
@@ -176,15 +180,30 @@ function DepartmentMix({ data }: { data: DashboardInsights["departments"] }) {
     return stop;
   }).join(", ");
 
+  const hovered = hoveredIndex == null ? null : data[hoveredIndex];
+  function selectPieSegment(event: React.MouseEvent<HTMLDivElement>) {
+    if (!total) return;
+    const rect = event.currentTarget.getBoundingClientRect();
+    const x = event.clientX - rect.left - rect.width / 2;
+    const y = event.clientY - rect.top - rect.height / 2;
+    const angle = (Math.atan2(y, x) * 180 / Math.PI + 450) % 360;
+    let running = 0;
+    const index = data.findIndex((item) => {
+      running += (item.scannedCoupons / total) * 360;
+      return angle <= running;
+    });
+    setHoveredIndex(index < 0 ? null : index);
+  }
+
   return <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
     <h2 className="font-semibold text-[#211f20]">Department output mix</h2>
     <p className="mt-1 text-xs text-slate-500">Scanned in the selected tenure out of all coupons on those active work orders.</p>
     <div className="mt-5 flex items-center gap-5">
-      <div className="grid h-36 w-36 shrink-0 place-items-center rounded-full" style={{ background: total ? `conic-gradient(${stops})` : "#f1f5f9" }}>
+      <div className="relative"><div onMouseMove={selectPieSegment} onMouseLeave={() => setHoveredIndex(null)} className="grid h-36 w-36 shrink-0 cursor-pointer place-items-center rounded-full" style={{ background: total ? `conic-gradient(${stops})` : "#f1f5f9" }}>
         <div className="grid h-24 w-24 place-items-center rounded-full bg-white text-center"><b className="text-xl text-[#211f20]">{number.format(total)}</b><span className="text-[10px] text-slate-500">scanned</span></div>
-      </div>
+      </div>{hovered && <div className="absolute left-1/2 top-0 z-10 w-40 -translate-x-1/2 -translate-y-full rounded-lg border border-[#efc3c6] bg-white px-3 py-2 text-[11px] shadow-lg"><p className="font-bold capitalize text-[#211f20]">{hovered.department}</p><p className="text-[#b11016]">{number.format(hovered.scannedCoupons)} scanned</p><p className="text-slate-500">{number.format(hovered.scannedCoupons)} / {number.format(hovered.generatedCoupons)} coupons</p></div>}</div>
       <div className="min-w-0 flex-1 space-y-3">
-        {data.map((item, index) => <div key={item.department} className="flex items-center justify-between gap-2 text-xs"><span className="flex items-center gap-2 capitalize text-slate-600"><i className="h-2.5 w-2.5 rounded-full" style={{ background: colors[index] }} />{item.department}</span><b className="text-[#211f20]">{number.format(item.scannedCoupons)} / {number.format(item.generatedCoupons)}</b></div>)}
+        {data.map((item, index) => <div key={item.department} onMouseEnter={() => setHoveredIndex(index)} onMouseLeave={() => setHoveredIndex(null)} className="flex cursor-pointer items-center justify-between gap-2 rounded px-1 py-0.5 text-xs hover:bg-[#fff1f2]"><span className="flex items-center gap-2 capitalize text-slate-600"><i className="h-2.5 w-2.5 rounded-full" style={{ background: colors[index] }} />{item.department}</span><b className="text-[#211f20]">{number.format(item.scannedCoupons)} / {number.format(item.generatedCoupons)}</b></div>)}
       </div>
     </div>
   </article>;
