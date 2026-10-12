@@ -122,13 +122,14 @@ export function CouponScanningDashboard() {
               <th style={{ width: "50px" }} className="text-center">Qty</th>
               <th style={{ width: "50px" }} className="text-center">SMV</th>
               <th style={{ width: "60px" }} className="text-center">Rate</th>
+              <th style={{ width: "70px" }} className="text-center">Incentive</th>
               <th style={{ width: "70px" }} className="text-center">Value</th>
             </tr>
           </thead>
           <tbody>
             {scannedCoupons.length === 0 ? (
               <tr>
-                <td colSpan={13} className="text-center py-4 font-bold text-gray-400">
+                <td colSpan={14} className="text-center py-4 font-bold text-gray-400">
                   No scanned coupons available for print.
                 </td>
               </tr>
@@ -147,6 +148,7 @@ export function CouponScanningDashboard() {
                   <td className="text-center">{row.qty || "0"}</td>
                   <td className="text-center">{row.smv || "0.00"}</td>
                   <td className="text-center">{row.rate || "0.00"}</td>
+                  <td className="text-center">{row.incentive || "0.00"}</td>
                   <td className="text-center">{row.value || "0.00"}</td>
                 </tr>
               ))

@@ -15,6 +15,7 @@ export interface ScanningRow {
   skillCode: string;
   smv: string;
   rate: string;
+  incentive: string;
   value: string;
   scanDate?: string;
   scanned?: boolean;
@@ -55,6 +56,7 @@ export interface CouponApiItem {
   SkillCode?: string | number;
   Smv?: string | number;
   Rate?: string | number;
+  Incentive?: string | number;
   Value?: string | number;
   ScannedAt?: string;
 }
@@ -104,6 +106,7 @@ export function makeEmptyRow(index: number): ScanningRow {
     skillCode: "",
     smv: "",
     rate: "",
+    incentive: "",
     value: "",
     scanDate: "",
   };
@@ -130,6 +133,7 @@ export function couponItemToRow(
     skillCode: String(item.SkillCode ?? ""),
     smv: String(item.Smv ?? ""),
     rate: String(item.Rate ?? ""),
+    incentive: String(item.Incentive ?? ""),
     value: String(item.Value ?? ""),
   };
 }

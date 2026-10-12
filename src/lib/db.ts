@@ -215,6 +215,7 @@ export function styleBulletinSnapshotByFilter(
         [Machine Type] AS Machine_Type,
         [Piece Rate] AS Piece_Rate,
         [Smv/Sam] AS Smv_Sam,
+        Incentive,
         [First Operation Section Wise] AS First_Operation_Section_Wise,
         [Last Operation Section Wise] AS Last_Operation_Section_Wise,
         CAST(NULL AS NVARCHAR(50)) AS SkillLevel,

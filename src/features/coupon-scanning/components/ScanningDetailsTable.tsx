@@ -84,6 +84,7 @@ export function ScanningDetailsTable(props: Facade) {
           row.skillCode,
           row.smv,
           row.rate,
+          row.incentive,
           row.value,
         ]),
     [rows],
@@ -139,6 +140,7 @@ export function ScanningDetailsTable(props: Facade) {
               "Skill #",
               "SMV",
               "Rate",
+              "Incentive",
               "Value",
             ]}
             rows={csvRows}
@@ -194,7 +196,7 @@ export function ScanningDetailsTable(props: Facade) {
                 className="py-1 px-3 border-r border-slate-200"
               ></th>
               <th
-                colSpan={3}
+                colSpan={4}
                 className="py-0.5 px-3 text-center text-[9px] uppercase tracking-wider bg-slate-200/60 text-slate-800 border-b border-slate-300"
               >
                 Rate
@@ -243,6 +245,9 @@ export function ScanningDetailsTable(props: Facade) {
               </th>
               <th className="py-1 px-2 border-r border-slate-200 text-right w-[90px] bg-slate-100/30">
                 Rate
+              </th>
+              <th className="py-1 px-2 border-r border-slate-200 text-right w-[90px] bg-slate-100/30">
+                Incentive
               </th>
               <th className="py-1 px-3 text-right w-[100px] bg-indigo-50/20 text-[#4f46e5]">
                 Value
@@ -293,6 +298,9 @@ export function ScanningDetailsTable(props: Facade) {
                     </td>
                     <td className="py-3 px-2 border-r border-slate-200 text-center">
                       <div className="h-3 w-8 bg-slate-200 rounded mx-auto" />
+                    </td>
+                    <td className="py-3 px-2 border-r border-slate-200 text-right bg-slate-50/50">
+                      <div className="h-3 w-12 bg-slate-200 rounded ml-auto" />
                     </td>
                     <td className="py-3 px-2 border-r border-slate-200 text-right bg-slate-50/50">
                       <div className="h-3 w-12 bg-slate-200 rounded ml-auto" />
@@ -380,6 +388,10 @@ export function ScanningDetailsTable(props: Facade) {
                     {/* Rate */}
                     <td className="py-1 px-2 border-r border-slate-200 text-right bg-slate-50/30 font-semibold text-slate-700">
                       {row.rate || "-"}
+                    </td>
+                    {/* Incentive */}
+                    <td className="py-1 px-2 border-r border-slate-200 text-right bg-slate-50/30 font-semibold text-slate-700">
+                      {row.incentive || "0"}
                     </td>
                     {/* Value */}
                     <td className="py-1 px-3 text-right bg-indigo-50/10 text-indigo-700 font-bold">
