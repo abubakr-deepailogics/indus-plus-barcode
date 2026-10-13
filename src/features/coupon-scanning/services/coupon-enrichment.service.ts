@@ -219,13 +219,16 @@ export async function enrichCouponRows<
   return rows.map((row) => {
     const cut = cutMaps.get(row.WorkOrder)?.get(row.BundleNo);
     const op = opMaps.get(row.WorkOrder)?.get(row.OpNo);
+    // QrCode_Coupon.CutNo is captured when a coupon is generated. Prefer it
+    // when supplied; the snapshot is a fallback for callers without it.
+    const storedCutNo = (row as T & { CutNo?: unknown }).CutNo;
     const qty = (cut?.Bundle_Qty as number | null | undefined) ?? null;
     const rate = (op?.Piece_Rate as number | null | undefined) ?? null;
     return {
       ...row,
       Inseam: cut?.Inseam ?? null,
       SizeCode: cut?.Size ?? null,
-      CutNo: cut?.Cut ?? null,
+      CutNo: storedCutNo != null ? String(storedCutNo) : cut?.Cut ?? null,
       Category: cut?.Shade ?? null,
       Qty: qty,
       SectionCode: op?.Section ?? null,

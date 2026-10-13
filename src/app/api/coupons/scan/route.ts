@@ -1,7 +1,6 @@
 import { getPool, sql, SCANNED_AT_FROM_DATE_SQL } from "@/lib/db";
 import {
   enrichCouponRows,
-  withinCutRange,
 } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import { chunk } from "@/features/qr-code-generation/services/coupon-registration.service";
 import {
@@ -19,6 +18,7 @@ interface CouponRow {
   OpNo: string;
   IsScanned: boolean;
   ScannedAt: string | null;
+  CutNo?: string | null;
   WageId?: number | null;
 }
 
@@ -46,6 +46,20 @@ export async function GET(request: Request) {
     );
   }
   if (!isCouponDepartment(department)) return Response.json({ error: "Invalid department." }, { status: 400 });
+
+  // Filter the coupon's persisted CutNo, matching the Coupon Tracing range
+  // semantics. Snapshot data is enrichment only and may change later.
+  const cutRangeConditions = [
+    fromCut
+      ? "(LEN(CutNo) > LEN(@fromCut) OR (LEN(CutNo) = LEN(@fromCut) AND CutNo >= @fromCut))"
+      : "",
+    toCut
+      ? "(LEN(CutNo) < LEN(@toCut) OR (LEN(CutNo) = LEN(@toCut) AND CutNo <= @toCut))"
+      : "",
+  ].filter(Boolean);
+  const cutRangeWhere = cutRangeConditions.length > 0
+    ? `AND ${cutRangeConditions.join(" AND ")}`
+    : "";
 
   try {
     // Wages already generated for this date? The whole tenure is closed —
@@ -76,11 +90,13 @@ export async function GET(request: Request) {
       .input("wo", sql.NVarChar, wo.trim())
       .input("bundle", sql.NVarChar, bundle.trim())
       .input("op", sql.NVarChar, op.trim())
+      .input("fromCut", sql.NVarChar, fromCut.trim())
+      .input("toCut", sql.NVarChar, toCut.trim())
       .input("department", sql.NVarChar, department)
       .query(
         barcode.trim() !== ""
           ? `
-            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, WageId
+            SELECT CouponCode, WorkOrder, BundleNo, OpNo, CutNo, IsScanned, ScannedAt, WageId
             FROM dbo.QrCode_Coupon WITH (NOLOCK)
             WHERE CouponCode = @barcode
               AND (@wo = '' OR WorkOrder = @wo)
@@ -88,27 +104,24 @@ export async function GET(request: Request) {
               AND IsDeleted = 0
           `
           : `
-            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, WageId
+            SELECT CouponCode, WorkOrder, BundleNo, OpNo, CutNo, IsScanned, ScannedAt, WageId
             FROM dbo.QrCode_Coupon WITH (NOLOCK)
             WHERE WorkOrder = @wo
               AND (@bundle = '' OR BundleNo = @bundle)
               AND (@op = '' OR OpNo = @op)
               AND Department = @department
               AND IsDeleted = 0
+              ${cutRangeWhere}
           `,
       );
 
-    let records = await enrichCouponRows(
+    const records = await enrichCouponRows(
       result.recordset as CouponRow[],
       department as CouponDepartment,
     );
 
     // Cut-range filter only applies to the wo/bundle/op (bulk/selection)
     // path — the barcode path never used it, same as the old query.
-    if (!barcode.trim() && (fromCut || toCut)) {
-      records = records.filter((r) => withinCutRange(r.CutNo, fromCut, toCut));
-    }
-
     if (records.length === 0) {
       return Response.json(
         { error: "No matching coupon code found in the database." },
