@@ -42,6 +42,7 @@ interface RawCouponRow {
   EmployeeCode: string;
   ScannedAt: string | null;
   WageId?: number | null;
+  IsArrear?: boolean;
 }
 
 // Which QrCode_Coupon column scopes every query to the searched dimension.
@@ -292,7 +293,7 @@ export async function buildReportSummary(
   rawValue: string,
   from: string,
   to: string,
-  options: { all?: boolean; department?: CouponDepartment } = {},
+  options: { all?: boolean; department?: CouponDepartment; includeArrears?: boolean } = {},
 ): Promise<BuildReportSummaryResult> {
   // "All <mode>" reuses that mode's column/query shape but drops the
   // equality filter — every other dimension (aggregation, breakdowns,
@@ -356,14 +357,26 @@ export async function buildReportSummary(
     couponRequest.input("value", sql.NVarChar, boundValue);
     couponConditions.push(`${column} = @value`);
   }
-  if (from) {
-    couponRequest.input("from", sql.Date, from);
+  if (from) couponRequest.input("from", sql.Date, from);
+  if (to) couponRequest.input("to", sql.Date, to);
+  if (from && to) {
+    // Arrears retain their original production date for normal reports, but
+    // an unpaid arrear can be folded into a later wage only when requested.
+    couponConditions.push(
+      options.includeArrears
+        ? `(ScannedAt >= @from AND ScannedAt < DATEADD(day, 1, @to) OR (
+            WageId IS NULL AND ScannedAt < @from AND EXISTS (
+              SELECT 1 FROM dbo.EmployeeWages priorWage
+              WHERE priorWage.Department = @department
+                AND ScannedAt >= priorWage.FromDate
+                AND ScannedAt < DATEADD(day, 1, priorWage.ToDate)
+            )
+          ))`
+        : "ScannedAt >= @from AND ScannedAt < DATEADD(day, 1, @to)",
+    );
+  } else if (from) {
     couponConditions.push("ScannedAt >= @from");
-  }
-  if (to) {
-    couponRequest.input("to", sql.Date, to);
-    // Exclusive upper bound one day out, so the `to` day itself is fully
-    // included regardless of the time-of-day portion of ScannedAt.
+  } else if (to) {
     couponConditions.push("ScannedAt < DATEADD(day, 1, @to)");
   }
 
@@ -382,8 +395,14 @@ export async function buildReportSummary(
 
   const [couponResult, scanCountsResult] = await Promise.all([
     couponRequest.query(`
-      SELECT CouponCode, WorkOrder, BundleNo, OpNo, EmployeeCode, ScannedAt, WageId
-      FROM dbo.QrCode_Coupon
+      SELECT c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.EmployeeCode, c.ScannedAt, c.WageId,
+             CAST(CASE WHEN c.WageId IS NULL AND EXISTS (
+               SELECT 1 FROM dbo.EmployeeWages priorWage
+               WHERE priorWage.Department = c.Department
+                 AND c.ScannedAt >= priorWage.FromDate
+                 AND c.ScannedAt < DATEADD(day, 1, priorWage.ToDate)
+             ) THEN 1 ELSE 0 END AS BIT) AS IsArrear
+      FROM dbo.QrCode_Coupon c
       WHERE ${couponConditions.join(" AND ")}
       ORDER BY ScannedAt DESC
     `),
@@ -649,6 +668,7 @@ export async function buildReportSummary(
       employeeName: empName,
       isWageCalculated: isWageCalc,
       wageId,
+      isArrear: Boolean(row.IsArrear),
     };
   });
 

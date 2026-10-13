@@ -187,6 +187,7 @@ export async function POST(request: Request) {
     const { from: fromDate, to: toDate } = tenure;
 
     const createdBy = body?.createdBy ? String(body.createdBy) : null;
+    const includeArrears = body?.includeArrears === true;
 
     // A date may belong to only one wage — otherwise the same coupons get
     // paid twice and the lock can't say which wage owns the date.
@@ -208,6 +209,7 @@ export async function POST(request: Request) {
       fromDate,
       toDate,
       department as CouponDepartment,
+      includeArrears,
     );
     if (!built.ok) {
       return Response.json({ error: built.error }, { status: built.status });
@@ -235,6 +237,7 @@ export async function POST(request: Request) {
       .input("totalAmount", sql.Decimal(18, 2), preview.totalAmount)
       .input("createdBy", sql.NVarChar, createdBy)
       .input("department", sql.NVarChar, department)
+      .input("includeArrears", sql.Bit, includeArrears)
       .query(`
         INSERT INTO dbo.EmployeeWages
           (Title, FromDate, ToDate, TotalCoupons, TotalQty, TotalAmount, CreatedBy, CreatedAt, Department)
@@ -286,14 +289,23 @@ export async function POST(request: Request) {
       .input("fromDate", sql.Date, fromDate)
       .input("toDate", sql.Date, toDate)
       .input("department", sql.NVarChar, department)
+      .input("includeArrears", sql.Bit, includeArrears)
       .query(`
-        UPDATE dbo.QrCode_Coupon
+        UPDATE c
         SET WageId = @wageId
+        FROM dbo.QrCode_Coupon c
         WHERE IsScanned = 1
           AND IsDeleted = 0
           AND Department = @department
-          AND ScannedAt >= @fromDate
-          AND ScannedAt < DATEADD(day, 1, @toDate);
+          AND (
+            (ScannedAt >= @fromDate AND ScannedAt < DATEADD(day, 1, @toDate))
+            OR (@includeArrears = 1 AND WageId IS NULL AND ScannedAt < @fromDate AND EXISTS (
+              SELECT 1 FROM dbo.EmployeeWages priorWage
+              WHERE priorWage.Department = @department
+                AND ScannedAt >= priorWage.FromDate
+                AND ScannedAt < DATEADD(day, 1, priorWage.ToDate)
+            ))
+          );
       `);
 
     return Response.json({

@@ -122,12 +122,13 @@ export async function scanCoupon(params: {
   employeeCode: string;
   scanBy: string;
   scanDate: string;
+  isArrear?: boolean;
   department: CouponDepartment;
 }): Promise<{ ok: true; item: CouponApiItem } | { ok: false; error: string }> {
-  const { barcode, workOrder, employeeCode, scanBy, scanDate, department } = params;
+  const { barcode, workOrder, employeeCode, scanBy, scanDate, department, isArrear } = params;
   const woParam = workOrder ? `&wo=${encodeURIComponent(workOrder)}` : "";
   const response = await fetch(
-    `/api/coupons/scan?barcode=${encodeURIComponent(barcode)}${woParam}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}&scanDate=${encodeURIComponent(scanDate)}&department=${encodeURIComponent(department)}`,
+    `/api/coupons/scan?barcode=${encodeURIComponent(barcode)}${woParam}&employeeCode=${encodeURIComponent(employeeCode)}&scanBy=${encodeURIComponent(scanBy)}&scanDate=${encodeURIComponent(scanDate)}&department=${encodeURIComponent(department)}&isArrear=${isArrear ? "true" : "false"}`,
   );
   const data = await response.json();
 
@@ -156,6 +157,7 @@ export async function scanCouponsBatch(params: {
   employeeCode: string;
   scanBy: string;
   scanDate: string;
+  isArrear?: boolean;
   department: CouponDepartment;
 }): Promise<
   | { ok: true; scanned: CouponApiItem[]; failed: FailedScan[] }

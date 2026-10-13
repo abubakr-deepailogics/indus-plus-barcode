@@ -35,6 +35,7 @@ export async function GET(request: Request) {
   const employeeCode = searchParams.get("employeeCode") || "";
   const scanBy = searchParams.get("scanBy") || "";
   const scanDate = searchParams.get("scanDate") || "";
+  const isArrear = searchParams.get("isArrear") === "true";
   // "fetch" = lookup only, does not mark coupons as scanned in the DB
   const mode = searchParams.get("mode") || "scan";
 
@@ -53,8 +54,11 @@ export async function GET(request: Request) {
     // a read-only lookup, so it stays open; only writes are refused.
     if (mode !== "fetch") {
       const lock = await findWageLockForDate(scanDate, department as CouponDepartment);
-      if (lock) {
+      if (lock && !isArrear) {
         return Response.json({ error: wageLockMessage(lock) }, { status: 400 });
+      }
+      if (!lock && isArrear) {
+        return Response.json({ error: "Arrears can only be used for a date in an already-paid wage tenure." }, { status: 400 });
       }
     }
 
