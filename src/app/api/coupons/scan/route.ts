@@ -7,7 +7,9 @@ import {
   findWageLockForDate,
   wageLockMessage,
 } from "@/features/wages/services/wage-lock.service";
+import { requireArrearsScanningPermission } from "@/features/coupon-scanning/services/arrears-authorization.service";
 import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
+import { AuthError } from "@/lib/require-session";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +64,12 @@ export async function GET(request: Request) {
     : "";
 
   try {
+    // Lookup-only requests cannot change scan data. Every arrears write is
+    // authorized from the signed server session, never from UI state.
+    if (isArrear && mode !== "fetch") {
+      await requireArrearsScanningPermission(department as CouponDepartment);
+    }
+
     // Wages already generated for this date? The whole tenure is closed —
     // checked once up front rather than per coupon, since the lock is a
     // property of the scan date, not of any individual row. "fetch" mode is
@@ -209,6 +217,9 @@ export async function GET(request: Request) {
 
     return Response.json(unscanned);
   } catch (err: unknown) {
+    if (err instanceof AuthError) {
+      return Response.json({ error: err.message }, { status: err.status });
+    }
     console.error("Coupon scan validation error:", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });

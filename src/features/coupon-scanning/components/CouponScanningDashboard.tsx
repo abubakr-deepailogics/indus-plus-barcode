@@ -15,6 +15,7 @@ export function CouponScanningDashboard() {
   const couponScanning = useCouponScanning();
   const { can } = useAuth();
   const canScan = can("coupon-scanning", "create");
+  const canScanArrears = canScan && can("coupon-scanning-arrears", "create");
 
   useConfirmNavigation(
     true,
@@ -59,7 +60,11 @@ export function CouponScanningDashboard() {
           icon={ScanLine}
           accent="indigo"
         />
-        <InformationPanel {...couponScanning} canScan={canScan} />
+        <InformationPanel
+          {...couponScanning}
+          canScan={canScan}
+          canScanArrears={canScanArrears}
+        />
         <ScanningDetailsTable {...couponScanning} />
         <ScanModals {...couponScanning} />
       </div>

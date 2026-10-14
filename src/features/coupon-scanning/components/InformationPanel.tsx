@@ -16,7 +16,10 @@ import { fetchLockedWageRanges } from "@/features/wages/services/wages.service";
 import type { LockedRange } from "@/features/wages/types";
 import type { useCouponScanning } from "../hooks/useCouponScanning";
 
-type Facade = ReturnType<typeof useCouponScanning> & { canScan: boolean };
+type Facade = ReturnType<typeof useCouponScanning> & {
+  canScan: boolean;
+  canScanArrears: boolean;
+};
 
 function parseDateString(str: string): Date | null {
   const trimmed = str.trim();
@@ -120,6 +123,7 @@ export function InformationPanel(props: Facade) {
     handleFetchAndScan,
     clearForm,
     canScan,
+    canScanArrears,
   } = props;
 
   const [prevDated, setPrevDated] = useState(dated);
@@ -314,7 +318,12 @@ export function InformationPanel(props: Facade) {
                     setDated("");
                     setTypedValue(null);
                   }}
-                  disabled={!isEmployeeCodeFilled}
+                  disabled={!isEmployeeCodeFilled || !canScanArrears}
+                  title={
+                    !canScanArrears
+                      ? "You don't have permission to scan arrears."
+                      : undefined
+                  }
                   aria-pressed={isArrear}
                   className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${isArrear ? "bg-amber-100 text-amber-800 ring-1 ring-amber-300" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
                 >

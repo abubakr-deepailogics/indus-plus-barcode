@@ -22,6 +22,32 @@ export async function getPermissionsForUser(userId: number): Promise<UserPermiss
   }));
 }
 
+// Uses an existence check instead of loading a user's full permission set on
+// a write path. This is used for sensitive, action-specific server checks.
+export async function hasPermissionForUser(
+  userId: number,
+  department: PermissionDepartment,
+  pageKey: PageKey,
+  operation: PageOperation,
+): Promise<boolean> {
+  const pool = await getPool("pitSystem");
+  const result = await pool
+    .request()
+    .input("userId", sql.Int, userId)
+    .input("department", sql.NVarChar, department)
+    .input("pageKey", sql.NVarChar, pageKey)
+    .input("operation", sql.NVarChar, operation)
+    .query<{ Granted: number }>(`
+      SELECT TOP 1 CAST(1 AS INT) AS Granted
+      FROM dbo.UserPermissions
+      WHERE UserId = @userId
+        AND Department = @department
+        AND PageKey = @pageKey
+        AND [Operation] = @operation
+    `);
+  return result.recordset.length > 0;
+}
+
 export async function replacePermissionsForUser(
   userId: number,
   permissions: UserPermission[],

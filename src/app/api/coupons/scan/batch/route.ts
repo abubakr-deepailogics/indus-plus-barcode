@@ -4,7 +4,9 @@ import {
   findWageLockForDate,
   wageLockMessage,
 } from "@/features/wages/services/wage-lock.service";
+import { requireArrearsScanningPermission } from "@/features/coupon-scanning/services/arrears-authorization.service";
 import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
+import { AuthError } from "@/lib/require-session";
 
 export const dynamic = "force-dynamic";
 
@@ -54,6 +56,9 @@ export async function POST(request: Request) {
       );
     }
     if (!isCouponDepartment(department)) return Response.json({ error: "Invalid department." }, { status: 400 });
+    if (isArrear) {
+      await requireArrearsScanningPermission(department as CouponDepartment);
+    }
 
     // Wages already generated for this date? The whole tenure is closed.
     // One check for the batch — the lock belongs to the scan date, which is
@@ -131,6 +136,9 @@ export async function POST(request: Request) {
 
     return Response.json({ scanned, failed });
   } catch (err: unknown) {
+    if (err instanceof AuthError) {
+      return Response.json({ error: err.message }, { status: err.status });
+    }
     console.error("Batch coupon scan error:", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
