@@ -1,6 +1,7 @@
 import { getPool, sql, SCANNED_AT_FROM_DATE_SQL } from "@/lib/db";
 import {
   enrichCouponRows,
+  withinCutRange,
 } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import { chunk } from "@/features/qr-code-generation/services/coupon-registration.service";
 import {
@@ -8,7 +9,10 @@ import {
   wageLockMessage,
 } from "@/features/wages/services/wage-lock.service";
 import { requireArrearsScanningPermission } from "@/features/coupon-scanning/services/arrears-authorization.service";
-import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
+import {
+  isCouponDepartment,
+  type CouponDepartment,
+} from "@/lib/department-classification";
 import { AuthError } from "@/lib/require-session";
 
 export const dynamic = "force-dynamic";
@@ -32,7 +36,9 @@ export async function GET(request: Request) {
   const op = searchParams.get("op") || "";
   const fromCut = searchParams.get("fromCut") || "";
   const toCut = searchParams.get("toCut") || "";
-  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
+  const department = (searchParams.get("department") || "sewing")
+    .trim()
+    .toLowerCase();
 
   const employeeCode = searchParams.get("employeeCode") || "";
   const scanBy = searchParams.get("scanBy") || "";
@@ -47,21 +53,8 @@ export async function GET(request: Request) {
       { status: 400 },
     );
   }
-  if (!isCouponDepartment(department)) return Response.json({ error: "Invalid department." }, { status: 400 });
-
-  // Filter the coupon's persisted CutNo, matching the Coupon Tracing range
-  // semantics. Snapshot data is enrichment only and may change later.
-  const cutRangeConditions = [
-    fromCut
-      ? "(LEN(CutNo) > LEN(@fromCut) OR (LEN(CutNo) = LEN(@fromCut) AND CutNo >= @fromCut))"
-      : "",
-    toCut
-      ? "(LEN(CutNo) < LEN(@toCut) OR (LEN(CutNo) = LEN(@toCut) AND CutNo <= @toCut))"
-      : "",
-  ].filter(Boolean);
-  const cutRangeWhere = cutRangeConditions.length > 0
-    ? `AND ${cutRangeConditions.join(" AND ")}`
-    : "";
+  if (!isCouponDepartment(department))
+    return Response.json({ error: "Invalid department." }, { status: 400 });
 
   try {
     // Lookup-only requests cannot change scan data. Every arrears write is
@@ -75,12 +68,21 @@ export async function GET(request: Request) {
     // property of the scan date, not of any individual row. "fetch" mode is
     // a read-only lookup, so it stays open; only writes are refused.
     if (mode !== "fetch") {
-      const lock = await findWageLockForDate(scanDate, department as CouponDepartment);
+      const lock = await findWageLockForDate(
+        scanDate,
+        department as CouponDepartment,
+      );
       if (lock && !isArrear) {
         return Response.json({ error: wageLockMessage(lock) }, { status: 400 });
       }
       if (!lock && isArrear) {
-        return Response.json({ error: "Arrears can only be used for a date in an already-paid wage tenure." }, { status: 400 });
+        return Response.json(
+          {
+            error:
+              "Arrears can only be used for a date in an already-paid wage tenure.",
+          },
+          { status: 400 },
+        );
       }
     }
 
@@ -98,8 +100,6 @@ export async function GET(request: Request) {
       .input("wo", sql.NVarChar, wo.trim())
       .input("bundle", sql.NVarChar, bundle.trim())
       .input("op", sql.NVarChar, op.trim())
-      .input("fromCut", sql.NVarChar, fromCut.trim())
-      .input("toCut", sql.NVarChar, toCut.trim())
       .input("department", sql.NVarChar, department)
       .query(
         barcode.trim() !== ""
@@ -119,14 +119,19 @@ export async function GET(request: Request) {
               AND (@op = '' OR OpNo = @op)
               AND Department = @department
               AND IsDeleted = 0
-              ${cutRangeWhere}
           `,
       );
 
-    const records = await enrichCouponRows(
+    const enrichedRecords = await enrichCouponRows(
       result.recordset as CouponRow[],
       department as CouponDepartment,
     );
+
+    const records = barcode
+      ? enrichedRecords
+      : enrichedRecords.filter((row) =>
+          withinCutRange(row.CutNo, fromCut, toCut),
+        );
 
     // Cut-range filter only applies to the wo/bundle/op (bulk/selection)
     // path — the barcode path never used it, same as the old query.

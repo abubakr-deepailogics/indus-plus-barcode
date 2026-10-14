@@ -63,7 +63,8 @@ async function fetchCutDetailByBundle(
 
   const pool = await getPool("pitSystem");
   for (const batch of chunk(uniqueBundles, IN_LIST_CHUNK_SIZE)) {
-    const request = pool.request()
+    const request = pool
+      .request()
       .input("wo", sql.NVarChar, workOrder)
       .input("department", sql.NVarChar, department);
     const placeholders = batch.map((b, i) => {
@@ -94,7 +95,8 @@ async function fetchCutDetailByBundle(
   const missingBundles = uniqueBundles.filter((b) => !map.has(b));
   if (missingBundles.length > 0) {
     for (const batch of chunk(missingBundles, IN_LIST_CHUNK_SIZE)) {
-      const req = pool.request()
+      const req = pool
+        .request()
         .input("wo", sql.NVarChar, workOrder)
         .input("department", sql.NVarChar, department);
       const placeholders = batch.map((b, i) => {
@@ -137,7 +139,8 @@ async function fetchStyleBulletinByOp(
 
   const pool = await getPool("pitSystem");
   for (const batch of chunk(uniqueOps, IN_LIST_CHUNK_SIZE)) {
-    const request = pool.request()
+    const request = pool
+      .request()
       .input("wo", sql.NVarChar, workOrder)
       .input("department", sql.NVarChar, department);
     const placeholders = batch.map((o, i) => {
@@ -228,7 +231,7 @@ export async function enrichCouponRows<
       ...row,
       Inseam: cut?.Inseam ?? null,
       SizeCode: cut?.Size ?? null,
-      CutNo: storedCutNo != null ? String(storedCutNo) : cut?.Cut ?? null,
+      CutNo: storedCutNo != null ? String(storedCutNo) : (cut?.Cut ?? null),
       Category: cut?.Shade ?? null,
       Qty: qty,
       SectionCode: op?.Section ?? null,
@@ -249,7 +252,10 @@ export async function enrichCouponRows<
 
 export async function fetchPieceRates<
   T extends { WorkOrder: string; OpNo: string },
->(rows: T[], department: CouponDepartment = "sewing"): Promise<(T & { Rate: number | null; Incentive: number })[]> {
+>(
+  rows: T[],
+  department: CouponDepartment = "sewing",
+): Promise<(T & { Rate: number | null; Incentive: number })[]> {
   if (rows.length === 0) return [];
 
   const workOrders = [...new Set(rows.map((r) => r.WorkOrder))];
@@ -275,9 +281,12 @@ export async function fetchPieceRates<
   });
 }
 
-// Cut # is alphanumeric: order by length, then lexically (matches the SQL
-// range filters, e.g. "9" < "10", "T0002451" < "T0002460").
-const cutCmp = (a: string, b: string) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
+const cutCollator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+});
+
+const cutCmp = (a: string, b: string) => cutCollator.compare(a, b);
 
 export function withinCutRange(
   cutNo: unknown,
