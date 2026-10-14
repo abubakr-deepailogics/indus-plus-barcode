@@ -159,10 +159,11 @@ export async function GET(request: Request) {
             WHERE WorkOrder = @wo
               AND CutNo IS NOT NULL
               AND CutNo <> ''
-              -- Cut identifiers are displayed in their stored form (for
-              -- example, 1F1), but users commonly type them in lowercase.
-              -- Do not depend on the database collation being case-insensitive.
-              AND UPPER(CutNo) LIKE UPPER(@q)
+              -- Cut identifiers may be stored with spaces (for example,
+              -- "1 F1") while users type the compact form ("1F1"). Match
+              -- case-insensitively after ignoring spaces, but return the
+              -- original stored value for display and filtering.
+              AND REPLACE(UPPER(CutNo), ' ', '') LIKE REPLACE(UPPER(@q), ' ', '')
               AND IsDeleted = 0
               AND Department = @department
           ) t
