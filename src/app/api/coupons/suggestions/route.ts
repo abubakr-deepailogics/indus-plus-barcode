@@ -159,7 +159,10 @@ export async function GET(request: Request) {
             WHERE WorkOrder = @wo
               AND CutNo IS NOT NULL
               AND CutNo <> ''
-              AND CutNo LIKE @q
+              -- Cut identifiers are displayed in their stored form (for
+              -- example, 1F1), but users commonly type them in lowercase.
+              -- Do not depend on the database collation being case-insensitive.
+              AND UPPER(CutNo) LIKE UPPER(@q)
               AND IsDeleted = 0
               AND Department = @department
           ) t
