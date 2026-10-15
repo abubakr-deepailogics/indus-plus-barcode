@@ -119,6 +119,14 @@ export async function getCutPlanning(workOrder: string): Promise<CutPlanningData
       ORDER BY Inseam, TRY_CONVERT(INT, Size), Size, SubNo
     `);
   const sourceRows = sourceRowsResult.recordset as Array<Record<string, unknown>>;
+  const fabricResult = await indusPool.request()
+    .input("workOrder", sql.NVarChar, trimmedWorkOrder)
+    .query(`
+      SELECT TOP (1) [Fabric Code(Main Body)] AS FabricCode
+      FROM ${CUT_DETAIL_VIEW}
+      WHERE [Work Order #] = @workOrder
+        AND NULLIF(LTRIM(RTRIM([Fabric Code(Main Body)])), '') IS NOT NULL
+    `);
   const grouped = new Map<string, CutPlanningInseamGroup>();
   for (const row of sourceRows) {
     const size = String(row.Size ?? "").trim();
@@ -140,6 +148,7 @@ export async function getCutPlanning(workOrder: string): Promise<CutPlanningData
   const metadata: CutPlanningMetadata | null = first ? {
     workOrder: trimmedWorkOrder,
     customerName: String(first.Customer ?? ""),
+    fabricCode: String(fabricResult.recordset[0]?.FabricCode ?? ""),
     workOrderDate: String(first.WorkOrderDate ?? ""),
     color: String(first.Color ?? ""),
     styleCode: String(first.StyleCode ?? ""),
