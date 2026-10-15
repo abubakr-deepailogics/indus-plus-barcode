@@ -1,4 +1,4 @@
-import { getPool, sql } from "@/lib/db";
+import { CUT_DETAIL_VIEW, getPool, sql } from "@/lib/db";
 import type {
   CutPlanningData,
   CutPlanningInseamGroup,
@@ -10,6 +10,52 @@ import type {
 
 const SOURCE_TABLE = "dbo.S_WorkOrderSizeWiseQtyViewPITS";
 const MAX_PLANS = 250;
+
+export async function searchCutPlanningWorkOrders(filters: {
+  workOrder?: string;
+  customer?: string;
+  saleOrderNo?: string;
+}): Promise<Array<{ workOrder: string; customer: string | null; saleOrderNo: string | null }>> {
+  const workOrder = filters.workOrder?.trim() || "";
+  const customer = filters.customer?.trim() || "";
+  const saleOrderNo = filters.saleOrderNo?.trim() || "";
+  const pool = await getPool("indusPlus");
+  const request = pool.request();
+  const conditions = ["NULLIF(LTRIM(RTRIM(source.WorkOrderNo)), '') IS NOT NULL"];
+
+  if (workOrder) {
+    request.input("workOrder", sql.NVarChar, `%${workOrder}%`);
+    conditions.push("source.WorkOrderNo LIKE @workOrder");
+  }
+  if (customer) {
+    request.input("customer", sql.NVarChar, `%${customer}%`);
+    conditions.push("UPPER(source.Customer) LIKE UPPER(@customer)");
+  }
+  if (saleOrderNo) {
+    request.input("saleOrderNo", sql.NVarChar, `%${saleOrderNo}%`);
+    conditions.push("saleOrder.SaleOrderNo LIKE @saleOrderNo");
+  }
+
+  const result = await request.query(`
+    SELECT DISTINCT TOP (40)
+      source.WorkOrderNo AS workOrder,
+      source.Customer AS customer,
+      saleOrder.SaleOrderNo AS saleOrderNo
+    FROM ${SOURCE_TABLE} source
+    OUTER APPLY (
+      SELECT TOP (1) cd.[Sale Order No] AS SaleOrderNo
+      FROM ${CUT_DETAIL_VIEW} cd
+      WHERE cd.[Work Order #] = source.WorkOrderNo
+    ) saleOrder
+    WHERE ${conditions.join(" AND ")}
+    ORDER BY source.WorkOrderNo ${workOrder || customer || saleOrderNo ? "ASC" : "DESC"}
+  `);
+  return result.recordset.map((row) => ({
+    workOrder: String(row.workOrder ?? ""),
+    customer: row.customer == null ? null : String(row.customer),
+    saleOrderNo: row.saleOrderNo == null ? null : String(row.saleOrderNo),
+  }));
+}
 
 function number(value: unknown) {
   const parsed = Number(value);
@@ -173,5 +219,30 @@ export async function saveCutPlanning(payload: SaveCutPlanningPayload, userEmail
   } catch (error) {
     await transaction.rollback();
     throw error;
+  }
+}
+
+export async function softDeleteCutPlanningRow(
+  workOrderInput: string,
+  id: number,
+  userEmail: string,
+) {
+  const workOrder = workOrderInput.trim();
+  if (!workOrder) throw new Error("Work Order is required.");
+  if (!Number.isSafeInteger(id) || id <= 0) throw new Error("A valid planning row is required.");
+
+  const pool = await getPool("pitSystem");
+  const result = await pool.request()
+    .input("id", sql.BigInt, id)
+    .input("workOrder", sql.NVarChar, workOrder)
+    .input("updatedBy", sql.NVarChar, userEmail || "system")
+    .query(`
+      UPDATE dbo.CutPlanning
+      SET IsDeleted = 1, UpdatedAt = SYSUTCDATETIME(), UpdatedBy = @updatedBy
+      WHERE Id = @id AND WorkOrder = @workOrder AND IsDeleted = 0
+    `);
+
+  if ((result.rowsAffected[0] ?? 0) === 0) {
+    throw new Error("Planning row was not found or was already deleted.");
   }
 }

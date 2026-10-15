@@ -28,29 +28,34 @@ export function ModulePageHeader({
   title,
   detail,
   icon: Icon,
+  actions,
+  compact = false,
 }: {
   eyebrow: string;
   title: string;
-  detail: string;
+  detail?: string;
   icon: LucideIcon;
   accent?: ModuleAccent;
+  actions?: React.ReactNode;
+  compact?: boolean;
 }) {
   return (
-    <header className="flex flex-col justify-between gap-5 border-b border-slate-200 pb-5 sm:flex-row sm:items-center">
-      <div className="flex items-start gap-4">
-        <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm">
-          <Icon className="size-5" />
+    <header className={`flex flex-col justify-between border-b border-slate-200 sm:flex-row sm:items-center ${compact ? "gap-3 pb-3" : "gap-5 pb-5"}`}>
+      <div className={`flex items-start ${compact ? "gap-3" : "gap-4"}`}>
+        <div className={`flex shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm ${compact ? "size-10" : "size-12"}`}>
+          <Icon className={compact ? "size-4" : "size-5"} />
         </div>
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-indigo-700">
             {eyebrow}
           </p>
-          <h1 className="mt-1 text-2xl font-semibold text-slate-950">
+          <h1 className={`${compact ? "mt-0.5 text-xl" : "mt-1 text-2xl"} font-semibold text-slate-950`}>
             {title}
           </h1>
-          <p className="mt-1 text-sm text-slate-500">{detail}</p>
+          {detail && <p className="mt-1 text-sm text-slate-500">{detail}</p>}
         </div>
       </div>
+      {actions && <div className="w-full shrink-0 sm:w-auto">{actions}</div>}
     </header>
   );
 }
