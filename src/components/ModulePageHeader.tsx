@@ -29,6 +29,7 @@ export function ModulePageHeader({
   detail,
   icon: Icon,
   actions,
+  titleAccessory,
   compact = false,
 }: {
   eyebrow: string;
@@ -37,6 +38,7 @@ export function ModulePageHeader({
   icon: LucideIcon;
   accent?: ModuleAccent;
   actions?: React.ReactNode;
+  titleAccessory?: React.ReactNode;
   compact?: boolean;
 }) {
   return (
@@ -49,9 +51,12 @@ export function ModulePageHeader({
           <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-indigo-700">
             {eyebrow}
           </p>
-          <h1 className={`${compact ? "mt-0.5 text-xl" : "mt-1 text-2xl"} font-semibold text-slate-950`}>
-            {title}
-          </h1>
+          <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 ${compact ? "mt-0.5" : "mt-1"}`}>
+            <h1 className={`${compact ? "text-xl" : "text-2xl"} font-semibold text-slate-950`}>
+              {title}
+            </h1>
+            {titleAccessory}
+          </div>
           {detail && <p className="mt-1 text-sm text-slate-500">{detail}</p>}
         </div>
       </div>
