@@ -133,10 +133,18 @@ export default function CutPlanningPage() {
     for (const plan of plans) {
       for (const size of sizeColumns) planned[size] = (planned[size] || 0) + (plan.sizeQuantities[size] || 0);
     }
+    const plannedTotal = plans.reduce(
+      (sum, plan) => sum + sizeColumns.reduce(
+        (rowTotal, size) => rowTotal + (plan.sizeQuantities[size] || 0),
+        0,
+      ),
+      0,
+    );
     return {
       order,
       willCut,
       planned,
+      plannedTotal,
       less: Object.fromEntries(sizeColumns.map((size) => [size, Math.max((willCut[size] || 0) - (planned[size] || 0), 0)])),
       over: Object.fromEntries(sizeColumns.map((size) => [size, Math.max((planned[size] || 0) - (willCut[size] || 0), 0)])),
     };
@@ -170,7 +178,9 @@ export default function CutPlanningPage() {
               <tbody>
                 {[["Order", totals.order], ["Will be cut", totals.willCut], ["Planned", totals.planned], ["Less", totals.less], ["Over", totals.over]].map(([label, quantities]) => {
                   const values = quantities as Record<string, number>;
-                  const total = sizeColumns.reduce((sum, size) => sum + (values[size] || 0), 0);
+                  const total = label === "Planned"
+                    ? totals.plannedTotal
+                    : sizeColumns.reduce((sum, size) => sum + (values[size] || 0), 0);
                   return <tr key={label as string} className="border-t border-slate-100"><th className="px-3 py-1.5 text-left font-semibold">{label as string}</th>{sizeColumns.map((size) => <td key={size} className="px-2 py-1.5 text-right">{displayNumber(values[size] || 0)}</td>)}<td className="px-3 py-1.5 text-right font-bold">{displayNumber(total)}</td></tr>;
                 })}
               </tbody>
