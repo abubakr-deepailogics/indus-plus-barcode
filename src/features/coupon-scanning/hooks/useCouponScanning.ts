@@ -48,6 +48,7 @@ export function useCouponScanning() {
   }
 
   const [dated, setDated] = useState("");
+  const [isArrear, setIsArrear] = useState(false);
   const [employeeName, setEmployeeName] = useState("");
   const [section, setSection] = useState("");
   const [shift, setShift] = useState("");
@@ -322,6 +323,7 @@ export function useCouponScanning() {
         employeeCode,
         scanBy,
         scanDate: dated,
+        isArrear,
         department: activeDepartment,
       });
 
@@ -440,6 +442,7 @@ export function useCouponScanning() {
     setLineId("");
     setScanBy(user?.email || user?.displayName || "");
     setDated("");
+    setIsArrear(false);
     setEmployeeName("");
     setSection("");
     setShift("");
@@ -518,6 +521,7 @@ export function useCouponScanning() {
         employeeCode,
         scanBy,
         scanDate: dated,
+        isArrear,
         department: activeDepartment,
       });
 
@@ -588,6 +592,7 @@ export function useCouponScanning() {
     employeeCode,
     scanBy,
     dated,
+    isArrear,
     isEmployeePresent,
     verifyAttendance,
     playAlreadyScannedSound,
@@ -769,6 +774,7 @@ export function useCouponScanning() {
         employeeCode,
         scanBy,
         scanDate: dated,
+        isArrear,
         department: activeDepartment,
       });
 
@@ -853,6 +859,8 @@ export function useCouponScanning() {
     scanBy,
     dated,
     setDated,
+    isArrear,
+    setIsArrear,
     employeeName,
     section,
     shift,

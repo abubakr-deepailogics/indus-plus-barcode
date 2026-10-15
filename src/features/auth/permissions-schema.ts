@@ -46,6 +46,10 @@ export const PAGE_PERMISSION_SCHEMA: Partial<Record<PageKey, PageDef>> = {
       { key: "create", label: "Create" },
     ],
   },
+  "coupon-scanning-arrears": {
+    label: "Arrears",
+    operations: [{ key: "create", label: "Scan arrears" }],
+  },
   "coupon-tracing": {
     label: "Coupon Tracing",
     operations: [

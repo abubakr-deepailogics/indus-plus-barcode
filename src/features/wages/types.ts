@@ -63,6 +63,7 @@ export interface WagePreview {
   employeeCount: number;
   totalQty: number;
   totalAmount: number;
+  arrearsCouponCount: number;
 }
 
 // A tenure already covered by a wage — scanning is locked inside it.

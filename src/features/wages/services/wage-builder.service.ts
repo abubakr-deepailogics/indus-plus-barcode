@@ -20,11 +20,13 @@ export async function buildWageData(
   from: string,
   to: string,
   department: CouponDepartment = "sewing",
+  includeArrears = false,
 ): Promise<BuildWageDataResult> {
   // "all employees" over the tenure — no search value, no filters.
   const summaryResult = await buildReportSummary("employee", "", from, to, {
     all: true,
     department,
+    includeArrears,
   });
   if (!summaryResult.ok) return summaryResult;
 
@@ -66,6 +68,9 @@ export async function buildWageData(
       employeeCount,
       totalQty: rows.reduce((s, r) => s + r.qty, 0),
       totalAmount: rows.reduce((s, r) => s + r.totalPay, 0),
+      arrearsCouponCount: includeArrears
+        ? coupons.filter((coupon) => coupon.isArrear === true).length
+        : 0,
     },
   };
 }

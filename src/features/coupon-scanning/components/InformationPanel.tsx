@@ -2,7 +2,7 @@
 
 import { useState, useMemo, useRef, useEffect } from "react";
 import { useDepartment } from "@/lib/department-context";
-import { Calendar as CalendarIcon, Cpu } from "lucide-react";
+import { Calendar as CalendarIcon, Clock3, Cpu } from "lucide-react";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import {
   Popover,
@@ -16,7 +16,10 @@ import { fetchLockedWageRanges } from "@/features/wages/services/wages.service";
 import type { LockedRange } from "@/features/wages/types";
 import type { useCouponScanning } from "../hooks/useCouponScanning";
 
-type Facade = ReturnType<typeof useCouponScanning> & { canScan: boolean };
+type Facade = ReturnType<typeof useCouponScanning> & {
+  canScan: boolean;
+  canScanArrears: boolean;
+};
 
 function parseDateString(str: string): Date | null {
   const trimmed = str.trim();
@@ -50,14 +53,20 @@ function lockedRangeFor(
   return lockedRanges.find((r) => iso >= r.from && iso <= r.to) ?? null;
 }
 
-function isValidSelectedDate(date: Date, lockedRanges: LockedRange[] = []): boolean {
-  if (date.getDay() === 0) return false; // Sunday
-
+function isValidSelectedDate(
+  date: Date,
+  lockedRanges: LockedRange[] = [],
+  allowArrears = false,
+): boolean {
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const comp = new Date(date);
   comp.setHours(0, 0, 0, 0);
   if (comp > today) return false; // Future
+
+  if (allowArrears) return lockedRangeFor(date, lockedRanges) !== null;
+
+  if (date.getDay() === 0) return false; // Sunday
 
   // Wages already generated for this date — the whole tenure is closed.
   // Enforced server-side too; this only keeps the UI from offering it.
@@ -76,6 +85,8 @@ export function InformationPanel(props: Facade) {
     designation,
     dated,
     setDated,
+    isArrear,
+    setIsArrear,
     shift,
     setShift,
     section,
@@ -112,6 +123,7 @@ export function InformationPanel(props: Facade) {
     handleFetchAndScan,
     clearForm,
     canScan,
+    canScanArrears,
   } = props;
 
   const [prevDated, setPrevDated] = useState(dated);
@@ -181,8 +193,8 @@ export function InformationPanel(props: Facade) {
     if (!displayValue.trim()) return false;
     const parsed = parseDateString(displayValue);
     if (!parsed) return true;
-    return !isValidSelectedDate(parsed, lockedRanges);
-  }, [displayValue, lockedRanges]);
+    return !isValidSelectedDate(parsed, lockedRanges, isArrear);
+  }, [displayValue, lockedRanges, isArrear]);
 
   // A locked date turns the field red like any other invalid one, so name
   // the wage responsible rather than leaving the user guessing.
@@ -293,11 +305,31 @@ export function InformationPanel(props: Facade) {
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             {/* Dated */}
             <div className="flex flex-col gap-0.5">
-              <span
-                className={`font-bold text-[10px] uppercase transition-colors ${!isEmployeeCodeFilled ? "text-slate-400" : "text-[#475569]"}`}
-              >
-                Dated
-              </span>
+              <div className="flex items-center justify-between gap-2">
+                <span
+                  className={`font-bold text-[10px] uppercase transition-colors ${!isEmployeeCodeFilled ? "text-slate-400" : "text-[#475569]"}`}
+                >
+                  Dated
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsArrear(!isArrear);
+                    setDated("");
+                    setTypedValue(null);
+                  }}
+                  disabled={!isEmployeeCodeFilled || !canScanArrears}
+                  title={
+                    !canScanArrears
+                      ? "You don't have permission to scan arrears."
+                      : undefined
+                  }
+                  aria-pressed={isArrear}
+                  className={`flex items-center gap-1 rounded-md px-1.5 py-0.5 text-[9px] font-bold uppercase transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${isArrear ? "bg-amber-100 text-amber-800 ring-1 ring-amber-300" : "bg-slate-100 text-slate-500 hover:bg-slate-200"}`}
+                >
+                  <Clock3 className="size-3" /> Arrears
+                </button>
+              </div>
               <div className="relative flex items-center w-full">
                 <input
                   type="text"
@@ -315,7 +347,10 @@ export function InformationPanel(props: Facade) {
                       return;
                     }
                     const parsed = parseDateString(val);
-                    if (parsed && isValidSelectedDate(parsed, lockedRanges)) {
+                    if (
+                      parsed &&
+                      isValidSelectedDate(parsed, lockedRanges, isArrear)
+                    ) {
                       setDated(format(parsed, "yyyy-MM-dd"));
                     } else {
                       setDated("");
@@ -369,14 +404,20 @@ export function InformationPanel(props: Facade) {
                           setTypedValue(null);
                         }
                       }}
-                      disabled={(date) => !isValidSelectedDate(date, lockedRanges)}
+                      disabled={(date) =>
+                        !isValidSelectedDate(date, lockedRanges, isArrear)
+                      }
                     />
                   </PopoverContent>
                 </Popover>
               </div>
               {lockedWage && (
-                <span className="text-[10px] font-bold text-red-600">
-                  Wages generated ({lockedWage.title}) — scanning locked
+                <span
+                  className={`text-[10px] font-bold ${isArrear ? "text-amber-700" : "text-red-600"}`}
+                >
+                  {isArrear
+                    ? `Arrears: late scans for ${lockedWage.title} will be paid with a later wage`
+                    : `Wages generated (${lockedWage.title}) — enable Arrears to scan late coupons`}
                 </span>
               )}
               {checkingAttendance && (
@@ -660,7 +701,11 @@ export function InformationPanel(props: Facade) {
                   type="button"
                   onClick={() => handleFetchAndScan()}
                   disabled={isScanning || !canScan}
-                  title={!canScan ? "You don't have permission to scan coupons." : undefined}
+                  title={
+                    !canScan
+                      ? "You don't have permission to scan coupons."
+                      : undefined
+                  }
                   className="flex-1 bg-[#4f46e5] hover:bg-[#4338ca] text-white font-bold py-1 rounded-lg text-xs shadow-sm transition-all flex items-center justify-center gap-1 cursor-pointer hover:shadow-md active:scale-[0.98] border border-transparent h-[26px] whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                   <span>🔍 Scan</span>

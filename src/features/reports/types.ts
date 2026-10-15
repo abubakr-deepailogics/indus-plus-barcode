@@ -130,6 +130,7 @@ export interface CouponReportItem {
   employeeName?: string | null;
   isWageCalculated?: boolean;
   wageId?: number | null;
+  isArrear?: boolean;
 }
 
 export interface ReportSummary {
