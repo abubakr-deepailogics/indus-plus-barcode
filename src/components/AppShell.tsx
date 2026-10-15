@@ -125,6 +125,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
     if (department === "sewing") {
       return [
+        { label: "Cut Planning", href: "/sewing/cut-planning", hasDropdown: false },
         { label: "Cut Report", href: "/sewing/cut-report", hasDropdown: false },
         ...productionModuleTabs("/sewing"),
       ];
