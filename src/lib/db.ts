@@ -49,6 +49,7 @@ export { sql };
 // SELECT can't see them yet, so filter against the raw bracketed names
 // (see cutDetailByFilter below for the common filtered-lookup case).
 export const CUT_DETAIL_VIEW = "dbo.SaleOrderPOCutDetailViewV1";
+export const STYLE_CARD_BOM_CONSUMPTION_TABLE = "dbo.S_StyleCardBOMConsumptionSAMView";
 export const CUT_DETAIL_COLUMNS_SQL = `
   [Sale Order No] AS Sale_Order_No,
   [Customer Name] AS Customer_Name,

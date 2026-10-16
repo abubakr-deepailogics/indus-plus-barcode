@@ -19,7 +19,7 @@ export type CutPlanRow = {
 export type CutPlanningMetadata = {
   workOrder: string;
   customerName: string;
-  fabricCode: string;
+  accessCodes: string[];
   workOrderDate: string;
   color: string;
   styleCode: string;

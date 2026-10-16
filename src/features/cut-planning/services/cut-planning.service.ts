@@ -1,4 +1,9 @@
-import { CUT_DETAIL_VIEW, getPool, sql } from "@/lib/db";
+import {
+  CUT_DETAIL_VIEW,
+  getPool,
+  sql,
+  STYLE_CARD_BOM_CONSUMPTION_TABLE,
+} from "@/lib/db";
 import type {
   CutPlanningData,
   CutPlanningInseamGroup,
@@ -119,14 +124,24 @@ export async function getCutPlanning(workOrder: string): Promise<CutPlanningData
       ORDER BY Inseam, TRY_CONVERT(INT, Size), Size, SubNo
     `);
   const sourceRows = sourceRowsResult.recordset as Array<Record<string, unknown>>;
-  const fabricResult = await indusPool.request()
-    .input("workOrder", sql.NVarChar, trimmedWorkOrder)
-    .query(`
-      SELECT TOP (1) [Fabric Code(Main Body)] AS FabricCode
-      FROM ${CUT_DETAIL_VIEW}
-      WHERE [Work Order #] = @workOrder
-        AND NULLIF(LTRIM(RTRIM([Fabric Code(Main Body)])), '') IS NOT NULL
-    `);
+  const styleCode = String(sourceRows[0]?.StyleCode ?? "").trim();
+  const accessCodeResult = styleCode
+    ? await indusPool.request()
+      .input("styleCode", sql.NVarChar, styleCode)
+      .query(`
+        SELECT DISTINCT LTRIM(RTRIM(AccessCode)) AS AccessCode
+        FROM ${STYLE_CARD_BOM_CONSUMPTION_TABLE}
+        WHERE StyleCode = @styleCode
+          AND NULLIF(LTRIM(RTRIM(AccessCode)), '') IS NOT NULL
+          AND UPPER(LTRIM(RTRIM(AccessCode))) <> 'NULL'
+        ORDER BY AccessCode
+      `)
+    : { recordset: [] as Array<{ AccessCode?: unknown }> };
+  const accessCodes = [...new Set(
+    accessCodeResult.recordset
+      .map((row) => String(row.AccessCode ?? "").trim())
+      .filter((accessCode) => accessCode && accessCode.toUpperCase() !== "NULL"),
+  )];
   const grouped = new Map<string, CutPlanningInseamGroup>();
   for (const row of sourceRows) {
     const size = String(row.Size ?? "").trim();
@@ -148,7 +163,7 @@ export async function getCutPlanning(workOrder: string): Promise<CutPlanningData
   const metadata: CutPlanningMetadata | null = first ? {
     workOrder: trimmedWorkOrder,
     customerName: String(first.Customer ?? ""),
-    fabricCode: String(fabricResult.recordset[0]?.FabricCode ?? ""),
+    accessCodes,
     workOrderDate: String(first.WorkOrderDate ?? ""),
     color: String(first.Color ?? ""),
     styleCode: String(first.StyleCode ?? ""),
