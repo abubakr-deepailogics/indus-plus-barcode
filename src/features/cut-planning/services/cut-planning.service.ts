@@ -207,7 +207,7 @@ function validatePlan(row: CutPlanRow, index: number) {
 export async function saveCutPlanning(payload: SaveCutPlanningPayload, userEmail: string) {
   const workOrder = payload.workOrder?.trim();
   if (!workOrder) throw new Error("Work Order is required.");
-  if (!Array.isArray(payload.plans) || !payload.plans.length) throw new Error("Add at least one planning row.");
+  if (!Array.isArray(payload.plans)) throw new Error("Planning rows are required.");
   if (payload.plans.length > MAX_PLANS) throw new Error(`A maximum of ${MAX_PLANS} planning rows can be saved at once.`);
   payload.plans.forEach(validatePlan);
 
