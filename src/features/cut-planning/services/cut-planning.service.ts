@@ -125,23 +125,33 @@ export async function getCutPlanning(workOrder: string): Promise<CutPlanningData
     `);
   const sourceRows = sourceRowsResult.recordset as Array<Record<string, unknown>>;
   const styleCode = String(sourceRows[0]?.StyleCode ?? "").trim();
-  const accessCodeResult = styleCode
+  const accessItemResult = styleCode
     ? await indusPool.request()
       .input("styleCode", sql.NVarChar, styleCode)
       .query(`
-        SELECT DISTINCT LTRIM(RTRIM(AccessCode)) AS AccessCode
+        SELECT DISTINCT
+          LTRIM(RTRIM(AccessCode)) AS AccessCode,
+          COALESCE(
+            NULLIF(LTRIM(RTRIM(ItemName)), ''),
+            NULLIF(LTRIM(RTRIM(ItemCode)), '')
+          ) AS ItemName
         FROM ${STYLE_CARD_BOM_CONSUMPTION_TABLE}
         WHERE StyleCode = @styleCode
           AND NULLIF(LTRIM(RTRIM(AccessCode)), '') IS NOT NULL
           AND UPPER(LTRIM(RTRIM(AccessCode))) <> 'NULL'
-        ORDER BY AccessCode
+          AND (
+            NULLIF(LTRIM(RTRIM(ItemName)), '') IS NOT NULL
+            OR NULLIF(LTRIM(RTRIM(ItemCode)), '') IS NOT NULL
+          )
+        ORDER BY AccessCode, ItemName
       `)
-    : { recordset: [] as Array<{ AccessCode?: unknown }> };
-  const accessCodes = [...new Set(
-    accessCodeResult.recordset
-      .map((row) => String(row.AccessCode ?? "").trim())
-      .filter((accessCode) => accessCode && accessCode.toUpperCase() !== "NULL"),
-  )];
+    : { recordset: [] as Array<{ AccessCode?: unknown; ItemName?: unknown }> };
+  const accessItems = accessItemResult.recordset
+    .map((row) => ({
+      accessCode: String(row.AccessCode ?? "").trim(),
+      itemName: String(row.ItemName ?? "").trim(),
+    }))
+    .filter(({ accessCode, itemName }) => accessCode && accessCode.toUpperCase() !== "NULL" && itemName);
   const grouped = new Map<string, CutPlanningInseamGroup>();
   for (const row of sourceRows) {
     const size = String(row.Size ?? "").trim();
@@ -163,7 +173,7 @@ export async function getCutPlanning(workOrder: string): Promise<CutPlanningData
   const metadata: CutPlanningMetadata | null = first ? {
     workOrder: trimmedWorkOrder,
     customerName: String(first.Customer ?? ""),
-    accessCodes,
+    accessItems,
     workOrderDate: String(first.WorkOrderDate ?? ""),
     color: String(first.Color ?? ""),
     styleCode: String(first.StyleCode ?? ""),
