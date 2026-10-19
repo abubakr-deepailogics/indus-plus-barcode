@@ -327,15 +327,31 @@ export default function CutPlanningPage() {
       for (const size of sizeColumns)
         planned[size] = (planned[size] || 0) + (plan.sizeQuantities[size] || 0);
     }
-    const plannedTotal = plans.reduce(
-      (sum, plan) =>
-        sum +
-        sizeColumns.reduce(
-          (rowTotal, size) => rowTotal + (plan.sizeQuantities[size] || 0),
+    // Planned's final Total is the sum of the main table's Transaction count
+    // (combined marker-row quantity × its marker plies), not its size Total.
+    const plannedTotal = Array.from(
+      { length: Math.max(0, ...groupedPlans.map(({ rows }) => rows.length)) },
+      (_, rowIndex) => {
+        const markerRowTotal = groups.reduce(
+          (sum, group) => {
+            const entry = groupedPlans.find(
+              ({ group: candidate }) => candidate.inseam === group.inseam,
+            )?.rows[rowIndex];
+            return (
+              sum +
+              group.sizeColumns.reduce(
+                (groupTotal, size) =>
+                  groupTotal + (entry?.plan.sizeQuantities[size] || 0),
+                0,
+              )
+            );
+          },
           0,
-        ),
-      0,
-    );
+        );
+        const markerPlies = groupedPlans[0]?.rows[rowIndex]?.plan.markerPlies || 0;
+        return markerRowTotal * markerPlies;
+      },
+    ).reduce((sum, transactionCount) => sum + transactionCount, 0);
     return {
       order,
       willCut,
@@ -354,7 +370,7 @@ export default function CutPlanningPage() {
         ]),
       ),
     };
-  }, [groups, plans, sizeColumns]);
+  }, [groupedPlans, groups, plans, sizeColumns]);
 
   async function save() {
     if (!workOrder) {
