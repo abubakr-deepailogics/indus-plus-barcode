@@ -64,10 +64,11 @@ export default function CutPlanningPage() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [deletingRowId, setDeletingRowId] = useState<number | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<{
-    index: number;
-    group: CutPlanningInseamGroup;
-  } | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<
+    | { type: "plan"; index: number; group: CutPlanningInseamGroup }
+    | { type: "marker-set"; rowIndex: number }
+    | null
+  >(null);
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
   const [selectedFabricItem, setSelectedFabricItem] = useState("");
   const [selectedFabricWorkOrder, setSelectedFabricWorkOrder] = useState("");
@@ -309,7 +310,7 @@ export default function CutPlanningPage() {
       plan.shade.trim(),
     );
   const requestRemove = (index: number, group: CutPlanningInseamGroup) => {
-    if (hasRowData(plans[index])) setPendingDelete({ index, group });
+    if (hasRowData(plans[index])) setPendingDelete({ type: "plan", index, group });
     else void deleteRow(index, group);
   };
   const totals = useMemo(() => {
@@ -493,6 +494,17 @@ export default function CutPlanningPage() {
       );
       return current.filter((_, index) => !targets.has(index));
     });
+  const requestRemoveMarkerSet = (rowIndex: number) => {
+    const containsData = groupedPlans.some(({ rows }) => {
+      const row = rows[rowIndex];
+      return row ? hasRowData(row.plan) : false;
+    });
+    if (containsData) {
+      setPendingDelete({ type: "marker-set", rowIndex });
+      return;
+    }
+    removeMarkerSet(rowIndex);
+  };
   const inseamMatrix = groups.length > 0 && (
     <section ref={matrixRef} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
       <div ref={matrixScrollRef} className="hide-horizontal-scrollbar overscroll-contain overflow-x-auto overflow-y-auto" style={matrixMaxHeight == null ? undefined : { maxHeight: matrixMaxHeight }}>
@@ -712,7 +724,7 @@ export default function CutPlanningPage() {
                   <td className="p-0">
                     <button
                       type="button"
-                      onClick={() => removeMarkerSet(rowIndex)}
+                      onClick={() => requestRemoveMarkerSet(rowIndex)}
                       className="p-2 text-rose-600 hover:bg-rose-50"
                       aria-label={`Remove marker row ${rowIndex + 1}`}
                     >
@@ -1480,7 +1492,7 @@ export default function CutPlanningPage() {
               id="delete-row-title"
               className="text-base font-semibold text-slate-950"
             >
-              Remove planning row?
+              Remove marker row?
             </h2>
             <p className="mt-2 text-sm text-slate-600">
               This row contains entered planning data. Remove it?
@@ -1497,9 +1509,14 @@ export default function CutPlanningPage() {
               <button
                 type="button"
                 disabled={deletingRowId !== null}
-                onClick={() =>
-                  void deleteRow(pendingDelete.index, pendingDelete.group)
-                }
+                onClick={() => {
+                  if (pendingDelete.type === "marker-set") {
+                    removeMarkerSet(pendingDelete.rowIndex);
+                    setPendingDelete(null);
+                    return;
+                  }
+                  void deleteRow(pendingDelete.index, pendingDelete.group);
+                }}
                 className="rounded-lg bg-rose-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-60"
               >
                 {deletingRowId !== null ? "Removing..." : "Remove row"}
