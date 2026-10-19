@@ -138,7 +138,7 @@ export async function getCutPlanning(workOrder: string): Promise<CutPlanningData
         FROM ${STYLE_CARD_BOM_CONSUMPTION_TABLE}
         WHERE StyleCode = @styleCode
           AND NULLIF(LTRIM(RTRIM(AccessCode)), '') IS NOT NULL
-          AND UPPER(LTRIM(RTRIM(AccessCode))) <> 'NULL'
+          AND UPPER(LTRIM(RTRIM(AccessCode))) = 'FABRIC'
           AND (
             NULLIF(LTRIM(RTRIM(ItemName)), '') IS NOT NULL
             OR NULLIF(LTRIM(RTRIM(ItemCode)), '') IS NOT NULL
