@@ -851,9 +851,14 @@ export default function OpenOrderPage() {
 
   // Dynamically derive style bulletin metadata from fetched style bulletins and cut details
   const styleBulletinMetadata = useMemo(() => {
-    const planQty =
-      cutDetails[0]?.Order_Qty_After_Add ??
-      cutDetails.reduce((acc, curr) => acc + (curr.Bundle_Qty ?? 0), 0);
+    // Sewing Cut Report is driven by generated bundles. Its Order Qty must
+    // therefore move with every newly generated bundle, rather than keeping
+    // the first Cut Planning row's transaction count.
+    const generatedBundleQty = cutDetails.reduce(
+      (acc, curr) => acc + (curr.Bundle_Qty ?? 0),
+      0,
+    );
+    const planQty = generatedBundleQty || cutDetails[0]?.Order_Qty_After_Add || 0;
 
     return {
       amNo: cutDetails[0]?.Work_Order || activeSearchQuery || "",
@@ -1008,7 +1013,7 @@ export default function OpenOrderPage() {
               <input
                 type="text"
                 readOnly
-                value={cutDetails[0]?.Order_Qty_After_Add || ""}
+                value={styleBulletinMetadata.planQty}
                 className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-indigo-700 focus:outline-none"
               />
             </div>
@@ -1352,7 +1357,7 @@ export default function OpenOrderPage() {
                   </div>
                   <div>
                     <strong>ORDER QTY:</strong>{" "}
-                    {cutDetails[0]?.Order_Qty_After_Add || ""}
+                    {styleBulletinMetadata.planQty}
                   </div>
                 </div>
               </td>

@@ -72,7 +72,7 @@ export async function GET(request: Request) {
         SELECT Id AS RowId, WorkOrder AS Work_Order,
           JSON_VALUE(CutNosJson, '$[0]') AS Cut,
           BundleId AS Bundle_Id, BundleQty AS Bundle_Qty,
-          SourceInseam, SourceSize
+          SourceInseam, SourceSize, SourceShade
         FROM dbo.BundleGeneration
         WHERE WorkOrder = @wo
           AND SourceInseam IS NOT NULL
@@ -111,7 +111,7 @@ export async function GET(request: Request) {
             Color: planning.metadata?.color ?? "",
             Inseam: sourceInseam ?? "",
             Size: sourceSize,
-            Shade: unique(sourceRows.map((plan) => plan.shade)),
+            Shade: String(bundle.SourceShade ?? "") || unique(sourceRows.map((plan) => plan.shade)),
             Shrinkage: unique(sourceRows.map((plan) => plan.shrinkage)),
             MarkerWidthCm: unique(sourceRows.map((plan) => plan.markerWidthCm)),
             MarkerLengthM: unique(sourceRows.map((plan) => plan.markerLengthM)),

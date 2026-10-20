@@ -296,9 +296,12 @@ export async function generateBundles(
   const cutNos = [...new Set((payload.cutNos ?? []).map((cut) => cut.trim()).filter(Boolean))];
   const bundleQty = number(payload.bundleQty);
   if (!workOrder) throw new Error("Work Order is required.");
-  if (!cutNos.length) throw new Error("Select at least one Cut no.");
-  if (!Number.isFinite(bundleQty) || bundleQty <= 0) throw new Error("Bundle quantity must be greater than zero.");
+  if (cutNos.length !== 1) throw new Error("Select exactly one Cut no.");
+  if (!Number.isFinite(bundleQty) || bundleQty < 0) throw new Error("Bundle quantity cannot be negative.");
 
+  // A Cut Report row is a generation-time snapshot. Read the associated
+  // planning metadata before creating the PIT transaction that writes it.
+  const planningSnapshot = await getCutPlanning(workOrder);
   const pool = await getPool("pitSystem");
   const transaction = new sql.Transaction(pool);
   await transaction.begin();
@@ -307,22 +310,30 @@ export async function generateBundles(
     const sourceRequest = new sql.Request(transaction).input("workOrder", sql.NVarChar, workOrder);
     cutNos.forEach((cutNo, index) => sourceRequest.input(`cut${index}`, sql.NVarChar, cutNo));
     const source = await sourceRequest.query(`
-      SELECT CutNo, SourceInseam, SizeQuantitiesJson, MarkerPlies
+      SELECT CutNo, SourceInseam, SizeQuantitiesJson, MarkerPlies, Shade
       FROM dbo.CutPlanning
       WHERE WorkOrder = @workOrder AND IsDeleted = 0 AND CutNo IN (${placeholders})
     `);
+    const markerPlies = Math.max(
+      0,
+      ...(source.recordset as Array<Record<string, unknown>>).map((row) => number(row.MarkerPlies)),
+    );
+    if (markerPlies > 0 && bundleQty > markerPlies) {
+      throw new Error(`Bundle quantity cannot exceed Marker plies (${markerPlies}).`);
+    }
     const sourceRows: Array<{
       cutNo: string;
       inseam: number | null;
       size: string;
       qty: number;
+      shade: string;
     }> = [];
     for (const row of source.recordset as Array<Record<string, unknown>>) {
       const cutNo = String(row.CutNo ?? "").trim();
       const inseam = row.SourceInseam == null ? null : number(row.SourceInseam);
       for (const [size, quantity] of Object.entries(parseQuantities(row.SizeQuantitiesJson))) {
         const qty = quantity * number(row.MarkerPlies);
-        if (qty > 0) sourceRows.push({ cutNo, inseam, size, qty });
+        if (qty > 0) sourceRows.push({ cutNo, inseam, size, qty, shade: String(row.Shade ?? "").trim() });
       }
     }
     const missingCuts = cutNos.filter((cutNo) => !sourceRows.some((row) => row.cutNo === cutNo));
@@ -355,7 +366,23 @@ export async function generateBundles(
     const totalTransactionQty = available.reduce((sum, item) => sum + item.qty, 0);
     if (totalTransactionQty <= 0) throw new Error("The selected Cut no(s) have no remaining quantity to bundle.");
 
-    const createBundle = async (allocations: Array<{ cutNo: string; inseam: number | null; size: string; qty: number }>) => {
+    const shadeAllocations = (payload.shadeAllocations ?? []).map((allocation) => ({
+      shade: String(allocation.shade ?? "").trim().toUpperCase(),
+      qty: number(allocation.quantity),
+    })).filter((allocation) => allocation.shade && allocation.qty > 0);
+    const isShadeSplit = shadeAllocations.length > 0;
+    const allocatedShadeQty = shadeAllocations.reduce((sum, allocation) => sum + allocation.qty, 0);
+    if (!isShadeSplit && (!Number.isInteger(bundleQty) || bundleQty <= 0)) {
+      throw new Error("Bundle quantity must be a whole number greater than zero.");
+    }
+    if (isShadeSplit && shadeAllocations.some((allocation) => !Number.isInteger(allocation.qty))) {
+      throw new Error("Shade plies must be whole numbers.");
+    }
+    if (isShadeSplit && Math.abs(allocatedShadeQty - markerPlies) > 0.0001) {
+      throw new Error(`Shade plies must equal Marker plies (${markerPlies}).`);
+    }
+
+    const createBundle = async (allocations: Array<{ cutNo: string; inseam: number | null; size: string; shade: string; qty: number }>) => {
       const sequenceRequest = new sql.Request(transaction).input("workOrder", sql.NVarChar, workOrder);
       const sequenceResult = await sequenceRequest.query(`
         IF EXISTS (SELECT 1 FROM dbo.BundleGenerationSequence WITH (UPDLOCK, HOLDLOCK) WHERE WorkOrder = @workOrder)
@@ -365,8 +392,11 @@ export async function generateBundles(
           INSERT INTO dbo.BundleGenerationSequence (WorkOrder, LastSequence) OUTPUT INSERTED.LastSequence AS Sequence VALUES (@workOrder, 1);
       `);
       const sequence = number(sequenceResult.recordset[0]?.Sequence);
-      const id = `${bundlePrefix(workOrder)}${String(sequence).padStart(4, "0")}`;
+      const id = `${bundlePrefix(workOrder)}-${String(sequence).padStart(4, "0")}`;
       const qty = allocations.reduce((sum, item) => sum + item.qty, 0);
+      if (!Number.isInteger(qty)) {
+        throw new Error("Generated Bundle quantity must be a whole number. Check size quantities and Marker plies.");
+      }
       const insert = await new sql.Request(transaction)
         .input("workOrder", sql.NVarChar, workOrder)
         .input("sequence", sql.Int, sequence)
@@ -375,14 +405,28 @@ export async function generateBundles(
         .input("sourceQty", sql.Decimal(18, 3), totalTransactionQty)
         .input("sourceInseam", sql.Int, allocations[0]?.inseam ?? null)
         .input("sourceSize", sql.NVarChar, allocations[0]?.size ?? null)
+        .input("sourceShade", sql.NVarChar, allocations[0]?.shade ?? null)
         // Merge is a modal display option only. Every generated bundle stays
         // tied to its own Cut no. for the normal Cut Report flow.
         .input("isMerged", sql.Bit, false)
         .input("cutNos", sql.NVarChar, JSON.stringify(allocations.map((item) => item.cutNo)))
         .input("insertedBy", sql.NVarChar, userEmail || "system")
-        .query(`INSERT INTO dbo.BundleGeneration (WorkOrder, BundleSequence, BundleId, BundleQty, SourceTransactionQty, SourceInseam, SourceSize, IsMerged, CutNosJson, InsertedBy)
-          OUTPUT INSERTED.Id AS Id VALUES (@workOrder, @sequence, @bundleId, @bundleQty, @sourceQty, @sourceInseam, @sourceSize, @isMerged, @cutNos, @insertedBy)`);
+        .query(`INSERT INTO dbo.BundleGeneration (WorkOrder, BundleSequence, BundleId, BundleQty, SourceTransactionQty, SourceInseam, SourceSize, SourceShade, IsMerged, CutNosJson, InsertedBy)
+          OUTPUT INSERTED.Id AS Id VALUES (@workOrder, @sequence, @bundleId, @bundleQty, @sourceQty, @sourceInseam, @sourceSize, @sourceShade, @isMerged, @cutNos, @insertedBy)`);
       const bundleId = number(insert.recordset[0]?.Id);
+      await new sql.Request(transaction)
+        .input("bundleGenerationId", sql.BigInt, bundleId)
+        .input("workOrder", sql.NVarChar, workOrder)
+        .input("inseam", sql.Int, allocations[0]?.inseam ?? null)
+        .input("size", sql.NVarChar, allocations[0]?.size ?? null)
+        .input("color", sql.NVarChar, planningSnapshot.metadata?.color || null)
+        .input("cutNo", sql.NVarChar, allocations[0]?.cutNo ?? null)
+        .input("bundleId", sql.NVarChar, id)
+        .input("bundleQty", sql.Decimal(18, 3), qty)
+        .input("shade", sql.NVarChar, allocations[0]?.shade ?? null)
+        .input("createdBy", sql.NVarChar, userEmail || "system")
+        .query(`INSERT INTO dbo.SewingCutReport (BundleGenerationId, WorkOrder, Inseam, Size, Color, CutNo, BundleId, BundleQty, Shade, CreatedBy)
+          VALUES (@bundleGenerationId, @workOrder, @inseam, @size, @color, @cutNo, @bundleId, @bundleQty, @shade, @createdBy)`);
       for (const allocation of allocations) {
         await new sql.Request(transaction)
           .input("bundleGenerationId", sql.BigInt, bundleId)
@@ -398,12 +442,25 @@ export async function generateBundles(
     };
 
     const bundles: GeneratedBundle[] = [];
+    if (!isShadeSplit) {
+      for (const item of available) {
+        let remaining = item.qty;
+        while (remaining > 0) {
+          const qty = Math.min(bundleQty, remaining);
+          bundles.push(await createBundle([{ cutNo: item.cutNo, inseam: item.inseam, size: item.size, shade: item.shade || "UNSHADED", qty }]));
+          remaining -= qty;
+        }
+      }
+      await transaction.commit();
+      return { totalTransactionQty, bundles };
+    }
+
     for (const item of available) {
-      let remaining = item.qty;
-      while (remaining > 0) {
-        const qty = Math.min(bundleQty, remaining);
-        bundles.push(await createBundle([{ cutNo: item.cutNo, inseam: item.inseam, size: item.size, qty }]));
-        remaining -= qty;
+      for (const allocation of shadeAllocations) {
+        const qty = item.qty * (allocation.qty / markerPlies);
+        if (qty > 0) {
+          bundles.push(await createBundle([{ cutNo: item.cutNo, inseam: item.inseam, size: item.size, shade: allocation.shade, qty }]));
+        }
       }
     }
     await transaction.commit();
