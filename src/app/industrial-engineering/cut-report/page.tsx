@@ -791,7 +791,7 @@ export default function OpenOrderPage() {
       setHasSearched(true);
       try {
         const response = await fetch(
-          `/api/open-order?work_order=${encodeURIComponent(activeSearchQuery)}&t=${Date.now()}`,
+          `/api/open-order?work_order=${encodeURIComponent(activeSearchQuery)}&department=sewing&t=${Date.now()}`,
         );
         if (!response.ok) {
           const errData = await response.json();

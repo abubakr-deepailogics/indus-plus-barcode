@@ -5,6 +5,7 @@ import {
   styleBulletinByFilter,
 } from "@/lib/db";
 import { isStyleBulletinDepartment } from "@/lib/department-classification";
+import { getCutPlanning } from "@/features/cut-planning/services/cut-planning.service";
 
 export const dynamic = "force-dynamic";
 
@@ -62,16 +63,68 @@ export async function GET(request: Request) {
         }),
     ]);
 
+    // Sewing bundles are generated from Cut Planning in PIT. Prefer those
+    // records over the legacy ERP Cut Detail view once they exist.
+    let generatedBundles: Array<Record<string, unknown>> = [];
+    try {
+      const pitPool = await getPool("pitSystem");
+      const generatedResult = await pitPool.request().input("wo", sql.NVarChar, workOrder).query(`
+        SELECT Id AS RowId, WorkOrder AS Work_Order,
+          JSON_VALUE(CutNosJson, '$[0]') AS Cut,
+          BundleId AS Bundle_Id, BundleQty AS Bundle_Qty,
+          SourceInseam, SourceSize
+        FROM dbo.BundleGeneration
+        WHERE WorkOrder = @wo
+          AND SourceInseam IS NOT NULL
+          AND NULLIF(SourceSize, '') IS NOT NULL
+        ORDER BY BundleSequence
+      `);
+      generatedBundles = generatedResult.recordset;
+      if (generatedBundles.length > 0) {
+        const planning = await getCutPlanning(workOrder);
+        generatedBundles = generatedBundles.map((bundle) => {
+          const cutNo = String(bundle.Cut ?? "").trim();
+          const sourceInseam = bundle.SourceInseam == null ? null : Number(bundle.SourceInseam);
+          const sourceSize = String(bundle.SourceSize ?? "");
+          const sourceRows = planning.plans.filter(
+            (plan) =>
+              plan.cutNo.trim() === cutNo &&
+              plan.sourceInseam === sourceInseam &&
+              (!sourceSize || Object.hasOwn(plan.sizeQuantities, sourceSize)),
+          );
+          const unique = (values: Array<string | number | null | undefined>) =>
+            [...new Set(values.filter((value) => value != null && String(value).trim() !== "").map(String))].join(", ");
+          return {
+            ...bundle,
+            Customer_Name: planning.metadata?.customerName ?? "",
+            Order_Qty_After_Add: sourceRows.reduce(
+              (sum, plan) =>
+                sum +
+                Object.values(plan.sizeQuantities).reduce(
+                  (rowTotal, quantity) => rowTotal + quantity,
+                  0,
+                ) * plan.markerPlies,
+              0,
+            ),
+            Fabric_Code_Main_Body:
+              planning.metadata?.accessItems.map((item) => item.itemName).join(", ") ?? "",
+            Color: planning.metadata?.color ?? "",
+            Inseam: sourceInseam ?? "",
+            Size: sourceSize,
+            Shade: unique(sourceRows.map((plan) => plan.shade)),
+            Shrinkage: unique(sourceRows.map((plan) => plan.shrinkage)),
+            MarkerWidthCm: unique(sourceRows.map((plan) => plan.markerWidthCm)),
+            MarkerLengthM: unique(sourceRows.map((plan) => plan.markerLengthM)),
+          };
+        });
+      }
+    } catch (bundleError) {
+      console.log("BundleGeneration table is not available yet:", bundleError);
+    }
+
     // Fetch Style Bulletin Header (Metadata) — this app's own write data,
     // lives on pitSystem (see db/migrations/010_order_style_bulletin_header.sql),
     // not the read-only indusPlus/ERP connection.
-    if (department && styleBulletinResult.recordset.length === 0) {
-      return Response.json(
-        { error: "This Work Order has no operations for the selected department." },
-        { status: 404 },
-      );
-    }
-
     let metadata = null;
     try {
       const pitPool = await getPool("pitSystem");
@@ -93,7 +146,8 @@ export async function GET(request: Request) {
     }
 
     return Response.json({
-      cutDetails: cutDetailResult.recordset,
+      cutDetails:
+        department === "sewing" ? generatedBundles : cutDetailResult.recordset,
       styleBulletins: styleBulletinResult.recordset,
       metadata,
     });

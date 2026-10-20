@@ -47,3 +47,16 @@ export type SaveCutPlanningPayload = {
   workOrder: string;
   plans: CutPlanRow[];
 };
+
+export type GenerateBundlesPayload = {
+  workOrder: string;
+  cutNos: string[];
+  bundleQty: number;
+  mergeCuts: boolean;
+};
+
+export type GeneratedBundle = {
+  bundleId: string;
+  bundleQty: number;
+  cutNos: string[];
+};
