@@ -139,6 +139,13 @@ async function fetchBundleQtyByWorkOrder(
             AND WorkOrder IN (${inClause})
           GROUP BY WorkOrder
         `)
+      : department === "sewing"
+        ? await req.query(`
+          SELECT WorkOrder, SUM(BundleQty) AS BundleQty
+          FROM dbo.SewingCutReport
+          WHERE WorkOrder IN (${inClause})
+          GROUP BY WorkOrder
+        `)
       : await req.input("department", sql.NVarChar, department).query(`
           SELECT
             [Work Order #] AS WorkOrder,

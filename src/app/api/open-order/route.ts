@@ -63,58 +63,43 @@ export async function GET(request: Request) {
         }),
     ]);
 
-    // Sewing bundles are generated from Cut Planning in PIT. Prefer those
-    // records over the legacy ERP Cut Detail view once they exist.
+    // Sewing bundles are generated from Cut Planning in PIT. SewingCutReport
+    // is the immutable generation-time record: do not reconstruct this
+    // response from today's mutable planning rows, especially after a shade
+    // split changes visible Cut 5 into 5A/5B.
     let generatedBundles: Array<Record<string, unknown>> = [];
     try {
       const pitPool = await getPool("pitSystem");
       const generatedResult = await pitPool.request().input("wo", sql.NVarChar, workOrder).query(`
-        SELECT Id AS RowId, WorkOrder AS Work_Order,
-          JSON_VALUE(CutNosJson, '$[0]') AS Cut,
-          BundleId AS Bundle_Id, BundleQty AS Bundle_Qty,
-          SourceInseam, SourceSize, SourceShade
-        FROM dbo.BundleGeneration
-        WHERE WorkOrder = @wo
-          AND SourceInseam IS NOT NULL
-          AND NULLIF(SourceSize, '') IS NOT NULL
-        ORDER BY BundleSequence
+        SELECT
+          report.RowId,
+          report.WorkOrder AS Work_Order,
+          report.CutNo AS Cut,
+          report.BundleId AS Bundle_Id,
+          report.BundleQty AS Bundle_Qty,
+          report.Inseam,
+          report.Size,
+          report.Color,
+          report.Shade,
+          NULL AS Shrinkage,
+          NULL AS MarkerWidthCm,
+          NULL AS MarkerLengthM,
+          generation.BundleSequence
+        FROM dbo.SewingCutReport AS report
+        INNER JOIN dbo.BundleGeneration AS generation
+          ON generation.Id = report.BundleGenerationId
+        WHERE report.WorkOrder = @wo
+        ORDER BY generation.BundleSequence
       `);
       generatedBundles = generatedResult.recordset;
       if (generatedBundles.length > 0) {
         const planning = await getCutPlanning(workOrder);
         generatedBundles = generatedBundles.map((bundle) => {
-          const cutNo = String(bundle.Cut ?? "").trim();
-          const sourceInseam = bundle.SourceInseam == null ? null : Number(bundle.SourceInseam);
-          const sourceSize = String(bundle.SourceSize ?? "");
-          const sourceRows = planning.plans.filter(
-            (plan) =>
-              plan.cutNo.trim() === cutNo &&
-              plan.sourceInseam === sourceInseam &&
-              (!sourceSize || Object.hasOwn(plan.sizeQuantities, sourceSize)),
-          );
-          const unique = (values: Array<string | number | null | undefined>) =>
-            [...new Set(values.filter((value) => value != null && String(value).trim() !== "").map(String))].join(", ");
           return {
             ...bundle,
             Customer_Name: planning.metadata?.customerName ?? "",
-            Order_Qty_After_Add: sourceRows.reduce(
-              (sum, plan) =>
-                sum +
-                Object.values(plan.sizeQuantities).reduce(
-                  (rowTotal, quantity) => rowTotal + quantity,
-                  0,
-                ) * plan.markerPlies,
-              0,
-            ),
             Fabric_Code_Main_Body:
               planning.metadata?.accessItems.map((item) => item.itemName).join(", ") ?? "",
-            Color: planning.metadata?.color ?? "",
-            Inseam: sourceInseam ?? "",
-            Size: sourceSize,
-            Shade: String(bundle.SourceShade ?? "") || unique(sourceRows.map((plan) => plan.shade)),
-            Shrinkage: unique(sourceRows.map((plan) => plan.shrinkage)),
-            MarkerWidthCm: unique(sourceRows.map((plan) => plan.markerWidthCm)),
-            MarkerLengthM: unique(sourceRows.map((plan) => plan.markerLengthM)),
           };
         });
       }
