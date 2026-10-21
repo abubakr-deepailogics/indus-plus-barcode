@@ -63,6 +63,7 @@ export default function CutPlanningPage() {
   const [workOrder, setWorkOrder] = useState("");
   const [data, setData] = useState<CutPlanningData | null>(null);
   const [plans, setPlans] = useState<CutPlanRow[]>([]);
+  const [isDirty, setIsDirty] = useState(false);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -80,7 +81,6 @@ export default function CutPlanningPage() {
   const [shadeCutNos, setShadeCutNos] = useState<Record<string, string>>({});
   const [bundleCutMenuOpen, setBundleCutMenuOpen] = useState(false);
   const [bundleQty, setBundleQty] = useState("");
-  const [bundlePreviewStart, setBundlePreviewStart] = useState(1);
   const [generatingBundles, setGeneratingBundles] = useState(false);
   const [showBundlePreview, setShowBundlePreview] = useState(false);
   const [selectedFabricItem, setSelectedFabricItem] = useState("");
@@ -137,6 +137,7 @@ export default function CutPlanningPage() {
   }, []);
 
   useEffect(() => {
+    if (!isDirty) return;
     const leaveMessage = "Leave Cut Planning? Any unsaved changes will be lost.";
     const handleBeforeUnload = (event: BeforeUnloadEvent) => {
       event.preventDefault();
@@ -159,7 +160,7 @@ export default function CutPlanningPage() {
       window.removeEventListener("beforeunload", handleBeforeUnload);
       document.removeEventListener("click", handleDocumentClick, true);
     };
-  }, []);
+  }, [isDirty]);
 
   const load = useCallback(async (candidate: string) => {
     const wo = candidate.trim();
@@ -169,6 +170,7 @@ export default function CutPlanningPage() {
     if (!wo) {
       setData(null);
       setPlans([]);
+      setIsDirty(false);
       return;
     }
     setLoading(true);
@@ -192,6 +194,7 @@ export default function CutPlanningPage() {
         return saved.length ? saved : [makePlan(group)];
       });
       setPlans(initialPlans);
+      setIsDirty(false);
       if (!body.metadata)
         setNotice("No size-wise ERP rows were found for this Work Order.");
     } catch (caught) {
@@ -316,7 +319,6 @@ export default function CutPlanningPage() {
   const bundlePreview = useMemo(() => {
     const qty = Number(bundleQty);
     if (!hasShadeSplit && (!Number.isFinite(qty) || qty <= 0)) return [];
-    const prefix = (workOrder.replace(/\D/g, "").slice(-6) || "0").padStart(6, "0");
     const sourceRows = plans.flatMap((plan) => {
       const cutNo = plan.cutNo.trim();
       if (!cutNo || cutNo !== selectedBundleCut) return [];
@@ -344,7 +346,7 @@ export default function CutPlanningPage() {
         }
         return bundles;
       });
-      return rows.map((row, index) => ({ ...row, previewId: `${prefix}-${String(bundlePreviewStart + index).padStart(4, "0")}`, color: data?.metadata?.color || "—" }));
+      return rows.map((row) => ({ ...row, previewId: "Assigned on confirmation", color: data?.metadata?.color || "—" }));
     }
     const rows = sourceRows.flatMap((source) =>
       effectiveShadeQuantities
@@ -356,25 +358,25 @@ export default function CutPlanningPage() {
           qty: source.qty * (quantity / selectedMarkerPlies),
         })),
     );
-    return rows.map((row, index) => ({
+    return rows.map((row) => ({
       ...row,
-      previewId: `${prefix}-${String(bundlePreviewStart + index).padStart(4, "0")}`,
+      previewId: "Assigned on confirmation",
       color: data?.metadata?.color || "—",
     }));
-  }, [bundlePreviewStart, bundleQty, data?.metadata?.color, effectiveShadeQuantities, hasShadeSplit, plans, selectedBundleCut, selectedMarkerPlies, workOrder]);
+  }, [bundleQty, data?.metadata?.color, effectiveShadeQuantities, hasShadeSplit, plans, selectedBundleCut, selectedMarkerPlies]);
 
   const update = (index: number, patch: Partial<CutPlanRow>) =>
-    setPlans((current) =>
+    (setIsDirty(true), setPlans((current) =>
       current.map((plan, planIndex) =>
         planIndex === index ? { ...plan, ...patch } : plan,
       ),
-    );
+    ));
   // Size cells in the combined inseam matrix can be edited in quick
   // succession. Build the new size map from React's current state rather
   // than the render that installed the event handler; otherwise a change in
   // another inseam can replace this row with an older size map.
   const updateSize = (index: number, size: string, value: string) =>
-    setPlans((current) =>
+    (setIsDirty(true), setPlans((current) =>
       current.map((plan, planIndex) =>
         planIndex === index
           ? {
@@ -386,14 +388,14 @@ export default function CutPlanningPage() {
             }
           : plan,
       ),
-    );
+    ));
   const updateMatrixSize = (
     group: CutPlanningInseamGroup,
     rowIndex: number,
     size: string,
     value: string,
   ) =>
-    setPlans((current) => {
+    (setIsDirty(true), setPlans((current) => {
       const groupPlanIndexes = current
         .map((plan, index) => ({ plan, index }))
         .filter(({ plan }) => plan.sourceInseam === group.inseam)
@@ -430,9 +432,11 @@ export default function CutPlanningPage() {
         },
       };
       return [...current, ...additions];
-    });
-  const add = (group: CutPlanningInseamGroup) =>
+    }));
+  const add = (group: CutPlanningInseamGroup) => {
+    setIsDirty(true);
     setPlans((current) => [...current, makePlan(group)]);
+  };
   const addOnEnter = (
     event: React.KeyboardEvent<HTMLInputElement>,
     group: CutPlanningInseamGroup,
@@ -441,13 +445,15 @@ export default function CutPlanningPage() {
     event.preventDefault();
     add(group);
   };
-  const remove = (index: number, group: CutPlanningInseamGroup) =>
+  const remove = (index: number, group: CutPlanningInseamGroup) => {
+    setIsDirty(true);
     setPlans((current) => {
       const remaining = current.filter((_, planIndex) => planIndex !== index);
       return remaining.some((plan) => plan.sourceInseam === group.inseam)
         ? remaining
         : [...remaining, makePlan(group)];
     });
+  };
 
   async function deleteRow(index: number, group: CutPlanningInseamGroup) {
     const plan = plans[index];
@@ -471,6 +477,7 @@ export default function CutPlanningPage() {
       if (!response.ok)
         throw new Error(body.error || "Failed to remove planning row.");
       remove(index, group);
+      setIsDirty(false);
       setPendingDelete(null);
       setNotice(body.message || "Planning row removed.");
     } catch (caught) {
@@ -567,6 +574,10 @@ export default function CutPlanningPage() {
       return;
     }
     const populatedPlans = plans.filter(hasRowData);
+    if (populatedPlans.length === 0) {
+      setError("Add at least one planning row before saving. A blank save is not allowed.");
+      return;
+    }
     setSaving(true);
     setError("");
     setNotice("");
@@ -583,6 +594,7 @@ export default function CutPlanningPage() {
       if (!response.ok)
         throw new Error(body.error || "Failed to save cut planning.");
       setPlans(populatedPlans);
+      setIsDirty(false);
       setNotice(body.message || "Cut planning saved successfully.");
       await load(workOrder);
     } catch (caught) {
@@ -610,10 +622,15 @@ export default function CutPlanningPage() {
   );
   const addMarkerSet = () => {
     setNewMarkerRowIndex(markerRowCount);
+    setIsDirty(true);
     setPlans((current) => [...current, ...groups.map(makePlan)]);
   };
   const generateBundlesFromSelection = async () => {
     if (!workOrder || !selectedBundleCut || (!hasShadeSplit && Number(bundleQty) <= 0)) return;
+    if (isDirty) {
+      setError("Save Cut Planning before generating bundles so the preview and generated quantities match.");
+      return;
+    }
     setGeneratingBundles(true);
     setError("");
     try {
@@ -674,7 +691,7 @@ export default function CutPlanningPage() {
     addMarkerSet();
   };
   const updateSharedMarker = (rowIndex: number, patch: Partial<CutPlanRow>) =>
-    setPlans((current) => {
+    (setIsDirty(true), setPlans((current) => {
       const targets = new Set(
         groups
           .flatMap(
@@ -690,9 +707,9 @@ export default function CutPlanningPage() {
       return current.map((plan, index) =>
         targets.has(index) ? { ...plan, ...patch } : plan,
       );
-    });
+    }));
   const removeMarkerSet = (rowIndex: number) =>
-    setPlans((current) => {
+    (setIsDirty(true), setPlans((current) => {
       const targets = new Set(
         groups
           .flatMap(
@@ -706,7 +723,7 @@ export default function CutPlanningPage() {
           .filter((index): index is number => index != null),
       );
       return current.filter((_, index) => !targets.has(index));
-    });
+    }));
   const requestRemoveMarkerSet = (rowIndex: number) => {
     const containsData = groupedPlans.some(({ rows }) => {
       const row = rows[rowIndex];
@@ -1748,7 +1765,7 @@ export default function CutPlanningPage() {
             {selectedMarkerPlies > 0 && Number(bundleQty) > selectedMarkerPlies && <p className="mt-2 text-xs font-medium text-rose-700">Bundle qty cannot exceed Marker plies ({displayNumber(selectedMarkerPlies)}).</p>}
             {requiresShadeSplit && <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/40 p-4"><div className="flex items-center justify-between"><p className="text-sm font-bold text-slate-800">Shade split <span className="font-normal text-rose-700">(required)</span></p><p className={`text-xs font-semibold ${Math.abs(shadePlyTotal - selectedMarkerPlies) < 0.0001 && splitCutNamesAreValid ? "text-emerald-700" : "text-amber-700"}`}>Plies allocated {displayNumber(shadePlyTotal)} / {displayNumber(selectedMarkerPlies)}</p></div><p className="mt-1 text-xs text-slate-600">Each shade is generated under its own Cut No. Review the default names before generating.</p><div className="mt-3 grid gap-3 sm:grid-cols-2">{selectedShadeCodes.map((shade) => <div key={shade} className="space-y-2"><label className="block text-xs font-semibold text-slate-600">Shade {shade} · plies<input type="number" min="1" max={selectedMarkerPlies || undefined} step="1" value={shadeQuantities[shade] ?? ""} onWheel={preventWheelChange} onChange={(event) => { setShadeQuantities((current) => ({ ...current, [shade]: event.target.value })); setShowBundlePreview(false); }} className="bundle-modal-number mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm" /></label><label className="block text-xs font-semibold text-slate-600">New Cut No.<input type="text" value={shadeCutNos[shade] ?? `${selectedBundleCut}${shade}`} onChange={(event) => { setShadeCutNos((current) => ({ ...current, [shade]: event.target.value })); setShowBundlePreview(false); }} className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm" /></label></div>)}</div>{Math.abs(shadePlyTotal - selectedMarkerPlies) >= 0.0001 && <p className="mt-2 text-xs text-amber-700">Shade plies must add up exactly to Marker plies.</p>}{!splitCutNamesAreValid && <p className="mt-2 text-xs text-rose-700">Every shade needs a different Cut No. and at least one ply.</p>}</div>}
             {showBundlePreview && <div className="mt-4 overflow-hidden rounded-xl border border-indigo-100"><div className="bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-900">Bundle preview · {bundlePreview.length} bundle(s)</div><div className="max-h-52 overflow-y-auto"><table className="w-full table-fixed text-xs"><colgroup><col className="w-[8%]" /><col className="w-[17%]" /><col className="w-[10%]" /><col className="w-[9%]" /><col className="w-[8%]" /><col className="w-[25%]" /><col className="w-[10%]" /><col className="w-[13%]" /></colgroup><thead className="sticky top-0 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500"><tr><th className="px-2 py-2 text-center">Cut</th><th className="px-2 py-2">Bundle ID</th><th className="px-2 py-2 text-right">Bundle qty</th><th className="px-2 py-2 text-center">Inseam</th><th className="px-2 py-2 text-center">Size</th><th className="px-2 py-2">Color</th><th className="px-2 py-2 text-center">Shade</th><th className="px-2 py-2 text-center">Shrinkage</th></tr></thead><tbody>{bundlePreview.map((row, index) => <tr key={`${row.cutNo}-${row.inseam ?? "none"}-${row.size}-${index}`} className="border-t border-slate-100 align-middle"><td className="px-2 py-2 text-center font-semibold text-indigo-700">{row.cutNo}</td><td className="break-all px-2 py-2 font-mono text-indigo-700">{row.previewId}</td><td className="px-2 py-2 text-right font-semibold">{displayNumber(row.qty)}</td><td className="px-2 py-2 text-center">{row.inseam ?? "—"}</td><td className="px-2 py-2 text-center font-semibold">{row.size}</td><td className="break-words px-2 py-2 leading-4" title={row.color}>{row.color}</td><td className="break-words px-2 py-2 text-center font-semibold">{row.shade || "—"}</td><td className="break-words px-2 py-2 text-center font-mono">{row.shrinkage || "—"}</td></tr>)}</tbody></table></div></div>}
-            <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => showBundlePreview ? setShowBundlePreview(false) : setShowBundleModal(false)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">{showBundlePreview ? "Back" : "Cancel"}</button><button type="button" disabled={generatingBundles || !selectedBundleCut || (!hasShadeSplit && (!Number.isInteger(Number(bundleQty)) || Number(bundleQty) <= 0)) || (!hasShadeSplit && selectedMarkerPlies > 0 && Number(bundleQty) > selectedMarkerPlies) || (hasShadeSplit && (Math.abs(shadePlyTotal - selectedMarkerPlies) >= 0.0001 || !splitCutNamesAreValid))} onClick={() => { if (showBundlePreview) { void generateBundlesFromSelection(); return; } void fetch(`/api/cut-planning/bundles?work_order=${encodeURIComponent(workOrder)}`).then((response) => response.json()).then((body: { nextSequence?: number }) => setBundlePreviewStart(body.nextSequence || 1)).finally(() => setShowBundlePreview(true)); }} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{generatingBundles ? "Generating..." : showBundlePreview ? "Confirm & generate" : "Preview bundles"}</button></div>
+            <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => showBundlePreview ? setShowBundlePreview(false) : setShowBundleModal(false)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">{showBundlePreview ? "Back" : "Cancel"}</button><button type="button" disabled={generatingBundles || !selectedBundleCut || isDirty || (!hasShadeSplit && (!Number.isInteger(Number(bundleQty)) || Number(bundleQty) <= 0)) || (!hasShadeSplit && selectedMarkerPlies > 0 && Number(bundleQty) > selectedMarkerPlies) || (hasShadeSplit && (Math.abs(shadePlyTotal - selectedMarkerPlies) >= 0.0001 || !splitCutNamesAreValid))} onClick={() => { if (showBundlePreview) { void generateBundlesFromSelection(); return; } setShowBundlePreview(true); }} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{generatingBundles ? "Generating..." : showBundlePreview ? "Confirm & generate" : "Preview bundles"}</button></div>
           </div>
         </div>
       )}

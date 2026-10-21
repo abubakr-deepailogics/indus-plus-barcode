@@ -92,6 +92,30 @@ async function fetchCutDetailByBundle(
   // that scanning, reports, and tracing resolve the correct Cut #, Inseam,
   // Size, and Bundle_Qty (Pcs).
   const missingBundles = uniqueBundles.filter((b) => !map.has(b));
+  // Existing Cut Planning coupons may pre-date the snapshot repair. Resolve
+  // their PIT-native report rows directly as a safe fallback, so scans and
+  // reports still receive the cut/size/inseam/quantity fields.
+  if (department === "sewing" && missingBundles.length > 0) {
+    for (const batch of chunk(missingBundles, IN_LIST_CHUNK_SIZE)) {
+      const req = pool.request().input("wo", sql.NVarChar, workOrder);
+      const placeholders = batch.map((bundle, i) => {
+        req.input(`generatedBundle${i}`, sql.NVarChar, bundle);
+        return `@generatedBundle${i}`;
+      });
+      const result = await req.query(`
+        SELECT RowId, BundleId AS Bundle_Id, Inseam, Size, CutNo AS Cut,
+          Shade, BundleQty AS Bundle_Qty
+        FROM dbo.SewingCutReport
+        WHERE WorkOrder = @wo AND BundleId IN (${placeholders.join(", ")})
+        ORDER BY RowId DESC
+      `);
+      for (const row of result.recordset as CutDetailRow[]) {
+        const key = String(row.Bundle_Id);
+        if (!map.has(key)) map.set(key, row);
+      }
+    }
+  }
+
   if (missingBundles.length > 0) {
     for (const batch of chunk(missingBundles, IN_LIST_CHUNK_SIZE)) {
       const req = pool.request()

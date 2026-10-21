@@ -214,10 +214,58 @@ export async function getCutPlanning(workOrder: string): Promise<CutPlanningData
 
 function validatePlan(row: CutPlanRow, index: number) {
   const prefix = `Row ${index + 1}`;
-  if (row.planDate && Number.isNaN(new Date(`${row.planDate}T00:00:00`).getTime())) throw new Error(`${prefix}: Date is invalid.`);
+  if (!row || typeof row !== "object" || !row.sizeQuantities || typeof row.sizeQuantities !== "object" || Array.isArray(row.sizeQuantities)) {
+    throw new Error(`${prefix}: Size quantities are invalid.`);
+  }
+  if (row.sourceInseam != null && (!Number.isSafeInteger(row.sourceInseam) || row.sourceInseam < 0)) {
+    throw new Error(`${prefix}: Inseam is invalid.`);
+  }
+  if (Object.keys(row.sizeQuantities).length > 100) throw new Error(`${prefix}: Too many size values.`);
+  if (row.planDate) {
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(row.planDate) ? new Date(`${row.planDate}T00:00:00Z`) : null;
+    if (!date || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== row.planDate) {
+      throw new Error(`${prefix}: Date is invalid.`);
+    }
+  }
   const values = [...Object.values(row.sizeQuantities), row.reCutQty, row.markerPlies, row.calculatedRequired, row.markerWidthCm, row.markerLengthM];
   if (values.some((value) => value != null && (!Number.isFinite(Number(value)) || Number(value) < 0))) {
     throw new Error(`${prefix}: numeric values must be zero or greater.`);
+  }
+}
+
+async function validatePlanningRowsAgainstErp(workOrder: string, plans: CutPlanRow[]) {
+  const indusPool = await getPool("indusPlus");
+  const result = await indusPool.request().input("workOrder", sql.NVarChar, workOrder).query(`
+    SELECT DISTINCT Inseam, LTRIM(RTRIM(Size)) AS Size
+    FROM ${SOURCE_TABLE}
+    WHERE WorkOrderNo = @workOrder AND NULLIF(LTRIM(RTRIM(Size)), '') IS NOT NULL
+  `);
+  const allowed = new Map<string, Set<string>>();
+  for (const row of result.recordset as Array<Record<string, unknown>>) {
+    const inseam = row.Inseam == null ? "null" : String(number(row.Inseam));
+    const sizes = allowed.get(inseam) ?? new Set<string>();
+    sizes.add(String(row.Size ?? "").trim());
+    allowed.set(inseam, sizes);
+  }
+  if (allowed.size === 0) throw new Error("No ERP size-wise rows were found for this Work Order.");
+  for (const [index, plan] of plans.entries()) {
+    const inseam = plan.sourceInseam == null ? "null" : String(plan.sourceInseam);
+    const sizes = allowed.get(inseam);
+    if (!sizes) throw new Error(`Row ${index + 1}: Inseam does not belong to this Work Order.`);
+    for (const size of Object.keys(plan.sizeQuantities)) {
+      if (!sizes.has(size)) throw new Error(`Row ${index + 1}: Size ${size} does not belong to inseam ${plan.sourceInseam ?? "blank"}.`);
+    }
+  }
+}
+
+async function assertPlanningIsNotAllocated(pool: Awaited<ReturnType<typeof getPool>>, workOrder: string) {
+  const result = await pool.request().input("workOrder", sql.NVarChar, workOrder).query(`
+    SELECT TOP (1) 1 AS HasAllocation
+    FROM dbo.BundleGenerationAllocation
+    WHERE WorkOrder = @workOrder
+  `);
+  if (result.recordset.length > 0) {
+    throw new Error("Cut Planning is locked because bundles have already been generated. Create a new controlled revision before changing or removing planned quantities.");
   }
 }
 
@@ -225,10 +273,13 @@ export async function saveCutPlanning(payload: SaveCutPlanningPayload, userEmail
   const workOrder = payload.workOrder?.trim();
   if (!workOrder) throw new Error("Work Order is required.");
   if (!Array.isArray(payload.plans)) throw new Error("Planning rows are required.");
+  if (payload.plans.length === 0) throw new Error("At least one planning row is required. Use the row removal controls instead of saving a blank plan.");
   if (payload.plans.length > MAX_PLANS) throw new Error(`A maximum of ${MAX_PLANS} planning rows can be saved at once.`);
   payload.plans.forEach(validatePlan);
+  await validatePlanningRowsAgainstErp(workOrder, payload.plans);
 
   const pool = await getPool("pitSystem");
+  await assertPlanningIsNotAllocated(pool, workOrder);
   const transaction = new sql.Transaction(pool);
   await transaction.begin();
   try {
@@ -273,6 +324,7 @@ export async function softDeleteCutPlanningRow(
   if (!Number.isSafeInteger(id) || id <= 0) throw new Error("A valid planning row is required.");
 
   const pool = await getPool("pitSystem");
+  await assertPlanningIsNotAllocated(pool, workOrder);
   const result = await pool.request()
     .input("id", sql.BigInt, id)
     .input("workOrder", sql.NVarChar, workOrder)

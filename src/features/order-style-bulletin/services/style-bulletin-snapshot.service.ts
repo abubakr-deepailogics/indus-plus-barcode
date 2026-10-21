@@ -84,6 +84,7 @@ async function fetchStyleBulletinRows(
 async function fetchCutDetailRows(
   workOrder: string,
   bundleIds: string[],
+  department: CouponDepartment,
 ): Promise<CutDetailIndusRow[]> {
   const uniqueBundles = [...new Set(bundleIds)];
   if (uniqueBundles.length === 0) return [];
@@ -101,6 +102,42 @@ async function fetchCutDetailRows(
       ),
     );
     rows.push(...(result.recordset as CutDetailIndusRow[]));
+  }
+
+  // Cut Planning creates sewing bundles in PIT, not in the legacy ERP cut
+  // detail view. Snapshot those rows too, otherwise a coupon for a generated
+  // bundle has no size/cut/quantity data when it is scanned or reported.
+  if (department === "sewing") {
+    const foundBundles = new Set(rows.map((row) => String(row.Bundle_Id ?? "")));
+    const missingBundles = uniqueBundles.filter((bundle) => !foundBundles.has(bundle));
+    for (const batch of chunk(missingBundles, IN_LIST_CHUNK_SIZE)) {
+      const request = (await getPool("pitSystem"))
+        .request()
+        .input("wo", sql.NVarChar, workOrder);
+      const placeholders = batch.map((bundle, index) => {
+        request.input(`generatedBundle${index}`, sql.NVarChar, bundle);
+        return `@generatedBundle${index}`;
+      });
+      const generated = await request.query(`
+        SELECT
+          NULL AS Sale_Order_No,
+          NULL AS Customer_Name,
+          BundleId AS Bundle_Id,
+          NULL AS Order_Qty_After_Add,
+          Inseam,
+          Size,
+          Color,
+          NULL AS Fabric_Code_Main_Body,
+          NULL AS Wash,
+          CutNo AS Cut,
+          BundleQty AS Bundle_Qty,
+          Shade,
+          NULL AS Shrinkage
+        FROM dbo.SewingCutReport
+        WHERE WorkOrder = @wo AND BundleId IN (${placeholders.join(", ")})
+      `);
+      rows.push(...(generated.recordset as CutDetailIndusRow[]));
+    }
   }
   return rows;
 }
@@ -271,7 +308,7 @@ export async function snapshotWorkOrderBulletin(
   const by = insertedBy?.trim() || "system";
   const [styleBulletinRows, cutDetailRows] = await Promise.all([
     fetchStyleBulletinRows(workOrder, opNos),
-    fetchCutDetailRows(workOrder, bundleIds),
+    fetchCutDetailRows(workOrder, bundleIds, department),
   ]);
   await Promise.all([
     insertStyleBulletinSnapshot(styleBulletinRows, workOrder, by, generationId, department),

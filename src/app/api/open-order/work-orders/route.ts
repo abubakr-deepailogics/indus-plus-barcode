@@ -74,7 +74,45 @@ export async function GET(request: Request) {
       ORDER BY cd.[Work Order #] ${orderDirection}
     `);
 
-    return Response.json(result.recordset);
+    const erpRows = result.recordset.map((row) => ({
+      workOrder: String(row.workOrder ?? ""),
+      customer: row.customer ?? null,
+      saleOrderNo: row.saleOrderNo ?? null,
+    }));
+
+    // A work order can be valid for Cut Planning before it has any legacy
+    // ERP Cut Detail row. Include PIT planning work orders in that case so
+    // Cut Report remains reachable after bundles are generated from planning.
+    if (!customer && !saleOrderNo) {
+      const pitPool = await getPool("pitSystem");
+      const planningRequest = pitPool.request();
+      const planningCondition = workOrder ? "AND WorkOrder LIKE @planningWorkOrder" : "";
+      if (workOrder) planningRequest.input("planningWorkOrder", sql.NVarChar, `%${workOrder}%`);
+      const planningResult = await planningRequest.query(`
+        SELECT DISTINCT TOP 40 WorkOrder
+        FROM dbo.CutPlanning
+        WHERE IsDeleted = 0 ${planningCondition}
+        ORDER BY WorkOrder ${workOrder ? "ASC" : "DESC"}
+      `);
+      const byWorkOrder = new Map(erpRows.map((row) => [row.workOrder, row]));
+      for (const row of planningResult.recordset) {
+        const plannedWorkOrder = String(row.WorkOrder ?? "");
+        if (plannedWorkOrder && !byWorkOrder.has(plannedWorkOrder)) {
+          byWorkOrder.set(plannedWorkOrder, {
+            workOrder: plannedWorkOrder,
+            customer: null,
+            saleOrderNo: null,
+          });
+        }
+      }
+      return Response.json(
+        [...byWorkOrder.values()]
+          .sort((a, b) => a.workOrder.localeCompare(b.workOrder))
+          .slice(0, 40),
+      );
+    }
+
+    return Response.json(erpRows);
   } catch (err: unknown) {
     console.error("Work orders search API error:", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
