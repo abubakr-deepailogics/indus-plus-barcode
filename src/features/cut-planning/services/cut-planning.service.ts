@@ -109,6 +109,11 @@ function sortSizes(a: string, b: string) {
   return a.localeCompare(b, undefined, { numeric: true });
 }
 
+function splitShadeCodes(value: unknown): string[] {
+  const shade = String(value ?? "").trim().toUpperCase();
+  return /^[A-Z]{2,}$/.test(shade) ? [...new Set(shade)] : [shade || "UNSHADED"];
+}
+
 export async function getCutPlanning(workOrder: string): Promise<CutPlanningData> {
   const trimmedWorkOrder = workOrder.trim();
   if (!trimmedWorkOrder) {
@@ -366,12 +371,30 @@ export async function generateBundles(
     const totalTransactionQty = available.reduce((sum, item) => sum + item.qty, 0);
     if (totalTransactionQty <= 0) throw new Error("The selected Cut no(s) have no remaining quantity to bundle.");
 
+    const requiredShades = [...new Set(sourceRows.flatMap((row) => splitShadeCodes(row.shade)))];
+    const requiresShadeSplit = requiredShades.length > 1;
     const shadeAllocations = (payload.shadeAllocations ?? []).map((allocation) => ({
       shade: String(allocation.shade ?? "").trim().toUpperCase(),
       qty: number(allocation.quantity),
-    })).filter((allocation) => allocation.shade && allocation.qty > 0);
+      cutNo: String(allocation.cutNo ?? "").trim(),
+    })).filter((allocation) => allocation.shade);
     const isShadeSplit = shadeAllocations.length > 0;
     const allocatedShadeQty = shadeAllocations.reduce((sum, allocation) => sum + allocation.qty, 0);
+    if (requiresShadeSplit && !isShadeSplit) {
+      throw new Error(`Shade split is required for shades: ${requiredShades.join(", ")}.`);
+    }
+    if (isShadeSplit) {
+      const suppliedShades = new Set(shadeAllocations.map((allocation) => allocation.shade));
+      const suppliedCutNos = new Set(shadeAllocations.map((allocation) => allocation.cutNo.toLocaleLowerCase()));
+      if (
+        shadeAllocations.length !== requiredShades.length ||
+        requiredShades.some((shade) => !suppliedShades.has(shade)) ||
+        shadeAllocations.some((allocation) => allocation.qty <= 0 || !allocation.cutNo) ||
+        suppliedCutNos.size !== shadeAllocations.length
+      ) {
+        throw new Error("Every split shade needs a positive ply quantity and a unique Cut no.");
+      }
+    }
     if (!isShadeSplit && (!Number.isInteger(bundleQty) || bundleQty <= 0)) {
       throw new Error("Bundle quantity must be a whole number greater than zero.");
     }
@@ -382,7 +405,7 @@ export async function generateBundles(
       throw new Error(`Shade plies must equal Marker plies (${markerPlies}).`);
     }
 
-    const createBundle = async (allocations: Array<{ cutNo: string; inseam: number | null; size: string; shade: string; qty: number }>) => {
+    const createBundle = async (allocations: Array<{ sourceCutNo: string; cutNo: string; inseam: number | null; size: string; shade: string; qty: number }>) => {
       const sequenceRequest = new sql.Request(transaction).input("workOrder", sql.NVarChar, workOrder);
       const sequenceResult = await sequenceRequest.query(`
         IF EXISTS (SELECT 1 FROM dbo.BundleGenerationSequence WITH (UPDLOCK, HOLDLOCK) WHERE WorkOrder = @workOrder)
@@ -420,7 +443,7 @@ export async function generateBundles(
         .input("inseam", sql.Int, allocations[0]?.inseam ?? null)
         .input("size", sql.NVarChar, allocations[0]?.size ?? null)
         .input("color", sql.NVarChar, planningSnapshot.metadata?.color || null)
-        .input("cutNo", sql.NVarChar, allocations[0]?.cutNo ?? null)
+          .input("cutNo", sql.NVarChar, allocations[0]?.cutNo ?? null)
         .input("bundleId", sql.NVarChar, id)
         .input("bundleQty", sql.Decimal(18, 3), qty)
         .input("shade", sql.NVarChar, allocations[0]?.shade ?? null)
@@ -431,7 +454,9 @@ export async function generateBundles(
         await new sql.Request(transaction)
           .input("bundleGenerationId", sql.BigInt, bundleId)
           .input("workOrder", sql.NVarChar, workOrder)
-          .input("cutNo", sql.NVarChar, allocation.cutNo)
+          // Allocations retain the original planning Cut No. so future
+          // availability checks stay tied to the physical source quantity.
+          .input("cutNo", sql.NVarChar, allocation.sourceCutNo)
           .input("sourceInseam", sql.Int, allocation.inseam)
           .input("sourceSize", sql.NVarChar, allocation.size)
           .input("qty", sql.Decimal(18, 3), allocation.qty)
@@ -447,7 +472,7 @@ export async function generateBundles(
         let remaining = item.qty;
         while (remaining > 0) {
           const qty = Math.min(bundleQty, remaining);
-          bundles.push(await createBundle([{ cutNo: item.cutNo, inseam: item.inseam, size: item.size, shade: item.shade || "UNSHADED", qty }]));
+          bundles.push(await createBundle([{ sourceCutNo: item.cutNo, cutNo: item.cutNo, inseam: item.inseam, size: item.size, shade: item.shade || "UNSHADED", qty }]));
           remaining -= qty;
         }
       }
@@ -459,7 +484,7 @@ export async function generateBundles(
       for (const allocation of shadeAllocations) {
         const qty = item.qty * (allocation.qty / markerPlies);
         if (qty > 0) {
-          bundles.push(await createBundle([{ cutNo: item.cutNo, inseam: item.inseam, size: item.size, shade: allocation.shade, qty }]));
+          bundles.push(await createBundle([{ sourceCutNo: item.cutNo, cutNo: allocation.cutNo, inseam: item.inseam, size: item.size, shade: allocation.shade, qty }]));
         }
       }
     }

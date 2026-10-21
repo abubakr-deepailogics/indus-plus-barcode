@@ -53,7 +53,12 @@ export type GenerateBundlesPayload = {
   cutNos: string[];
   bundleQty: number;
   mergeCuts: boolean;
-  shadeAllocations?: Array<{ shade: string; quantity: number }>;
+  shadeAllocations?: Array<{
+    shade: string;
+    quantity: number;
+    /** The visible Cut No. for this shade, such as 5A or 5B. */
+    cutNo: string;
+  }>;
 };
 
 export type GeneratedBundle = {
