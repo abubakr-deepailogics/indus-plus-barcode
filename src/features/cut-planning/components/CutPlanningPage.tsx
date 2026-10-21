@@ -573,7 +573,25 @@ export default function CutPlanningPage() {
       setError("Enter a Work Order before saving.");
       return;
     }
-    const populatedPlans = plans.filter(hasRowData);
+    const populatedPlans = plans
+      .filter(hasRowData)
+      .map((plan) => {
+        const sourceGroup = sourceGroups.find(
+          (group) => group.inseam === plan.sourceInseam,
+        );
+        const allowedSizes = new Set(sourceGroup?.sizeColumns ?? []);
+        // The combined matrix renders a union of all inseam sizes. Remove
+        // its zero-only display cells before persistence; Size 31 must not
+        // be submitted as a real Size 31 value for Inseam 30.
+        return {
+          ...plan,
+          sizeQuantities: Object.fromEntries(
+            Object.entries(plan.sizeQuantities).filter(
+              ([size]) => allowedSizes.has(size),
+            ),
+          ),
+        };
+      });
     if (populatedPlans.length === 0) {
       setError("Add at least one planning row before saving. A blank save is not allowed.");
       return;
