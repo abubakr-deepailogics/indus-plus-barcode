@@ -258,15 +258,41 @@ async function validatePlanningRowsAgainstErp(workOrder: string, plans: CutPlanR
   }
 }
 
-async function assertPlanningIsNotAllocated(pool: Awaited<ReturnType<typeof getPool>>, workOrder: string) {
+async function getAllocatedCutNos(pool: Awaited<ReturnType<typeof getPool>>, workOrder: string) {
   const result = await pool.request().input("workOrder", sql.NVarChar, workOrder).query(`
-    SELECT TOP (1) 1 AS HasAllocation
+    SELECT DISTINCT CutNo
     FROM dbo.BundleGenerationAllocation
     WHERE WorkOrder = @workOrder
   `);
-  if (result.recordset.length > 0) {
-    throw new Error("Cut Planning is locked because bundles have already been generated. Create a new controlled revision before changing or removing planned quantities.");
-  }
+  return new Set(
+    result.recordset
+      .map((row) => String(row.CutNo ?? "").trim().toLocaleLowerCase())
+      .filter(Boolean),
+  );
+}
+
+function planSignature(plan: CutPlanRow) {
+  return JSON.stringify({
+    sourceInseam: plan.sourceInseam,
+    planDate: plan.planDate || "",
+    sizeQuantities: Object.fromEntries(
+      Object.entries(plan.sizeQuantities).sort(([a], [b]) => a.localeCompare(b)),
+    ),
+    reCutQty: plan.reCutQty,
+    markerNo: plan.markerNo.trim(),
+    cutNo: plan.cutNo.trim(),
+    markerPlies: plan.markerPlies,
+    shrinkage: plan.shrinkage.trim(),
+    shade: plan.shade.trim(),
+    calculatedRequired: plan.calculatedRequired,
+    markerWidthCm: plan.markerWidthCm,
+    markerLengthM: plan.markerLengthM,
+  });
+}
+
+function samePlanSet(left: CutPlanRow[], right: CutPlanRow[]) {
+  const signatures = (plans: CutPlanRow[]) => plans.map(planSignature).sort();
+  return JSON.stringify(signatures(left)) === JSON.stringify(signatures(right));
 }
 
 export async function saveCutPlanning(payload: SaveCutPlanningPayload, userEmail: string) {
@@ -279,16 +305,44 @@ export async function saveCutPlanning(payload: SaveCutPlanningPayload, userEmail
   await validatePlanningRowsAgainstErp(workOrder, payload.plans);
 
   const pool = await getPool("pitSystem");
-  await assertPlanningIsNotAllocated(pool, workOrder);
   const transaction = new sql.Transaction(pool);
   await transaction.begin();
   try {
-    await new sql.Request(transaction).input("workOrder", sql.NVarChar, workOrder).input("updatedBy", sql.NVarChar, userEmail || "system").query(`
+    const lockedCutNos = await getAllocatedCutNos(pool, workOrder);
+    const currentResult = await new sql.Request(transaction)
+      .input("workOrder", sql.NVarChar, workOrder)
+      .query(`
+        SELECT Id, SourceInseam, PlanDate, SizeQuantitiesJson, ReCutQty, MarkerNo, CutNo,
+          MarkerPlies, Shrinkage, Shade, CalculatedRequired, MarkerWidthCm, MarkerLengthM
+        FROM dbo.CutPlanning
+        WHERE WorkOrder = @workOrder AND IsDeleted = 0
+      `);
+    const lockedCurrentPlans = currentResult.recordset
+      .map(normalizeSavedRow)
+      .filter((plan) => lockedCutNos.has(plan.cutNo.trim().toLocaleLowerCase()));
+    const lockedSubmittedPlans = payload.plans
+      .filter((plan) => lockedCutNos.has(plan.cutNo.trim().toLocaleLowerCase()));
+    if (!samePlanSet(lockedCurrentPlans, lockedSubmittedPlans)) {
+      throw new Error(`Generated cut(s) cannot be changed or removed: ${[...lockedCutNos].join(", ")}. Update only cuts that have no generated bundles.`);
+    }
+
+    const editablePlans = payload.plans.filter(
+      (plan) => !lockedCutNos.has(plan.cutNo.trim().toLocaleLowerCase()),
+    );
+    const deleteRequest = new sql.Request(transaction)
+      .input("workOrder", sql.NVarChar, workOrder)
+      .input("updatedBy", sql.NVarChar, userEmail || "system");
+    const lockedPlaceholders = [...lockedCutNos].map((cutNo, index) => {
+      deleteRequest.input(`lockedCut${index}`, sql.NVarChar, cutNo);
+      return `@lockedCut${index}`;
+    });
+    await deleteRequest.query(`
       UPDATE dbo.CutPlanning
       SET IsDeleted = 1, UpdatedAt = SYSUTCDATETIME(), UpdatedBy = @updatedBy
       WHERE WorkOrder = @workOrder AND IsDeleted = 0
+        ${lockedPlaceholders.length ? `AND (CutNo IS NULL OR LOWER(LTRIM(RTRIM(CutNo))) NOT IN (${lockedPlaceholders.join(", ")}))` : ""}
     `);
-    for (const row of payload.plans) {
+    for (const row of editablePlans) {
       await new sql.Request(transaction)
         .input("workOrder", sql.NVarChar, workOrder)
         .input("sourceInseam", sql.Int, row.sourceInseam)
@@ -324,7 +378,18 @@ export async function softDeleteCutPlanningRow(
   if (!Number.isSafeInteger(id) || id <= 0) throw new Error("A valid planning row is required.");
 
   const pool = await getPool("pitSystem");
-  await assertPlanningIsNotAllocated(pool, workOrder);
+  const planResult = await pool.request()
+    .input("id", sql.BigInt, id)
+    .input("workOrder", sql.NVarChar, workOrder)
+    .query(`SELECT CutNo FROM dbo.CutPlanning WHERE Id = @id AND WorkOrder = @workOrder AND IsDeleted = 0`);
+  if (planResult.recordset.length === 0) {
+    throw new Error("Planning row was not found or was already deleted.");
+  }
+  const lockedCutNos = await getAllocatedCutNos(pool, workOrder);
+  const cutNo = String(planResult.recordset[0].CutNo ?? "").trim().toLocaleLowerCase();
+  if (cutNo && lockedCutNos.has(cutNo)) {
+    throw new Error(`Cut ${String(planResult.recordset[0].CutNo).trim()} has generated bundles and cannot be removed.`);
+  }
   const result = await pool.request()
     .input("id", sql.BigInt, id)
     .input("workOrder", sql.NVarChar, workOrder)
