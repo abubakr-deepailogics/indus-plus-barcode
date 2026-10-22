@@ -133,8 +133,8 @@ function DailyOutputChart({ data, range }: { data: DashboardInsights["dailyOutpu
       </div>
       {!hasOutput ? <EmptyChart range={range} /> : <div className="mt-5 grid grid-cols-[32px_1fr] gap-2">
         <div className="flex h-48 flex-col justify-between pb-5 text-right text-[10px] font-medium text-slate-400"><span>{number.format(maximum)}</span><span>{number.format(Math.ceil(maximum / 2))}</span><span>0</span></div>
-        <div>
-          <svg viewBox="0 0 104 90" preserveAspectRatio="none" className="h-48 w-full overflow-visible" aria-label="Daily scanned coupons line chart">
+        <div className="relative">
+          <svg viewBox="0 0 104 90" preserveAspectRatio="none" className="h-48 w-full overflow-visible" aria-label="Daily scanned coupons line chart" onMouseLeave={() => setHoveredIndex(null)}>
             <defs>
               <linearGradient id="daily-output-area" x1="0%" x2="0%" y1="0%" y2="100%">
                 <stop offset="0%" stopColor="#b11016" stopOpacity="0.22" />
