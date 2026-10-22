@@ -808,7 +808,7 @@ export default function CutPlanningPage() {
   };
   const inseamMatrix = groups.length > 0 && (
     <section ref={matrixRef} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-      <div ref={matrixScrollRef} className="hide-horizontal-scrollbar overscroll-contain overflow-x-auto overflow-y-auto" style={matrixMaxHeight == null ? undefined : { maxHeight: matrixMaxHeight }}>
+      <div ref={matrixScrollRef} className="overscroll-contain overflow-x-auto overflow-y-auto" style={matrixMaxHeight == null ? undefined : { maxHeight: matrixMaxHeight }}>
         <table className="min-w-max w-full border-collapse text-xs">
           <thead className="sticky top-0 z-10 bg-slate-100 text-left text-slate-600">
             <tr>
