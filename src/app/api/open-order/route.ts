@@ -100,7 +100,7 @@ export async function GET(request: Request) {
           report.Size,
           report.Color,
           report.Shade,
-          NULL AS Shrinkage,
+          report.Shrinkage,
           NULL AS MarkerWidthCm,
           NULL AS MarkerLengthM,
           generation.BundleSequence

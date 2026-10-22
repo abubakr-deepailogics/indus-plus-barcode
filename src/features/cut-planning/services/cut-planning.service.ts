@@ -411,9 +411,19 @@ export async function softDeleteCutPlanningRow(
   }
 }
 
-function bundlePrefix(workOrder: string) {
+export function getBundleIdPrefix(workOrder: string) {
   const digits = workOrder.replace(/\D/g, "");
   return (digits.slice(-6) || "0").padStart(6, "0");
+}
+
+export async function getNextBundleSequence(workOrderInput: string) {
+  const workOrder = workOrderInput.trim();
+  if (!workOrder) return 1;
+  const pool = await getPool("pitSystem");
+  const result = await pool.request()
+    .input("workOrder", sql.NVarChar, workOrder)
+    .query("SELECT LastSequence FROM dbo.BundleGenerationSequence WHERE WorkOrder = @workOrder");
+  return Math.max(1, number(result.recordset[0]?.LastSequence) + 1);
 }
 
 export async function generateBundles(
@@ -423,9 +433,17 @@ export async function generateBundles(
   const workOrder = payload.workOrder?.trim();
   const cutNos = [...new Set((payload.cutNos ?? []).map((cut) => cut.trim()).filter(Boolean))];
   const bundleQty = number(payload.bundleQty);
+  const expectedNextSequence = payload.expectedNextSequence;
+  const expectedBundleCount = payload.expectedBundleCount;
   if (!workOrder) throw new Error("Work Order is required.");
   if (cutNos.length !== 1) throw new Error("Select exactly one Cut no.");
   if (!Number.isFinite(bundleQty) || bundleQty < 0) throw new Error("Bundle quantity cannot be negative.");
+  if (expectedNextSequence != null && (!Number.isSafeInteger(expectedNextSequence) || expectedNextSequence <= 0)) {
+    throw new Error("Bundle preview sequence is invalid. Preview bundles again.");
+  }
+  if (expectedBundleCount != null && (!Number.isSafeInteger(expectedBundleCount) || expectedBundleCount <= 0)) {
+    throw new Error("Bundle preview count is invalid. Preview bundles again.");
+  }
 
   // A Cut Report row is a generation-time snapshot. Read the associated
   // planning metadata before creating the PIT transaction that writes it.
@@ -434,11 +452,24 @@ export async function generateBundles(
   const transaction = new sql.Transaction(pool);
   await transaction.begin();
   try {
+    if (expectedNextSequence != null) {
+      const sequenceResult = await new sql.Request(transaction)
+        .input("workOrder", sql.NVarChar, workOrder)
+        .query(`
+          SELECT LastSequence
+          FROM dbo.BundleGenerationSequence WITH (UPDLOCK, HOLDLOCK)
+          WHERE WorkOrder = @workOrder
+        `);
+      const nextSequence = number(sequenceResult.recordset[0]?.LastSequence) + 1;
+      if (nextSequence !== expectedNextSequence) {
+        throw new Error("Bundle preview is out of date. Preview bundles again before confirming.");
+      }
+    }
     const placeholders = cutNos.map((_, index) => `@cut${index}`).join(", ");
     const sourceRequest = new sql.Request(transaction).input("workOrder", sql.NVarChar, workOrder);
     cutNos.forEach((cutNo, index) => sourceRequest.input(`cut${index}`, sql.NVarChar, cutNo));
     const source = await sourceRequest.query(`
-      SELECT CutNo, SourceInseam, SizeQuantitiesJson, MarkerPlies, Shade
+      SELECT CutNo, SourceInseam, SizeQuantitiesJson, MarkerPlies, Shade, Shrinkage
       FROM dbo.CutPlanning
       WHERE WorkOrder = @workOrder AND IsDeleted = 0 AND CutNo IN (${placeholders})
     `);
@@ -455,13 +486,23 @@ export async function generateBundles(
       size: string;
       qty: number;
       shade: string;
+      shrinkage: string;
     }> = [];
     for (const row of source.recordset as Array<Record<string, unknown>>) {
       const cutNo = String(row.CutNo ?? "").trim();
       const inseam = row.SourceInseam == null ? null : number(row.SourceInseam);
       for (const [size, quantity] of Object.entries(parseQuantities(row.SizeQuantitiesJson))) {
         const qty = quantity * number(row.MarkerPlies);
-        if (qty > 0) sourceRows.push({ cutNo, inseam, size, qty, shade: String(row.Shade ?? "").trim() });
+        if (qty > 0) {
+          sourceRows.push({
+            cutNo,
+            inseam,
+            size,
+            qty,
+            shade: String(row.Shade ?? "").trim(),
+            shrinkage: String(row.Shrinkage ?? "").trim(),
+          });
+        }
       }
     }
     const missingCuts = cutNos.filter((cutNo) => !sourceRows.some((row) => row.cutNo === cutNo));
@@ -529,7 +570,7 @@ export async function generateBundles(
       throw new Error(`Shade plies must equal Marker plies (${markerPlies}).`);
     }
 
-    const createBundle = async (allocations: Array<{ sourceCutNo: string; cutNo: string; inseam: number | null; size: string; shade: string; qty: number }>) => {
+    const createBundle = async (allocations: Array<{ sourceCutNo: string; cutNo: string; inseam: number | null; size: string; shade: string; shrinkage: string; qty: number }>) => {
       const sequenceRequest = new sql.Request(transaction).input("workOrder", sql.NVarChar, workOrder);
       const sequenceResult = await sequenceRequest.query(`
         IF EXISTS (SELECT 1 FROM dbo.BundleGenerationSequence WITH (UPDLOCK, HOLDLOCK) WHERE WorkOrder = @workOrder)
@@ -539,7 +580,7 @@ export async function generateBundles(
           INSERT INTO dbo.BundleGenerationSequence (WorkOrder, LastSequence) OUTPUT INSERTED.LastSequence AS Sequence VALUES (@workOrder, 1);
       `);
       const sequence = number(sequenceResult.recordset[0]?.Sequence);
-      const id = `${bundlePrefix(workOrder)}-${String(sequence).padStart(4, "0")}`;
+      const id = `${getBundleIdPrefix(workOrder)}-${String(sequence).padStart(4, "0")}`;
       const qty = allocations.reduce((sum, item) => sum + item.qty, 0);
       if (!Number.isInteger(qty)) {
         throw new Error("Generated Bundle quantity must be a whole number. Check size quantities and Marker plies.");
@@ -571,9 +612,10 @@ export async function generateBundles(
         .input("bundleId", sql.NVarChar, id)
         .input("bundleQty", sql.Decimal(18, 3), qty)
         .input("shade", sql.NVarChar, allocations[0]?.shade ?? null)
+        .input("shrinkage", sql.NVarChar, allocations[0]?.shrinkage ?? null)
         .input("createdBy", sql.NVarChar, userEmail || "system")
-        .query(`INSERT INTO dbo.SewingCutReport (BundleGenerationId, WorkOrder, Inseam, Size, Color, CutNo, BundleId, BundleQty, Shade, CreatedBy)
-          VALUES (@bundleGenerationId, @workOrder, @inseam, @size, @color, @cutNo, @bundleId, @bundleQty, @shade, @createdBy)`);
+        .query(`INSERT INTO dbo.SewingCutReport (BundleGenerationId, WorkOrder, Inseam, Size, Color, CutNo, BundleId, BundleQty, Shade, Shrinkage, CreatedBy)
+          VALUES (@bundleGenerationId, @workOrder, @inseam, @size, @color, @cutNo, @bundleId, @bundleQty, @shade, @shrinkage, @createdBy)`);
       for (const allocation of allocations) {
         await new sql.Request(transaction)
           .input("bundleGenerationId", sql.BigInt, bundleId)
@@ -596,9 +638,12 @@ export async function generateBundles(
         let remaining = item.qty;
         while (remaining > 0) {
           const qty = Math.min(bundleQty, remaining);
-          bundles.push(await createBundle([{ sourceCutNo: item.cutNo, cutNo: item.cutNo, inseam: item.inseam, size: item.size, shade: item.shade || "UNSHADED", qty }]));
+          bundles.push(await createBundle([{ sourceCutNo: item.cutNo, cutNo: item.cutNo, inseam: item.inseam, size: item.size, shade: item.shade || "UNSHADED", shrinkage: item.shrinkage, qty }]));
           remaining -= qty;
         }
+      }
+      if (expectedBundleCount != null && bundles.length !== expectedBundleCount) {
+        throw new Error("Bundle preview is out of date. Preview bundles again before confirming.");
       }
       await transaction.commit();
       return { totalTransactionQty, bundles };
@@ -608,9 +653,12 @@ export async function generateBundles(
       for (const allocation of shadeAllocations) {
         const qty = item.qty * (allocation.qty / markerPlies);
         if (qty > 0) {
-          bundles.push(await createBundle([{ sourceCutNo: item.cutNo, cutNo: allocation.cutNo, inseam: item.inseam, size: item.size, shade: allocation.shade, qty }]));
+          bundles.push(await createBundle([{ sourceCutNo: item.cutNo, cutNo: allocation.cutNo, inseam: item.inseam, size: item.size, shade: allocation.shade, shrinkage: item.shrinkage, qty }]));
         }
       }
+    }
+    if (expectedBundleCount != null && bundles.length !== expectedBundleCount) {
+      throw new Error("Bundle preview is out of date. Preview bundles again before confirming.");
     }
     await transaction.commit();
     return { totalTransactionQty, bundles };

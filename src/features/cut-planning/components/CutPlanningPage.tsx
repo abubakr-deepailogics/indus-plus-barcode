@@ -83,6 +83,10 @@ export default function CutPlanningPage() {
   const [bundleQty, setBundleQty] = useState("");
   const [generatingBundles, setGeneratingBundles] = useState(false);
   const [showBundlePreview, setShowBundlePreview] = useState(false);
+  const [bundlePreviewIdentity, setBundlePreviewIdentity] = useState<{
+    nextSequence: number;
+    bundleIdPrefix: string;
+  } | null>(null);
   const [selectedFabricItem, setSelectedFabricItem] = useState("");
   const [selectedFabricWorkOrder, setSelectedFabricWorkOrder] = useState("");
   const [fabricMenuOpen, setFabricMenuOpen] = useState(false);
@@ -346,7 +350,13 @@ export default function CutPlanningPage() {
         }
         return bundles;
       });
-      return rows.map((row) => ({ ...row, previewId: "Assigned on confirmation", color: data?.metadata?.color || "—" }));
+      return rows.map((row, index) => ({
+        ...row,
+        previewId: bundlePreviewIdentity
+          ? `${bundlePreviewIdentity.bundleIdPrefix}-${String(bundlePreviewIdentity.nextSequence + index).padStart(4, "0")}`
+          : "Loading…",
+        color: data?.metadata?.color || "—",
+      }));
     }
     const rows = sourceRows.flatMap((source) =>
       effectiveShadeQuantities
@@ -358,12 +368,14 @@ export default function CutPlanningPage() {
           qty: source.qty * (quantity / selectedMarkerPlies),
         })),
     );
-    return rows.map((row) => ({
+    return rows.map((row, index) => ({
       ...row,
-      previewId: "Assigned on confirmation",
+      previewId: bundlePreviewIdentity
+        ? `${bundlePreviewIdentity.bundleIdPrefix}-${String(bundlePreviewIdentity.nextSequence + index).padStart(4, "0")}`
+        : "Loading…",
       color: data?.metadata?.color || "—",
     }));
-  }, [bundleQty, data?.metadata?.color, effectiveShadeQuantities, hasShadeSplit, plans, selectedBundleCut, selectedMarkerPlies]);
+  }, [bundlePreviewIdentity, bundleQty, data?.metadata?.color, effectiveShadeQuantities, hasShadeSplit, plans, selectedBundleCut, selectedMarkerPlies]);
 
   const update = (index: number, patch: Partial<CutPlanRow>) =>
     (setIsDirty(true), setPlans((current) =>
@@ -655,12 +667,21 @@ export default function CutPlanningPage() {
       const response = await fetch("/api/cut-planning/bundles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workOrder, cutNos: [selectedBundleCut], bundleQty: Number(bundleQty), mergeCuts: false, shadeAllocations: hasShadeSplit ? effectiveShadeQuantities : undefined }),
+        body: JSON.stringify({
+          workOrder,
+          cutNos: [selectedBundleCut],
+          bundleQty: Number(bundleQty),
+          mergeCuts: false,
+          expectedNextSequence: bundlePreviewIdentity?.nextSequence,
+          expectedBundleCount: bundlePreview.length,
+          shadeAllocations: hasShadeSplit ? effectiveShadeQuantities : undefined,
+        }),
       });
       const body = (await response.json()) as { error?: string; bundles?: Array<{ bundleId: string }> };
       if (!response.ok) throw new Error(body.error || "Failed to generate bundles.");
       setNotice(`${body.bundles?.length ?? 0} bundle(s) generated successfully.`);
       setShowBundlePreview(false);
+      setBundlePreviewIdentity(null);
       setSelectedBundleCut("");
       setShadeQuantities({});
       setShadeCutNos({});
@@ -670,6 +691,38 @@ export default function CutPlanningPage() {
       setError(caught instanceof Error ? caught.message : "Failed to generate bundles.");
     } finally {
       setGeneratingBundles(false);
+    }
+  };
+
+  const loadBundlePreview = async () => {
+    if (!workOrder) return;
+    setError("");
+    try {
+      const response = await fetch(
+        `/api/cut-planning/bundles?work_order=${encodeURIComponent(workOrder)}`,
+      );
+      const body = (await response.json()) as {
+        nextSequence?: number;
+        bundleIdPrefix?: string;
+        error?: string;
+      };
+      if (
+        !response.ok ||
+        typeof body.nextSequence !== "number" ||
+        !Number.isSafeInteger(body.nextSequence) ||
+        !body.bundleIdPrefix
+      ) {
+        throw new Error(body.error || "Unable to prepare the bundle preview.");
+      }
+      setBundlePreviewIdentity({
+        nextSequence: body.nextSequence,
+        bundleIdPrefix: body.bundleIdPrefix,
+      });
+      setShowBundlePreview(true);
+    } catch (caught) {
+      setError(
+        caught instanceof Error ? caught.message : "Unable to prepare the bundle preview.",
+      );
     }
   };
 
@@ -1783,7 +1836,7 @@ export default function CutPlanningPage() {
             {selectedMarkerPlies > 0 && Number(bundleQty) > selectedMarkerPlies && <p className="mt-2 text-xs font-medium text-rose-700">Bundle qty cannot exceed Marker plies ({displayNumber(selectedMarkerPlies)}).</p>}
             {requiresShadeSplit && <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/40 p-4"><div className="flex items-center justify-between"><p className="text-sm font-bold text-slate-800">Shade split <span className="font-normal text-rose-700">(required)</span></p><p className={`text-xs font-semibold ${Math.abs(shadePlyTotal - selectedMarkerPlies) < 0.0001 && splitCutNamesAreValid ? "text-emerald-700" : "text-amber-700"}`}>Plies allocated {displayNumber(shadePlyTotal)} / {displayNumber(selectedMarkerPlies)}</p></div><p className="mt-1 text-xs text-slate-600">Each shade is generated under its own Cut No. Review the default names before generating.</p><div className="mt-3 grid gap-3 sm:grid-cols-2">{selectedShadeCodes.map((shade) => <div key={shade} className="space-y-2"><label className="block text-xs font-semibold text-slate-600">Shade {shade} · plies<input type="number" min="1" max={selectedMarkerPlies || undefined} step="1" value={shadeQuantities[shade] ?? ""} onWheel={preventWheelChange} onChange={(event) => { setShadeQuantities((current) => ({ ...current, [shade]: event.target.value })); setShowBundlePreview(false); }} className="bundle-modal-number mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm" /></label><label className="block text-xs font-semibold text-slate-600">New Cut No.<input type="text" value={shadeCutNos[shade] ?? `${selectedBundleCut}${shade}`} onChange={(event) => { setShadeCutNos((current) => ({ ...current, [shade]: event.target.value })); setShowBundlePreview(false); }} className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm" /></label></div>)}</div>{Math.abs(shadePlyTotal - selectedMarkerPlies) >= 0.0001 && <p className="mt-2 text-xs text-amber-700">Shade plies must add up exactly to Marker plies.</p>}{!splitCutNamesAreValid && <p className="mt-2 text-xs text-rose-700">Every shade needs a different Cut No. and at least one ply.</p>}</div>}
             {showBundlePreview && <div className="mt-4 overflow-hidden rounded-xl border border-indigo-100"><div className="bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-900">Bundle preview · {bundlePreview.length} bundle(s)</div><div className="max-h-52 overflow-y-auto"><table className="w-full table-fixed text-xs"><colgroup><col className="w-[8%]" /><col className="w-[17%]" /><col className="w-[10%]" /><col className="w-[9%]" /><col className="w-[8%]" /><col className="w-[25%]" /><col className="w-[10%]" /><col className="w-[13%]" /></colgroup><thead className="sticky top-0 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500"><tr><th className="px-2 py-2 text-center">Cut</th><th className="px-2 py-2">Bundle ID</th><th className="px-2 py-2 text-right">Bundle qty</th><th className="px-2 py-2 text-center">Inseam</th><th className="px-2 py-2 text-center">Size</th><th className="px-2 py-2">Color</th><th className="px-2 py-2 text-center">Shade</th><th className="px-2 py-2 text-center">Shrinkage</th></tr></thead><tbody>{bundlePreview.map((row, index) => <tr key={`${row.cutNo}-${row.inseam ?? "none"}-${row.size}-${index}`} className="border-t border-slate-100 align-middle"><td className="px-2 py-2 text-center font-semibold text-indigo-700">{row.cutNo}</td><td className="break-all px-2 py-2 font-mono text-indigo-700">{row.previewId}</td><td className="px-2 py-2 text-right font-semibold">{displayNumber(row.qty)}</td><td className="px-2 py-2 text-center">{row.inseam ?? "—"}</td><td className="px-2 py-2 text-center font-semibold">{row.size}</td><td className="break-words px-2 py-2 leading-4" title={row.color}>{row.color}</td><td className="break-words px-2 py-2 text-center font-semibold">{row.shade || "—"}</td><td className="break-words px-2 py-2 text-center font-mono">{row.shrinkage || "—"}</td></tr>)}</tbody></table></div></div>}
-            <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => showBundlePreview ? setShowBundlePreview(false) : setShowBundleModal(false)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">{showBundlePreview ? "Back" : "Cancel"}</button><button type="button" disabled={generatingBundles || !selectedBundleCut || isDirty || (!hasShadeSplit && (!Number.isInteger(Number(bundleQty)) || Number(bundleQty) <= 0)) || (!hasShadeSplit && selectedMarkerPlies > 0 && Number(bundleQty) > selectedMarkerPlies) || (hasShadeSplit && (Math.abs(shadePlyTotal - selectedMarkerPlies) >= 0.0001 || !splitCutNamesAreValid))} onClick={() => { if (showBundlePreview) { void generateBundlesFromSelection(); return; } setShowBundlePreview(true); }} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{generatingBundles ? "Generating..." : showBundlePreview ? "Confirm & generate" : "Preview bundles"}</button></div>
+            <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => showBundlePreview ? setShowBundlePreview(false) : setShowBundleModal(false)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">{showBundlePreview ? "Back" : "Cancel"}</button><button type="button" disabled={generatingBundles || !selectedBundleCut || isDirty || (!hasShadeSplit && (!Number.isInteger(Number(bundleQty)) || Number(bundleQty) <= 0)) || (!hasShadeSplit && selectedMarkerPlies > 0 && Number(bundleQty) > selectedMarkerPlies) || (hasShadeSplit && (Math.abs(shadePlyTotal - selectedMarkerPlies) >= 0.0001 || !splitCutNamesAreValid))} onClick={() => { if (showBundlePreview) { void generateBundlesFromSelection(); return; } void loadBundlePreview(); }} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{generatingBundles ? "Generating..." : showBundlePreview ? "Confirm & generate" : "Preview bundles"}</button></div>
           </div>
         </div>
       )}

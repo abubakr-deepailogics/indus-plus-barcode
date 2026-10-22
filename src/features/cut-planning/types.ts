@@ -53,6 +53,10 @@ export type GenerateBundlesPayload = {
   cutNos: string[];
   bundleQty: number;
   mergeCuts: boolean;
+  /** Sequence displayed in the preview; prevents confirming a stale preview. */
+  expectedNextSequence?: number;
+  /** Number of rows displayed in the preview; prevents an incomplete preview. */
+  expectedBundleCount?: number;
   shadeAllocations?: Array<{
     shade: string;
     quantity: number;

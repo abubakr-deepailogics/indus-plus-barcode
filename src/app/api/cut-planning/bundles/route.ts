@@ -1,20 +1,26 @@
-import { generateBundles } from "@/features/cut-planning/services/cut-planning.service";
+import {
+  generateBundles,
+  getBundleIdPrefix,
+  getNextBundleSequence,
+} from "@/features/cut-planning/services/cut-planning.service";
 import type { GenerateBundlesPayload } from "@/features/cut-planning/types";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const workOrder = new URL(request.url).searchParams.get("work_order")?.trim();
-  if (!workOrder) return Response.json({ nextSequence: 1 });
+  if (!workOrder) return Response.json({ nextSequence: 1, bundleIdPrefix: "000000" });
   try {
-    const { getPool, sql } = await import("@/lib/db");
-    const pool = await getPool("pitSystem");
-    const result = await pool.request().input("workOrder", sql.NVarChar, workOrder).query(
-      "SELECT LastSequence FROM dbo.BundleGenerationSequence WHERE WorkOrder = @workOrder",
+    return Response.json({
+      nextSequence: await getNextBundleSequence(workOrder),
+      bundleIdPrefix: getBundleIdPrefix(workOrder),
+    });
+  } catch (error) {
+    console.error("Bundle preview GET error:", error);
+    return Response.json(
+      { error: "Unable to prepare the bundle preview." },
+      { status: 500 },
     );
-    return Response.json({ nextSequence: Number(result.recordset[0]?.LastSequence ?? 0) + 1 });
-  } catch {
-    return Response.json({ nextSequence: 1 });
   }
 }
 
