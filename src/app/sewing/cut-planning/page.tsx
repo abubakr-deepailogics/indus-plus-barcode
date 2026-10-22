@@ -1,5 +1,5 @@
-import CutPlanningPage from "@/features/cut-planning/components/CutPlanningPage";
+import { redirect } from "next/navigation";
 
 export default function Page() {
-  return <CutPlanningPage />;
+  redirect("/planning/cut-planning");
 }

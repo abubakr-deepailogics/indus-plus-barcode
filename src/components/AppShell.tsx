@@ -31,12 +31,12 @@ function productionModuleTabs(basePath: "/sewing" | "/washing" | "/finishing") {
 }
 
 const PLANNING_TABS = [
-  { label: "Cut Planning", href: "/sewing/cut-planning", hasDropdown: false },
-  { label: "Cut Report", href: "/sewing/cut-report", hasDropdown: false },
+  { label: "Cut Planning", href: "/planning/cut-planning", hasDropdown: false },
+  { label: "Cut Report", href: "/planning/cut-report", hasDropdown: false },
 ];
 
 function isPlanningPath(pathname: string) {
-  return pathname === "/sewing/cut-planning" || pathname === "/sewing/cut-report";
+  return pathname === "/planning/cut-planning" || pathname === "/planning/cut-report";
 }
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
@@ -164,7 +164,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <nav aria-label="Department Navigation" className="hidden md:flex items-center justify-center flex-1 max-w-xl mx-2">
           <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 gap-1 shadow-xs">
             <Link
-              href={workOrderHref("/sewing/cut-planning")}
+              href={workOrderHref("/planning/cut-planning")}
               className={`px-3.5 lg:px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 isPlanningPath(pathname)
                   ? "bg-white text-[#4f46e5] shadow-xs"
@@ -242,7 +242,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </span>
             <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
               <Link
-                href={workOrderHref("/sewing/cut-planning")}
+                href={workOrderHref("/planning/cut-planning")}
                 onClick={() => setMobileMenuOpen(false)}
                 className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all ${
                   isPlanningPath(pathname)
