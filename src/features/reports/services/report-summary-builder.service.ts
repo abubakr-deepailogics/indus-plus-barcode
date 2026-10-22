@@ -143,7 +143,8 @@ async function fetchBundleQtyByWorkOrder(
         ? await req.query(`
           SELECT WorkOrder, SUM(BundleQty) AS BundleQty
           FROM dbo.SewingCutReport
-          WHERE WorkOrder IN (${inClause})
+          WHERE IsDeleted = 0
+            AND WorkOrder IN (${inClause})
           GROUP BY WorkOrder
         `)
       : await req.input("department", sql.NVarChar, department).query(`

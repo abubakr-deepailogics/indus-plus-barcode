@@ -134,7 +134,8 @@ async function fetchCutDetailRows(
           Shade,
           NULL AS Shrinkage
         FROM dbo.SewingCutReport
-        WHERE WorkOrder = @wo AND BundleId IN (${placeholders.join(", ")})
+        WHERE WorkOrder = @wo AND IsDeleted = 0
+          AND BundleId IN (${placeholders.join(", ")})
       `);
       rows.push(...(generated.recordset as CutDetailIndusRow[]));
     }

@@ -70,6 +70,25 @@ export async function GET(request: Request) {
     let generatedBundles: Array<Record<string, unknown>> = [];
     try {
       const pitPool = await getPool("pitSystem");
+      // Migration 053 adds these columns. Keep the Cut Report readable while
+      // that migration is being rolled out, rather than treating an old schema
+      // as if the work order had no generated bundles.
+      const softDeleteColumns = await pitPool.request().query(`
+        SELECT
+          CASE WHEN COL_LENGTH('dbo.SewingCutReport', 'IsDeleted') IS NULL THEN 0 ELSE 1 END AS HasReportSoftDelete,
+          CASE WHEN COL_LENGTH('dbo.BundleGeneration', 'IsDeleted') IS NULL THEN 0 ELSE 1 END AS HasGenerationSoftDelete
+      `);
+      const schema = softDeleteColumns.recordset[0] as {
+        HasReportSoftDelete?: number;
+        HasGenerationSoftDelete?: number;
+      } | undefined;
+      const activeBundlePredicates = [
+        Number(schema?.HasReportSoftDelete) === 1 ? "report.IsDeleted = 0" : "",
+        Number(schema?.HasGenerationSoftDelete) === 1 ? "generation.IsDeleted = 0" : "",
+      ].filter(Boolean);
+      const activeBundleWhere = activeBundlePredicates.length
+        ? `\n          AND ${activeBundlePredicates.join("\n          AND ")}`
+        : "";
       const generatedResult = await pitPool.request().input("wo", sql.NVarChar, workOrder).query(`
         SELECT
           report.RowId,
@@ -89,6 +108,7 @@ export async function GET(request: Request) {
         INNER JOIN dbo.BundleGeneration AS generation
           ON generation.Id = report.BundleGenerationId
         WHERE report.WorkOrder = @wo
+          ${activeBundleWhere}
         ORDER BY generation.BundleSequence
       `);
       generatedBundles = generatedResult.recordset;
@@ -104,7 +124,7 @@ export async function GET(request: Request) {
         });
       }
     } catch (bundleError) {
-      console.log("BundleGeneration table is not available yet:", bundleError);
+      console.error("Generated sewing bundle lookup failed:", bundleError);
     }
 
     // Fetch Style Bulletin Header (Metadata) — this app's own write data,

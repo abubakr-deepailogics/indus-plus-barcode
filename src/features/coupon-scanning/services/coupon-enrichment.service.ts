@@ -106,7 +106,8 @@ async function fetchCutDetailByBundle(
         SELECT RowId, BundleId AS Bundle_Id, Inseam, Size, CutNo AS Cut,
           Shade, BundleQty AS Bundle_Qty
         FROM dbo.SewingCutReport
-        WHERE WorkOrder = @wo AND BundleId IN (${placeholders.join(", ")})
+        WHERE WorkOrder = @wo AND IsDeleted = 0
+          AND BundleId IN (${placeholders.join(", ")})
         ORDER BY RowId DESC
       `);
       for (const row of result.recordset as CutDetailRow[]) {

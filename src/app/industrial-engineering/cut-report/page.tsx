@@ -14,6 +14,7 @@ import {
   Database,
   Paperclip,
   Printer,
+  Trash2,
 } from "lucide-react";
 // import type { PageSetupConfig } from "@/features/barcode-generation/types";
 // import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
@@ -46,8 +47,8 @@ interface CutDetailRow {
   Color?: string;
   Fabric_Code_Main_Body?: string;
   Wash?: string;
-  Cut?: number;
-  Bundle_Id?: number;
+  Cut?: string | number;
+  Bundle_Id?: string | number;
   Bundle_Qty?: number;
   Shade?: string;
   Shrinkage?: string;
@@ -112,6 +113,15 @@ function TableSkeleton({ columnsCount }: { columnsCount: number }) {
 }
 
 export default function OpenOrderPage() {
+  const [bundlePendingDeletion, setBundlePendingDeletion] =
+    useState<CutDetailRow | null>(null);
+  const [deletingBundleRowId, setDeletingBundleRowId] = useState<number | null>(null);
+  const [bundleDeleteError, setBundleDeleteError] = useState("");
+  const [cutPendingDeletion, setCutPendingDeletion] = useState<string | null>(null);
+  const [cutToDelete, setCutToDelete] = useState("");
+  const [deletingCutNo, setDeletingCutNo] = useState<string | null>(null);
+  const [cutDeleteError, setCutDeleteError] = useState("");
+
   const cutReportColumns = useMemo<ColumnDef<CutDetailRow>[]>(
     () => [
       {
@@ -276,8 +286,31 @@ export default function OpenOrderPage() {
         ),
         size: 80,
       },
+      {
+        id: "actions",
+        meta: { align: "center" },
+        header: "Actions",
+        cell: ({ row }) => (
+          <button
+            type="button"
+            aria-label={`Delete bundle ${row.original.Bundle_Id ?? row.original.RowId}`}
+            title="Delete bundle"
+            disabled={deletingBundleRowId === row.original.RowId}
+            onClick={() => {
+              setBundleDeleteError("");
+              setBundlePendingDeletion(row.original);
+            }}
+            className="inline-flex size-8 items-center justify-center rounded-lg text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Trash2 className="size-4" />
+          </button>
+        ),
+        enableSorting: false,
+        enableHiding: false,
+        size: 78,
+      },
     ],
-    [],
+    [deletingBundleRowId],
   );
 
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
@@ -317,6 +350,11 @@ export default function OpenOrderPage() {
     [],
   );
   const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
+  const generatedCuts = useMemo(
+    () => [...new Set(cutDetails.map((row) => String(row.Cut ?? "").trim()).filter(Boolean))]
+      .sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
+    [cutDetails],
+  );
   const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
   // Operations to include in coupon generation — defaults to "all" (set
   // whenever a fresh style bulletin loads, see the fetch effect below) so
@@ -949,6 +987,70 @@ export default function OpenOrderPage() {
     setShowPageSetupModal(false);
   };
 
+  const handleDeleteBundle = async () => {
+    const bundle = bundlePendingDeletion;
+    const workOrder = bundle?.Work_Order || activeSearchQuery;
+    if (!bundle || !workOrder) {
+      setBundleDeleteError("No active Work Order was found for this bundle.");
+      return;
+    }
+
+    setDeletingBundleRowId(bundle.RowId);
+    setBundleDeleteError("");
+    try {
+      const response = await fetch("/api/open-order/bundles", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workOrder, reportRowId: bundle.RowId }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Unable to delete this Cut Report bundle.");
+      }
+      setCutDetails((rows) => rows.filter((row) => row.RowId !== bundle.RowId));
+      setBundlePendingDeletion(null);
+    } catch (error) {
+      setBundleDeleteError(
+        error instanceof Error ? error.message : "Unable to delete this Cut Report bundle.",
+      );
+    } finally {
+      setDeletingBundleRowId(null);
+    }
+  };
+
+  const handleDeleteCut = async () => {
+    const cutNo = cutPendingDeletion;
+    if (!cutNo || !activeSearchQuery) {
+      setCutDeleteError("No active Work Order or Cut was found.");
+      return;
+    }
+
+    setDeletingCutNo(cutNo);
+    setCutDeleteError("");
+    try {
+      const response = await fetch("/api/open-order/bundles", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workOrder: activeSearchQuery, cutNo }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Unable to delete the generated cut.");
+      }
+      setCutDetails((rows) => rows.filter(
+        (row) => String(row.Cut ?? "").trim().toLocaleLowerCase() !== cutNo.toLocaleLowerCase(),
+      ));
+      setCutToDelete("");
+      setCutPendingDeletion(null);
+    } catch (error) {
+      setCutDeleteError(
+        error instanceof Error ? error.message : "Unable to delete the generated cut.",
+      );
+    } finally {
+      setDeletingCutNo(null);
+    }
+  };
+
   return (
     <RequirePermission pageKey="cut-report">
       <div className="no-print mx-auto flex w-full max-w-[1500px] flex-col gap-5 text-xs text-slate-700 animate-fade-in pb-16">
@@ -1115,15 +1217,40 @@ export default function OpenOrderPage() {
                 ],
               }}
               toolbarChildren={
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  disabled={cutDetails.length === 0}
-                  className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-[#334155] disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print</span>
-                </button>
+                <>
+                  <select
+                    aria-label="Choose a Cut to delete all of its bundles"
+                    value={cutToDelete}
+                    onChange={(event) => setCutToDelete(event.target.value)}
+                    className="rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-rose-500"
+                  >
+                    <option value="">Choose Cut to delete…</option>
+                    {generatedCuts.map((cutNo) => (
+                      <option key={cutNo} value={cutNo}>Cut {cutNo}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!cutToDelete || deletingCutNo !== null}
+                    onClick={() => {
+                      setCutDeleteError("");
+                      setCutPendingDeletion(cutToDelete);
+                    }}
+                    className="bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 disabled:cursor-not-allowed disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Cut</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    disabled={cutDetails.length === 0}
+                    className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-[#334155] disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print</span>
+                  </button>
+                </>
               }
             />
           </div>
@@ -1138,6 +1265,104 @@ export default function OpenOrderPage() {
           onGeneratePdf={handleGeneratePdf}
           generatingPdf={generatingPdf}
         />
+      )}
+
+      {bundlePendingDeletion && (
+        <div
+          className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-bundle-title"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 id="delete-bundle-title" className="text-base font-bold text-slate-900">
+              Delete generated bundle?
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Bundle <strong>{bundlePendingDeletion.Bundle_Id}</strong> from Cut{" "}
+              <strong>{bundlePendingDeletion.Cut}</strong> will be removed from the Cut Report.
+              Its planning allocation will be released. The cut can be edited again only if
+              no other generated bundle still uses it.
+            </p>
+            <p className="mt-2 text-sm text-amber-700">
+              If coupons already exist for this bundle, delete those coupons first.
+            </p>
+            {bundleDeleteError && (
+              <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
+                {bundleDeleteError}
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={deletingBundleRowId !== null}
+                onClick={() => {
+                  setBundlePendingDeletion(null);
+                  setBundleDeleteError("");
+                }}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingBundleRowId !== null}
+                onClick={handleDeleteBundle}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deletingBundleRowId !== null ? "Deleting…" : "Delete bundle"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cutPendingDeletion && (
+        <div
+          className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-cut-title"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 id="delete-cut-title" className="text-base font-bold text-slate-900">
+              Delete all bundles for Cut {cutPendingDeletion}?
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              This deletes every active generated bundle for this Cut in one action and releases
+              their planning allocations.
+            </p>
+            <p className="mt-2 text-sm text-amber-700">
+              If any bundle has active coupons, nothing is deleted. Delete its coupons first.
+            </p>
+            {cutDeleteError && (
+              <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
+                {cutDeleteError}
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={deletingCutNo !== null}
+                onClick={() => {
+                  setCutPendingDeletion(null);
+                  setCutDeleteError("");
+                }}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={deletingCutNo !== null}
+                onClick={handleDeleteCut}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deletingCutNo !== null ? "Deleting…" : "Delete all bundles"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <WorkOrderSearchModal

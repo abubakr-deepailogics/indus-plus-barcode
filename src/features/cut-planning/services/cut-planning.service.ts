@@ -262,7 +262,7 @@ async function getAllocatedCutNos(pool: Awaited<ReturnType<typeof getPool>>, wor
   const result = await pool.request().input("workOrder", sql.NVarChar, workOrder).query(`
     SELECT DISTINCT CutNo
     FROM dbo.BundleGenerationAllocation
-    WHERE WorkOrder = @workOrder
+    WHERE WorkOrder = @workOrder AND IsDeleted = 0
   `);
   return new Set(
     result.recordset
@@ -276,7 +276,13 @@ function planSignature(plan: CutPlanRow) {
     sourceInseam: plan.sourceInseam,
     planDate: plan.planDate || "",
     sizeQuantities: Object.fromEntries(
-      Object.entries(plan.sizeQuantities).sort(([a], [b]) => a.localeCompare(b)),
+      // Older plans can retain zero-only size keys from another inseam. The
+      // matrix intentionally drops those display-only cells before saving;
+      // they carry no allocated quantity and must not make an untouched
+      // generated cut look modified. Any positive quantity remains locked.
+      Object.entries(plan.sizeQuantities)
+        .filter(([, quantity]) => number(quantity) > 0)
+        .sort(([a], [b]) => a.localeCompare(b)),
     ),
     reCutQty: plan.reCutQty,
     markerNo: plan.markerNo.trim(),
@@ -466,7 +472,8 @@ export async function generateBundles(
     const allocated = await allocationRequest.query(`
       SELECT CutNo, SourceInseam, SourceSize, COALESCE(SUM(AllocatedQty), 0) AS AllocatedQty
       FROM dbo.BundleGenerationAllocation WITH (UPDLOCK, HOLDLOCK)
-      WHERE WorkOrder = @workOrder AND CutNo IN (${cutNos.map((_, index) => `@allocatedCut${index}`).join(", ")})
+      WHERE WorkOrder = @workOrder AND IsDeleted = 0
+        AND CutNo IN (${cutNos.map((_, index) => `@allocatedCut${index}`).join(", ")})
       GROUP BY CutNo, SourceInseam, SourceSize
     `);
     const sourceKey = (cutNo: string, inseam: number | null, size: string) =>
