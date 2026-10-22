@@ -38,6 +38,7 @@ import { RequirePermission } from "@/features/auth/components/RequirePermission"
 
 interface CutDetailRow {
   RowId: number;
+  DisplayRowId?: number;
   Sale_Order_No?: string;
   Customer_Name?: string;
   Work_Order?: string;
@@ -50,6 +51,7 @@ interface CutDetailRow {
   Cut?: string | number;
   Bundle_Id?: string | number;
   Bundle_Qty?: number;
+  ActiveCouponCount?: number;
   Shade?: string;
   Shrinkage?: string;
 }
@@ -125,7 +127,7 @@ export default function OpenOrderPage() {
   const cutReportColumns = useMemo<ColumnDef<CutDetailRow>[]>(
     () => [
       {
-        accessorKey: "RowId",
+        accessorKey: "DisplayRowId",
         meta: { align: "center" },
         header: ({ column }) => (
           <DataTableColumnHeader
@@ -136,7 +138,7 @@ export default function OpenOrderPage() {
         ),
         cell: ({ row }) => (
           <span className="font-semibold text-slate-900">
-            {row.original.RowId}
+            {row.original.DisplayRowId ?? row.original.RowId}
           </span>
         ),
         footer: ({ table }) => (
@@ -354,6 +356,15 @@ export default function OpenOrderPage() {
     () => [...new Set(cutDetails.map((row) => String(row.Cut ?? "").trim()).filter(Boolean))]
       .sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
     [cutDetails],
+  );
+  const selectedCutHasActiveCoupons = useMemo(
+    () =>
+      cutDetails.some(
+        (row) =>
+          String(row.Cut ?? "").trim() === cutToDelete &&
+          Number(row.ActiveCouponCount) > 0,
+      ),
+    [cutDetails, cutToDelete],
   );
   const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
   // Operations to include in coupon generation — defaults to "all" (set
@@ -1205,7 +1216,7 @@ export default function OpenOrderPage() {
               csv={{
                 filename: `cut-report-${cutDetails[0]?.Work_Order || activeSearchQuery || "export"}`,
                 columns: [
-                  { header: "Row ID", accessor: (row) => row.RowId },
+                  { header: "Row ID", accessor: (row) => row.DisplayRowId ?? row.RowId },
                   { header: "Cut", accessor: (row) => row.Cut },
                   { header: "Bundle ID", accessor: (row) => row.Bundle_Id },
                   { header: "Bundle Qty", accessor: (row) => row.Bundle_Qty },
@@ -1284,9 +1295,11 @@ export default function OpenOrderPage() {
               Its planning allocation will be released. The cut can be edited again only if
               no other generated bundle still uses it.
             </p>
-            <p className="mt-2 text-sm text-amber-700">
-              If coupons already exist for this bundle, delete those coupons first.
-            </p>
+            {Number(bundlePendingDeletion.ActiveCouponCount) > 0 && (
+              <p className="mt-2 text-sm text-amber-700">
+                Coupons exist for this bundle. Delete them first, then delete the bundle.
+              </p>
+            )}
             {bundleDeleteError && (
               <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
                 {bundleDeleteError}
@@ -1306,7 +1319,10 @@ export default function OpenOrderPage() {
               </button>
               <button
                 type="button"
-                disabled={deletingBundleRowId !== null}
+                disabled={
+                  Number(bundlePendingDeletion.ActiveCouponCount) > 0 ||
+                  deletingBundleRowId !== null
+                }
                 onClick={handleDeleteBundle}
                 className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
@@ -1332,9 +1348,11 @@ export default function OpenOrderPage() {
               This deletes every active generated bundle for this Cut in one action and releases
               their planning allocations.
             </p>
-            <p className="mt-2 text-sm text-amber-700">
-              If any bundle has active coupons, nothing is deleted. Delete its coupons first.
-            </p>
+            {selectedCutHasActiveCoupons && (
+              <p className="mt-2 text-sm text-amber-700">
+                Coupons exist for one or more bundles in this Cut. Delete them first, then delete the bundles.
+              </p>
+            )}
             {cutDeleteError && (
               <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
                 {cutDeleteError}
@@ -1354,7 +1372,7 @@ export default function OpenOrderPage() {
               </button>
               <button
                 type="button"
-                disabled={deletingCutNo !== null}
+                disabled={selectedCutHasActiveCoupons || deletingCutNo !== null}
                 onClick={handleDeleteCut}
                 className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
               >

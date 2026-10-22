@@ -130,13 +130,8 @@ export async function softDeleteGeneratedCut(
     }
     const blockedBundles = bundles.filter((bundle) => Number(bundle.CouponCount) > 0);
     if (blockedBundles.length > 0) {
-      const details = blockedBundles
-        .slice(0, 8)
-        .map((bundle) => `${bundle.BundleId} (${bundle.CouponCount})`)
-        .join(", ");
-      const more = blockedBundles.length > 8 ? ` and ${blockedBundles.length - 8} more` : "";
       throw new Error(
-        `Delete active coupons first. Blocked bundle(s): ${details}${more}. No bundles were deleted.`,
+        "Coupons have been generated for these bundles. Delete the coupons first, then delete the bundles.",
       );
     }
 

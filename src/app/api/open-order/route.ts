@@ -92,6 +92,7 @@ export async function GET(request: Request) {
       const generatedResult = await pitPool.request().input("wo", sql.NVarChar, workOrder).query(`
         SELECT
           report.RowId,
+          ROW_NUMBER() OVER (ORDER BY generation.BundleSequence) AS DisplayRowId,
           report.WorkOrder AS Work_Order,
           report.CutNo AS Cut,
           report.BundleId AS Bundle_Id,
@@ -101,12 +102,22 @@ export async function GET(request: Request) {
           report.Color,
           report.Shade,
           report.Shrinkage,
+          COALESCE(coupons.ActiveCouponCount, 0) AS ActiveCouponCount,
           NULL AS MarkerWidthCm,
           NULL AS MarkerLengthM,
           generation.BundleSequence
         FROM dbo.SewingCutReport AS report
         INNER JOIN dbo.BundleGeneration AS generation
           ON generation.Id = report.BundleGenerationId
+        LEFT JOIN (
+          SELECT BundleNo, COUNT_BIG(*) AS ActiveCouponCount
+          FROM dbo.QrCode_Coupon
+          WHERE WorkOrder = @wo
+            AND Department = 'sewing'
+            AND IsDeleted = 0
+          GROUP BY BundleNo
+        ) AS coupons
+          ON coupons.BundleNo = report.BundleId
         WHERE report.WorkOrder = @wo
           ${activeBundleWhere}
         ORDER BY generation.BundleSequence

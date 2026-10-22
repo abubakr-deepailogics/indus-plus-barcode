@@ -148,14 +148,14 @@ export default function CutPlanningPage() {
       event.returnValue = "";
     };
     const handleDocumentClick = (event: MouseEvent) => {
-      if (event.defaultPrevented || event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
       const anchor = (event.target as Element | null)?.closest<HTMLAnchorElement>("a[href]");
       if (!anchor || anchor.target === "_blank" || anchor.hasAttribute("download")) return;
       const destination = new URL(anchor.href, window.location.href);
       if (destination.origin !== window.location.origin || destination.pathname === window.location.pathname) return;
       if (window.confirm(leaveMessage)) return;
       event.preventDefault();
-      event.stopPropagation();
+      event.stopImmediatePropagation();
     };
 
     window.addEventListener("beforeunload", handleBeforeUnload);

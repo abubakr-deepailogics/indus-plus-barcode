@@ -301,6 +301,13 @@ function samePlanSet(left: CutPlanRow[], right: CutPlanRow[]) {
   return JSON.stringify(signatures(left)) === JSON.stringify(signatures(right));
 }
 
+function generatedCutsLockedMessage(cutNos: Iterable<string>) {
+  const cuts = [...cutNos].filter(Boolean);
+  const label = cuts.length === 1 ? "Cut" : "Cuts";
+  const verb = cuts.length === 1 ? "is" : "are";
+  return `${label} ${cuts.join(", ")} ${verb} locked by generated bundles. Delete ${cuts.length === 1 ? "its" : "their"} bundles in Cut Report before editing or removing ${cuts.length === 1 ? "it" : "them"}. Delete active coupons first.`;
+}
+
 export async function saveCutPlanning(payload: SaveCutPlanningPayload, userEmail: string) {
   const workOrder = payload.workOrder?.trim();
   if (!workOrder) throw new Error("Work Order is required.");
@@ -329,7 +336,7 @@ export async function saveCutPlanning(payload: SaveCutPlanningPayload, userEmail
     const lockedSubmittedPlans = payload.plans
       .filter((plan) => lockedCutNos.has(plan.cutNo.trim().toLocaleLowerCase()));
     if (!samePlanSet(lockedCurrentPlans, lockedSubmittedPlans)) {
-      throw new Error(`Generated cut(s) cannot be changed or removed: ${[...lockedCutNos].join(", ")}. Update only cuts that have no generated bundles.`);
+      throw new Error(generatedCutsLockedMessage(lockedCutNos));
     }
 
     const editablePlans = payload.plans.filter(
