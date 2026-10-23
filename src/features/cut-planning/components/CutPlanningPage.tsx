@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import {
   AlertCircle,
   Check,
@@ -84,6 +85,12 @@ export default function CutPlanningPage() {
   const [shadeQuantities, setShadeQuantities] = useState<Record<string, string>>({});
   const [shadeCutNos, setShadeCutNos] = useState<Record<string, string>>({});
   const [bundleCutMenuOpen, setBundleCutMenuOpen] = useState(false);
+  const [bundleCutMenuPosition, setBundleCutMenuPosition] = useState({
+    top: 0,
+    left: 0,
+    width: 0,
+    maxHeight: 256,
+  });
   const [bundleQty, setBundleQty] = useState("");
   const [generatingBundles, setGeneratingBundles] = useState(false);
   const [showBundlePreview, setShowBundlePreview] = useState(false);
@@ -102,6 +109,7 @@ export default function CutPlanningPage() {
   const matrixFooterRef = useRef<HTMLDivElement>(null);
   const totalsRef = useRef<HTMLElement>(null);
   const fabricMenuRef = useRef<HTMLDivElement>(null);
+  const bundleCutButtonRef = useRef<HTMLButtonElement>(null);
   const bundleCutMenuRef = useRef<HTMLDivElement>(null);
   const newMarkerRowRef = useRef<HTMLTableRowElement>(null);
   const [matrixMaxHeight, setMatrixMaxHeight] = useState<number | null>(null);
@@ -139,7 +147,10 @@ export default function CutPlanningPage() {
       if (!fabricMenuRef.current?.contains(event.target as Node)) {
         setFabricMenuOpen(false);
       }
-      if (!bundleCutMenuRef.current?.contains(event.target as Node)) {
+      if (
+        !bundleCutButtonRef.current?.contains(event.target as Node) &&
+        !bundleCutMenuRef.current?.contains(event.target as Node)
+      ) {
         setBundleCutMenuOpen(false);
       }
     };
@@ -392,6 +403,34 @@ export default function CutPlanningPage() {
       );
   }, [plans]);
   const selectedBundleTotal = bundleCutOptions.find(({ cutNo }) => cutNo === selectedBundleCut)?.transactionQty ?? 0;
+  const toggleBundleCutMenu = () => {
+    if (bundleCutMenuOpen) {
+      setBundleCutMenuOpen(false);
+      return;
+    }
+
+    const buttonBounds = bundleCutButtonRef.current?.getBoundingClientRect();
+    if (!buttonBounds) return;
+    const viewportPadding = 8;
+    const spaceBelow = window.innerHeight - buttonBounds.bottom - viewportPadding;
+    const spaceAbove = buttonBounds.top - viewportPadding;
+    const maxHeight = Math.min(256, Math.max(120, Math.max(spaceBelow, spaceAbove)));
+    const opensUpward = spaceBelow < 180 && spaceAbove > spaceBelow;
+    const top = opensUpward
+      ? Math.max(viewportPadding, buttonBounds.top - maxHeight - viewportPadding)
+      : buttonBounds.bottom + viewportPadding;
+
+    setBundleCutMenuPosition({
+      top,
+      left: Math.max(
+        viewportPadding,
+        Math.min(buttonBounds.left, window.innerWidth - buttonBounds.width - viewportPadding),
+      ),
+      width: buttonBounds.width,
+      maxHeight,
+    });
+    setBundleCutMenuOpen(true);
+  };
   const selectedMarkerPlies = Math.max(
     0,
     ...plans
@@ -475,6 +514,29 @@ export default function CutPlanningPage() {
       color: data?.metadata?.color || "—",
     }));
   }, [bundlePreviewIdentity, bundleQty, data?.metadata?.color, effectiveShadeQuantities, hasShadeSplit, plans, selectedBundleCut, selectedMarkerPlies]);
+  const bundlePreviewTotal = bundlePreview.reduce((sum, row) => sum + row.qty, 0);
+  const bundlePreviewByCut = useMemo(() => {
+    const summaries = new Map<string, { bundleCount: number; quantity: number }>();
+    for (const row of bundlePreview) {
+      const summary = summaries.get(row.cutNo) ?? { bundleCount: 0, quantity: 0 };
+      summary.bundleCount += 1;
+      summary.quantity += row.qty;
+      summaries.set(row.cutNo, summary);
+    }
+    return [...summaries.entries()].map(([cutNo, summary]) => ({
+      cutNo,
+      ...summary,
+    }));
+  }, [bundlePreview]);
+  const bundlePreviewUniqueCounts = useMemo(
+    () => ({
+      inseams: new Set(bundlePreview.map((row) => row.inseam ?? "—")).size,
+      sizes: new Set(bundlePreview.map((row) => row.size)).size,
+      shades: new Set(bundlePreview.map((row) => row.shade || "UNSHADED")).size,
+      shrinkages: new Set(bundlePreview.map((row) => row.shrinkage || "—")).size,
+    }),
+    [bundlePreview],
+  );
 
   const update = (index: number, patch: Partial<CutPlanRow>) =>
     (setIsDirty(true), setPlans((current) =>
@@ -860,6 +922,62 @@ export default function CutPlanningPage() {
     event.preventDefault();
     addMarkerSet();
   };
+  const navigateGridWithArrowKeys = (
+    event: React.KeyboardEvent<HTMLElement>,
+  ) => {
+    if (
+      !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(
+        event.key,
+      ) ||
+      event.altKey ||
+      event.ctrlKey ||
+      event.metaKey ||
+      !(event.target instanceof HTMLInputElement) ||
+      !event.target.classList.contains("cell-input")
+    ) {
+      return;
+    }
+
+    const currentCell = event.target.closest("td");
+    const currentRow = currentCell?.closest("tr");
+    const table = currentCell?.closest("table");
+    if (!currentCell || !currentRow || !table) return;
+
+    const rows = Array.from(table.querySelectorAll<HTMLTableRowElement>("tbody tr"));
+    const rowIndex = rows.indexOf(currentRow);
+    const cellIndex = Array.from(currentRow.cells).indexOf(currentCell);
+    if (rowIndex < 0 || cellIndex < 0) return;
+
+    let nextInput: HTMLInputElement | null = null;
+    if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+      const editableCells = Array.from(currentRow.cells).filter((cell) =>
+        cell.querySelector<HTMLInputElement>("input.cell-input:not(:disabled)"),
+      );
+      const editableIndex = editableCells.indexOf(currentCell);
+      const direction = event.key === "ArrowLeft" ? -1 : 1;
+      nextInput = editableCells[editableIndex + direction]?.querySelector(
+        "input.cell-input:not(:disabled)",
+      ) ?? null;
+    } else {
+      const direction = event.key === "ArrowUp" ? -1 : 1;
+      for (
+        let candidateIndex = rowIndex + direction;
+        candidateIndex >= 0 && candidateIndex < rows.length;
+        candidateIndex += direction
+      ) {
+        nextInput = rows[candidateIndex]?.cells[cellIndex]?.querySelector(
+          "input.cell-input:not(:disabled)",
+        ) ?? null;
+        if (nextInput) break;
+      }
+    }
+
+    // Always suppress a native numeric/date increment, even at the grid edge.
+    event.preventDefault();
+    if (!nextInput) return;
+    nextInput.focus();
+    nextInput.scrollIntoView({ block: "nearest", inline: "nearest" });
+  };
   const updateSharedMarker = (rowIndex: number, patch: Partial<CutPlanRow>) =>
     (setIsDirty(true), setPlans((current) => {
       const targets = new Set(
@@ -1231,7 +1349,7 @@ export default function CutPlanningPage() {
             New marker row added
           </span>
         )}
-        <button type="button" onClick={() => { setSelectedBundleCut(""); setShadeQuantities({}); setBundleCutMenuOpen(false); setBundleQty(""); setShowBundlePreview(false); setShowBundleModal(true); }} className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
+        <button type="button" onClick={() => { setSelectedBundleCut(""); setShadeQuantities({}); setBundleQty(""); setShowBundlePreview(false); setShowBundleModal(true); }} className="rounded-md bg-indigo-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-indigo-700">
           Generate bundle
         </button>
       </div>
@@ -1480,7 +1598,10 @@ export default function CutPlanningPage() {
   return (
     <main
       className="cut-planning-page -mt-4 w-full space-y-3 pb-56 sm:-mt-5"
-      onKeyDown={addMarkerSetOnEnter}
+      onKeyDown={(event) => {
+        navigateGridWithArrowKeys(event);
+        addMarkerSetOnEnter(event);
+      }}
     >
       <ModulePageHeader
         eyebrow="Sewing / Cutting"
@@ -1963,21 +2084,156 @@ export default function CutPlanningPage() {
       {showBundleModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/45 p-3 sm:p-4">
           <div role="dialog" aria-modal="true" className="max-h-[calc(100dvh-1.5rem)] w-full max-w-6xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:max-h-[calc(100dvh-2rem)] sm:p-6">
-            <div className="flex items-start justify-between"><div><h2 className="text-lg font-bold text-slate-900">Generate bundles</h2><p className="mt-1 text-sm text-slate-500">Select one saved Cut no. and allocate its quantity by shade.</p></div><button type="button" onClick={() => setShowBundleModal(false)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-5" /></button></div>
+            <div className="flex items-start justify-between"><div><h2 className="text-lg font-bold text-slate-900">{showBundlePreview ? "Bundle preview" : "Generate bundles"}</h2><p className="mt-1 text-sm text-slate-500">{showBundlePreview ? "Review bundle quantities and totals before generating." : "Select one saved Cut no. and allocate its quantity by shade."}</p></div><button type="button" onClick={() => setShowBundleModal(false)} className="rounded p-1 text-slate-500 hover:bg-slate-100"><X className="size-5" /></button></div>
+            {!showBundlePreview && (
+              <>
             <div className="mt-4 grid grid-cols-1 items-end gap-3 rounded-xl border border-slate-200 bg-slate-50 p-4 sm:grid-cols-2 lg:grid-cols-[minmax(15rem,1.7fr)_repeat(3,minmax(8rem,1fr))]">
               <div>
                 <label className="block text-xs font-bold uppercase tracking-wide text-slate-500">Cut no.</label>
-              <div ref={bundleCutMenuRef} className="relative mt-2"><button type="button" aria-haspopup="listbox" aria-expanded={bundleCutMenuOpen} onClick={() => setBundleCutMenuOpen((open) => !open)} className="flex h-11 w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 text-left shadow-sm transition hover:border-indigo-300 hover:shadow focus:outline-none focus:ring-2 focus:ring-indigo-200"><span className="flex size-6 items-center justify-center rounded-md bg-indigo-50 text-[11px] font-black text-indigo-700">#</span><span className="flex-1 text-sm font-semibold text-slate-700">{selectedBundleCut ? `Cut ${selectedBundleCut}` : "Select Cut no."}</span><ChevronDown className={`size-4 text-indigo-600 transition-transform ${bundleCutMenuOpen ? "rotate-180" : ""}`} /></button>{bundleCutMenuOpen && <div role="listbox" className="absolute z-10 mt-2 max-h-64 w-full overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-900/10"><div className="sticky top-0 px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400 bg-white">Choose one cut</div>{bundleCutOptions.map(({ cutNo }) => <button key={cutNo} type="button" role="option" aria-selected={selectedBundleCut === cutNo} onClick={() => { setSelectedBundleCut(cutNo); setShadeQuantities({}); setShadeCutNos({}); setShowBundlePreview(false); setBundleCutMenuOpen(false); }} className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-sm font-semibold transition ${selectedBundleCut === cutNo ? "bg-indigo-50 text-indigo-800" : "text-slate-700 hover:bg-slate-50"}`}><span className={`flex size-5 items-center justify-center rounded border text-[11px] ${selectedBundleCut === cutNo ? "border-indigo-600 bg-indigo-600 text-white" : "border-slate-300 bg-white text-transparent"}`}>✓</span>Cut {cutNo}</button>)}</div>}</div>
+              <button
+                ref={bundleCutButtonRef}
+                type="button"
+                aria-haspopup="listbox"
+                aria-expanded={bundleCutMenuOpen}
+                onClick={toggleBundleCutMenu}
+                className="mt-2 flex h-11 w-full items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 text-left shadow-sm transition hover:border-indigo-300 hover:shadow focus:outline-none focus:ring-2 focus:ring-indigo-200"
+              >
+                <span className="flex size-6 items-center justify-center rounded-md bg-indigo-50 text-[11px] font-black text-indigo-700">#</span>
+                <span className="flex-1 text-sm font-semibold text-slate-700">
+                  {selectedBundleCut ? `Cut ${selectedBundleCut}` : "Select Cut no."}
+                </span>
+                <ChevronDown
+                  className={`size-4 text-indigo-600 transition-transform ${
+                    bundleCutMenuOpen ? "rotate-180" : ""
+                  }`}
+                />
+              </button>
             </div>
             <div className="contents">{!hasShadeSplit && <label className="text-sm font-medium text-slate-700">Bundle qty<input type="number" min="1" max={selectedMarkerPlies || undefined} step="1" value={bundleQty} onWheel={preventWheelChange} onChange={(event) => { setBundleQty(event.target.value); setShowBundlePreview(false); }} className="bundle-modal-number mt-1 h-9 w-full rounded-lg border border-slate-300 px-2" /></label>}<div className="flex h-9 items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3"><span className="text-xs font-semibold text-slate-500">Marker plies</span><span className="text-sm font-bold tabular-nums text-slate-800">{displayNumber(selectedMarkerPlies)}</span></div><div className="flex h-9 items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-3"><span className="text-xs font-semibold text-slate-500">Cut total</span><span className="text-sm font-bold tabular-nums text-slate-800">{displayNumber(selectedBundleTotal)}</span></div></div></div>
             {!hasShadeSplit && Number(bundleQty) > 0 && !Number.isInteger(Number(bundleQty)) && <p className="mt-2 text-xs font-medium text-rose-700">Bundle qty must be a whole number.</p>}
             {selectedMarkerPlies > 0 && Number(bundleQty) > selectedMarkerPlies && <p className="mt-2 text-xs font-medium text-rose-700">Bundle qty cannot exceed Marker plies ({displayNumber(selectedMarkerPlies)}).</p>}
             {requiresShadeSplit && <div className="mt-4 rounded-xl border border-indigo-200 bg-indigo-50/40 p-4"><div className="flex items-center justify-between"><p className="text-sm font-bold text-slate-800">Shade split <span className="font-normal text-rose-700">(required)</span></p><p className={`text-xs font-semibold ${Math.abs(shadePlyTotal - selectedMarkerPlies) < 0.0001 && splitCutNamesAreValid ? "text-emerald-700" : "text-amber-700"}`}>Plies allocated {displayNumber(shadePlyTotal)} / {displayNumber(selectedMarkerPlies)}</p></div><p className="mt-1 text-xs text-slate-600">Each shade is generated under its own Cut No. Review the default names before generating.</p><div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">{selectedShadeCodes.map((shade) => <div key={shade} className="space-y-2"><label className="block text-xs font-semibold text-slate-600">Shade {shade} · plies<input type="number" min="1" max={selectedMarkerPlies || undefined} step="1" value={shadeQuantities[shade] ?? ""} onWheel={preventWheelChange} onChange={(event) => { setShadeQuantities((current) => ({ ...current, [shade]: event.target.value })); setShowBundlePreview(false); }} className="bundle-modal-number mt-1 h-9 w-full rounded-lg border border-slate-300 px-2 text-sm" /></label><label className="block text-xs font-semibold text-slate-600">New Cut No.<input type="text" value={shadeCutNos[shade] ?? `${selectedBundleCut}${shade}`} onChange={(event) => { setShadeCutNos((current) => ({ ...current, [shade]: event.target.value })); setShowBundlePreview(false); }} className="mt-1 h-9 w-full rounded-lg border border-slate-300 bg-white px-2 text-sm" /></label></div>)}</div>{Math.abs(shadePlyTotal - selectedMarkerPlies) >= 0.0001 && <p className="mt-2 text-xs text-amber-700">Shade plies must add up exactly to Marker plies.</p>}{!splitCutNamesAreValid && <p className="mt-2 text-xs text-rose-700">Every shade needs a different Cut No. and at least one ply.</p>}</div>}
-            {showBundlePreview && <div className="mt-4 overflow-hidden rounded-xl border border-indigo-100"><div className="bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-900">Bundle preview · {bundlePreview.length} bundle(s)</div><div className="max-h-52 overflow-y-auto"><table className="w-full table-fixed text-xs"><colgroup><col className="w-[8%]" /><col className="w-[17%]" /><col className="w-[10%]" /><col className="w-[9%]" /><col className="w-[8%]" /><col className="w-[25%]" /><col className="w-[10%]" /><col className="w-[13%]" /></colgroup><thead className="sticky top-0 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500"><tr><th className="px-2 py-2 text-center">Cut</th><th className="px-2 py-2">Bundle ID</th><th className="px-2 py-2 text-right">Bundle qty</th><th className="px-2 py-2 text-center">Inseam</th><th className="px-2 py-2 text-center">Size</th><th className="px-2 py-2">Color</th><th className="px-2 py-2 text-center">Shade</th><th className="px-2 py-2 text-center">Shrinkage</th></tr></thead><tbody>{bundlePreview.map((row, index) => <tr key={`${row.cutNo}-${row.inseam ?? "none"}-${row.size}-${index}`} className="border-t border-slate-100 align-middle"><td className="px-2 py-2 text-center font-semibold text-indigo-700">{row.cutNo}</td><td className="break-all px-2 py-2 font-mono text-indigo-700">{row.previewId}</td><td className="px-2 py-2 text-right font-semibold">{displayNumber(row.qty)}</td><td className="px-2 py-2 text-center">{row.inseam ?? "—"}</td><td className="px-2 py-2 text-center font-semibold">{row.size}</td><td className="break-words px-2 py-2 leading-4" title={row.color}>{row.color}</td><td className="break-words px-2 py-2 text-center font-semibold">{row.shade || "—"}</td><td className="break-words px-2 py-2 text-center font-mono">{row.shrinkage || "—"}</td></tr>)}</tbody></table></div></div>}
+              </>
+            )}
+            {showBundlePreview && (
+              <div className="mt-4 overflow-hidden rounded-xl border border-indigo-100">
+                <div className="max-h-[min(55dvh,32rem)] overflow-auto">
+                  <table className="w-full min-w-[760px] table-fixed text-xs">
+                    <colgroup>
+                      <col className="w-[8%]" />
+                      <col className="w-[17%]" />
+                      <col className="w-[10%]" />
+                      <col className="w-[9%]" />
+                      <col className="w-[8%]" />
+                      <col className="w-[25%]" />
+                      <col className="w-[10%]" />
+                      <col className="w-[13%]" />
+                    </colgroup>
+                    <thead className="sticky top-0 bg-slate-50 text-left text-[10px] uppercase tracking-wide text-slate-500">
+                      <tr>
+                        <th className="px-2 py-2 text-center">Cut</th>
+                        <th className="px-2 py-2">Bundle ID</th>
+                        <th className="px-2 py-2 text-right">Bundle qty</th>
+                        <th className="px-2 py-2 text-center">Inseam</th>
+                        <th className="px-2 py-2 text-center">Size</th>
+                        <th className="px-2 py-2">Color</th>
+                        <th className="px-2 py-2 text-center">Shade</th>
+                        <th className="px-2 py-2 text-center">Shrinkage</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {bundlePreview.map((row, index) => (
+                        <tr
+                          key={`${row.cutNo}-${row.inseam ?? "none"}-${row.size}-${index}`}
+                          className="border-t border-slate-100 align-middle"
+                        >
+                          <td className="px-2 py-2 text-center font-semibold text-indigo-700">{row.cutNo}</td>
+                          <td className="break-all px-2 py-2 font-mono text-indigo-700">{row.previewId}</td>
+                          <td className="px-2 py-2 text-right font-semibold">{displayNumber(row.qty)}</td>
+                          <td className="px-2 py-2 text-center">{row.inseam ?? "—"}</td>
+                          <td className="px-2 py-2 text-center font-semibold">{row.size}</td>
+                          <td className="break-words px-2 py-2 leading-4" title={row.color}>{row.color}</td>
+                          <td className="break-words px-2 py-2 text-center font-semibold">{row.shade || "—"}</td>
+                          <td className="break-words px-2 py-2 text-center font-mono">{row.shrinkage || "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="sticky bottom-0 z-10 border-t-2 border-indigo-200 bg-indigo-50 text-slate-800 shadow-[0_-2px_4px_-3px_rgb(15_23_42)]">
+                      <tr>
+                        <td className="px-2 py-2 text-center text-[10px] font-bold text-indigo-800">
+                          Cut: {bundlePreviewByCut.length}
+                        </td>
+                        <td className="px-2 py-2 text-[10px] font-bold">Total: {bundlePreview.length}</td>
+                        <td className="px-2 py-2 text-right font-bold text-indigo-800">{displayNumber(bundlePreviewTotal)}</td>
+                        <td className="px-2 py-2 text-center text-[10px] font-bold text-indigo-800">{bundlePreviewUniqueCounts.inseams}</td>
+                        <td className="px-2 py-2 text-center text-[10px] font-bold text-indigo-800">{bundlePreviewUniqueCounts.sizes}</td>
+                        <td />
+                        <td className="px-2 py-2 text-center text-[10px] font-bold text-indigo-800">{bundlePreviewUniqueCounts.shades}</td>
+                        <td className="px-2 py-2 text-center text-[10px] font-bold text-indigo-800">{bundlePreviewUniqueCounts.shrinkages}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            )}
             <div className="mt-5 flex justify-end gap-2"><button type="button" onClick={() => showBundlePreview ? setShowBundlePreview(false) : setShowBundleModal(false)} className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-semibold">{showBundlePreview ? "Back" : "Cancel"}</button><button type="button" disabled={generatingBundles || !selectedBundleCut || isDirty || (!hasShadeSplit && (!Number.isInteger(Number(bundleQty)) || Number(bundleQty) <= 0)) || (!hasShadeSplit && selectedMarkerPlies > 0 && Number(bundleQty) > selectedMarkerPlies) || (hasShadeSplit && (Math.abs(shadePlyTotal - selectedMarkerPlies) >= 0.0001 || !splitCutNamesAreValid))} onClick={() => { if (showBundlePreview) { void generateBundlesFromSelection(); return; } void loadBundlePreview(); }} className="rounded-lg bg-indigo-600 px-3 py-2 text-sm font-semibold text-white disabled:opacity-50">{generatingBundles ? "Generating..." : showBundlePreview ? "Confirm & generate" : "Preview bundles"}</button></div>
           </div>
         </div>
       )}
+      {showBundleModal &&
+        !showBundlePreview &&
+        bundleCutMenuOpen &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div
+            ref={bundleCutMenuRef}
+            role="listbox"
+            aria-label="Choose Cut no."
+            className="fixed z-[60] overflow-y-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-900/20"
+            style={{
+              top: bundleCutMenuPosition.top,
+              left: bundleCutMenuPosition.left,
+              width: bundleCutMenuPosition.width,
+              maxHeight: bundleCutMenuPosition.maxHeight,
+            }}
+          >
+            <div className="sticky top-0 bg-white px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              Choose one cut
+            </div>
+            {bundleCutOptions.map(({ cutNo }) => (
+              <button
+                key={cutNo}
+                type="button"
+                role="option"
+                aria-selected={selectedBundleCut === cutNo}
+                onClick={() => {
+                  setSelectedBundleCut(cutNo);
+                  setShadeQuantities({});
+                  setShadeCutNos({});
+                  setShowBundlePreview(false);
+                  setBundleCutMenuOpen(false);
+                }}
+                className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-sm font-semibold transition ${
+                  selectedBundleCut === cutNo
+                    ? "bg-indigo-50 text-indigo-800"
+                    : "text-slate-700 hover:bg-slate-50"
+                }`}
+              >
+                <span
+                  className={`flex size-5 items-center justify-center rounded border text-[11px] ${
+                    selectedBundleCut === cutNo
+                      ? "border-indigo-600 bg-indigo-600 text-white"
+                      : "border-slate-300 bg-white text-transparent"
+                  }`}
+                >
+                  ✓
+                </span>
+                Cut {cutNo}
+              </button>
+            ))}
+          </div>,
+          document.body,
+        )}
       {pendingDelete && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4"
