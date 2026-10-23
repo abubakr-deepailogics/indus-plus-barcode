@@ -818,6 +818,18 @@ export default function CutPlanningPage() {
               >
                 Date
               </th>
+              <th
+                rowSpan={2}
+                className="border-b border-r border-slate-300 px-2 py-3 font-semibold whitespace-nowrap"
+              >
+                Marker no.
+              </th>
+              <th
+                rowSpan={2}
+                className="border-b border-r border-slate-300 px-2 py-3 font-semibold whitespace-nowrap"
+              >
+                Cut no.
+              </th>
               {groups.map((group) => (
                 <th
                   key={group.inseam ?? "none"}
@@ -828,7 +840,7 @@ export default function CutPlanningPage() {
                 </th>
               ))}
               <th
-                colSpan={12}
+                colSpan={10}
                 className="border-b border-slate-300 px-2 py-2 text-center font-bold"
               >
                 Marker details
@@ -848,8 +860,6 @@ export default function CutPlanningPage() {
               {[
                 "Re-cut",
                 "Total",
-                "Marker no.",
-                "Cut no.",
                 "Marker plies",
                 "Transaction count",
                 "Shrinkage",
@@ -904,6 +914,28 @@ export default function CutPlanningPage() {
                       className={`${cellClass} w-32`}
                     />
                   </td>
+                  <td className="p-0">
+                    <input
+                      value={base?.plan.markerNo || ""}
+                      onChange={(event) =>
+                        updateSharedMarker(rowIndex, {
+                          markerNo: event.target.value,
+                        })
+                      }
+                      className={`${cellClass} w-20`}
+                    />
+                  </td>
+                  <td className="p-0">
+                    <input
+                      value={base?.plan.cutNo || ""}
+                      onChange={(event) =>
+                        updateSharedMarker(rowIndex, {
+                          cutNo: event.target.value,
+                        })
+                      }
+                      className={`${cellClass} w-20`}
+                    />
+                  </td>
                   {groups.flatMap((group) =>
                     group.sizeColumns.map((size) => {
                       const entry = groupedPlans.find(
@@ -948,28 +980,6 @@ export default function CutPlanningPage() {
                     />
                   </td>
                   <td className="cell-value">{displayNumber(total)}</td>
-                  <td className="p-0">
-                    <input
-                      value={base?.plan.markerNo || ""}
-                      onChange={(event) =>
-                        updateSharedMarker(rowIndex, {
-                          markerNo: event.target.value,
-                        })
-                      }
-                      className={`${cellClass} w-20`}
-                    />
-                  </td>
-                  <td className="p-0">
-                    <input
-                      value={base?.plan.cutNo || ""}
-                      onChange={(event) =>
-                        updateSharedMarker(rowIndex, {
-                          cutNo: event.target.value,
-                        })
-                      }
-                      className={`${cellClass} w-20`}
-                    />
-                  </td>
                   <td className="p-0">
                     <input
                       type="number"
@@ -1127,11 +1137,11 @@ export default function CutPlanningPage() {
                 <tr>
                   {[
                     "Date",
+                    "Marker no.",
+                    "Cut no.",
                     ...group.sizeColumns,
                     "Re-cut",
                     "Total",
-                    "Marker no.",
-                    "Cut no.",
                     "Marker plies",
                     "Transaction count",
                     "Shrinkage",
@@ -1173,6 +1183,26 @@ export default function CutPlanningPage() {
                           className={`${cellClass} w-32`}
                         />
                       </td>
+                      <td className="p-0">
+                        <input
+                          value={plan.markerNo}
+                          onKeyDown={(event) => addOnEnter(event, group)}
+                          onChange={(event) =>
+                            update(index, { markerNo: event.target.value })
+                          }
+                          className={`${cellClass} w-20`}
+                        />
+                      </td>
+                      <td className="p-0">
+                        <input
+                          value={plan.cutNo}
+                          onKeyDown={(event) => addOnEnter(event, group)}
+                          onChange={(event) =>
+                            update(index, { cutNo: event.target.value })
+                          }
+                          className={`${cellClass} w-20`}
+                        />
+                      </td>
                       {group.sizeColumns.map((size) => (
                         <td key={size} className="p-0">
                           <input
@@ -1206,26 +1236,6 @@ export default function CutPlanningPage() {
                         />
                       </td>
                       <td className="cell-value">{displayNumber(total)}</td>
-                      <td className="p-0">
-                        <input
-                          value={plan.markerNo}
-                          onKeyDown={(event) => addOnEnter(event, group)}
-                          onChange={(event) =>
-                            update(index, { markerNo: event.target.value })
-                          }
-                          className={`${cellClass} w-20`}
-                        />
-                      </td>
-                      <td className="p-0">
-                        <input
-                          value={plan.cutNo}
-                          onKeyDown={(event) => addOnEnter(event, group)}
-                          onChange={(event) =>
-                            update(index, { cutNo: event.target.value })
-                          }
-                          className={`${cellClass} w-20`}
-                        />
-                      </td>
                       <td className="p-0">
                         <input
                           type="number"
@@ -1499,11 +1509,11 @@ export default function CutPlanningPage() {
                     <tr>
                       {[
                         "Date",
+                        "Marker no.",
+                        "Cut no.",
                         ...sizeColumns,
                         "Re-cut",
                         "Total",
-                        "Marker no.",
-                        "Cut no.",
                         "Marker plies",
                         "Transaction count",
                         "Shrinkage",
@@ -1570,6 +1580,30 @@ export default function CutPlanningPage() {
                                 className={`${cellClass} w-32`}
                               />
                             </td>
+                            <td className="p-0">
+                              <input
+                                value={plan.markerNo}
+                                onKeyDown={(event) => addOnEnter(event, group)}
+                                onChange={(event) =>
+                                  update(index, {
+                                    markerNo: event.target.value,
+                                  })
+                                }
+                                className={`${cellClass} w-20`}
+                              />
+                            </td>
+                            <td className="p-0">
+                              <input
+                                value={plan.cutNo}
+                                onKeyDown={(event) => addOnEnter(event, group)}
+                                onChange={(event) =>
+                                  update(index, {
+                                    cutNo: event.target.value,
+                                  })
+                                }
+                                className={`${cellClass} w-20`}
+                              />
+                            </td>
                             {sizeColumns.map((size) => (
                               <td key={size} className="p-0">
                                 <input
@@ -1606,28 +1640,6 @@ export default function CutPlanningPage() {
                             </td>
                             <td className="cell-value">
                               {displayNumber(total)}
-                            </td>
-                            <td className="p-0">
-                              <input
-                                value={plan.markerNo}
-                                onKeyDown={(event) => addOnEnter(event, group)}
-                                onChange={(event) =>
-                                  update(index, {
-                                    markerNo: event.target.value,
-                                  })
-                                }
-                                className={`${cellClass} w-20`}
-                              />
-                            </td>
-                            <td className="p-0">
-                              <input
-                                value={plan.cutNo}
-                                onKeyDown={(event) => addOnEnter(event, group)}
-                                onChange={(event) =>
-                                  update(index, { cutNo: event.target.value })
-                                }
-                                className={`${cellClass} w-20`}
-                              />
                             </td>
                             <td className="p-0">
                               <input
