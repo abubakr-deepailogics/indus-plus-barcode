@@ -310,7 +310,7 @@ export default function CutPlanningPage() {
       isMatrixColumnPinned(columnId)
         ? type === "header"
           ? "sticky z-30 bg-slate-100 shadow-[2px_0_3px_-3px_rgb(15_23_42)]"
-          : "sticky z-20 bg-white shadow-[2px_0_3px_-3px_rgb(15_23_42)]"
+          : "sticky z-20 shadow-[2px_0_3px_-3px_rgb(15_23_42)]"
         : ""
     }`,
   });
@@ -1019,7 +1019,7 @@ export default function CutPlanningPage() {
                 <tr
                   key={base?.plan.id ?? rowIndex}
                   ref={rowIndex === newMarkerRowIndex ? newMarkerRowRef : null}
-                  className={`border-b border-slate-200 transition-colors hover:bg-slate-50/50 ${rowIndex === newMarkerRowIndex ? "bg-indigo-50" : ""}`}
+                  className={`border-b border-slate-200 transition-colors hover:bg-slate-50/50 ${rowIndex % 2 === 0 ? "bg-white" : "bg-slate-100"} ${rowIndex === newMarkerRowIndex ? "bg-indigo-50" : ""}`}
                 >
                   <td {...matrixCellProps("date", "p-0")}>
                     <input
@@ -1295,7 +1295,7 @@ export default function CutPlanningPage() {
                   return (
                     <tr
                       key={plan.id ?? `${group.inseam}-${row}`}
-                      className="border-b border-slate-200 hover:bg-slate-50/50"
+                      className={`border-b border-slate-200 hover:bg-slate-50/50 ${row % 2 === 0 ? "bg-white" : "bg-slate-100"}`}
                     >
                       <td className="p-0">
                         <input
@@ -1690,7 +1690,7 @@ export default function CutPlanningPage() {
                         return (
                           <tr
                             key={plan.id ?? `${group.inseam}-${row}`}
-                            className="border-b border-slate-200 hover:bg-slate-50/50"
+                            className={`border-b border-slate-200 hover:bg-slate-50/50 ${row % 2 === 0 ? "bg-white" : "bg-slate-100"}`}
                           >
                             <td className="p-0">
                               <input
@@ -2037,6 +2037,9 @@ export default function CutPlanningPage() {
         .cell-input:focus {
           background: #eef2ff;
           box-shadow: inset 0 0 0 1px #6366f1;
+        }
+        td[data-pin-column] {
+          background: inherit;
         }
         .cell-label {
           border-right: 1px solid #e2e8f0;
