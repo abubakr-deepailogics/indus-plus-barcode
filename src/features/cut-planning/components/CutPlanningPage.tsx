@@ -1,11 +1,13 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   Check,
   ChevronDown,
   LoaderCircle,
+  Pin,
+  PinOff,
   Plus,
   Scissors,
   Search,
@@ -39,6 +41,8 @@ const shadeCodes = (value: string) => {
   const shade = value.trim().toUpperCase();
   return /^[A-Z]{2,}$/.test(shade) ? [...new Set(shade)] : [shade || "UNSHADED"];
 };
+const matrixSizeColumnId = (group: CutPlanningInseamGroup, size: string) =>
+  `size-${group.inseam ?? "none"}-${size}`;
 
 function makePlan(group: CutPlanningInseamGroup): CutPlanRow {
   return {
@@ -101,6 +105,9 @@ export default function CutPlanningPage() {
   const bundleCutMenuRef = useRef<HTMLDivElement>(null);
   const newMarkerRowRef = useRef<HTMLTableRowElement>(null);
   const [matrixMaxHeight, setMatrixMaxHeight] = useState<number | null>(null);
+  const [pinnedMatrixColumnIds, setPinnedMatrixColumnIds] = useState<string[]>(
+    [],
+  );
 
   useEffect(() => {
     const updateMatrixHeight = () => {
@@ -262,6 +269,98 @@ export default function CutPlanningPage() {
       })),
     [groups, plans],
   );
+  const matrixColumnOrder = useMemo(
+    () => [
+      "date",
+      "marker-no",
+      "cut-no",
+      ...groups.flatMap((group) =>
+        group.sizeColumns.map((size) => matrixSizeColumnId(group, size)),
+      ),
+      "re-cut",
+      "total",
+      "marker-plies",
+      "transaction-count",
+      "shrinkage",
+      "shade",
+      "calculated-required",
+      "marker-width",
+      "marker-length",
+      "actions",
+    ],
+    [groups],
+  );
+  const isMatrixColumnPinned = (columnId: string) =>
+    pinnedMatrixColumnIds.includes(columnId);
+  const toggleMatrixColumnPin = (columnId: string) => {
+    setPinnedMatrixColumnIds((current) => {
+      const next = current.includes(columnId)
+        ? current.filter((id) => id !== columnId)
+        : [...current, columnId];
+      return matrixColumnOrder.filter((id) => next.includes(id));
+    });
+  };
+  const matrixCellProps = (
+    columnId: string,
+    className: string,
+    type: "body" | "header" = "body",
+  ) => ({
+    "data-pin-column": columnId,
+    className: `${className} ${
+      isMatrixColumnPinned(columnId)
+        ? type === "header"
+          ? "sticky z-30 bg-slate-100 shadow-[2px_0_3px_-3px_rgb(15_23_42)]"
+          : "sticky z-20 bg-white shadow-[2px_0_3px_-3px_rgb(15_23_42)]"
+        : ""
+    }`,
+  });
+  const matrixPinButton = (columnId: string, label: string) => {
+    const pinned = isMatrixColumnPinned(columnId);
+    return (
+      <button
+        type="button"
+        onClick={() => toggleMatrixColumnPin(columnId)}
+        className={`rounded p-0.5 transition hover:bg-slate-300/70 ${
+          pinned ? "text-indigo-700" : "text-slate-400 hover:text-slate-700"
+        }`}
+        aria-label={`${pinned ? "Unpin" : "Pin"} ${label} column`}
+        title={`${pinned ? "Unpin" : "Pin"} column`}
+      >
+        {pinned ? <PinOff className="size-3" /> : <Pin className="size-3" />}
+      </button>
+    );
+  };
+
+  useLayoutEffect(() => {
+    const table = matrixScrollRef.current?.querySelector("table");
+    if (!table) return;
+
+    const updatePinnedOffsets = () => {
+      const cells = Array.from(
+        table.querySelectorAll<HTMLElement>("[data-pin-column]"),
+      );
+      cells.forEach((cell) => {
+        cell.style.left = "";
+      });
+
+      let offset = 0;
+      for (const columnId of pinnedMatrixColumnIds) {
+        const columnCells = cells.filter(
+          (cell) => cell.dataset.pinColumn === columnId,
+        );
+        const width = columnCells[0]?.getBoundingClientRect().width ?? 0;
+        columnCells.forEach((cell) => {
+          cell.style.left = `${offset}px`;
+        });
+        offset += width;
+      }
+    };
+
+    updatePinnedOffsets();
+    const observer = new ResizeObserver(updatePinnedOffsets);
+    observer.observe(table);
+    return () => observer.disconnect();
+  }, [matrixColumnOrder, pinnedMatrixColumnIds]);
   const materialSummaries = useMemo(() => {
     const byAccessCode = new Map<string, string[]>();
     for (const { accessCode, itemName } of data?.metadata?.accessItems ?? []) {
@@ -814,21 +913,33 @@ export default function CutPlanningPage() {
             <tr>
               <th
                 rowSpan={2}
-                className="border-b border-r border-slate-300 px-2 py-3 font-semibold"
+                {...matrixCellProps(
+                  "date",
+                  "border-b border-r border-slate-300 px-2 py-3 font-semibold",
+                  "header",
+                )}
               >
-                Date
+                <span className="flex items-center gap-1">Date {matrixPinButton("date", "Date")}</span>
               </th>
               <th
                 rowSpan={2}
-                className="border-b border-r border-slate-300 px-2 py-3 font-semibold whitespace-nowrap"
+                {...matrixCellProps(
+                  "marker-no",
+                  "border-b border-r border-slate-300 px-2 py-3 font-semibold whitespace-nowrap",
+                  "header",
+                )}
               >
-                Marker no.
+                <span className="flex items-center gap-1">Marker no. {matrixPinButton("marker-no", "Marker no.")}</span>
               </th>
               <th
                 rowSpan={2}
-                className="border-b border-r border-slate-300 px-2 py-3 font-semibold whitespace-nowrap"
+                {...matrixCellProps(
+                  "cut-no",
+                  "border-b border-r border-slate-300 px-2 py-3 font-semibold whitespace-nowrap",
+                  "header",
+                )}
               >
-                Cut no.
+                <span className="flex items-center gap-1">Cut no. {matrixPinButton("cut-no", "Cut no.")}</span>
               </th>
               {groups.map((group) => (
                 <th
@@ -851,29 +962,37 @@ export default function CutPlanningPage() {
                 group.sizeColumns.map((size) => (
                   <th
                     key={`${group.inseam}-${size}`}
-                    className="border-b border-r border-slate-300 px-2 py-2 font-semibold"
+                    {...matrixCellProps(
+                      matrixSizeColumnId(group, size),
+                      "border-b border-r border-slate-300 px-2 py-2 font-semibold",
+                      "header",
+                    )}
                   >
-                    {size}
+                    <span className="flex items-center gap-1">{size} {matrixPinButton(matrixSizeColumnId(group, size), `size ${size}`)}</span>
                   </th>
                 )),
               )}
               {[
-                "Re-cut",
-                "Total",
-                "Marker plies",
-                "Transaction count",
-                "Shrinkage",
-                "Shade",
-                "Calculated required",
-                "Marker width (cm)",
-                "Marker length (m)",
-                "",
-              ].map((heading) => (
+                ["re-cut", "Re-cut"],
+                ["total", "Total"],
+                ["marker-plies", "Marker plies"],
+                ["transaction-count", "Transaction count"],
+                ["shrinkage", "Shrinkage"],
+                ["shade", "Shade"],
+                ["calculated-required", "Calculated required"],
+                ["marker-width", "Marker width (cm)"],
+                ["marker-length", "Marker length (m)"],
+                ["actions", "Actions"],
+              ].map(([columnId, heading]) => (
                 <th
-                  key={heading}
-                  className="border-b border-slate-300 px-2 py-2 font-semibold whitespace-nowrap"
+                  key={columnId}
+                  {...matrixCellProps(
+                    columnId,
+                    "border-b border-slate-300 px-2 py-2 font-semibold whitespace-nowrap",
+                    "header",
+                  )}
                 >
-                  {heading}
+                  <span className="flex items-center gap-1">{heading === "Actions" ? "" : heading} {matrixPinButton(columnId, heading.toLowerCase())}</span>
                 </th>
               ))}
             </tr>
@@ -902,7 +1021,7 @@ export default function CutPlanningPage() {
                   ref={rowIndex === newMarkerRowIndex ? newMarkerRowRef : null}
                   className={`border-b border-slate-200 transition-colors hover:bg-slate-50/50 ${rowIndex === newMarkerRowIndex ? "bg-indigo-50" : ""}`}
                 >
-                  <td className="p-0">
+                  <td {...matrixCellProps("date", "p-0")}>
                     <input
                       type="date"
                       value={base?.plan.planDate || ""}
@@ -914,7 +1033,7 @@ export default function CutPlanningPage() {
                       className={`${cellClass} w-32`}
                     />
                   </td>
-                  <td className="p-0">
+                  <td {...matrixCellProps("marker-no", "p-0")}>
                     <input
                       value={base?.plan.markerNo || ""}
                       onChange={(event) =>
@@ -925,7 +1044,7 @@ export default function CutPlanningPage() {
                       className={`${cellClass} w-20`}
                     />
                   </td>
-                  <td className="p-0">
+                  <td {...matrixCellProps("cut-no", "p-0")}>
                     <input
                       value={base?.plan.cutNo || ""}
                       onChange={(event) =>
@@ -943,7 +1062,13 @@ export default function CutPlanningPage() {
                           candidate.inseam === group.inseam,
                       )?.rows[rowIndex];
                       return (
-                        <td key={`${group.inseam}-${size}`} className="p-0">
+                        <td
+                          key={`${group.inseam}-${size}`}
+                          {...matrixCellProps(
+                            matrixSizeColumnId(group, size),
+                            "p-0",
+                          )}
+                        >
                           <input
                             type="number"
                             min="0"
@@ -964,7 +1089,7 @@ export default function CutPlanningPage() {
                       );
                     }),
                   )}
-                  <td className="p-0">
+                  <td {...matrixCellProps("re-cut", "p-0")}>
                     <input
                       type="number"
                       min="0"
@@ -979,8 +1104,8 @@ export default function CutPlanningPage() {
                       className={`${cellClass} w-16 text-right`}
                     />
                   </td>
-                  <td className="cell-value">{displayNumber(total)}</td>
-                  <td className="p-0">
+                  <td {...matrixCellProps("total", "cell-value")}>{displayNumber(total)}</td>
+                  <td {...matrixCellProps("marker-plies", "p-0")}>
                     <input
                       type="number"
                       min="0"
@@ -995,10 +1120,10 @@ export default function CutPlanningPage() {
                       className={`${cellClass} w-20 text-right`}
                     />
                   </td>
-                  <td className="cell-value">
+                  <td {...matrixCellProps("transaction-count", "cell-value")}>
                     {displayNumber(total * markerPlies)}
                   </td>
-                  <td className="p-0">
+                  <td {...matrixCellProps("shrinkage", "p-0")}>
                     <input
                       value={base?.plan.shrinkage || ""}
                       onChange={(event) =>
@@ -1009,7 +1134,7 @@ export default function CutPlanningPage() {
                       className={`${cellClass} w-24`}
                     />
                   </td>
-                  <td className="p-0">
+                  <td {...matrixCellProps("shade", "p-0")}>
                     <input
                       value={base?.plan.shade || ""}
                       onChange={(event) =>
@@ -1020,7 +1145,7 @@ export default function CutPlanningPage() {
                       className={`${cellClass} w-24`}
                     />
                   </td>
-                  <td className="p-0">
+                  <td {...matrixCellProps("calculated-required", "p-0")}>
                     <input
                       type="number"
                       min="0"
@@ -1038,7 +1163,7 @@ export default function CutPlanningPage() {
                       className={`${cellClass} w-24 text-right`}
                     />
                   </td>
-                  <td className="p-0">
+                  <td {...matrixCellProps("marker-width", "p-0")}>
                     <input
                       type="number"
                       min="0"
@@ -1056,7 +1181,7 @@ export default function CutPlanningPage() {
                       className={`${cellClass} w-24 text-right`}
                     />
                   </td>
-                  <td className="p-0">
+                  <td {...matrixCellProps("marker-length", "p-0")}>
                     <input
                       type="number"
                       min="0"
@@ -1074,7 +1199,7 @@ export default function CutPlanningPage() {
                       className={`${cellClass} w-24 text-right`}
                     />
                   </td>
-                  <td className="p-0">
+                  <td {...matrixCellProps("actions", "p-0")}>
                     <button
                       type="button"
                       onClick={() => requestRemoveMarkerSet(rowIndex)}
