@@ -305,6 +305,14 @@ export default function CutPlanningPage() {
   );
   const isMatrixColumnPinned = (columnId: string) =>
     pinnedMatrixColumnIds.includes(columnId);
+  const matrixPinSide = useCallback(
+    (columnId: string) =>
+      matrixColumnOrder.indexOf(columnId) >
+      (matrixColumnOrder.length - 1) / 2
+        ? "right"
+        : "left",
+    [matrixColumnOrder],
+  );
   const toggleMatrixColumnPin = (columnId: string) => {
     setPinnedMatrixColumnIds((current) => {
       const next = current.includes(columnId)
@@ -319,11 +327,12 @@ export default function CutPlanningPage() {
     type: "body" | "header" = "body",
   ) => ({
     "data-pin-column": columnId,
+    "data-pin-side": matrixPinSide(columnId),
     className: `${className} ${
       isMatrixColumnPinned(columnId)
         ? type === "header"
-          ? "sticky z-30 bg-slate-100 shadow-[2px_0_3px_-3px_rgb(15_23_42)]"
-          : "sticky z-20 shadow-[2px_0_3px_-3px_rgb(15_23_42)]"
+          ? `sticky z-30 bg-slate-100 ${matrixPinSide(columnId) === "left" ? "shadow-[2px_0_3px_-3px_rgb(15_23_42)]" : "shadow-[-2px_0_3px_-3px_rgb(15_23_42)]"}`
+          : `sticky z-20 ${matrixPinSide(columnId) === "left" ? "shadow-[2px_0_3px_-3px_rgb(15_23_42)]" : "shadow-[-2px_0_3px_-3px_rgb(15_23_42)]"}`
         : ""
     }`,
   });
@@ -354,26 +363,39 @@ export default function CutPlanningPage() {
       );
       cells.forEach((cell) => {
         cell.style.left = "";
+        cell.style.right = "";
       });
 
-      let offset = 0;
-      for (const columnId of pinnedMatrixColumnIds) {
-        const columnCells = cells.filter(
-          (cell) => cell.dataset.pinColumn === columnId,
-        );
-        const width = columnCells[0]?.getBoundingClientRect().width ?? 0;
-        columnCells.forEach((cell) => {
-          cell.style.left = `${offset}px`;
-        });
-        offset += width;
-      }
+      const setOffsets = (columnIds: string[], side: "left" | "right") => {
+        let offset = 0;
+        for (const columnId of columnIds) {
+          const columnCells = cells.filter(
+            (cell) => cell.dataset.pinColumn === columnId,
+          );
+          const width = columnCells[0]?.getBoundingClientRect().width ?? 0;
+          columnCells.forEach((cell) => {
+            cell.style[side] = `${offset}px`;
+          });
+          offset += width;
+        }
+      };
+
+      const leftPinnedColumns = pinnedMatrixColumnIds.filter(
+        (columnId) => matrixPinSide(columnId) === "left",
+      );
+      const rightPinnedColumns = pinnedMatrixColumnIds.filter(
+        (columnId) => matrixPinSide(columnId) === "right",
+      );
+      setOffsets(leftPinnedColumns, "left");
+      // Right offsets start with the outermost right column, then build inward.
+      setOffsets([...rightPinnedColumns].reverse(), "right");
     };
 
     updatePinnedOffsets();
     const observer = new ResizeObserver(updatePinnedOffsets);
     observer.observe(table);
     return () => observer.disconnect();
-  }, [matrixColumnOrder, pinnedMatrixColumnIds]);
+  }, [matrixColumnOrder, matrixPinSide, pinnedMatrixColumnIds]);
   const materialSummaries = useMemo(() => {
     const byAccessCode = new Map<string, string[]>();
     for (const { accessCode, itemName } of data?.metadata?.accessItems ?? []) {
