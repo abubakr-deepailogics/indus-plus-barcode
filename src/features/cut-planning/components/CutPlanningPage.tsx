@@ -104,10 +104,12 @@ export default function CutPlanningPage() {
   const [newMarkerRowIndex, setNewMarkerRowIndex] = useState<number | null>(
     null,
   );
+  const [activeInseamTotalIndex, setActiveInseamTotalIndex] = useState(0);
   const matrixRef = useRef<HTMLElement>(null);
   const matrixScrollRef = useRef<HTMLDivElement>(null);
   const matrixFooterRef = useRef<HTMLDivElement>(null);
   const totalsRef = useRef<HTMLElement>(null);
+  const totalsWheelLockedRef = useRef(false);
   const fabricMenuRef = useRef<HTMLDivElement>(null);
   const bundleCutButtonRef = useRef<HTMLButtonElement>(null);
   const bundleCutMenuRef = useRef<HTMLDivElement>(null);
@@ -681,65 +683,81 @@ export default function CutPlanningPage() {
     if (hasRowData(plans[index])) setPendingDelete({ type: "plan", index, group });
     else void deleteRow(index, group);
   };
-  const totals = useMemo(() => {
-    const order: Record<string, number> = {};
-    const willCut: Record<string, number> = {};
-    const planned: Record<string, number> = {};
-    for (const group of groups) {
-      for (const size of sizeColumns) {
-        order[size] = (order[size] || 0) + (group.orderQuantities[size] || 0);
-        willCut[size] =
-          (willCut[size] || 0) + (group.willCutQuantities[size] || 0);
-      }
-    }
-    for (const plan of plans) {
-      for (const size of sizeColumns)
-        planned[size] = (planned[size] || 0) + (plan.sizeQuantities[size] || 0);
-    }
-    // Planned's final Total is the sum of the main table's Transaction count
-    // (combined marker-row quantity × its marker plies), not its size Total.
-    const plannedTotal = Array.from(
-      { length: Math.max(0, ...groupedPlans.map(({ rows }) => rows.length)) },
-      (_, rowIndex) => {
-        const markerRowTotal = groups.reduce(
-          (sum, group) => {
-            const entry = groupedPlans.find(
-              ({ group: candidate }) => candidate.inseam === group.inseam,
-            )?.rows[rowIndex];
-            return (
-              sum +
-              group.sizeColumns.reduce(
-                (groupTotal, size) =>
-                  groupTotal + (entry?.plan.sizeQuantities[size] || 0),
-                0,
-              )
-            );
-          },
-          0,
+  const inseamTotals = useMemo(
+    () =>
+      groups.map((group) => {
+        const order = Object.fromEntries(
+          sizeColumns.map((size) => [size, group.orderQuantities[size] || 0]),
+        ) as Record<string, number>;
+        const willCut = Object.fromEntries(
+          sizeColumns.map((size) => [
+            size,
+            group.willCutQuantities[size] || 0,
+          ]),
+        ) as Record<string, number>;
+        const planned: Record<string, number> = Object.fromEntries(
+          sizeColumns.map((size) => [size, 0]),
         );
-        const markerPlies = groupedPlans[0]?.rows[rowIndex]?.plan.markerPlies || 0;
-        return markerRowTotal * markerPlies;
-      },
-    ).reduce((sum, transactionCount) => sum + transactionCount, 0);
-    return {
-      order,
-      willCut,
-      planned,
-      plannedTotal,
-      less: Object.fromEntries(
-        sizeColumns.map((size) => [
-          size,
-          Math.max((willCut[size] || 0) - (planned[size] || 0), 0),
-        ]),
-      ),
-      over: Object.fromEntries(
-        sizeColumns.map((size) => [
-          size,
-          Math.max((planned[size] || 0) - (willCut[size] || 0), 0),
-        ]),
-      ),
-    };
-  }, [groupedPlans, groups, plans, sizeColumns]);
+
+        for (const plan of plans) {
+          if (plan.sourceInseam !== group.inseam) continue;
+          for (const size of sizeColumns) {
+            planned[size] +=
+              (plan.sizeQuantities[size] || 0) * plan.markerPlies;
+          }
+        }
+
+        const less = Object.fromEntries(
+          sizeColumns.map((size) => {
+            const difference = planned[size] - willCut[size];
+            return [size, difference < 0 ? difference : 0];
+          }),
+        ) as Record<string, number>;
+        const over = Object.fromEntries(
+          sizeColumns.map((size) => {
+            const difference = planned[size] - willCut[size];
+            return [size, difference > 0 ? difference : 0];
+          }),
+        ) as Record<string, number>;
+
+        return {
+          inseam: group.inseam,
+          rows: [
+            { label: "Order", values: order },
+            { label: "Will be cut", values: willCut },
+            { label: "Planned", values: planned },
+            { label: "Less", values: less },
+            { label: "Over", values: over },
+          ],
+        };
+      }),
+    [groups, plans, sizeColumns],
+  );
+  const visibleInseamTotal =
+    inseamTotals[activeInseamTotalIndex % inseamTotals.length];
+  const cycleInseamTotalsOnWheel = (
+    event: React.WheelEvent<HTMLDivElement>,
+  ) => {
+    const wheelDistance =
+      Math.abs(event.deltaX) > Math.abs(event.deltaY)
+        ? event.deltaX
+        : event.deltaY;
+    if (!wheelDistance || inseamTotals.length < 2) return;
+
+    event.preventDefault();
+    // A touchpad emits several wheel events for one gesture. Locking briefly
+    // makes one gesture advance exactly one inseam instead of skipping pages.
+    if (totalsWheelLockedRef.current) return;
+
+    totalsWheelLockedRef.current = true;
+    const direction = wheelDistance > 0 ? 1 : -1;
+    setActiveInseamTotalIndex((currentIndex) =>
+      (currentIndex + direction + inseamTotals.length) % inseamTotals.length,
+    );
+    window.setTimeout(() => {
+      totalsWheelLockedRef.current = false;
+    }, 450);
+  };
 
   async function save() {
     if (!workOrder) {
@@ -2008,11 +2026,18 @@ export default function CutPlanningPage() {
           {inseamMatrix}
           {groups.length > 0 && (
             <section ref={totalsRef} className="fixed inset-x-4 bottom-5 z-40 mx-auto max-w-[1336px] overflow-hidden rounded-xl border border-slate-300 bg-white shadow-xl shadow-slate-950/10 sm:inset-x-6 md:inset-x-8 lg:bottom-6">
-              <div className="hide-horizontal-scrollbar overflow-x-auto">
-                <table className="min-w-max w-full text-xs">
-                  <thead className="sticky top-0 border-b border-slate-200 bg-white text-slate-950 shadow-sm">
+              <div onWheel={cycleInseamTotalsOnWheel}>
+                {visibleInseamTotal && (() => {
+                  const { inseam, rows } = visibleInseamTotal;
+                  return (
+                  <table
+                    key={inseam ?? "none"}
+                    className="w-full text-xs"
+                  >
+                  <thead className="border-b border-slate-200 bg-white text-slate-950 shadow-sm">
                     <tr>
-                      <th className="px-3 py-2 text-left"> </th>
+                      <th className="bg-white px-3 py-2 text-left"> </th>
+                      <th className="px-3 py-2 text-center font-bold">Inseam</th>
                       {sizeColumns.map((size) => (
                         <th
                           key={size}
@@ -2025,47 +2050,75 @@ export default function CutPlanningPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {[
-                      ["Order", totals.order],
-                      ["Will be cut", totals.willCut],
-                      ["Planned", totals.planned],
-                      ["Less", totals.less],
-                      ["Over", totals.over],
-                    ].map(([label, quantities]) => {
-                      const values = quantities as Record<string, number>;
-                      const total =
-                        label === "Planned"
-                          ? totals.plannedTotal
-                          : sizeColumns.reduce(
-                              (sum, size) => sum + (values[size] || 0),
-                              0,
-                            );
-                      return (
-                        <tr
-                          key={label as string}
-                          className="border-t border-slate-100 text-slate-950"
-                        >
-                          <th className="bg-white px-3 py-2 text-left font-semibold">
-                            {label as string}
-                          </th>
-                          {sizeColumns.map((size) => (
-                            <td
-                              key={size}
-                              className={`px-2 py-2 text-right font-medium ${totalCellBackgrounds[String(label)]}`}
-                            >
-                              {displayNumber(values[size] || 0)}
-                            </td>
-                          ))}
-                          <td
-                            className={`px-3 py-2 text-right text-sm font-bold ${totalCellBackgrounds[String(label)]}`}
+                    {rows.map(({ label, values }, rowIndex) => {
+                        const total = sizeColumns.reduce(
+                          (sum, size) => sum + (values[size] || 0),
+                          0,
+                        );
+                        return (
+                          <tr
+                            key={`${inseam ?? "none"}-${label}`}
+                            className="border-t border-slate-100 text-slate-950"
                           >
-                            {displayNumber(total)}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                            <th className="bg-white px-3 py-2 text-left font-semibold">
+                              {label}
+                            </th>
+                            {rowIndex === 0 && (
+                              <td
+                                rowSpan={rows.length}
+                                className="border-r border-slate-200 bg-slate-50 px-3 text-center align-middle font-bold text-indigo-800"
+                              >
+                                {inseam ?? "—"}
+                              </td>
+                            )}
+                            {sizeColumns.map((size) => (
+                              <td
+                                key={size}
+                                className={`px-2 py-2 text-right font-medium ${totalCellBackgrounds[label]}`}
+                              >
+                                {displayNumber(values[size] || 0)}
+                              </td>
+                            ))}
+                            <td
+                              className={`px-3 py-2 text-right text-sm font-bold ${totalCellBackgrounds[label]}`}
+                            >
+                              {displayNumber(total)}
+                            </td>
+                          </tr>
+                        );
+                      })}
                   </tbody>
-                </table>
+                  {inseamTotals.length > 1 && (
+                    <tfoot className="border-t border-slate-200 bg-slate-50 text-slate-500">
+                      <tr>
+                        <td
+                          colSpan={sizeColumns.length + 3}
+                          className="px-3 py-2"
+                        >
+                          <div className="flex items-center justify-center gap-1.5" aria-label="Inseam pages">
+                            {inseamTotals.map((total, index) => {
+                              const isActive =
+                                index ===
+                                activeInseamTotalIndex % inseamTotals.length;
+                              return (
+                                <button
+                                  key={`${total.inseam ?? "none"}-${index}`}
+                                  type="button"
+                                  aria-label={`Show inseam ${total.inseam ?? "unspecified"}`}
+                                  aria-current={isActive ? "true" : undefined}
+                                  onClick={() => setActiveInseamTotalIndex(index)}
+                                  className={`size-2.5 rounded-full transition-colors ${isActive ? "bg-indigo-700" : "bg-slate-300 hover:bg-slate-400"}`}
+                                />
+                              );
+                            })}
+                          </div>
+                        </td>
+                      </tr>
+                    </tfoot>
+                  )}
+                  </table>
+                  );
+                })()}
               </div>
             </section>
           )}
