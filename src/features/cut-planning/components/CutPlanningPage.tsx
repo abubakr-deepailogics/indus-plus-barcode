@@ -3,12 +3,14 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import useEmblaCarousel from "embla-carousel-react";
+import ExcelJS from "exceljs";
 import {
   AlertCircle,
   Check,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
+  Download,
   LoaderCircle,
   Pin,
   PinOff,
@@ -38,6 +40,8 @@ const numeric = (value: string) => {
 };
 const displayNumber = (value: number) =>
   new Intl.NumberFormat(undefined, { maximumFractionDigits: 3 }).format(value);
+const displayPrintNumber = (value: number | null | undefined) =>
+  value == null || value === 0 ? "" : displayNumber(value);
 const preventWheelChange = (event: React.WheelEvent<HTMLInputElement>) =>
   event.currentTarget.blur();
 const shortenFabricName = (value: string, limit = 30) =>
@@ -759,47 +763,96 @@ export default function CutPlanningPage() {
       plan.shade.trim(),
     );
   const renderPrintPlanningGrid = (
-    group: CutPlanningInseamGroup,
-    rows: Array<{ plan: CutPlanRow; index: number }>,
-    showFixedHeaders: boolean,
+    entries: Array<{
+      group: CutPlanningInseamGroup;
+      rows: Array<{ plan: CutPlanRow; index: number }>;
+    }>,
   ) => {
-    const printedRows = rows.filter(({ plan }) => hasRowData(plan));
+    const rowsByCut = new Map<
+      string,
+      { firstIndex: number; plansByInseam: Map<number, CutPlanRow[]> }
+    >();
+    entries.forEach(({ rows }, inseamIndex) => {
+      rows.forEach(({ plan, index }) => {
+        if (!hasRowData(plan)) return;
+        const cutNo = plan.cutNo.trim();
+        const key = cutNo ? `cut:${cutNo}` : `row:${inseamIndex}:${index}`;
+        const row = rowsByCut.get(key) ?? {
+          firstIndex: index,
+          plansByInseam: new Map<number, CutPlanRow[]>(),
+        };
+        row.firstIndex = Math.min(row.firstIndex, index);
+        const inseamPlans = row.plansByInseam.get(inseamIndex) ?? [];
+        inseamPlans.push(plan);
+        row.plansByInseam.set(inseamIndex, inseamPlans);
+        rowsByCut.set(key, row);
+      });
+    });
+    const printRows = [...rowsByCut.values()].sort(
+      (left, right) => left.firstIndex - right.firstIndex,
+    );
     return (
-      <section className="cut-planning-print-sheet" key={`print-grid-${group.inseam ?? "none"}`}>
+      <section className="cut-planning-print-sheet">
         <table className="cut-planning-print-table cut-planning-print-planning-grid">
           <thead>
             <tr>
-              {showFixedHeaders ? (
-                <>
-                  <th rowSpan={3}>SR</th>
-                  <th rowSpan={3}>TOTAL PCS</th>
-                  <th rowSpan={3}>SHRINKAGE</th>
-                  <th rowSpan={3}>PLYS</th>
-                  <th rowSpan={3}>CUT #</th>
-                  <th rowSpan={3}>BUNDLE</th>
-                </>
-              ) : (
-                <th className="print-fixed-column-spacer" colSpan={6} rowSpan={3} />
-              )}
-              <th className="print-inseam-label" colSpan={group.sizeColumns.length}>INSEAM</th>
+              <th rowSpan={3}>SR</th>
+              <th rowSpan={3}>TOTAL PCS</th>
+              <th rowSpan={3}>SHRINKAGE</th>
+              <th rowSpan={3}>PLYS</th>
+              <th rowSpan={3}>CUT #</th>
+              <th rowSpan={3}>BUNDLE</th>
+              {entries.map(({ group }) => (
+                <th key={group.inseam ?? "none"} className="print-inseam-label" colSpan={group.sizeColumns.length}>INSEAM</th>
+              ))}
             </tr>
             <tr>
-              <th className="print-inseam-value" colSpan={group.sizeColumns.length}>{group.inseam ?? "-"}</th>
+              {entries.map(({ group }) => (
+                <th key={group.inseam ?? "none"} className="print-inseam-value" colSpan={group.sizeColumns.length}>{group.inseam ?? "-"}</th>
+              ))}
             </tr>
-            <tr>{group.sizeColumns.map((size) => <th key={size}>{size}</th>)}</tr>
+            <tr>{entries.flatMap(({ group }) => group.sizeColumns.map((size) => <th key={`${group.inseam}-${size}`}>{size}</th>))}</tr>
           </thead>
           <tbody>
-            {printedRows.map(({ plan }, index) => {
-              const total = group.sizeColumns.reduce((sum, size) => sum + (plan.sizeQuantities[size] || 0), 0);
+            {printRows.map((printRow, displayIndex) => {
+              const plansForRow = entries.map(({ group }, inseamIndex) => ({
+                group,
+                plans: printRow.plansByInseam.get(inseamIndex) ?? [],
+              }));
+              const basePlan = plansForRow.find(({ plans }) => plans[0])?.plans[0];
+              const total = plansForRow.reduce(
+                (sum, { group, plans: inseamPlans }) => sum + group.sizeColumns.reduce(
+                  (sizeSum, size) => sizeSum + inseamPlans.reduce(
+                    (planSum, plan) => planSum + (plan.sizeQuantities[size] || 0),
+                    0,
+                  ),
+                  0,
+                ),
+                0,
+              );
+              if (!basePlan) return null;
+              const cutNo = basePlan.cutNo.trim();
+              const transactionTotal = cutNo
+                ? plans
+                    .filter((plan) => plan.cutNo.trim() === cutNo)
+                    .reduce(
+                      (sum, plan) =>
+                        sum + Object.values(plan.sizeQuantities).reduce(
+                          (sizeSum, quantity) => sizeSum + quantity,
+                          0,
+                        ),
+                      0,
+                    )
+                : total;
               return (
-                <tr key={plan.id ?? `print-grid-row-${index}`}>
-                  <td>{index + 1}</td>
-                  <td>{displayNumber(total)}</td>
-                  <td>{plan.shrinkage || "-"}</td>
-                  <td>{displayNumber(plan.markerPlies)}</td>
-                  <td>{plan.cutNo || "-"}</td>
-                  <td>1</td>
-                  {group.sizeColumns.map((size) => <td key={size}>{displayNumber(plan.sizeQuantities[size] || 0)}</td>)}
+                <tr key={basePlan.id ?? `print-grid-row-${printRow.firstIndex}`}>
+                  <td>{displayIndex + 1}</td>
+                  <td>{displayPrintNumber(transactionTotal * basePlan.markerPlies)}</td>
+                  <td>{basePlan.shrinkage || "-"}</td>
+                  <td>{displayPrintNumber(basePlan.markerPlies)}</td>
+                  <td>{basePlan.cutNo || "-"}</td>
+                  <td>{transactionTotal ? `1 - ${displayNumber(transactionTotal)}` : ""}</td>
+                  {plansForRow.flatMap(({ group, plans: inseamPlans }) => group.sizeColumns.map((size) => <td key={`${group.inseam}-${size}`}>{displayPrintNumber(inseamPlans.reduce((sum, plan) => sum + (plan.sizeQuantities[size] || 0), 0))}</td>))}
                 </tr>
               );
             })}
@@ -966,6 +1019,160 @@ export default function CutPlanningPage() {
       setSaving(false);
     }
   }
+
+  const exportCutPlanning = async () => {
+    if (!workOrder || groupedPlans.length === 0) return;
+    const workbook = new ExcelJS.Workbook();
+    const border = { style: "thin" as const, color: { argb: "FF000000" } };
+    const headerFill = { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFF2F2F2" } };
+    const inseamFill = { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFE7E6E6" } };
+    const cutGroups = new Map<string, CutPlanRow[]>();
+    plans.filter(hasRowData).forEach((plan, index) => {
+      const key = plan.cutNo.trim() ? `cut:${plan.cutNo.trim()}` : `row:${index}`;
+      const list = cutGroups.get(key) ?? [];
+      list.push(plan);
+      cutGroups.set(key, list);
+    });
+    const maxSizeCount = Math.max(
+      ...printInseamPairs.map((pair) =>
+        pair.reduce((sum, entry) => sum + entry.group.sizeColumns.length, 0),
+      ),
+    );
+    const columnCount = 6 + maxSizeCount;
+    const sheet = workbook.addWorksheet("Cut Planning");
+    sheet.pageSetup.orientation = "landscape";
+    sheet.pageSetup.fitToPage = true;
+    sheet.pageSetup.fitToWidth = 1;
+    sheet.pageSetup.fitToHeight = 1;
+    sheet.columns = [14, 20, 12, 18, 11, 14, ...Array.from({ length: maxSizeCount }, () => ({ width: 8 }))];
+    sheet.mergeCells(1, 1, 1, columnCount);
+    const title = sheet.getCell(1, 1);
+    title.value = "SIZE DETAIL & CHECK LIST";
+    title.font = { name: "Calibri", bold: true, size: 14 };
+    title.alignment = { horizontal: "center" };
+    const exportDate = String(data?.metadata?.workOrderDate ?? "").split(/[ T]/)[0];
+    const metadata = [
+      ["DATE", exportDate, "ORDER #", data?.metadata?.workOrder ?? ""],
+      ["CUSTOMER", data?.metadata?.customerName ?? "", "STYLE", data?.metadata?.styleNo || data?.metadata?.styleCode || ""],
+    ];
+    metadata.forEach((row, rowIndex) => {
+      sheet.getRow(rowIndex + 2).values = row;
+      [1, 3].forEach((column) => { sheet.getCell(rowIndex + 2, column).font = { name: "Calibri", bold: true, size: 11 }; });
+    });
+
+    const sectionStartRows: number[] = [];
+    let startRow = 5;
+    printInseamPairs.forEach((pair) => {
+      sectionStartRows.push(startRow);
+      const pairColumnCount = 6 + pair.reduce((sum, entry) => sum + entry.group.sizeColumns.length, 0);
+      ["SR", "TOTAL PCS", "SHRINKAGE", "PLYS", "CUT #", "BUNDLE"].forEach((label, index) => {
+        sheet.mergeCells(startRow, index + 1, startRow + 2, index + 1);
+        sheet.getCell(startRow, index + 1).value = label;
+      });
+      let startColumn = 7;
+      pair.forEach(({ group }) => {
+        const endColumn = startColumn + group.sizeColumns.length - 1;
+        sheet.mergeCells(startRow, startColumn, startRow, endColumn);
+        sheet.mergeCells(startRow + 1, startColumn, startRow + 1, endColumn);
+        sheet.getCell(startRow, startColumn).value = "INSEAM";
+        sheet.getCell(startRow + 1, startColumn).value = group.inseam ?? "-";
+        group.sizeColumns.forEach((size, index) => { sheet.getCell(startRow + 2, startColumn + index).value = size; });
+        startColumn = endColumn + 1;
+      });
+      const includedInseams = new Set(pair.map(({ group }) => group.inseam));
+      [...cutGroups.values()].forEach((cutPlans, index) => {
+        const base = cutPlans[0];
+        const total = cutPlans.reduce((sum, plan) => sum + Object.values(plan.sizeQuantities).reduce((sizeSum, qty) => sizeSum + qty, 0), 0);
+        const row = startRow + 3 + index;
+        sheet.getRow(row).values = [index + 1, total * base.markerPlies || "", base.shrinkage || "", base.markerPlies || "", base.cutNo || "", total ? `1 - ${total}` : ""];
+        let column = 7;
+        pair.forEach(({ group }) => {
+          group.sizeColumns.forEach((size) => {
+            const value = cutPlans.filter((plan) => plan.sourceInseam === group.inseam && includedInseams.has(plan.sourceInseam)).reduce((sum, plan) => sum + (plan.sizeQuantities[size] || 0), 0);
+            sheet.getCell(row, column++).value = value || "";
+          });
+        });
+      });
+      const totalsStartRow = startRow + 4 + cutGroups.size;
+      let panelStartColumn = 1;
+      pair.forEach(({ group }) => {
+        const total = inseamTotals.find((entry) => entry.inseam === group.inseam);
+        if (!total) return;
+        const panelEndColumn = panelStartColumn + group.sizeColumns.length + 1;
+        sheet.mergeCells(totalsStartRow, panelStartColumn, totalsStartRow, panelEndColumn);
+        sheet.getCell(totalsStartRow, panelStartColumn).value = "INSEAM";
+        sheet.getCell(totalsStartRow, panelStartColumn).fill = inseamFill;
+        sheet.getCell(totalsStartRow, panelStartColumn).font = { name: "Calibri", bold: true, size: 11 };
+        sheet.mergeCells(totalsStartRow + 1, panelStartColumn, totalsStartRow + 1, panelEndColumn);
+        sheet.getCell(totalsStartRow + 1, panelStartColumn).value = group.inseam ?? "-";
+        sheet.getCell(totalsStartRow + 1, panelStartColumn).fill = inseamFill;
+        sheet.getCell(totalsStartRow + 1, panelStartColumn).font = { name: "Calibri", bold: true, size: 11 };
+        sheet.getCell(totalsStartRow + 2, panelStartColumn).value = "";
+        group.sizeColumns.forEach((size, index) => { sheet.getCell(totalsStartRow + 2, panelStartColumn + index + 1).value = size; });
+        sheet.getCell(totalsStartRow + 2, panelEndColumn).value = "TOTAL";
+        total.rows.filter(({ label }) => label !== "Order").forEach(({ label, values }, rowIndex) => {
+          const row = totalsStartRow + 3 + rowIndex;
+          sheet.getCell(row, panelStartColumn).value = label;
+          group.sizeColumns.forEach((size, index) => {
+            const value = label === "Less" ? Math.abs(values[size] || 0) : values[size] || 0;
+            sheet.getCell(row, panelStartColumn + index + 1).value = value || "";
+          });
+          const totalValue = group.sizeColumns.reduce((sum, size) => sum + (values[size] || 0), 0);
+          sheet.getCell(row, panelEndColumn).value = label === "Less" ? Math.abs(totalValue) || "" : totalValue || "";
+        });
+        panelStartColumn = panelEndColumn + 1;
+      });
+      for (let column = 1; column <= pairColumnCount; column += 1) {
+        sheet.getCell(startRow, column).fill = column <= 6 ? headerFill : inseamFill;
+        sheet.getCell(startRow + 1, column).fill = column <= 6 ? headerFill : inseamFill;
+        sheet.getCell(startRow + 2, column).fill = headerFill;
+        sheet.getCell(startRow, column).font = { name: "Calibri", bold: true, size: 11 };
+      }
+      sheet.getRow(startRow).height = 18;
+      startRow = totalsStartRow + 8;
+    });
+    sheet.eachRow((row) => row.eachCell((cell) => {
+      cell.border = { top: border, left: border, bottom: border, right: border };
+      cell.alignment = { horizontal: "center", vertical: "middle" };
+      cell.font = { name: "Calibri", size: 11 };
+    }));
+    title.font = { name: "Calibri", bold: true, size: 14 };
+    metadata.forEach((_, rowIndex) => {
+      [1, 3].forEach((column) => {
+        sheet.getCell(rowIndex + 2, column).font = { name: "Calibri", bold: true, size: 11 };
+      });
+      [1, 2, 3, 4].forEach((column) => {
+        sheet.getCell(rowIndex + 2, column).alignment = { horizontal: "left", vertical: "middle" };
+      });
+    });
+    printInseamPairs.forEach((pair, pairIndex) => {
+      const sectionStartRow = sectionStartRows[pairIndex];
+      const pairColumnCount = 6 + pair.reduce(
+        (sum, entry) => sum + entry.group.sizeColumns.length,
+        0,
+      );
+      const totalsStartRow = sectionStartRow + 4 + cutGroups.size;
+      for (let column = 1; column <= pairColumnCount; column += 1) {
+        [sectionStartRow, sectionStartRow + 1, sectionStartRow + 2, totalsStartRow, totalsStartRow + 1, totalsStartRow + 2].forEach((row) => {
+          sheet.getCell(row, column).font = { name: "Calibri", bold: true, size: 11 };
+        });
+      }
+    });
+    sheet.views = [{ showGridLines: false }];
+    sheet.getRow(1).height = 28;
+    sheet.getRow(2).height = 22;
+    sheet.getRow(3).height = 22;
+    sheet.properties.defaultRowHeight = 21;
+    sheet.views = [{ showGridLines: true, zoomScale: 100 }];
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `cut-planning-${workOrder.replace(/[^A-Za-z0-9._-]+/g, "-")}.xlsx`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  };
 
   const cellClass = "cell-input";
   const totalCellBackgrounds: Record<string, string> = {
@@ -1881,9 +2088,21 @@ export default function CutPlanningPage() {
               type="button"
               onClick={() => window.print()}
               disabled={!workOrder || groups.length === 0}
-              className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm hover:border-indigo-300 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+              aria-label="Print cut planning"
+              title="Print"
+              className="inline-flex size-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 shadow-sm hover:border-indigo-300 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
             >
-              <Printer className="size-4" /> Print
+              <Printer className="size-4" />
+            </button>
+            <button
+              type="button"
+              onClick={exportCutPlanning}
+              disabled={!workOrder || groups.length === 0}
+              aria-label="Export cut planning to Excel"
+              title="Export to Excel"
+              className="inline-flex size-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 shadow-sm hover:border-emerald-300 hover:bg-emerald-50 hover:text-emerald-700 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Download className="size-4" />
             </button>
             <button
               type="button"
@@ -2342,8 +2561,7 @@ export default function CutPlanningPage() {
                 </header>
 
                 <div className="cut-planning-print-two-inseams">
-                  {renderPrintPlanningGrid(group, rows, true)}
-                  {second && renderPrintPlanningGrid(second.group, second.rows, false)}
+                  {renderPrintPlanningGrid(second ? [first, second] : [first])}
                 </div>
                 <div className="cut-planning-print-total-pair">
                   {pair.map(({ group: totalGroup }) => {
@@ -2359,7 +2577,23 @@ export default function CutPlanningPage() {
                         <table className="cut-planning-print-table">
                           <thead>
                             <tr>
-                              <th>INSEAM</th>
+                              <th
+                                className="print-inseam-label"
+                                colSpan={totalGroup.sizeColumns.length + 2}
+                              >
+                                INSEAM
+                              </th>
+                            </tr>
+                            <tr>
+                              <th
+                                className="print-inseam-value"
+                                colSpan={totalGroup.sizeColumns.length + 2}
+                              >
+                                {totalGroup.inseam ?? "-"}
+                              </th>
+                            </tr>
+                            <tr>
+                              <th />
                               {totalGroup.sizeColumns.map((size) => <th key={size}>{size}</th>)}
                               <th>TOTAL</th>
                             </tr>
@@ -2371,9 +2605,9 @@ export default function CutPlanningPage() {
                               <tr key={label}>
                                 <th>{label}</th>
                                 {totalGroup.sizeColumns.map((size) => (
-                                  <td key={size}>{displayNumber(label === "Less" ? Math.abs(values[size] || 0) : values[size] || 0)}</td>
+                                  <td key={size}>{displayPrintNumber(label === "Less" ? Math.abs(values[size] || 0) : values[size] || 0)}</td>
                                 ))}
-                                <td>{displayNumber(label === "Less" ? Math.abs(totalGroup.sizeColumns.reduce((sum, size) => sum + (values[size] || 0), 0)) : totalGroup.sizeColumns.reduce((sum, size) => sum + (values[size] || 0), 0))}</td>
+                                <td>{displayPrintNumber(label === "Less" ? Math.abs(totalGroup.sizeColumns.reduce((sum, size) => sum + (values[size] || 0), 0)) : totalGroup.sizeColumns.reduce((sum, size) => sum + (values[size] || 0), 0))}</td>
                               </tr>
                               ))}
                           </tbody>
@@ -2948,9 +3182,6 @@ export default function CutPlanningPage() {
           }
           .cut-planning-print-two-inseams {
             display: block;
-          }
-          .cut-planning-print-two-inseams > .cut-planning-print-sheet + .cut-planning-print-sheet {
-            border-top: 0;
           }
           .cut-planning-print-total-pair {
             display: grid;
