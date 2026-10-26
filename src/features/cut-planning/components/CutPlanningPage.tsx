@@ -1057,9 +1057,13 @@ export default function CutPlanningPage() {
       sheet.getRow(rowIndex + 2).values = row;
       [1, 3].forEach((column) => { sheet.getCell(rowIndex + 2, column).font = { name: "Calibri", bold: true, size: 11 }; });
     });
+    const exportFabric = activeFabricItem || materialSummaries[0]?.itemNames[0] || "";
+    sheet.getCell(4, 1).value = "FABRIC";
+    sheet.mergeCells(4, 2, 4, 4);
+    sheet.getCell(4, 2).value = exportFabric;
 
     const sectionStartRows: number[] = [];
-    let startRow = 5;
+    let startRow = 6;
     printInseamPairs.forEach((pair) => {
       sectionStartRows.push(startRow);
       const pairColumnCount = 6 + pair.reduce((sum, entry) => sum + entry.group.sizeColumns.length, 0);
@@ -1152,6 +1156,10 @@ export default function CutPlanningPage() {
         sheet.getCell(rowIndex + 2, column).alignment = { horizontal: "left", vertical: "middle" };
       });
     });
+    sheet.getCell(4, 1).font = { name: "Calibri", bold: true, size: 11 };
+    [1, 2].forEach((column) => {
+      sheet.getCell(4, column).alignment = { horizontal: "left", vertical: "middle", wrapText: true };
+    });
     printInseamPairs.forEach((pair, pairIndex) => {
       const sectionStartRow = sectionStartRows[pairIndex];
       const pairColumnCount = 6 + pair.reduce(
@@ -1174,6 +1182,7 @@ export default function CutPlanningPage() {
     sheet.getRow(1).height = 28;
     sheet.getRow(2).height = 22;
     sheet.getRow(3).height = 22;
+    sheet.getRow(4).height = exportFabric.length > 45 ? 38 : 22;
     sheet.properties.defaultRowHeight = 21;
     sheet.views = [{ showGridLines: true, zoomScale: 100 }];
     const buffer = await workbook.xlsx.writeBuffer();
