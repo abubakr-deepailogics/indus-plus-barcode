@@ -13,6 +13,7 @@ import {
   Pin,
   PinOff,
   Plus,
+  Printer,
   Scissors,
   Search,
   Trash2,
@@ -47,6 +48,18 @@ const shadeCodes = (value: string) => {
 };
 const matrixSizeColumnId = (group: CutPlanningInseamGroup, size: string) =>
   `size-${group.inseam ?? "none"}-${size}`;
+const matrixInseamBoundaryClass = (
+  group: CutPlanningInseamGroup,
+  size: string,
+) => {
+  if (size === group.sizeColumns[0]) {
+    return "!border-l-[3px] !border-l-slate-400";
+  }
+  if (size === group.sizeColumns[group.sizeColumns.length - 1]) {
+    return "!border-r-[3px] !border-r-slate-400";
+  }
+  return "";
+};
 
 function makePlan(group: CutPlanningInseamGroup): CutPlanRow {
   return {
@@ -298,6 +311,13 @@ export default function CutPlanningPage() {
       })),
     [groups, plans],
   );
+  const printInseamPairs = useMemo(
+    () =>
+      Array.from({ length: Math.ceil(groupedPlans.length / 2) }, (_, index) =>
+        groupedPlans.slice(index * 2, index * 2 + 2),
+      ),
+    [groupedPlans],
+  );
   const matrixColumnOrder = useMemo(
     () => [
       "date",
@@ -428,6 +448,27 @@ export default function CutPlanningPage() {
     selectedFabricWorkOrder === data?.metadata?.workOrder
       ? selectedFabricItem
       : "";
+  const printHeaderDetails = [
+    { label: "DATE", value: data?.metadata?.workOrderDate ?? "" },
+    { label: "GROUP", value: materialSummaries[0]?.accessCode ?? "" },
+    { label: "ORDER #", value: data?.metadata?.workOrder ?? "" },
+    {
+      label: "STYLE",
+      value: [
+        data?.metadata?.styleNo,
+        data?.metadata?.styleCode,
+        data?.metadata?.styleName,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    },
+    { label: "CUSTOMER", value: data?.metadata?.customerName ?? "" },
+    { label: "COLOR", value: data?.metadata?.color ?? "" },
+    {
+      label: "FABRIC",
+      value: activeFabricItem || materialSummaries[0]?.itemNames[0] || "",
+    },
+  ];
   const bundleCutOptions = useMemo(() => {
     const cuts = new Map<string, number>();
     for (const plan of plans) {
@@ -717,6 +758,57 @@ export default function CutPlanningPage() {
       plan.shrinkage.trim() ||
       plan.shade.trim(),
     );
+  const renderPrintPlanningGrid = (
+    group: CutPlanningInseamGroup,
+    rows: Array<{ plan: CutPlanRow; index: number }>,
+    showFixedHeaders: boolean,
+  ) => {
+    const printedRows = rows.filter(({ plan }) => hasRowData(plan));
+    return (
+      <section className="cut-planning-print-sheet" key={`print-grid-${group.inseam ?? "none"}`}>
+        <table className="cut-planning-print-table cut-planning-print-planning-grid">
+          <thead>
+            <tr>
+              {showFixedHeaders ? (
+                <>
+                  <th rowSpan={3}>SR</th>
+                  <th rowSpan={3}>TOTAL PCS</th>
+                  <th rowSpan={3}>SHRINKAGE</th>
+                  <th rowSpan={3}>PLYS</th>
+                  <th rowSpan={3}>CUT #</th>
+                  <th rowSpan={3}>BUNDLE</th>
+                </>
+              ) : (
+                <th className="print-fixed-column-spacer" colSpan={6} rowSpan={3} />
+              )}
+              <th className="print-inseam-label" colSpan={group.sizeColumns.length}>INSEAM</th>
+            </tr>
+            <tr>
+              <th className="print-inseam-value" colSpan={group.sizeColumns.length}>{group.inseam ?? "-"}</th>
+            </tr>
+            <tr>{group.sizeColumns.map((size) => <th key={size}>{size}</th>)}</tr>
+          </thead>
+          <tbody>
+            {printedRows.map(({ plan }, index) => {
+              const total = group.sizeColumns.reduce((sum, size) => sum + (plan.sizeQuantities[size] || 0), 0);
+              return (
+                <tr key={plan.id ?? `print-grid-row-${index}`}>
+                  <td>{index + 1}</td>
+                  <td>{displayNumber(total)}</td>
+                  <td>{plan.shrinkage || "-"}</td>
+                  <td>{displayNumber(plan.markerPlies)}</td>
+                  <td>{plan.cutNo || "-"}</td>
+                  <td>1</td>
+                  {group.sizeColumns.map((size) => <td key={size}>{displayNumber(plan.sizeQuantities[size] || 0)}</td>)}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </section>
+    );
+  };
+
   const requestRemove = (index: number, group: CutPlanningInseamGroup) => {
     if (hasRowData(plans[index])) setPendingDelete({ type: "plan", index, group });
     else void deleteRow(index, group);
@@ -1139,7 +1231,7 @@ export default function CutPlanningPage() {
                 <th
                   key={group.inseam ?? "none"}
                   colSpan={group.sizeColumns.length}
-                  className="border-b border-r border-slate-300 px-2 py-2 text-center font-bold text-indigo-800"
+                  className="border-x-[3px] border-b border-slate-400 px-2 py-2 text-center font-bold text-indigo-800"
                 >
                   Inseam {group.inseam ?? "—"}
                 </th>
@@ -1158,7 +1250,7 @@ export default function CutPlanningPage() {
                     key={`${group.inseam}-${size}`}
                     {...matrixCellProps(
                       matrixSizeColumnId(group, size),
-                      "border-b border-r border-slate-300 px-2 py-2 font-semibold",
+                      `border-b border-r border-slate-300 px-2 py-2 font-semibold ${matrixInseamBoundaryClass(group, size)}`,
                       "header",
                     )}
                   >
@@ -1260,7 +1352,7 @@ export default function CutPlanningPage() {
                           key={`${group.inseam}-${size}`}
                           {...matrixCellProps(
                             matrixSizeColumnId(group, size),
-                            "p-0",
+                            `p-0 ${matrixInseamBoundaryClass(group, size)}`,
                           )}
                         >
                           <input
@@ -1787,6 +1879,14 @@ export default function CutPlanningPage() {
             </button>
             <button
               type="button"
+              onClick={() => window.print()}
+              disabled={!workOrder || groups.length === 0}
+              className="inline-flex h-9 items-center gap-2 rounded-lg border border-slate-300 bg-white px-3 text-sm font-semibold text-slate-700 shadow-sm hover:border-indigo-300 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Printer className="size-4" /> Print
+            </button>
+            <button
+              type="button"
               onClick={save}
               disabled={saving || !workOrder || groups.length === 0}
               className="inline-flex h-9 items-center gap-2 rounded-lg bg-indigo-600 px-3 text-sm font-semibold text-white hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -2143,13 +2243,17 @@ export default function CutPlanningPage() {
                                 key={size}
                                 className={`px-2 py-2 text-right font-medium ${totalCellBackgrounds[label]}`}
                               >
-                                {displayNumber(values[size] || 0)}
+                                {displayNumber(
+                                  label === "Less"
+                                    ? Math.abs(values[size] || 0)
+                                    : values[size] || 0,
+                                )}
                               </td>
                             ))}
                             <td
                               className={`px-3 py-2 text-right text-sm font-bold ${totalCellBackgrounds[label]}`}
                             >
-                              {displayNumber(total)}
+                              {displayNumber(label === "Less" ? Math.abs(total) : total)}
                             </td>
                           </tr>
                         );
@@ -2206,6 +2310,240 @@ export default function CutPlanningPage() {
             </section>
           )}
         </>
+      )}
+      {data && groups.length > 0 && (
+        <div className="cut-planning-print">
+          {printInseamPairs.map((pair) => {
+            const [first, second] = pair;
+            const { group, rows } = first;
+            const totals = inseamTotals.find(
+              (entry) => entry.inseam === group.inseam,
+            );
+            const printedRows = rows.filter(({ plan }) => hasRowData(plan));
+            return (
+              <section
+                key={`print-${group.inseam ?? "none"}`}
+                className="cut-planning-print-page"
+              >
+                <header className="cut-planning-print-header">
+                  <h1>SIZE DETAIL &amp; CHECK LIST</h1>
+                  <div className="cut-planning-print-details">
+                    {printHeaderDetails.map(({ label, value }) => (
+                      <div key={label}>
+                        <span>{label}</span>
+                        <strong>{value}</strong>
+                      </div>
+                    ))}
+                    <div className="cut-planning-print-inseam-meta">
+                      <span>INSEAM</span>
+                      <strong>{group.inseam ?? "—"}</strong>
+                    </div>
+                  </div>
+                </header>
+
+                <div className="cut-planning-print-two-inseams">
+                  {renderPrintPlanningGrid(group, rows, true)}
+                  {second && renderPrintPlanningGrid(second.group, second.rows, false)}
+                </div>
+                <div className="cut-planning-print-total-pair">
+                  {pair.map(({ group: totalGroup }) => {
+                    const total = inseamTotals.find(
+                      (entry) => entry.inseam === totalGroup.inseam,
+                    );
+                    if (!total) return null;
+                    return (
+                      <section
+                        key={`print-total-${totalGroup.inseam ?? "none"}`}
+                        className="cut-planning-print-total-panel"
+                      >
+                        <table className="cut-planning-print-table">
+                          <thead>
+                            <tr>
+                              <th>INSEAM</th>
+                              {totalGroup.sizeColumns.map((size) => <th key={size}>{size}</th>)}
+                              <th>TOTAL</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {total.rows
+                              .filter(({ label }) => label !== "Order")
+                              .map(({ label, values }) => (
+                              <tr key={label}>
+                                <th>{label}</th>
+                                {totalGroup.sizeColumns.map((size) => (
+                                  <td key={size}>{displayNumber(label === "Less" ? Math.abs(values[size] || 0) : values[size] || 0)}</td>
+                                ))}
+                                <td>{displayNumber(label === "Less" ? Math.abs(totalGroup.sizeColumns.reduce((sum, size) => sum + (values[size] || 0), 0)) : totalGroup.sizeColumns.reduce((sum, size) => sum + (values[size] || 0), 0))}</td>
+                              </tr>
+                              ))}
+                          </tbody>
+                        </table>
+                      </section>
+                    );
+                  })}
+                </div>
+
+                {totals && (
+                  <section className="cut-planning-print-section cut-planning-print-summary-section">
+                    <div className="cut-planning-print-section-title">
+                      <span>SIZE DETAIL</span>
+                      <span>INSEAM: {group.inseam ?? "-"}</span>
+                    </div>
+                  <table className="cut-planning-print-summary">
+                    <thead>
+                      <tr>
+                        <th>SIZE</th>
+                        {group.sizeColumns.map((size) => (
+                          <th key={size}>{size}</th>
+                        ))}
+                        <th>TOTAL</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {totals.rows.map(({ label, values }) => (
+                        <tr key={label} className={`print-total-${label.toLowerCase().replaceAll(" ", "-")}`}>
+                          <th>{label}</th>
+                          {group.sizeColumns.map((size) => (
+                            <td key={size}>{displayNumber(values[size] || 0)}</td>
+                          ))}
+                          <td>
+                            {displayNumber(
+                              group.sizeColumns.reduce(
+                                (sum, size) => sum + (values[size] || 0),
+                                0,
+                              ),
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  </section>
+                )}
+
+                <section className="cut-planning-print-sheet cut-planning-print-old">
+                  <table className="cut-planning-print-table cut-planning-print-planning-grid">
+                    <thead>
+                      <tr>
+                        <th rowSpan={3}>FABRIC WIDTH</th>
+                        <th rowSpan={3}>SR</th>
+                        <th rowSpan={3}>TOTAL PCS</th>
+                        <th rowSpan={3}>SHRINKAGE</th>
+                        <th rowSpan={3}>PLYS</th>
+                        <th rowSpan={3}>CUT #</th>
+                        <th rowSpan={3}>BUNDLE</th>
+                        <th className="print-inseam-label" colSpan={group.sizeColumns.length}>INSEAM</th>
+                        <th rowSpan={3}>FABRIC</th>
+                        <th rowSpan={3}>SHADE</th>
+                        <th rowSpan={3}>M.AVG</th>
+                        <th rowSpan={3}>MK LENGTH</th>
+                      </tr>
+                      <tr>
+                        <th className="print-inseam-value" colSpan={group.sizeColumns.length}>{group.inseam ?? "-"}</th>
+                      </tr>
+                      <tr>
+                        {group.sizeColumns.map((size) => <th key={size}>{size}</th>)}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr className="print-required-row">
+                        <td colSpan={5} />
+                        <th colSpan={2}>QTY</th>
+                        {group.sizeColumns.map((size) => <td key={size}>{displayNumber(group.orderQuantities[size] || 0)}</td>)}
+                        <td colSpan={4} />
+                      </tr>
+                      {printedRows.map(({ plan }, index) => {
+                        const markerTotal = group.sizeColumns.reduce((sum, size) => sum + (plan.sizeQuantities[size] || 0), 0);
+                        return (
+                          <tr key={plan.id ?? `print-layout-row-${index}`}>
+                            <td>{plan.markerWidthCm == null ? "-" : displayNumber(plan.markerWidthCm)}</td>
+                            <td>{index + 1}</td>
+                            <td>{displayNumber(markerTotal * plan.markerPlies)}</td>
+                            <td>{plan.shrinkage || "-"}</td>
+                            <td>{displayNumber(plan.markerPlies)}</td>
+                            <td>{plan.cutNo || "-"}</td>
+                            <td>{plan.markerNo || "-"}</td>
+                            {group.sizeColumns.map((size) => <td key={size}>{displayNumber(plan.sizeQuantities[size] || 0)}</td>)}
+                            {index === 0 && (
+                              <td
+                                className="print-fabric-cell"
+                                rowSpan={printedRows.length}
+                              >
+                                {activeFabricItem || materialSummaries[0]?.itemNames[0] || "-"}
+                              </td>
+                            )}
+                            <td>{plan.shade || "-"}</td>
+                            <td>{markerTotal ? displayNumber(markerTotal / 100) : "-"}</td>
+                            <td>{plan.markerLengthM == null ? "-" : displayNumber(plan.markerLengthM)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </section>
+                <section className="cut-planning-print-section cut-planning-print-legacy">
+                  <div className="cut-planning-print-section-title">
+                    <span>MARKER / CUTTING DETAIL</span>
+                    <span>PLANNING SHEET</span>
+                  </div>
+                <table className="cut-planning-print-table">
+                  <thead>
+                    <tr>
+                      <th>SR</th>
+                      <th>DATE</th>
+                      <th>MARKER NO.</th>
+                      <th>CUT NO.</th>
+                      <th>PLYS</th>
+                      <th>SHRINKAGE</th>
+                      <th>SHADE</th>
+                      <th>WIDTH (CM)</th>
+                      <th>MK LENGTH (M)</th>
+                      {group.sizeColumns.map((size) => (
+                        <th key={size}>{size}</th>
+                      ))}
+                      <th>TOTAL PCS</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {printedRows.map(({ plan }, index) => {
+                      const markerTotal = group.sizeColumns.reduce(
+                        (sum, size) => sum + (plan.sizeQuantities[size] || 0),
+                        0,
+                      );
+                      return (
+                        <tr key={plan.id ?? `print-row-${index}`}>
+                          <td>{index + 1}</td>
+                          <td>{plan.planDate || "—"}</td>
+                          <td>{plan.markerNo || "—"}</td>
+                          <td>{plan.cutNo || "—"}</td>
+                          <td>{displayNumber(plan.markerPlies)}</td>
+                          <td>{plan.shrinkage || "—"}</td>
+                          <td>{plan.shade || "—"}</td>
+                          <td>{plan.markerWidthCm == null ? "—" : displayNumber(plan.markerWidthCm)}</td>
+                          <td>{plan.markerLengthM == null ? "—" : displayNumber(plan.markerLengthM)}</td>
+                          {group.sizeColumns.map((size) => (
+                            <td key={size}>{displayNumber(plan.sizeQuantities[size] || 0)}</td>
+                          ))}
+                          <td>{displayNumber(markerTotal * plan.markerPlies)}</td>
+                        </tr>
+                      );
+                    })}
+                    {printedRows.length === 0 && (
+                      <tr>
+                        <td colSpan={group.sizeColumns.length + 10}>No marker rows entered.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+                </section>
+                <footer className="cut-planning-print-footer">
+                  <span>Prepared by: ____________________</span>
+                  <span>Checked by: ____________________</span>
+                </footer>
+              </section>
+            );
+          })}
+        </div>
       )}
       <WorkOrderSearchModal
         open={showWorkOrderModal}
@@ -2475,6 +2813,241 @@ export default function CutPlanningPage() {
         }
         .cut-planning-page > section:nth-of-type(-n + 2) {
           display: none;
+        }
+        .cut-planning-print {
+          display: none;
+        }
+        @media print {
+          @page {
+            size: landscape;
+            margin: 5mm 6mm;
+          }
+          .cut-planning-page {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .cut-planning-page > :not(.cut-planning-print) {
+            display: none !important;
+          }
+          .cut-planning-print {
+            display: block !important;
+            color: #000;
+            font-family: Arial, Helvetica, sans-serif;
+          }
+          .cut-planning-print-page {
+            min-height: 190mm;
+            break-after: page;
+            page-break-after: always;
+          }
+          .cut-planning-print-page:last-child {
+            break-after: auto;
+            page-break-after: auto;
+          }
+          .cut-planning-print-header {
+            margin-bottom: 2.5mm;
+            border: 1.25px solid #000;
+          }
+          .cut-planning-print-header h1 {
+            margin: 0;
+            border-bottom: 1px solid #000;
+            padding: 1.8mm 3mm;
+            text-align: center;
+            font-size: 11pt;
+            letter-spacing: 0.08em;
+          }
+          .cut-planning-print-details {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+          }
+          .cut-planning-print-details > div {
+            display: grid;
+            grid-template-columns: 19mm 1fr;
+            min-width: 0;
+            border-right: 1px solid #000;
+            border-bottom: 1px solid #000;
+            font-size: 6.8pt;
+          }
+          .cut-planning-print-details > div:nth-last-child(-n + 4) {
+            border-bottom: 0;
+          }
+          .cut-planning-print-details > div:nth-child(4n) {
+            border-right: 0;
+          }
+          .cut-planning-print-details span,
+          .cut-planning-print-details strong {
+            min-width: 0;
+            padding: 1.2mm 1.5mm;
+          }
+          .cut-planning-print-details span {
+            border-right: 1px solid #000;
+            font-size: 5.8pt;
+            font-weight: 700;
+            text-transform: uppercase;
+          }
+          .cut-planning-print-details strong {
+            overflow-wrap: anywhere;
+          }
+          .cut-planning-print-summary,
+          .cut-planning-print-table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 6.2pt;
+          }
+          .cut-planning-print-summary {
+            margin-bottom: 2.5mm;
+          }
+          .cut-planning-print-summary th,
+          .cut-planning-print-summary td,
+          .cut-planning-print-table th,
+          .cut-planning-print-table td {
+            border: 1px solid #000;
+            padding: 1.05mm .8mm;
+            text-align: right;
+            vertical-align: middle;
+          }
+          .cut-planning-print-summary th:first-child,
+          .cut-planning-print-table th,
+          .cut-planning-print-table td:nth-child(-n + 4) {
+            text-align: center;
+          }
+          .cut-planning-print-summary thead,
+          .cut-planning-print-table thead {
+            background: #e8e8e8 !important;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .cut-planning-print-summary .print-order {
+            background: #fffbd5 !important;
+          }
+          .cut-planning-print-summary .print-will-be-cut {
+            background: #f0efff !important;
+          }
+          .cut-planning-print-summary .print-planned {
+            background: #f5e4f1 !important;
+          }
+          .cut-planning-print-summary .print-less {
+            background: #ffb7c0 !important;
+          }
+          .cut-planning-print-summary .print-over {
+            background: #59c9eb !important;
+          }
+          .cut-planning-print-summary tr {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .cut-planning-print-section {
+            margin-bottom: 2.5mm;
+            border: 1.25px solid #000;
+          }
+          .cut-planning-print-summary-section,
+          .cut-planning-print-legacy,
+          .cut-planning-print-old,
+          .cut-planning-print-inseam-meta {
+            display: none !important;
+          }
+          .cut-planning-print-two-inseams {
+            display: block;
+          }
+          .cut-planning-print-two-inseams > .cut-planning-print-sheet + .cut-planning-print-sheet {
+            border-top: 0;
+          }
+          .cut-planning-print-total-pair {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 2.5mm;
+            margin-top: 4mm;
+          }
+          .cut-planning-print-total-panel {
+            border: 1.25px solid #000;
+          }
+          .cut-planning-print-total-panel .cut-planning-print-table {
+            margin: 0;
+            font-size: 5.5pt;
+          }
+          .cut-planning-print-total-panel th,
+          .cut-planning-print-total-panel td {
+            padding: .8mm .5mm;
+            text-align: center;
+          }
+          .cut-planning-print-total-panel tbody th {
+            text-align: left;
+            white-space: nowrap;
+          }
+          .cut-planning-print-sheet {
+            border: 1.25px solid #000;
+            margin: 0;
+          }
+          .cut-planning-print-planning-grid {
+            margin: 0;
+            font-size: 5.7pt;
+          }
+          .cut-planning-print-planning-grid th,
+          .cut-planning-print-planning-grid td {
+            height: 3.2mm;
+            padding: .28mm .4mm;
+            line-height: 1.05;
+            text-align: center;
+          }
+          .cut-planning-print-planning-grid thead th {
+            font-size: 5pt;
+            font-weight: 700;
+            white-space: nowrap;
+          }
+          .cut-planning-print-planning-grid .print-inseam-label,
+          .cut-planning-print-planning-grid .print-inseam-value {
+            background: #fff2cc !important;
+            font-size: 6.5pt;
+            font-weight: 800;
+            letter-spacing: .08em;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .cut-planning-print-planning-grid .print-fixed-column-spacer {
+            background: #fff !important;
+          }
+          .cut-planning-print-planning-grid .print-inseam-value {
+            font-size: 7pt;
+          }
+          .cut-planning-print-planning-grid .print-required-row {
+            background: #f2f2f2 !important;
+            font-weight: 700;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .cut-planning-print-planning-grid .print-fabric-cell {
+            overflow-wrap: anywhere;
+            padding: .8mm 1mm !important;
+            text-align: left;
+            font-size: 5pt;
+            font-weight: 500;
+            line-height: 1.12;
+            vertical-align: middle;
+          }
+          .cut-planning-print-section .cut-planning-print-summary,
+          .cut-planning-print-section .cut-planning-print-table {
+            margin: 0;
+          }
+          .cut-planning-print-section-title {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #000;
+            padding: 1.1mm 2mm;
+            background: #d9e2f3 !important;
+            font-size: 6.5pt;
+            font-weight: 700;
+            letter-spacing: .04em;
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .cut-planning-print-footer {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 5mm;
+            padding: 1.5mm 1mm;
+            border-top: 1px solid #000;
+            font-size: 6.5pt;
+          }
         }
       `}</style>
       <style jsx global>{`
