@@ -1023,12 +1023,20 @@ export default function CutPlanningPage() {
       list.push(plan);
       cutGroups.set(key, list);
     });
-    const maxSizeCount = Math.max(
-      ...printInseamPairs.map((pair) =>
-        pair.reduce((sum, entry) => sum + entry.group.sizeColumns.length, 0),
-      ),
+    // Excel is intentionally not constrained to the two-inseam print layout.
+    // Keep every inseam in one horizontal planning grid and one horizontal
+    // totals grid, so their headers and row labels are not repeated.
+    const exportInseams = groupedPlans;
+    const sizeColumnCount = exportInseams.reduce(
+      (sum, entry) => sum + entry.group.sizeColumns.length,
+      0,
     );
-    const columnCount = 6 + maxSizeCount;
+    const planningColumnCount = 6 + sizeColumnCount;
+    const totalsColumnCount = 1 + exportInseams.reduce(
+      (sum, entry) => sum + entry.group.sizeColumns.length + 1,
+      0,
+    );
+    const columnCount = Math.max(planningColumnCount, totalsColumnCount);
     const sheet = workbook.addWorksheet("Cut Planning");
     sheet.pageSetup.orientation = "landscape";
     sheet.pageSetup.fitToPage = true;
@@ -1041,7 +1049,7 @@ export default function CutPlanningPage() {
       { width: 18 },
       { width: 11 },
       { width: 14 },
-      ...Array.from({ length: maxSizeCount }, () => ({ width: 8 })),
+      ...Array.from({ length: Math.max(0, columnCount - 6) }, () => ({ width: 8 })),
     ];
     sheet.mergeCells(1, 1, 1, columnCount);
     const title = sheet.getCell(1, 1);
@@ -1062,86 +1070,82 @@ export default function CutPlanningPage() {
     sheet.mergeCells(4, 2, 4, 4);
     sheet.getCell(4, 2).value = exportFabric;
 
-    const sectionStartRows: number[] = [];
-    let startRow = 6;
-    printInseamPairs.forEach((pair) => {
-      sectionStartRows.push(startRow);
-      const pairColumnCount = 6 + pair.reduce((sum, entry) => sum + entry.group.sizeColumns.length, 0);
-      ["SR", "TOTAL PCS", "SHRINKAGE", "PLYS", "CUT #", "BUNDLE"].forEach((label, index) => {
-        sheet.mergeCells(startRow, index + 1, startRow + 2, index + 1);
-        sheet.getCell(startRow, index + 1).value = label;
-      });
-      let startColumn = 7;
-      pair.forEach(({ group }) => {
-        const endColumn = startColumn + group.sizeColumns.length - 1;
-        sheet.mergeCells(startRow, startColumn, startRow, endColumn);
-        sheet.mergeCells(startRow + 1, startColumn, startRow + 1, endColumn);
-        sheet.getCell(startRow, startColumn).value = "INSEAM";
-        sheet.getCell(startRow + 1, startColumn).value = group.inseam ?? "-";
-        group.sizeColumns.forEach((size, index) => { sheet.getCell(startRow + 2, startColumn + index).value = size; });
-        startColumn = endColumn + 1;
-      });
-      const includedInseams = new Set(pair.map(({ group }) => group.inseam));
-      const pairCutGroups = [...cutGroups.values()].filter((cutPlans) =>
-        cutPlans.some((plan) => includedInseams.has(plan.sourceInseam)),
-      );
-      pairCutGroups.forEach((cutPlans, index) => {
-        const pairPlans = cutPlans.filter((plan) => includedInseams.has(plan.sourceInseam));
-        const base = pairPlans[0] ?? cutPlans[0];
-        const total = pairPlans.reduce((sum, plan) => sum + Object.values(plan.sizeQuantities).reduce((sizeSum, qty) => sizeSum + qty, 0), 0);
-        const row = startRow + 3 + index;
-        sheet.getRow(row).values = [index + 1, total * base.markerPlies || "", base.shrinkage || "", base.markerPlies || "", base.cutNo || "", total ? `1 - ${total}` : ""];
-        let column = 7;
-        pair.forEach(({ group }) => {
-          group.sizeColumns.forEach((size) => {
-            const value = cutPlans.filter((plan) => plan.sourceInseam === group.inseam && includedInseams.has(plan.sourceInseam)).reduce((sum, plan) => sum + (plan.sizeQuantities[size] || 0), 0);
-            sheet.getCell(row, column++).value = value || "";
-          });
-        });
-      });
-      // Keep one readable blank row between the planning grid, its totals,
-      // and the next two-inseam block.
-      const totalsStartRow = startRow + 4 + pairCutGroups.length;
-      let panelStartColumn = 1;
-      pair.forEach(({ group }) => {
-        const total = inseamTotals.find((entry) => entry.inseam === group.inseam);
-        if (!total) return;
-        // Each total panel starts with a text label column. It must be wider
-        // than the numeric size columns so labels such as "Will be cut" fit.
-        sheet.getColumn(panelStartColumn).width = 18;
-        const panelEndColumn = panelStartColumn + group.sizeColumns.length + 1;
-        sheet.mergeCells(totalsStartRow, panelStartColumn, totalsStartRow, panelEndColumn);
-        sheet.getCell(totalsStartRow, panelStartColumn).value = "INSEAM";
-        sheet.getCell(totalsStartRow, panelStartColumn).fill = inseamFill;
-        sheet.getCell(totalsStartRow, panelStartColumn).font = { name: "Calibri", bold: true, size: 11 };
-        sheet.mergeCells(totalsStartRow + 1, panelStartColumn, totalsStartRow + 1, panelEndColumn);
-        sheet.getCell(totalsStartRow + 1, panelStartColumn).value = group.inseam ?? "-";
-        sheet.getCell(totalsStartRow + 1, panelStartColumn).fill = inseamFill;
-        sheet.getCell(totalsStartRow + 1, panelStartColumn).font = { name: "Calibri", bold: true, size: 11 };
-        sheet.getCell(totalsStartRow + 2, panelStartColumn).value = "";
-        group.sizeColumns.forEach((size, index) => { sheet.getCell(totalsStartRow + 2, panelStartColumn + index + 1).value = size; });
-        sheet.getCell(totalsStartRow + 2, panelEndColumn).value = "TOTAL";
-        total.rows.filter(({ label }) => label !== "Order").forEach(({ label, values }, rowIndex) => {
-          const row = totalsStartRow + 3 + rowIndex;
-          sheet.getCell(row, panelStartColumn).value = label;
-          group.sizeColumns.forEach((size, index) => {
-            const value = label === "Less" ? Math.abs(values[size] || 0) : values[size] || 0;
-            sheet.getCell(row, panelStartColumn + index + 1).value = value || "";
-          });
-          const totalValue = group.sizeColumns.reduce((sum, size) => sum + (values[size] || 0), 0);
-          sheet.getCell(row, panelEndColumn).value = label === "Less" ? Math.abs(totalValue) || "" : totalValue || "";
-        });
-        panelStartColumn = panelEndColumn + 1;
-      });
-      for (let column = 1; column <= pairColumnCount; column += 1) {
-        sheet.getCell(startRow, column).fill = column <= 6 ? headerFill : inseamFill;
-        sheet.getCell(startRow + 1, column).fill = column <= 6 ? headerFill : inseamFill;
-        sheet.getCell(startRow + 2, column).fill = headerFill;
-        sheet.getCell(startRow, column).font = { name: "Calibri", bold: true, size: 11 };
-      }
-      sheet.getRow(startRow).height = 18;
-      startRow = totalsStartRow + 8;
+    const startRow = 6;
+    ["SR", "TOTAL PCS", "SHRINKAGE", "PLYS", "CUT #", "BUNDLE"].forEach((label, index) => {
+      sheet.mergeCells(startRow, index + 1, startRow + 2, index + 1);
+      sheet.getCell(startRow, index + 1).value = label;
     });
+    let startColumn = 7;
+    exportInseams.forEach(({ group }) => {
+      const endColumn = startColumn + group.sizeColumns.length - 1;
+      // Retain an individual header box for every inseam, even though all
+      // inseams now live in one horizontal Excel table.
+      sheet.mergeCells(startRow, startColumn, startRow, endColumn);
+      sheet.getCell(startRow, startColumn).value = "INSEAM";
+      sheet.mergeCells(startRow + 1, startColumn, startRow + 1, endColumn);
+      sheet.getCell(startRow + 1, startColumn).value = group.inseam ?? "-";
+      group.sizeColumns.forEach((size, index) => { sheet.getCell(startRow + 2, startColumn + index).value = size; });
+      startColumn = endColumn + 1;
+    });
+    const exportCutGroups = [...cutGroups.values()];
+    exportCutGroups.forEach((cutPlans, index) => {
+      const base = cutPlans[0];
+      const total = cutPlans.reduce((sum, plan) => sum + Object.values(plan.sizeQuantities).reduce((sizeSum, qty) => sizeSum + qty, 0), 0);
+      const row = startRow + 3 + index;
+      sheet.getRow(row).values = [index + 1, total * base.markerPlies || "", base.shrinkage || "", base.markerPlies || "", base.cutNo || "", total ? `1 - ${total}` : ""];
+      let column = 7;
+      exportInseams.forEach(({ group }) => {
+        group.sizeColumns.forEach((size) => {
+          const value = cutPlans.filter((plan) => plan.sourceInseam === group.inseam).reduce((sum, plan) => sum + (plan.sizeQuantities[size] || 0), 0);
+          sheet.getCell(row, column++).value = value || "";
+        });
+      });
+    });
+    const totalsStartRow = startRow + 4 + exportCutGroups.length;
+    sheet.getColumn(1).width = 18;
+    let totalsColumn = 2;
+    exportInseams.forEach(({ group }) => {
+      const total = inseamTotals.find((entry) => entry.inseam === group.inseam);
+      const endColumn = totalsColumn + group.sizeColumns.length;
+      // The totals remain one table, but every inseam retains the same
+      // separate boxed header used in the planning grid.
+      sheet.mergeCells(totalsStartRow, totalsColumn, totalsStartRow, endColumn);
+      sheet.getCell(totalsStartRow, totalsColumn).value = "INSEAM";
+      sheet.mergeCells(totalsStartRow + 1, totalsColumn, totalsStartRow + 1, endColumn);
+      sheet.getCell(totalsStartRow + 1, totalsColumn).value = group.inseam ?? "-";
+      group.sizeColumns.forEach((size, index) => {
+        sheet.getCell(totalsStartRow + 2, totalsColumn + index).value = size;
+      });
+      sheet.getCell(totalsStartRow + 2, endColumn).value = "TOTAL";
+      total?.rows.filter(({ label }) => label !== "Order").forEach(({ label, values }, rowIndex) => {
+        const row = totalsStartRow + 3 + rowIndex;
+        group.sizeColumns.forEach((size, index) => {
+          const value = label === "Less" ? Math.abs(values[size] || 0) : values[size] || 0;
+          sheet.getCell(row, totalsColumn + index).value = value || "";
+        });
+        const totalValue = group.sizeColumns.reduce((sum, size) => sum + (values[size] || 0), 0);
+        sheet.getCell(row, endColumn).value = label === "Less" ? Math.abs(totalValue) || "" : totalValue || "";
+      });
+      totalsColumn = endColumn + 1;
+    });
+    inseamTotals[0]?.rows.filter(({ label }) => label !== "Order").forEach(({ label }, rowIndex) => {
+      sheet.getCell(totalsStartRow + 3 + rowIndex, 1).value = label;
+    });
+    for (let column = 1; column <= planningColumnCount; column += 1) {
+      sheet.getCell(startRow, column).fill = column <= 6 ? headerFill : inseamFill;
+      sheet.getCell(startRow + 1, column).fill = column <= 6 ? headerFill : inseamFill;
+      sheet.getCell(startRow + 2, column).fill = headerFill;
+      sheet.getCell(startRow, column).font = { name: "Calibri", bold: true, size: 11 };
+    }
+    for (let column = 1; column <= totalsColumnCount; column += 1) {
+      sheet.getCell(totalsStartRow, column).fill = inseamFill;
+      sheet.getCell(totalsStartRow + 1, column).fill = inseamFill;
+      sheet.getCell(totalsStartRow + 2, column).fill = headerFill;
+      [totalsStartRow, totalsStartRow + 1, totalsStartRow + 2].forEach((row) => {
+        sheet.getCell(row, column).font = { name: "Calibri", bold: true, size: 11 };
+      });
+    }
+    sheet.getRow(startRow).height = 18;
     sheet.eachRow((row) => row.eachCell((cell) => {
       cell.border = { top: border, left: border, bottom: border, right: border };
       cell.alignment = { horizontal: "center", vertical: "middle" };
@@ -1159,24 +1163,6 @@ export default function CutPlanningPage() {
     sheet.getCell(4, 1).font = { name: "Calibri", bold: true, size: 11 };
     [1, 2].forEach((column) => {
       sheet.getCell(4, column).alignment = { horizontal: "left", vertical: "middle", wrapText: true };
-    });
-    printInseamPairs.forEach((pair, pairIndex) => {
-      const sectionStartRow = sectionStartRows[pairIndex];
-      const pairColumnCount = 6 + pair.reduce(
-        (sum, entry) => sum + entry.group.sizeColumns.length,
-        0,
-      );
-      const pairCutGroupCount = [...cutGroups.values()].filter((cutPlans) =>
-        cutPlans.some((plan) =>
-          pair.some(({ group }) => group.inseam === plan.sourceInseam),
-        ),
-      ).length;
-      const totalsStartRow = sectionStartRow + 4 + pairCutGroupCount;
-      for (let column = 1; column <= pairColumnCount; column += 1) {
-        [sectionStartRow, sectionStartRow + 1, sectionStartRow + 2, totalsStartRow, totalsStartRow + 1, totalsStartRow + 2].forEach((row) => {
-          sheet.getCell(row, column).font = { name: "Calibri", bold: true, size: 11 };
-        });
-      }
     });
     sheet.views = [{ showGridLines: false }];
     sheet.getRow(1).height = 28;
