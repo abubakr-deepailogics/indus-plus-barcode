@@ -2,10 +2,13 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import useEmblaCarousel from "embla-carousel-react";
 import {
   AlertCircle,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   LoaderCircle,
   Pin,
   PinOff,
@@ -109,7 +112,8 @@ export default function CutPlanningPage() {
   const matrixScrollRef = useRef<HTMLDivElement>(null);
   const matrixFooterRef = useRef<HTMLDivElement>(null);
   const totalsRef = useRef<HTMLElement>(null);
-  const totalsWheelLockedRef = useRef(false);
+  const totalsCarouselViewportRef = useRef<HTMLDivElement>(null);
+  const totalsCarouselTransitioningRef = useRef(false);
   const fabricMenuRef = useRef<HTMLDivElement>(null);
   const bundleCutButtonRef = useRef<HTMLButtonElement>(null);
   const bundleCutMenuRef = useRef<HTMLDivElement>(null);
@@ -117,6 +121,18 @@ export default function CutPlanningPage() {
   const [matrixMaxHeight, setMatrixMaxHeight] = useState<number | null>(null);
   const [pinnedMatrixColumnIds, setPinnedMatrixColumnIds] = useState<string[]>(
     [],
+  );
+  const [totalsCarouselRef, totalsCarouselApi] = useEmblaCarousel({
+    align: "start",
+    duration: 25,
+    loop: true,
+  });
+  const setTotalsCarouselViewport = useCallback(
+    (node: HTMLDivElement | null) => {
+      totalsCarouselViewportRef.current = node;
+      totalsCarouselRef(node);
+    },
+    [totalsCarouselRef],
   );
 
   useEffect(() => {
@@ -755,31 +771,51 @@ export default function CutPlanningPage() {
       }),
     [groups, plans, sizeColumns],
   );
-  const visibleInseamTotal =
-    inseamTotals[activeInseamTotalIndex % inseamTotals.length];
-  const cycleInseamTotalsOnWheel = (
-    event: React.WheelEvent<HTMLDivElement>,
-  ) => {
-    const wheelDistance =
-      Math.abs(event.deltaX) > Math.abs(event.deltaY)
-        ? event.deltaX
-        : event.deltaY;
-    if (!wheelDistance || inseamTotals.length < 2) return;
+  useEffect(() => {
+    if (!totalsCarouselApi) return;
 
-    event.preventDefault();
-    // A touchpad emits several wheel events for one gesture. Locking briefly
-    // makes one gesture advance exactly one inseam instead of skipping pages.
-    if (totalsWheelLockedRef.current) return;
+    const updateActiveInseam = () =>
+      setActiveInseamTotalIndex(totalsCarouselApi.selectedScrollSnap());
+    updateActiveInseam();
+    totalsCarouselApi.on("select", updateActiveInseam);
+    totalsCarouselApi.on("reInit", updateActiveInseam);
+    return () => {
+      totalsCarouselApi.off("select", updateActiveInseam);
+      totalsCarouselApi.off("reInit", updateActiveInseam);
+    };
+  }, [totalsCarouselApi]);
 
-    totalsWheelLockedRef.current = true;
-    const direction = wheelDistance > 0 ? 1 : -1;
-    setActiveInseamTotalIndex((currentIndex) =>
-      (currentIndex + direction + inseamTotals.length) % inseamTotals.length,
-    );
-    window.setTimeout(() => {
-      totalsWheelLockedRef.current = false;
-    }, 450);
-  };
+  useEffect(() => {
+    const viewport = totalsCarouselViewportRef.current;
+    if (!viewport || !totalsCarouselApi || inseamTotals.length < 2) return;
+
+    const releaseTransition = () => {
+      totalsCarouselTransitioningRef.current = false;
+      totalsCarouselApi.off("settle", releaseTransition);
+    };
+    const handleWheel = (event: WheelEvent) => {
+      const wheelDistance =
+        Math.abs(event.deltaX) > Math.abs(event.deltaY)
+          ? event.deltaX
+          : event.deltaY;
+      if (!wheelDistance) return;
+
+      event.preventDefault();
+      if (totalsCarouselTransitioningRef.current) return;
+
+      totalsCarouselTransitioningRef.current = true;
+      totalsCarouselApi.on("settle", releaseTransition);
+      if (wheelDistance > 0) totalsCarouselApi.scrollNext();
+      else totalsCarouselApi.scrollPrev();
+    };
+
+    viewport.addEventListener("wheel", handleWheel, { passive: false });
+    return () => {
+      viewport.removeEventListener("wheel", handleWheel);
+      totalsCarouselApi.off("settle", releaseTransition);
+      totalsCarouselTransitioningRef.current = false;
+    };
+  }, [inseamTotals.length, totalsCarouselApi]);
 
   async function save() {
     if (!workOrder) {
@@ -2048,18 +2084,27 @@ export default function CutPlanningPage() {
           {inseamMatrix}
           {groups.length > 0 && (
             <section ref={totalsRef} className="fixed inset-x-4 bottom-5 z-40 mx-auto max-w-[1336px] overflow-hidden rounded-xl border border-slate-300 bg-white shadow-xl shadow-slate-950/10 sm:inset-x-6 md:inset-x-8 lg:bottom-6">
-              <div onWheel={cycleInseamTotalsOnWheel}>
-                {visibleInseamTotal && (() => {
-                  const { inseam, rows } = visibleInseamTotal;
-                  return (
-                  <table
-                    key={inseam ?? "none"}
-                    className="w-full text-xs"
-                  >
+              <div
+                ref={setTotalsCarouselViewport}
+                className="overflow-hidden"
+              >
+                <div className="flex touch-pan-y">
+                  {inseamTotals.map(({ inseam, rows }, inseamIndex) => (
+                    <div
+                      key={inseam ?? `inseam-${inseamIndex}`}
+                      className="min-w-0 flex-[0_0_100%]"
+                    >
+                  <table className="w-full table-fixed text-xs">
+                  <colgroup>
+                    <col className="w-36" />
+                    <col className="w-12" />
+                    {sizeColumns.map((size) => <col key={size} />)}
+                    <col className="w-20" />
+                  </colgroup>
                   <thead className="border-b border-slate-200 bg-white text-slate-950 shadow-sm">
                     <tr>
                       <th className="bg-white px-3 py-2 text-left"> </th>
-                      <th className="px-3 py-2 text-center font-bold">Inseam</th>
+                      <th className="px-1 py-2 text-center font-bold">Inseam</th>
                       {sizeColumns.map((size) => (
                         <th
                           key={size}
@@ -2088,7 +2133,7 @@ export default function CutPlanningPage() {
                             {rowIndex === 0 && (
                               <td
                                 rowSpan={rows.length}
-                                className="border-r border-slate-200 bg-slate-50 px-3 text-center align-middle font-bold text-indigo-800"
+                                className="border-r border-slate-200 bg-slate-50 px-1 text-center align-middle font-bold text-indigo-800"
                               >
                                 {inseam ?? "—"}
                               </td>
@@ -2117,30 +2162,46 @@ export default function CutPlanningPage() {
                           colSpan={sizeColumns.length + 3}
                           className="px-3 py-2"
                         >
-                          <div className="flex items-center justify-center gap-1.5" aria-label="Inseam pages">
+                          <div className="flex items-center justify-center gap-2" aria-label="Inseam pages">
+                            <button
+                              type="button"
+                              aria-label="Show previous inseam"
+                              onClick={() => totalsCarouselApi?.scrollPrev()}
+                              className="rounded p-0.5 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900"
+                            >
+                              <ChevronLeft className="size-3.5" />
+                            </button>
                             {inseamTotals.map((total, index) => {
                               const isActive =
-                                index ===
-                                activeInseamTotalIndex % inseamTotals.length;
+                                index === activeInseamTotalIndex;
                               return (
                                 <button
                                   key={`${total.inseam ?? "none"}-${index}`}
                                   type="button"
                                   aria-label={`Show inseam ${total.inseam ?? "unspecified"}`}
                                   aria-current={isActive ? "true" : undefined}
-                                  onClick={() => setActiveInseamTotalIndex(index)}
+                                  onClick={() => totalsCarouselApi?.scrollTo(index)}
                                   className={`size-2.5 rounded-full transition-colors ${isActive ? "bg-indigo-700" : "bg-slate-300 hover:bg-slate-400"}`}
                                 />
                               );
                             })}
+                            <button
+                              type="button"
+                              aria-label="Show next inseam"
+                              onClick={() => totalsCarouselApi?.scrollNext()}
+                              className="rounded p-0.5 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900"
+                            >
+                              <ChevronRight className="size-3.5" />
+                            </button>
                           </div>
                         </td>
                       </tr>
                     </tfoot>
                   )}
                   </table>
-                  );
-                })()}
+                    </div>
+                  ))}
+                </div>
               </div>
             </section>
           )}
