@@ -54,6 +54,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated, dep
   const [previewing, setPreviewing] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [includeArrears, setIncludeArrears] = useState(false);
 
   const from = range.from ? format(range.from, "yyyy-MM-dd") : "";
   const to = range.to ? format(range.to, "yyyy-MM-dd") : "";
@@ -62,7 +63,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated, dep
   const previewSeq = useRef(0);
 
   const pickRange = useCallback(
-    (next: { from?: Date; to?: Date }) => {
+    (next: { from?: Date; to?: Date }, arrears = includeArrears) => {
       setRange(next);
       setError(null);
 
@@ -77,7 +78,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated, dep
       }
 
       setPreviewing(true);
-      void previewWages({ from: nextFrom, to: nextTo, department }).then((res) => {
+      void previewWages({ from: nextFrom, to: nextTo, department, includeArrears: arrears }).then((res) => {
         if (seq !== previewSeq.current) return;
         setPreviewing(false);
         if (res.ok) {
@@ -88,7 +89,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated, dep
         }
       });
     },
-    [department],
+    [department, includeArrears],
   );
 
   const handleOpenChange = useCallback(
@@ -100,6 +101,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated, dep
         setPreview(null);
         setError(null);
         setPreviewing(false);
+        setIncludeArrears(false);
       }
       onOpenChange(next);
     },
@@ -146,6 +148,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated, dep
         to,
         createdBy: createdBy ?? undefined,
         department,
+        includeArrears,
       });
       if (!res.ok) {
         setError(res.error);
@@ -170,6 +173,7 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated, dep
     onCreated,
     handleOpenChange,
     department,
+    includeArrears,
   ]);
 
   return (
@@ -275,6 +279,23 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated, dep
             </div>
           </div>
 
+          <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
+            <input
+              type="checkbox"
+              checked={includeArrears}
+              onChange={(e) => {
+                const next = e.target.checked;
+                setIncludeArrears(next);
+                if (range.from && range.to) pickRange(range, next);
+              }}
+              className="mt-0.5 size-4 accent-amber-600"
+            />
+            <span className="text-xs leading-relaxed text-amber-950">
+              <span className="block font-bold">Include unpaid arrears</span>
+              Add late scans from already-paid tenures to this wage. Leave this off to pay only this tenure.
+            </span>
+          </label>
+
           {/* Live Preview Summary Card */}
           {previewing && (
             <div className="flex items-center justify-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50 py-4 text-xs font-semibold text-slate-500">
@@ -319,6 +340,12 @@ export function CreateWagesModal({ open, onOpenChange, createdBy, onCreated, dep
                   Ready to Lock
                 </span>
               </div>
+
+              {includeArrears && preview.arrearsCouponCount > 0 && (
+                <p className="mb-3 rounded-lg bg-amber-100/70 px-3 py-2 text-[11px] font-semibold text-amber-900">
+                  Includes {preview.arrearsCouponCount.toLocaleString()} unpaid arrears coupon{preview.arrearsCouponCount === 1 ? "" : "s"}.
+                </p>
+              )}
 
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-center mb-3">
                 <div className="bg-white/80 rounded-lg p-2.5 border border-emerald-100 shadow-2xs">

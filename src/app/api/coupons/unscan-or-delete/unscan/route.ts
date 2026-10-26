@@ -1,6 +1,5 @@
 import { getPool, sql } from "@/lib/db";
 import { logCouponActionHistory } from "@/features/qr-code-generation/services/coupon-history.service";
-import { findLockedDates } from "@/features/wages/services/wage-lock.service";
 import { readCouponFilter, findMatchingCoupons, chunk } from "../shared";
 
 export const dynamic = "force-dynamic";
@@ -45,25 +44,15 @@ export async function POST(request: Request) {
     );
   }
 
-  // A coupon inside a paid wage's tenure can never be unscanned — unscanning
-  // clears EmployeeCode/ScannedAt but NOT WageId, so it would silently
-  // desync that wage's recorded totals from live coupon data, and the
-  // coupon could later be rescanned into a different (unlocked) date and
-  // paid a second time with nothing to catch it. Same hard rule as the scan
-  // endpoints' lock, checked in bulk here instead of one date at a time.
-  const lockCheck = await findLockedDates(
-    scanned.map((m) => m.ScannedAt),
-    parsed.department,
-  );
-  if (lockCheck) {
-    const titles = lockCheck.locks
-      .map((l) => `"${l.title}" (${l.from} to ${l.to})`)
-      .join(", ");
+  // Only a coupon actually recorded in a wage is immutable. Its scan date
+  // alone is insufficient: a missed normal scan and an unpaid arrear can
+  // both sit in an earlier wage tenure while WageId remains null. WageId is
+  // already selected with the coupon, avoiding a separate wage-tenure read.
+  const wageLinked = scanned.filter((coupon) => coupon.WageId != null);
+  if (wageLinked.length > 0) {
     return Response.json(
       {
-        error: `${lockCheck.lockedCount} of the matched coupon(s) fall inside a paid wage tenure — ${titles}. Delete ${
-          lockCheck.locks.length === 1 ? "that wage" : "those wages"
-        } first, or narrow the filter to exclude them.`,
+        error: `${wageLinked.length} of the matched coupon(s) are linked to a wage batch and cannot be unscanned. Delete the wage batch first, or narrow the filter to exclude them.`,
       },
       { status: 409 },
     );

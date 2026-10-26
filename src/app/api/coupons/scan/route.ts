@@ -8,7 +8,12 @@ import {
   findWageLockForDate,
   wageLockMessage,
 } from "@/features/wages/services/wage-lock.service";
-import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
+import { requireArrearsScanningPermission } from "@/features/coupon-scanning/services/arrears-authorization.service";
+import {
+  isCouponDepartment,
+  type CouponDepartment,
+} from "@/lib/department-classification";
+import { AuthError } from "@/lib/require-session";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +24,7 @@ interface CouponRow {
   OpNo: string;
   IsScanned: boolean;
   ScannedAt: string | null;
+  CutNo?: string | null;
   WageId?: number | null;
 }
 
@@ -30,11 +36,14 @@ export async function GET(request: Request) {
   const op = searchParams.get("op") || "";
   const fromCut = searchParams.get("fromCut") || "";
   const toCut = searchParams.get("toCut") || "";
-  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
+  const department = (searchParams.get("department") || "sewing")
+    .trim()
+    .toLowerCase();
 
   const employeeCode = searchParams.get("employeeCode") || "";
   const scanBy = searchParams.get("scanBy") || "";
   const scanDate = searchParams.get("scanDate") || "";
+  const isArrear = searchParams.get("isArrear") === "true";
   // "fetch" = lookup only, does not mark coupons as scanned in the DB
   const mode = searchParams.get("mode") || "scan";
 
@@ -44,17 +53,36 @@ export async function GET(request: Request) {
       { status: 400 },
     );
   }
-  if (!isCouponDepartment(department)) return Response.json({ error: "Invalid department." }, { status: 400 });
+  if (!isCouponDepartment(department))
+    return Response.json({ error: "Invalid department." }, { status: 400 });
 
   try {
+    // Lookup-only requests cannot change scan data. Every arrears write is
+    // authorized from the signed server session, never from UI state.
+    if (isArrear && mode !== "fetch") {
+      await requireArrearsScanningPermission(department as CouponDepartment);
+    }
+
     // Wages already generated for this date? The whole tenure is closed —
     // checked once up front rather than per coupon, since the lock is a
     // property of the scan date, not of any individual row. "fetch" mode is
     // a read-only lookup, so it stays open; only writes are refused.
     if (mode !== "fetch") {
-      const lock = await findWageLockForDate(scanDate, department as CouponDepartment);
-      if (lock) {
+      const lock = await findWageLockForDate(
+        scanDate,
+        department as CouponDepartment,
+      );
+      if (lock && !isArrear) {
         return Response.json({ error: wageLockMessage(lock) }, { status: 400 });
+      }
+      if (!lock && isArrear) {
+        return Response.json(
+          {
+            error:
+              "Arrears can only be used for a date in an already-paid wage tenure.",
+          },
+          { status: 400 },
+        );
       }
     }
 
@@ -76,7 +104,7 @@ export async function GET(request: Request) {
       .query(
         barcode.trim() !== ""
           ? `
-            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, WageId
+            SELECT CouponCode, WorkOrder, BundleNo, OpNo, CutNo, IsScanned, ScannedAt, WageId
             FROM dbo.QrCode_Coupon WITH (NOLOCK)
             WHERE CouponCode = @barcode
               AND (@wo = '' OR WorkOrder = @wo)
@@ -84,7 +112,7 @@ export async function GET(request: Request) {
               AND IsDeleted = 0
           `
           : `
-            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, WageId
+            SELECT CouponCode, WorkOrder, BundleNo, OpNo, CutNo, IsScanned, ScannedAt, WageId
             FROM dbo.QrCode_Coupon WITH (NOLOCK)
             WHERE WorkOrder = @wo
               AND (@bundle = '' OR BundleNo = @bundle)
@@ -94,17 +122,19 @@ export async function GET(request: Request) {
           `,
       );
 
-    let records = await enrichCouponRows(
+    const enrichedRecords = await enrichCouponRows(
       result.recordset as CouponRow[],
       department as CouponDepartment,
     );
 
+    const records = barcode
+      ? enrichedRecords
+      : enrichedRecords.filter((row) =>
+          withinCutRange(row.CutNo, fromCut, toCut),
+        );
+
     // Cut-range filter only applies to the wo/bundle/op (bulk/selection)
     // path — the barcode path never used it, same as the old query.
-    if (!barcode.trim() && (fromCut || toCut)) {
-      records = records.filter((r) => withinCutRange(r.CutNo, fromCut, toCut));
-    }
-
     if (records.length === 0) {
       return Response.json(
         { error: "No matching coupon code found in the database." },
@@ -192,6 +222,9 @@ export async function GET(request: Request) {
 
     return Response.json(unscanned);
   } catch (err: unknown) {
+    if (err instanceof AuthError) {
+      return Response.json({ error: err.message }, { status: err.status });
+    }
     console.error("Coupon scan validation error:", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });

@@ -102,6 +102,9 @@ interface RawScanRow {
   OpNo: string;
   EmployeeCode: string;
   ScannedAt: string;
+  // Normal scans are paid in their scan period. A settled arrear is paid in
+  // the period containing the later wage's end date instead.
+  PayableAt: string;
 }
 
 async function fetchScansInRange(fromDate: Date, toDate: Date, department: Department) {
@@ -111,11 +114,56 @@ async function fetchScansInRange(fromDate: Date, toDate: Date, department: Depar
     .input("from", sql.Date, format(fromDate, "yyyy-MM-dd"))
     .input("to", sql.Date, format(toDate, "yyyy-MM-dd"))
     .input("department", sql.NVarChar, department).query(`
-      SELECT CouponCode, WorkOrder, BundleNo, OpNo, EmployeeCode, ScannedAt
-      FROM dbo.QrCode_Coupon
-      WHERE IsScanned = 1 AND IsDeleted = 0 AND ScannedAt IS NOT NULL
-        AND Department = @department
-        AND ScannedAt >= @from AND ScannedAt < DATEADD(day, 1, @to)
+      SELECT c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.EmployeeCode,
+             c.ScannedAt,
+             CAST(CASE
+               -- A late coupon settled by a later wage is paid in that
+               -- wage's period. ToDate gives each wage one unambiguous
+               -- finance cycle even if a manually-selected tenure crosses a
+               -- cycle boundary.
+               WHEN c.WageId IS NOT NULL
+                AND NOT (
+                  c.ScannedAt >= paidWage.FromDate
+                  AND c.ScannedAt < DATEADD(day, 1, paidWage.ToDate)
+                )
+                 THEN paidWage.ToDate
+               ELSE c.ScannedAt
+             END AS DATETIME) AS PayableAt
+      FROM dbo.QrCode_Coupon c
+      LEFT JOIN dbo.EmployeeWages paidWage
+        ON paidWage.WageId = c.WageId
+       AND paidWage.Department = c.Department
+      WHERE c.IsScanned = 1 AND c.IsDeleted = 0 AND c.ScannedAt IS NOT NULL
+        AND c.Department = @department
+        AND (
+          -- Regular coupons remain date-based. An unpaid coupon inside an
+          -- already-paid tenure is pending arrears, so it must not appear in
+          -- the old salary report a second time.
+          (
+            (
+              (c.WageId IS NULL AND NOT EXISTS (
+                SELECT 1 FROM dbo.EmployeeWages priorWage
+                WHERE priorWage.Department = c.Department
+                  AND c.ScannedAt >= priorWage.FromDate
+                  AND c.ScannedAt < DATEADD(day, 1, priorWage.ToDate)
+              ))
+              OR
+              (c.WageId IS NOT NULL AND c.ScannedAt >= paidWage.FromDate
+               AND c.ScannedAt < DATEADD(day, 1, paidWage.ToDate))
+            )
+            AND c.ScannedAt >= @from AND c.ScannedAt < DATEADD(day, 1, @to)
+          )
+          OR
+          -- A settled arrear is selected by the tenure of the wage that paid
+          -- it, not by its original historic scan date.
+          (
+            c.WageId IS NOT NULL
+            AND NOT (c.ScannedAt >= paidWage.FromDate
+                     AND c.ScannedAt < DATEADD(day, 1, paidWage.ToDate))
+            AND paidWage.ToDate >= @from
+            AND paidWage.ToDate < DATEADD(day, 1, @to)
+          )
+        )
     `);
   const rows = result.recordset as RawScanRow[];
   return enrichCouponRows(rows, department);
@@ -177,7 +225,7 @@ export async function buildOrderWiseReport(
     const rate = Number(row.Rate) || 0;
     const value = qty * rate;
     const opInc = qty * (Number(row.Incentive) || 0);
-    const isCurrentCycle = new Date(row.ScannedAt) >= currentStart;
+    const isCurrentCycle = new Date(row.PayableAt) >= currentStart;
 
     const existing = byWorkOrder.get(row.WorkOrder) ?? {
       previousPaid: 0,

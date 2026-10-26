@@ -174,6 +174,21 @@ export default function CouponTracingPage() {
     return [];
   };
 
+  const fetchCutSuggestions = async (query: string): Promise<string[]> => {
+    if (!tracedWorkOrder) return [];
+    try {
+      const response = await fetch(
+        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=cut&query=${encodeURIComponent(query)}&department=${encodeURIComponent(department)}`,
+      );
+      if (response.ok) {
+        return await response.json();
+      }
+    } catch (err) {
+      console.error("Cut suggestions fetch error:", err);
+    }
+    return [];
+  };
+
   const fetchSectionOptions = async (workOrder: string) => {
     if (!workOrder) {
       setSectionOptions([]);
@@ -943,17 +958,26 @@ export default function CouponTracingPage() {
                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
                       From Cut
                     </span>
-                    <input
-                      type="text"
-                      placeholder="From Cut"
+                    <Autocomplete<string>
                       value={draftFilter.fromCut}
-                      onChange={(e) =>
+                      onChange={(value) =>
                         setDraftFilter((prev) => ({
                           ...prev,
-                          fromCut: e.target.value,
+                          fromCut: value,
                         }))
                       }
-                      className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all placeholder-slate-400 focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
+                      onSelect={(value) =>
+                        setDraftFilter((prev) => ({
+                          ...prev,
+                          fromCut: value,
+                        }))
+                      }
+                      fetchSuggestions={fetchCutSuggestions}
+                      renderSuggestion={(item) => <span>{item}</span>}
+                      getSuggestionValue={(item) => item}
+                      minChars={0}
+                      placeholder="From Cut"
+                      inputClassName="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all placeholder-slate-400 focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
                     />
                   </label>
 
@@ -961,17 +985,26 @@ export default function CouponTracingPage() {
                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
                       To Cut
                     </span>
-                    <input
-                      type="text"
-                      placeholder="To Cut"
+                    <Autocomplete<string>
                       value={draftFilter.toCut}
-                      onChange={(e) =>
+                      onChange={(value) =>
                         setDraftFilter((prev) => ({
                           ...prev,
-                          toCut: e.target.value,
+                          toCut: value,
                         }))
                       }
-                      className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all placeholder-slate-400 focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
+                      onSelect={(value) =>
+                        setDraftFilter((prev) => ({
+                          ...prev,
+                          toCut: value,
+                        }))
+                      }
+                      fetchSuggestions={fetchCutSuggestions}
+                      renderSuggestion={(item) => <span>{item}</span>}
+                      getSuggestionValue={(item) => item}
+                      minChars={0}
+                      placeholder="To Cut"
+                      inputClassName="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all placeholder-slate-400 focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
                     />
                   </label>
 

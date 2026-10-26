@@ -28,7 +28,8 @@ export async function GET(request: Request) {
     // commits, rather than failing them at the confirm step.
     const overlap = await findOverlappingWage(tenure.from, tenure.to, department as CouponDepartment);
 
-    const built = await buildWageData(tenure.from, tenure.to, department as CouponDepartment);
+    const includeArrears = searchParams.get("includeArrears") === "true";
+    const built = await buildWageData(tenure.from, tenure.to, department as CouponDepartment, includeArrears);
     if (!built.ok) {
       return Response.json({ error: built.error }, { status: built.status });
     }

@@ -44,6 +44,7 @@ export type PageKey =
   | "style-bulletin-attachments"
   | "coupon-generation"
   | "coupon-scanning"
+  | "coupon-scanning-arrears"
   | "coupon-tracing"
   | "coupon-tracing-unscan"
   | "rework-coupon"

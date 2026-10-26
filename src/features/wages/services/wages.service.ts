@@ -17,8 +17,10 @@ export async function previewWages(params: {
   from: string;
   to: string;
   department: CouponDepartment;
+  includeArrears?: boolean;
 }): Promise<{ ok: true; preview: WagePreviewResult } | { ok: false; error: string }> {
   const qp = new URLSearchParams({ from: params.from, to: params.to, department: params.department });
+  if (params.includeArrears) qp.set("includeArrears", "true");
   const response = await fetch(`/api/wages/preview?${qp.toString()}`);
   const data = await response.json();
   if (!response.ok) {
@@ -33,6 +35,7 @@ export async function createWages(params: {
   to: string;
   createdBy?: string;
   department: CouponDepartment;
+  includeArrears?: boolean;
 }): Promise<
   | { ok: true; wageId: number; totalRows: number; totalQty: number; totalAmount: number }
   | { ok: false; error: string }
