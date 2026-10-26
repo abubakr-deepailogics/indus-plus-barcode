@@ -831,19 +831,9 @@ export default function CutPlanningPage() {
                 0,
               );
               if (!basePlan) return null;
-              const cutNo = basePlan.cutNo.trim();
-              const transactionTotal = cutNo
-                ? plans
-                    .filter((plan) => plan.cutNo.trim() === cutNo)
-                    .reduce(
-                      (sum, plan) =>
-                        sum + Object.values(plan.sizeQuantities).reduce(
-                          (sizeSum, quantity) => sizeSum + quantity,
-                          0,
-                        ),
-                      0,
-                    )
-                : total;
+              // The printed block represents only its displayed inseams, so
+              // its cut quantity and bundle range must use that same scope.
+              const transactionTotal = total;
               return (
                 <tr key={basePlan.id ?? `print-grid-row-${printRow.firstIndex}`}>
                   <td>{displayIndex + 1}</td>
@@ -1044,7 +1034,15 @@ export default function CutPlanningPage() {
     sheet.pageSetup.fitToPage = true;
     sheet.pageSetup.fitToWidth = 1;
     sheet.pageSetup.fitToHeight = 1;
-    sheet.columns = [14, 20, 12, 18, 11, 14, ...Array.from({ length: maxSizeCount }, () => ({ width: 8 }))];
+    sheet.columns = [
+      { width: 14 },
+      { width: 20 },
+      { width: 12 },
+      { width: 18 },
+      { width: 11 },
+      { width: 14 },
+      ...Array.from({ length: maxSizeCount }, () => ({ width: 8 })),
+    ];
     sheet.mergeCells(1, 1, 1, columnCount);
     const title = sheet.getCell(1, 1);
     title.value = "SIZE DETAIL & CHECK LIST";
@@ -1080,9 +1078,13 @@ export default function CutPlanningPage() {
         startColumn = endColumn + 1;
       });
       const includedInseams = new Set(pair.map(({ group }) => group.inseam));
-      [...cutGroups.values()].forEach((cutPlans, index) => {
-        const base = cutPlans[0];
-        const total = cutPlans.reduce((sum, plan) => sum + Object.values(plan.sizeQuantities).reduce((sizeSum, qty) => sizeSum + qty, 0), 0);
+      const pairCutGroups = [...cutGroups.values()].filter((cutPlans) =>
+        cutPlans.some((plan) => includedInseams.has(plan.sourceInseam)),
+      );
+      pairCutGroups.forEach((cutPlans, index) => {
+        const pairPlans = cutPlans.filter((plan) => includedInseams.has(plan.sourceInseam));
+        const base = pairPlans[0] ?? cutPlans[0];
+        const total = pairPlans.reduce((sum, plan) => sum + Object.values(plan.sizeQuantities).reduce((sizeSum, qty) => sizeSum + qty, 0), 0);
         const row = startRow + 3 + index;
         sheet.getRow(row).values = [index + 1, total * base.markerPlies || "", base.shrinkage || "", base.markerPlies || "", base.cutNo || "", total ? `1 - ${total}` : ""];
         let column = 7;
@@ -1093,11 +1095,16 @@ export default function CutPlanningPage() {
           });
         });
       });
-      const totalsStartRow = startRow + 4 + cutGroups.size;
+      // Keep one readable blank row between the planning grid, its totals,
+      // and the next two-inseam block.
+      const totalsStartRow = startRow + 4 + pairCutGroups.length;
       let panelStartColumn = 1;
       pair.forEach(({ group }) => {
         const total = inseamTotals.find((entry) => entry.inseam === group.inseam);
         if (!total) return;
+        // Each total panel starts with a text label column. It must be wider
+        // than the numeric size columns so labels such as "Will be cut" fit.
+        sheet.getColumn(panelStartColumn).width = 18;
         const panelEndColumn = panelStartColumn + group.sizeColumns.length + 1;
         sheet.mergeCells(totalsStartRow, panelStartColumn, totalsStartRow, panelEndColumn);
         sheet.getCell(totalsStartRow, panelStartColumn).value = "INSEAM";
@@ -1151,7 +1158,12 @@ export default function CutPlanningPage() {
         (sum, entry) => sum + entry.group.sizeColumns.length,
         0,
       );
-      const totalsStartRow = sectionStartRow + 4 + cutGroups.size;
+      const pairCutGroupCount = [...cutGroups.values()].filter((cutPlans) =>
+        cutPlans.some((plan) =>
+          pair.some(({ group }) => group.inseam === plan.sourceInseam),
+        ),
+      ).length;
+      const totalsStartRow = sectionStartRow + 4 + pairCutGroupCount;
       for (let column = 1; column <= pairColumnCount; column += 1) {
         [sectionStartRow, sectionStartRow + 1, sectionStartRow + 2, totalsStartRow, totalsStartRow + 1, totalsStartRow + 2].forEach((row) => {
           sheet.getCell(row, column).font = { name: "Calibri", bold: true, size: 11 };
