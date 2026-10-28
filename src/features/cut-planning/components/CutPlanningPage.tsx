@@ -1406,7 +1406,10 @@ export default function CutPlanningPage() {
     removeMarkerSet(rowIndex);
   };
   const inseamMatrix = groups.length > 0 && (
-    <section ref={matrixRef} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+    <section
+      ref={matrixRef}
+      className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:mx-[calc((min(2400px,calc(100vw-3rem))-100%)/-2)] xl:w-[min(2400px,calc(100vw-3rem))]"
+    >
       <div ref={matrixScrollRef} className="overscroll-contain overflow-x-auto overflow-y-auto" style={matrixMaxHeight == null ? undefined : { maxHeight: matrixMaxHeight }}>
         <table className="min-w-max w-full border-collapse text-xs">
           <thead className="sticky top-0 z-10 bg-slate-100 text-left text-slate-600">
@@ -2082,7 +2085,7 @@ export default function CutPlanningPage() {
           ) : undefined
         }
         actions={
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-2 sm:translate-y-2">
             <button
               type="button"
               onClick={() => setShowWorkOrderModal(true)}
