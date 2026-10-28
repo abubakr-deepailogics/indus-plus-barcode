@@ -55,7 +55,7 @@ export async function createDummyEmployee(input: {
       .query(`INSERT INTO dbo.DummyEmployee (EmployeeCode, EmployeeName, Department, OperationCode, OperationName, CreatedBy)
         OUTPUT inserted.Id VALUES (CONCAT('PENDING-', LEFT(CONVERT(NVARCHAR(36), NEWID()), 20)), @employeeName, @department, @operationCode, @operationName, @createdBy)`);
     const id = Number(insert.recordset[0].Id);
-    const employeeCode = `DUMMY-${String(id).padStart(6, "0")}`;
+    const employeeCode = `DM-${String(id).padStart(6, "0")}`;
     await new sql.Request(transaction).input("employeeCode", sql.NVarChar, employeeCode).input("id", sql.Int, id)
       .query("UPDATE dbo.DummyEmployee SET EmployeeCode = @employeeCode WHERE Id = @id");
     await transaction.commit();

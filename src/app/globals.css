@@ -4,6 +4,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Trace reports use a light grand-total band, consistent with the workspace. */
+[data-trace-employees] tfoot tr.bg-slate-900 {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+  color: #0f172a;
+}
+
+[data-trace-employees] tfoot tr.bg-slate-900 td {
+  border-color: #e0e7ff;
+}
+
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
@@ -238,3 +249,4 @@
 [data-client-brand] [class*="text-slate-900"] {
   color: var(--client-brand-charcoal);
 }
+

@@ -36,7 +36,7 @@ export function TraceEmployeesWorkspace() {
   }, []);
   const createdBy = user?.email || user?.displayName || "Administrator";
 
-  return <div className="flex flex-1 flex-col gap-5">
+  return <div data-trace-employees className="flex flex-1 flex-col gap-5">
     <header className="flex flex-col justify-between gap-4 border-b border-slate-200 pb-5 sm:flex-row sm:items-start">
       <div className="flex gap-3.5"><span className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm"><ClipboardCheck className="size-5" /></span><div><p className="text-[10px] font-bold uppercase tracking-[0.14em] text-indigo-700">Industrial engineering / Traceability</p><h1 className="mt-1 text-2xl font-semibold text-slate-950">Trace Employees</h1><p className="mt-1 text-sm text-slate-500">PIT-only employee cards for operation checks, with zero payable earnings.</p></div></div>
       {tab === "cards" && <CreateEmployeeCardDialog createdBy={createdBy} onCreated={loadEmployees} />}

@@ -307,7 +307,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between ${
                       (tab.href === "/trace-employees?tab=reports"
                         ? pathname === "/trace-employees" && searchParams.get("tab") === "reports"
-                        : pathname === tab.href)
+                        : tab.href === "/trace-employees"
+                          ? pathname === "/trace-employees" && searchParams.get("tab") !== "reports"
+                          : pathname === tab.href)
                         ? "bg-indigo-50 text-[#4f46e5] font-bold"
                         : "text-slate-700 hover:bg-slate-50"
                     }`}
@@ -331,7 +333,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 const isTabActive = tab.href !== "#"
                   ? tab.href === "/trace-employees?tab=reports"
                     ? pathname === "/trace-employees" && searchParams.get("tab") === "reports"
-                    : pathname === tab.href
+                    : tab.href === "/trace-employees"
+                      ? pathname === "/trace-employees" && searchParams.get("tab") !== "reports"
+                      : pathname === tab.href
                   : (tab.label === "Industrial Engineering" && isIeOpen);
 
                 const content = (
