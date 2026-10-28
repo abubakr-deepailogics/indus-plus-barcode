@@ -31,6 +31,8 @@ export interface Worker {
   AlreadyMonthlyScan?: number;
   AlreadyDailyScanPrice?: number;
   AlreadyMonthlyScanPrice?: number;
+  IsDummy?: boolean;
+  RestrictedOperationCode?: string;
 }
 
 export interface OperationSuggestion {

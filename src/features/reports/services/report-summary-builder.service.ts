@@ -22,6 +22,7 @@ import type {
   SectionReportItem,
   WorkOrderReportItem,
 } from "../types";
+import { findDummyEmployee, findDummyEmployeesByCodes } from "@/features/dummy-employees/services/dummy-employees.service";
 
 // Server-only: builds the report summary for /api/reports/summary. Kept out
 // of the route handler per the "route files stay thin" convention — this is
@@ -205,6 +206,14 @@ async function resolveSubject(
   }
 
   if (mode === "employee") {
+    const dummy = await findDummyEmployee(value);
+    if (dummy) {
+      return { ok: true, subject: { mode: "employee", employee: {
+        EmployeeID: dummy.employeeCode, FirstName: dummy.employeeName,
+        ParentDepartment: dummy.department, DepartmentName: dummy.department,
+        DesignationName: "Tracing employee",
+      } }, boundValue: dummy.employeeCode };
+    }
     const employeeIdNum = parseInt(value, 10);
     if (isNaN(employeeIdNum)) {
       return { ok: false, status: 400, error: "Invalid employee code format." };
@@ -403,7 +412,13 @@ export async function buildReportSummary(
   ]);
 
   const rows = couponResult.recordset as RawCouponRow[];
-  const enriched = await enrichCouponRows(rows, department);
+  const rawEnriched = await enrichCouponRows(rows, department);
+  const dummyEmployees = await findDummyEmployeesByCodes([...new Set(rawEnriched.map((row) => row.EmployeeCode).filter(Boolean))]);
+  // A dummy card records the same coupon trail as a real employee, but can
+  // never affect earnings or incentive amounts in any standard report.
+  const enriched = rawEnriched.map((row) => dummyEmployees.has(row.EmployeeCode)
+    ? { ...row, Rate: 0, Incentive: 0, Value: 0 }
+    : row);
 
   const distinctWorkOrders = [...new Set(enriched.map((row) => row.WorkOrder))];
   const [orderQtyByWo, bundleQtyByWo] = await Promise.all([
@@ -438,6 +453,12 @@ export async function buildReportSummary(
         designation: row.DesignationName ?? null,
       });
     }
+  }
+  for (const dummy of dummyEmployees.values()) {
+    employeeInfoByCode.set(dummy.employeeCode, {
+      name: dummy.employeeName,
+      designation: "Tracing employee",
+    });
   }
 
   const totalAmount = enriched.reduce((sum, row) => sum + (row.Value ?? 0), 0);

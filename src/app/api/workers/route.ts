@@ -5,6 +5,7 @@ import {
   CURRENT_PAY_CYCLE_START_SQL,
 } from "@/lib/db";
 import { fetchPieceRates } from "@/features/coupon-scanning/services/coupon-enrichment.service";
+import { findDummyEmployee, searchDummyEmployees } from "@/features/dummy-employees/services/dummy-employees.service";
 
 export const dynamic = "force-dynamic";
 
@@ -24,6 +25,20 @@ export async function GET(request: Request) {
 
     // 1. Fetch details for a specific EmployeeID (exact match)
     if (code) {
+      const dummy = await findDummyEmployee(code);
+      if (dummy?.isActive) {
+        return Response.json({
+          EmployeeID: dummy.employeeCode,
+          FirstName: dummy.employeeName,
+          ParentDepartment: dummy.department,
+          DepartmentName: dummy.department,
+          DesignationName: "Tracing employee",
+          IsDummy: true,
+          RestrictedOperationCode: dummy.operationCode,
+          AlreadyDailyScan: 0, AlreadyMonthlyScan: 0,
+          AlreadyDailyScanPrice: 0, AlreadyMonthlyScanPrice: 0,
+        });
+      }
       const codeNum = parseInt(code);
       if (isNaN(codeNum)) {
         return Response.json(
@@ -89,7 +104,7 @@ export async function GET(request: Request) {
     // bounded active-worker list lets the user choose immediately; typing
     // narrows that same list by employee code or name.
     if (query) {
-      const result = await hrmsPool
+      const [result, dummyEmployees] = await Promise.all([hrmsPool
         .request()
         .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
           SELECT DISTINCT TOP 10 EmployeeID, FirstName, DesignationName, ParentDepartment, DepartmentName
@@ -97,18 +112,28 @@ export async function GET(request: Request) {
           WHERE (CAST(EmployeeID AS VARCHAR(50)) LIKE @q OR FirstName LIKE @q)
             AND EmpStatus = 'Active'
           ORDER BY EmployeeID
-        `);
+        `), searchDummyEmployees(query)]);
 
-      return Response.json(result.recordset);
+      return Response.json([...dummyEmployees.map((employee) => ({
+        EmployeeID: employee.employeeCode, FirstName: employee.employeeName,
+        ParentDepartment: employee.department, DepartmentName: employee.department,
+        DesignationName: "Tracing employee", IsDummy: true,
+        RestrictedOperationCode: employee.operationCode,
+      })), ...result.recordset].slice(0, 10));
     }
 
-    const result = await hrmsPool.request().query(`
+    const [result, dummyEmployees] = await Promise.all([hrmsPool.request().query(`
       SELECT DISTINCT TOP 20 EmployeeID, FirstName, DesignationName, ParentDepartment, DepartmentName
       FROM ${WORKERS_VIEW}
       WHERE EmpStatus = 'Active'
       ORDER BY EmployeeID
-    `);
-    return Response.json(result.recordset);
+    `), searchDummyEmployees("")]);
+    return Response.json([...dummyEmployees.map((employee) => ({
+      EmployeeID: employee.employeeCode, FirstName: employee.employeeName,
+      ParentDepartment: employee.department, DepartmentName: employee.department,
+      DesignationName: "Tracing employee", IsDummy: true,
+      RestrictedOperationCode: employee.operationCode,
+    })), ...result.recordset].slice(0, 20));
   } catch (err: unknown) {
     console.error("Workers API error:", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";

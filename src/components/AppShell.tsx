@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/features/auth/context/auth-context";
 import { useDepartment, type DepartmentKey } from "@/lib/department-context";
 import { useWorkOrder } from "@/lib/work-order-context";
@@ -15,7 +15,8 @@ import {
   ScanLine,
   Search as SearchIcon,
   RotateCcw,
-  Users
+  Users,
+  ClipboardCheck
 } from "lucide-react";
 
 function productionModuleTabs(basePath: "/sewing" | "/washing" | "/finishing") {
@@ -81,6 +82,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const { user, logout } = useAuth();
   const router = useRouter();
   const { department, setDepartment, departments } = useDepartment();
@@ -96,7 +98,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     } else if (pathname.startsWith("/finishing") && department !== "finishing") {
       setDepartment("finishing");
     } else if (
-      (pathname.startsWith("/sewing") || pathname.startsWith("/industrial-engineering")) &&
+      (pathname.startsWith("/sewing") ||
+        pathname.startsWith("/industrial-engineering")) &&
       department !== "sewing"
     ) {
       setDepartment("sewing");
@@ -120,6 +123,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   // Top navigation tabs
   const currentNavTabs = useMemo(() => {
+    if (pathname.startsWith("/trace-employees")) {
+      return [
+        { label: "Employee Cards", href: "/trace-employees", hasDropdown: false },
+        { label: "Trace Report", href: "/trace-employees?tab=reports", hasDropdown: false },
+      ];
+    }
     if (department === "washing" || department === "finishing") {
       return productionModuleTabs(`/${department}`);
     }
@@ -131,7 +140,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       ];
     }
     return [];
-  }, [department, user?.isAdmin]);
+  }, [department, pathname, user?.isAdmin]);
 
   return (
     <div data-client-brand className="min-h-screen bg-[#f8fafc] text-[#1e293b] flex flex-col font-sans selection:bg-indigo-100 selection:text-indigo-900">
@@ -154,7 +163,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         <nav aria-label="Department Navigation" className="hidden md:flex items-center justify-center flex-1 max-w-xl mx-2">
           <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 gap-1 shadow-xs">
             {departments.map((dept) => {
-              const isActive = department === dept.id;
+              const isActive = !pathname.startsWith("/trace-employees") && department === dept.id;
               return (
                 <button
                   key={dept.id}
@@ -171,6 +180,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </button>
               );
             })}
+            <Link
+              href="/trace-employees"
+              className={`inline-flex items-center gap-1.5 px-3.5 lg:px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+              pathname.startsWith("/trace-employees")
+                ? "bg-white text-[#4f46e5] shadow-xs"
+                : "text-[#64748b] hover:text-[#0f172a] hover:bg-slate-200/50"
+            }`}
+            >
+              Trace Employees
+            </Link>
           </div>
         </nav>
 
@@ -242,6 +261,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 );
               })}
             </div>
+            <Link
+              href="/trace-employees"
+              onClick={() => setMobileMenuOpen(false)}
+              className="mt-2 flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
+            >
+              <span className="flex items-center gap-2"><ClipboardCheck className="size-3.5 text-indigo-700" />Trace Employees</span>
+              <ChevronRight className="size-3.5 text-slate-400" />
+            </Link>
           </div>
 
           {user?.isAdmin && (
@@ -264,10 +291,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 {currentNavTabs.map((tab, idx) => (
                   <Link
                     key={idx}
-                    href={workOrderHref(tab.href)}
+                  href={tab.href.startsWith("/trace-employees") ? tab.href : workOrderHref(tab.href)}
                     onClick={() => setMobileMenuOpen(false)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between ${
-                      pathname === tab.href
+                      (tab.href === "/trace-employees?tab=reports"
+                        ? pathname === "/trace-employees" && searchParams.get("tab") === "reports"
+                        : pathname === tab.href)
                         ? "bg-indigo-50 text-[#4f46e5] font-bold"
                         : "text-slate-700 hover:bg-slate-50"
                     }`}
@@ -289,7 +318,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <div className="flex items-center gap-1.5 min-w-max">
               {currentNavTabs.map((tab, idx) => {
                 const isTabActive = tab.href !== "#"
-                  ? pathname === tab.href
+                  ? tab.href === "/trace-employees?tab=reports"
+                    ? pathname === "/trace-employees" && searchParams.get("tab") === "reports"
+                    : pathname === tab.href
                   : (tab.label === "Industrial Engineering" && isIeOpen);
 
                 const content = (
@@ -314,7 +345,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 return (
                   <div key={idx} className="relative">
                     {tab.href !== "#" ? (
-                      <Link href={workOrderHref(tab.href)} className={className}>
+                      <Link href={tab.href.startsWith("/trace-employees") ? tab.href : workOrderHref(tab.href)} className={className}>
                         {content}
                       </Link>
                     ) : (
@@ -625,6 +656,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   </span>
                   <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
                     Employee Report
+                  </span>
+                </Link>
+                <Link
+                  href="/trace-employees"
+                  onClick={() => setIsIeOpen(false)}
+                  className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
+                >
+                  <span className="w-8 h-8 rounded-lg bg-violet-50 text-violet-500 flex items-center justify-center">
+                    <ClipboardCheck className="w-4 h-4" />
+                  </span>
+                  <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
+                    Trace Employees
                   </span>
                 </Link>
                 <Link

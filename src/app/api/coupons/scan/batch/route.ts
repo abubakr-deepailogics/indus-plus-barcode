@@ -5,6 +5,7 @@ import {
   wageLockMessage,
 } from "@/features/wages/services/wage-lock.service";
 import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
+import { validateDummyEmployeeOperation } from "@/features/dummy-employees/services/dummy-employees.service";
 
 export const dynamic = "force-dynamic";
 
@@ -66,6 +67,13 @@ export async function POST(request: Request) {
     // indusPlus — see coupon-enrichment service for why those can't be
     // joined in one query.
     const pool = await getPool("pitSystem");
+    const dummyCheck = await validateDummyEmployeeOperation(employeeCode, []);
+    if (dummyCheck.isDummy) {
+      const codesRequest = pool.request().input("Codes", buildCodeListTable(codes)).input("department", sql.NVarChar, department);
+      const couponOperations = await codesRequest.query(`SELECT c.OpNo FROM dbo.QrCode_Coupon c INNER JOIN @Codes src ON src.CouponCode = c.CouponCode WHERE c.IsDeleted = 0 AND c.Department = @department`);
+      const validation = await validateDummyEmployeeOperation(employeeCode, couponOperations.recordset.map((row) => String(row.OpNo)));
+      if (!validation.allowed) return Response.json({ error: validation.error }, { status: 400 });
+    }
     const request_ = pool.request();
     request_.input("Codes", buildCodeListTable(codes));
     request_.input("employeeCode", sql.NVarChar, employeeCode);

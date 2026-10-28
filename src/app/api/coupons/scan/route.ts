@@ -9,6 +9,7 @@ import {
   wageLockMessage,
 } from "@/features/wages/services/wage-lock.service";
 import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
+import { validateDummyEmployeeOperation } from "@/features/dummy-employees/services/dummy-employees.service";
 
 export const dynamic = "force-dynamic";
 
@@ -110,6 +111,13 @@ export async function GET(request: Request) {
         { error: "No matching coupon code found in the database." },
         { status: 404 },
       );
+    }
+
+    if (mode !== "fetch") {
+      const validation = await validateDummyEmployeeOperation(employeeCode, records.map((record) => String(record.OprCode || record.OpNo || "")));
+      if (validation.isDummy && !validation.allowed) {
+        return Response.json({ error: validation.error }, { status: 400 });
+      }
     }
 
     if (barcode) {

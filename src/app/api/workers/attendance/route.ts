@@ -1,4 +1,5 @@
 import { getPool, sql, ATTENDANCE_VIEW } from "@/lib/db";
+import { findDummyEmployee } from "@/features/dummy-employees/services/dummy-employees.service";
 
 export const dynamic = "force-dynamic";
 
@@ -12,8 +13,7 @@ export async function GET(request: Request) {
   const code = searchParams.get("code") || "";
   const date = searchParams.get("date") || "";
 
-  const codeNum = parseInt(code, 10);
-  if (!code || isNaN(codeNum)) {
+  if (!code) {
     return Response.json(
       { error: "A valid employee code is required." },
       { status: 400 },
@@ -24,6 +24,10 @@ export async function GET(request: Request) {
   }
 
   try {
+    const dummy = await findDummyEmployee(code);
+    if (dummy) return Response.json({ present: dummy.isActive });
+    const codeNum = parseInt(code, 10);
+    if (isNaN(codeNum)) return Response.json({ error: "A valid employee code is required." }, { status: 400 });
     const pool = await getPool("hrms");
     const result = await pool
       .request()
