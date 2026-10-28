@@ -5,7 +5,7 @@ import { format } from "date-fns";
 import {
   CalendarIcon,
   ClipboardCheck,
-  FileSpreadsheet,
+  Download,
   Printer,
   Search,
 } from "lucide-react";
@@ -300,9 +300,9 @@ export function DummyEmployeeReport({ embedded = false }: { embedded?: boolean }
           </Popover>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <Button type="button" onClick={search} disabled={loading} className="h-10 gap-2 bg-indigo-700 px-4 text-xs hover:bg-indigo-800"><Search className="size-3.5" />{loading ? "Searching…" : "Search"}</Button>
-          <Button type="button" onClick={() => window.print()} className="h-10 gap-2 border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 shadow-sm hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950"><Printer className="size-3.5 text-slate-600" />Print</Button>
-          <Button type="button" onClick={exportExcel} disabled={rows.length === 0} className="h-10 gap-2 border border-slate-200 bg-white px-4 text-xs font-semibold text-slate-600 shadow-sm hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"><FileSpreadsheet className="size-3.5" />Excel</Button>
+          <Button type="button" onClick={search} disabled={loading} aria-label="Search report" title="Search report" className="size-10 bg-indigo-700 hover:bg-indigo-800"><Search className="size-4" /></Button>
+          <Button type="button" onClick={() => window.print()} aria-label="Print report" title="Print report" className="size-10 border border-slate-300 bg-white text-slate-700 shadow-sm hover:border-slate-400 hover:bg-slate-50 hover:text-slate-950"><Printer className="size-4 text-slate-600" /></Button>
+          <Button type="button" onClick={exportExcel} disabled={rows.length === 0} aria-label="Export Excel report" title="Export Excel report" className="size-10 border border-slate-200 bg-white text-slate-600 shadow-sm hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700"><Download className="size-4" /></Button>
         </div>
       </div>
       {error && <p role="alert" className="mt-4 rounded-lg border border-rose-200 bg-rose-50 px-3.5 py-2.5 text-xs font-medium text-rose-800">{error}</p>}
