@@ -9,6 +9,7 @@ import {
 import type { Department } from "@/lib/department-classification";
 import { fetchDepartmentOpTotalsByWorkOrder } from "./department-op-totals.service";
 import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
+import { findDummyEmployeesByCodes } from "@/features/dummy-employees/services/dummy-employees.service";
 import type {
   FinanceReportPeriod,
   OrderWiseReportResult,
@@ -118,7 +119,18 @@ async function fetchScansInRange(fromDate: Date, toDate: Date, department: Depar
         AND ScannedAt >= @from AND ScannedAt < DATEADD(day, 1, @to)
     `);
   const rows = result.recordset as RawScanRow[];
-  return enrichCouponRows(rows, department);
+  const enriched = await enrichCouponRows(rows, department);
+  const dummyEmployees = await findDummyEmployeesByCodes(
+    [...new Set(enriched.map((row) => row.EmployeeCode).filter(Boolean))],
+  );
+  // Finance reports must never turn dummy trace activity into a claim or
+  // incentive. Keep the scan trail/quantity available for audit, but zero
+  // every monetary input before either finance aggregation runs.
+  return enriched.map((row) =>
+    dummyEmployees.has(row.EmployeeCode)
+      ? { ...row, Rate: 0, Incentive: 0, Value: 0 }
+      : row,
+  );
 }
 
 async function fetchSewingOpCodesByWorkOrder(

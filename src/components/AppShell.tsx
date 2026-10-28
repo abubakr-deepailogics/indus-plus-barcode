@@ -108,6 +108,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const handleDepartmentSwitch = (deptId: DepartmentKey) => {
     setDepartment(deptId);
+    // Trace Employees is global. Choosing a production department from this
+    // screen must leave the global workspace and open that department's
+    // normal starting page, including Sewing.
+    if (pathname.startsWith("/trace-employees")) {
+      router.push(
+        deptId === "sewing"
+          ? "/sewing/cut-report"
+          : `/${deptId}/style-bulletin`,
+      );
+      return;
+    }
     if (deptId === "washing" || deptId === "finishing") {
       router.push(`/${deptId}/style-bulletin`);
     } else if (
