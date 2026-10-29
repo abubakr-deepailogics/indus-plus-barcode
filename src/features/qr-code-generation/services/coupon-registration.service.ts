@@ -9,6 +9,7 @@ import {
 import { buildCouponCode } from "./coupon-code";
 import type { CouponCard } from "./coupon-pairing.service";
 import type { CouponDepartment } from "@/lib/department-classification";
+import { cutBoundSql, normalizeCutNo } from "@/lib/cut-number";
 
 // Number of TVP round trips a registration run is split into — a divisor
 // of the row count, not a fixed row-count-per-chunk. A TVP has no 2100-param
@@ -458,17 +459,13 @@ function applyCouponFilters(
     conditions.push("c.IsScanned = @isScanned");
     request.input("isScanned", sql.Bit, filters.isScanned);
   }
-  if (filters.fromCut) {
-    conditions.push(
-      "(LEN(c.CutNo) > LEN(@fromCut) OR (LEN(c.CutNo) = LEN(@fromCut) AND c.CutNo >= @fromCut))",
-    );
-    request.input("fromCut", sql.NVarChar, filters.fromCut);
+  if (normalizeCutNo(filters.fromCut)) {
+    conditions.push(cutBoundSql("c.CutNo", "fromCut", "from"));
+    request.input("fromCut", sql.NVarChar, normalizeCutNo(filters.fromCut));
   }
-  if (filters.toCut) {
-    conditions.push(
-      "(LEN(c.CutNo) < LEN(@toCut) OR (LEN(c.CutNo) = LEN(@toCut) AND c.CutNo <= @toCut))",
-    );
-    request.input("toCut", sql.NVarChar, filters.toCut);
+  if (normalizeCutNo(filters.toCut)) {
+    conditions.push(cutBoundSql("c.CutNo", "toCut", "to"));
+    request.input("toCut", sql.NVarChar, normalizeCutNo(filters.toCut));
   }
   if (filters.employeeCode) {
     conditions.push("c.EmployeeCode = @employeeCode");

@@ -1,15 +1,16 @@
 import { getPool, sql, SCANNED_AT_FROM_DATE_SQL } from "@/lib/db";
-import {
-  enrichCouponRows,
-  withinCutRange,
-} from "@/features/coupon-scanning/services/coupon-enrichment.service";
+import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import { chunk } from "@/features/qr-code-generation/services/coupon-registration.service";
 import {
   findWageLockForDate,
   wageLockMessage,
 } from "@/features/wages/services/wage-lock.service";
-import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
+import {
+  isCouponDepartment,
+  type CouponDepartment,
+} from "@/lib/department-classification";
 import { validateDummyEmployeeOperation } from "@/features/dummy-employees/services/dummy-employees.service";
+import { cutBoundSql, normalizeCutNo } from "@/lib/cut-number";
 
 export const dynamic = "force-dynamic";
 
@@ -21,6 +22,7 @@ interface CouponRow {
   IsScanned: boolean;
   ScannedAt: string | null;
   WageId?: number | null;
+  CutNo: string | null;
 }
 
 export async function GET(request: Request) {
@@ -31,7 +33,9 @@ export async function GET(request: Request) {
   const op = searchParams.get("op") || "";
   const fromCut = searchParams.get("fromCut") || "";
   const toCut = searchParams.get("toCut") || "";
-  const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
+  const department = (searchParams.get("department") || "sewing")
+    .trim()
+    .toLowerCase();
 
   const employeeCode = searchParams.get("employeeCode") || "";
   const scanBy = searchParams.get("scanBy") || "";
@@ -45,7 +49,8 @@ export async function GET(request: Request) {
       { status: 400 },
     );
   }
-  if (!isCouponDepartment(department)) return Response.json({ error: "Invalid department." }, { status: 400 });
+  if (!isCouponDepartment(department))
+    return Response.json({ error: "Invalid department." }, { status: 400 });
 
   try {
     // Wages already generated for this date? The whole tenure is closed —
@@ -53,7 +58,10 @@ export async function GET(request: Request) {
     // property of the scan date, not of any individual row. "fetch" mode is
     // a read-only lookup, so it stays open; only writes are refused.
     if (mode !== "fetch") {
-      const lock = await findWageLockForDate(scanDate, department as CouponDepartment);
+      const lock = await findWageLockForDate(
+        scanDate,
+        department as CouponDepartment,
+      );
       if (lock) {
         return Response.json({ error: wageLockMessage(lock) }, { status: 400 });
       }
@@ -67,9 +75,25 @@ export async function GET(request: Request) {
     // EmployeeCode/ScanBy/ScannedAt columns are ensured by db/migrations
     // (005, 004) — not re-checked here on every request; see AGENTS.md.
 
+    // Cut range is matched against the coupon's own CutNo (stamped at
+    // generation), not the cut looked up from the bundle snapshot — bundle
+    // Ids can collide across ERP and Cut Planning, so the snapshot may hold
+    // a different cut for the same Id. Whitespace/case-insensitive; only
+    // applies to the wo/bundle/op path, never the barcode path.
+    const from = normalizeCutNo(fromCut);
+    const to = normalizeCutNo(toCut);
+    const cutConditions = [
+      ...(from ? [cutBoundSql("CutNo", "fromCut", "from")] : []),
+      ...(to ? [cutBoundSql("CutNo", "toCut", "to")] : []),
+    ]
+      .map((c) => `AND ${c}`)
+      .join(" ");
+
     const result = await pool
       .request()
       .input("barcode", sql.NVarChar, barcode.trim())
+      .input("fromCut", sql.NVarChar, from)
+      .input("toCut", sql.NVarChar, to)
       .input("wo", sql.NVarChar, wo.trim())
       .input("bundle", sql.NVarChar, bundle.trim())
       .input("op", sql.NVarChar, op.trim())
@@ -77,7 +101,7 @@ export async function GET(request: Request) {
       .query(
         barcode.trim() !== ""
           ? `
-            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, WageId
+            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, WageId, CutNo
             FROM dbo.QrCode_Coupon WITH (NOLOCK)
             WHERE CouponCode = @barcode
               AND (@wo = '' OR WorkOrder = @wo)
@@ -85,26 +109,21 @@ export async function GET(request: Request) {
               AND IsDeleted = 0
           `
           : `
-            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, WageId
+            SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, WageId, CutNo
             FROM dbo.QrCode_Coupon WITH (NOLOCK)
             WHERE WorkOrder = @wo
               AND (@bundle = '' OR BundleNo = @bundle)
               AND (@op = '' OR OpNo = @op)
               AND Department = @department
               AND IsDeleted = 0
+              ${cutConditions}
           `,
       );
 
-    let records = await enrichCouponRows(
+    const records = await enrichCouponRows(
       result.recordset as CouponRow[],
       department as CouponDepartment,
     );
-
-    // Cut-range filter only applies to the wo/bundle/op (bulk/selection)
-    // path — the barcode path never used it, same as the old query.
-    if (!barcode.trim() && (fromCut || toCut)) {
-      records = records.filter((r) => withinCutRange(r.CutNo, fromCut, toCut));
-    }
 
     if (records.length === 0) {
       return Response.json(
@@ -114,7 +133,10 @@ export async function GET(request: Request) {
     }
 
     if (mode !== "fetch") {
-      const validation = await validateDummyEmployeeOperation(employeeCode, records.map((record) => String(record.OprCode || record.OpNo || "")));
+      const validation = await validateDummyEmployeeOperation(
+        employeeCode,
+        records.map((record) => String(record.OprCode || record.OpNo || "")),
+      );
       if (validation.isDummy && !validation.allowed) {
         return Response.json({ error: validation.error }, { status: 400 });
       }
@@ -173,10 +195,8 @@ export async function GET(request: Request) {
       return Response.json(unscanned);
     }
 
-    // Mark all matched coupons as scanned — the fromCut/toCut range no
-    // longer narrows this in SQL (it's an indusPlus-only field, resolved
-    // above in JS), so update exactly the coupon codes that passed the
-    // filter rather than re-deriving the condition in a query. Chunked to
+    // Mark all matched coupons as scanned — update exactly the coupon codes
+    // returned above rather than re-deriving the conditions. Chunked to
     // stay under SQL Server's ~2100 parameter cap for a large selection.
     for (const batch of chunk(unscanned, 2000)) {
       const request_ = pool.request();

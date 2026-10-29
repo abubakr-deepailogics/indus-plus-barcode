@@ -28,6 +28,7 @@ interface ScannedRecord {
   OpNo: string;
   IsScanned: boolean;
   ScannedAt?: string;
+  CutNo: string | null;
 }
 
 // Batch version of GET /api/coupons/scan — a scanner gun fires codes fast,
@@ -103,7 +104,7 @@ export async function POST(request: Request) {
       INNER JOIN @Codes src ON src.CouponCode = c.CouponCode
       WHERE c.IsScanned = 0 AND c.IsDeleted = 0 AND c.Department = @department;
 
-      SELECT c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.IsScanned, c.ScannedAt
+      SELECT c.CouponCode, c.WorkOrder, c.BundleNo, c.OpNo, c.IsScanned, c.ScannedAt, c.CutNo
       FROM @Updated u
       INNER JOIN dbo.QrCode_Coupon c ON c.CouponCode = u.CouponCode AND c.Department = @department;
 

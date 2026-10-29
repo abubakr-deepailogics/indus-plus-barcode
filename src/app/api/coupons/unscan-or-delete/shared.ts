@@ -1,5 +1,6 @@
 import { getPool, sql } from "@/lib/db";
 import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
+import { cutBoundSql, normalizeCutNo } from "@/lib/cut-number";
 
 // Shared by the three routes in this folder (GET status check, POST
 // .../unscan, POST .../delete). These filters intentionally mirror Coupon
@@ -141,13 +142,13 @@ export async function findMatchingCoupons(
     request.input("isScanned", sql.Bit, filter.isScanned);
     conditions.push("IsScanned = @isScanned");
   }
-  if (filter.fromCut) {
-    request.input("fromCut", sql.NVarChar, filter.fromCut);
-    conditions.push("(LEN(CutNo) > LEN(@fromCut) OR (LEN(CutNo) = LEN(@fromCut) AND CutNo >= @fromCut))");
+  if (normalizeCutNo(filter.fromCut)) {
+    request.input("fromCut", sql.NVarChar, normalizeCutNo(filter.fromCut));
+    conditions.push(cutBoundSql("CutNo", "fromCut", "from"));
   }
-  if (filter.toCut) {
-    request.input("toCut", sql.NVarChar, filter.toCut);
-    conditions.push("(LEN(CutNo) < LEN(@toCut) OR (LEN(CutNo) = LEN(@toCut) AND CutNo <= @toCut))");
+  if (normalizeCutNo(filter.toCut)) {
+    request.input("toCut", sql.NVarChar, normalizeCutNo(filter.toCut));
+    conditions.push(cutBoundSql("CutNo", "toCut", "to"));
   }
   if (filter.employeeCode) {
     request.input("employeeCode", sql.NVarChar, filter.employeeCode);

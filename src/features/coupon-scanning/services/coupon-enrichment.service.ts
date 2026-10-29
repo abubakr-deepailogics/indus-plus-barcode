@@ -5,6 +5,7 @@ import {
   styleBulletinSnapshotByFilter,
 } from "@/lib/db";
 import type { CouponDepartment } from "@/lib/department-classification";
+import { normalizeCutNo } from "@/lib/cut-number";
 
 // Bundle/op display data (size, rate, SMV, section name, cut, …) for a
 // scanned coupon is read from the pitSystem-owned snapshot tables (see
@@ -52,18 +53,43 @@ interface StyleBulletinRow {
 // orders (a scanner-gun batch could in theory mix them) fetch one map per
 // work order rather than keying globally.
 
+// `expectedCuts` is the coupon's own stored CutNo per bundle (when known).
+// Bundle Ids are not guaranteed unique across sources — Cut Planning can
+// issue a bundle Id the ERP already used for a different cut, and coupon
+// generation snapshots the ERP row for that Id too — so a source row whose
+// cut disagrees with the coupon's own cut is treated as unresolved and the
+// later sources get a chance to supply a matching row. If none match, the
+// first row found is kept (previous behaviour).
 async function fetchCutDetailByBundle(
   workOrder: string,
   bundleNos: string[],
   department: CouponDepartment,
+  expectedCuts: Map<string, string> = new Map(),
 ): Promise<Map<string, CutDetailRow>> {
   const map = new Map<string, CutDetailRow>();
   const uniqueBundles = [...new Set(bundleNos)];
   if (uniqueBundles.length === 0) return map;
 
+  const matchesExpected = (bundle: string, row: CutDetailRow | undefined) => {
+    const expected = expectedCuts.get(bundle);
+    return !!row && (!expected || normalizeCutNo(row.Cut) === expected);
+  };
+  // A fallback row replaces what's in the map only when it's a better fit:
+  // nothing resolved yet, or the current row's cut disagrees and this one agrees.
+  const offerFallback = (row: CutDetailRow) => {
+    const key = String(row.Bundle_Id);
+    const existing = map.get(key);
+    if (
+      !existing ||
+      (!matchesExpected(key, existing) && matchesExpected(key, row))
+    )
+      map.set(key, row);
+  };
+
   const pool = await getPool("pitSystem");
   for (const batch of chunk(uniqueBundles, IN_LIST_CHUNK_SIZE)) {
-    const request = pool.request()
+    const request = pool
+      .request()
       .input("wo", sql.NVarChar, workOrder)
       .input("department", sql.NVarChar, department);
     const placeholders = batch.map((b, i) => {
@@ -91,10 +117,35 @@ async function fetchCutDetailByBundle(
   // that were not resolved above, look them up from ReworkCouponEntry so
   // that scanning, reports, and tracing resolve the correct Cut #, Inseam,
   // Size, and Bundle_Qty (Pcs).
-  const missingBundles = uniqueBundles.filter((b) => !map.has(b));
+  const missingBundles = uniqueBundles.filter(
+    (b) => !matchesExpected(b, map.get(b)),
+  );
+  // Existing Cut Planning coupons may pre-date the snapshot repair. Resolve
+  // their PIT-native report rows directly as a safe fallback, so scans and
+  // reports still receive the cut/size/inseam/quantity fields.
+  if (department === "sewing" && missingBundles.length > 0) {
+    for (const batch of chunk(missingBundles, IN_LIST_CHUNK_SIZE)) {
+      const req = pool.request().input("wo", sql.NVarChar, workOrder);
+      const placeholders = batch.map((bundle, i) => {
+        req.input(`generatedBundle${i}`, sql.NVarChar, bundle);
+        return `@generatedBundle${i}`;
+      });
+      const result = await req.query(`
+        SELECT RowId, BundleId AS Bundle_Id, Inseam, Size, CutNo AS Cut,
+          Shade, BundleQty AS Bundle_Qty
+        FROM dbo.SewingCutReport
+        WHERE WorkOrder = @wo AND IsDeleted = 0
+          AND BundleId IN (${placeholders.join(", ")})
+        ORDER BY RowId DESC
+      `);
+      for (const row of result.recordset as CutDetailRow[]) offerFallback(row);
+    }
+  }
+
   if (missingBundles.length > 0) {
     for (const batch of chunk(missingBundles, IN_LIST_CHUNK_SIZE)) {
-      const req = pool.request()
+      const req = pool
+        .request()
         .input("wo", sql.NVarChar, workOrder)
         .input("department", sql.NVarChar, department);
       const placeholders = batch.map((b, i) => {
@@ -116,10 +167,7 @@ async function fetchCutDetailByBundle(
           AND BundleNo IN (${placeholders.join(", ")})
         ORDER BY RowId DESC
       `);
-      for (const row of result.recordset as CutDetailRow[]) {
-        const key = String(row.Bundle_Id);
-        if (!map.has(key)) map.set(key, row);
-      }
+      for (const row of result.recordset as CutDetailRow[]) offerFallback(row);
     }
   }
 
@@ -137,7 +185,8 @@ async function fetchStyleBulletinByOp(
 
   const pool = await getPool("pitSystem");
   for (const batch of chunk(uniqueOps, IN_LIST_CHUNK_SIZE)) {
-    const request = pool.request()
+    const request = pool
+      .request()
       .input("wo", sql.NVarChar, workOrder)
       .input("department", sql.NVarChar, department);
     const placeholders = batch.map((o, i) => {
@@ -184,8 +233,17 @@ export interface EnrichmentFields {
 // from the style bulletin + operations catalog). Rows with no match on
 // either side (bundle/op no longer in the current bulletin) get null
 // fields rather than being dropped — same as the old OUTER APPLY semantics.
+//
+// Rows may carry the coupon's own QrCode_Coupon.CutNo; when present it is
+// used to pick the right cut-detail row (see fetchCutDetailByBundle) and is
+// returned as CutNo in preference to the looked-up one.
 export async function enrichCouponRows<
-  T extends { WorkOrder: string; BundleNo: string; OpNo: string },
+  T extends {
+    WorkOrder: string;
+    BundleNo: string;
+    OpNo: string;
+    CutNo?: unknown;
+  },
 >(
   rows: T[],
   department: CouponDepartment = "sewing",
@@ -199,11 +257,17 @@ export async function enrichCouponRows<
   await Promise.all(
     workOrders.map(async (wo) => {
       const woRows = rows.filter((r) => r.WorkOrder === wo);
+      const expectedCuts = new Map<string, string>();
+      for (const r of woRows) {
+        const cut = normalizeCutNo(r.CutNo);
+        if (cut) expectedCuts.set(r.BundleNo, cut);
+      }
       const [cutMap, opMap] = await Promise.all([
         fetchCutDetailByBundle(
           wo,
           woRows.map((r) => r.BundleNo),
           department,
+          expectedCuts,
         ),
         fetchStyleBulletinByOp(
           wo,
@@ -225,7 +289,7 @@ export async function enrichCouponRows<
       ...row,
       Inseam: cut?.Inseam ?? null,
       SizeCode: cut?.Size ?? null,
-      CutNo: cut?.Cut ?? null,
+      CutNo: (normalizeCutNo(row.CutNo) ? row.CutNo : null) ?? cut?.Cut ?? null,
       Category: cut?.Shade ?? null,
       Qty: qty,
       SectionCode: op?.Section ?? null,
@@ -246,7 +310,10 @@ export async function enrichCouponRows<
 
 export async function fetchPieceRates<
   T extends { WorkOrder: string; OpNo: string },
->(rows: T[], department: CouponDepartment = "sewing"): Promise<(T & { Rate: number | null; Incentive: number })[]> {
+>(
+  rows: T[],
+  department: CouponDepartment = "sewing",
+): Promise<(T & { Rate: number | null; Incentive: number })[]> {
   if (rows.length === 0) return [];
 
   const workOrders = [...new Set(rows.map((r) => r.WorkOrder))];
@@ -270,21 +337,4 @@ export async function fetchPieceRates<
     const rate = (op?.Piece_Rate as number | null | undefined) ?? null;
     return { ...row, Rate: rate, Incentive: Number(op?.Incentive) || 0 };
   });
-}
-
-// Cut # is alphanumeric: order by length, then lexically (matches the SQL
-// range filters, e.g. "9" < "10", "T0002451" < "T0002460").
-const cutCmp = (a: string, b: string) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0);
-
-export function withinCutRange(
-  cutNo: unknown,
-  fromCut: string,
-  toCut: string,
-): boolean {
-  if (!fromCut && !toCut) return true;
-  const cut = String(cutNo ?? "").trim();
-  if (!cut) return false;
-  if (fromCut && cutCmp(cut, fromCut.trim()) < 0) return false;
-  if (toCut && cutCmp(cut, toCut.trim()) > 0) return false;
-  return true;
 }
