@@ -558,7 +558,7 @@ export async function buildReportSummary(
         totalAmount: val || 0,
         operationsCount: 0,
         pieceRate: null, // resolved from operationRates in the final projection below
-        plan: null, // resolved from pieceRate * bundleQty in the final projection below
+        plan: null, // resolved from pieceRate * orderQty in the final projection below
         incentive: null,
         operations: new Set([opCode]),
         operationRates: new Map(rate != null ? [[opCode, rate]] : []),
@@ -712,8 +712,8 @@ export async function buildReportSummary(
         pieceRate,
         incentive,
         plan:
-          pieceRate != null && incentive != null && bundleQty != null
-            ? (pieceRate + incentive) * bundleQty
+          pieceRate != null && incentive != null && orderQty != null
+            ? (pieceRate + incentive) * orderQty
             : null,
       };
     })

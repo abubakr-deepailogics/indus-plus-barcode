@@ -398,3 +398,24 @@ export function groupRowsByDimension(
     };
   });
 }
+
+// Work Order rows show the work order's Order Qty (WorkOrderReportItem.orderQty)
+// — the whole order, scanned or not — rather than what was scanned. Group
+// totals add those per-work-order quantities up. A work order with no Order
+// Qty on record counts as 0.
+export function withWorkOrderQty(
+  groups: DimensionRowGroup[],
+  qtyByWorkOrder: Map<string, number | null>,
+): DimensionRowGroup[] {
+  return groups.map((g) => {
+    const rows = g.rows.map((row) => {
+      const qty = qtyByWorkOrder.get(row.key) ?? 0;
+      return { ...row, totalQty: qty, countedQty: qty };
+    });
+    return {
+      ...g,
+      rows,
+      totalQty: rows.reduce((acc, r) => acc + r.countedQty, 0),
+    };
+  });
+}

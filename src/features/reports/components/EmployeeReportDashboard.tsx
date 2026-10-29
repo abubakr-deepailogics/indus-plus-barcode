@@ -31,6 +31,7 @@ import {
   groupByDimension,
   groupEmployeeData,
   groupRowsByDimension,
+  withWorkOrderQty,
   withReworkTag,
   type EmployeeGroupDimension,
   type SearchDimension,
@@ -619,19 +620,40 @@ export function EmployeeReportDashboard() {
     [employeeGroupDimension, searchGroups, couponsList],
   );
 
+  // Work Order Qty = the work order's Order Qty (scanned or not), same
+  // figure as the Cut Report's Order Qty and the Plan column's multiplier.
+  const workOrderQty = useMemo(
+    () =>
+      new Map(
+        (summary?.workOrders ?? []).map((wo) => [wo.workOrder, wo.orderQty]),
+      ),
+    [summary],
+  );
+  const workOrderQtyTotal = useMemo(
+    () =>
+      (summary?.workOrders ?? []).reduce(
+        (acc, wo) => acc + (wo.orderQty ?? 0),
+        0,
+      ),
+    [summary],
+  );
+
   // Work Orders tab: only nests when the search subject isn't already the
   // work order.
   const workOrderRowGroups = useMemo(
     () =>
       searchDimension === "workOrder"
         ? []
-        : groupRowsByDimension(
-            searchDimension,
-            "workOrder",
-            searchGroups,
-            couponsList,
+        : withWorkOrderQty(
+            groupRowsByDimension(
+              searchDimension,
+              "workOrder",
+              searchGroups,
+              couponsList,
+            ),
+            workOrderQty,
           ),
-    [searchDimension, searchGroups, couponsList],
+    [searchDimension, searchGroups, couponsList, workOrderQty],
   );
 
   // Sections tab: only nests when the search subject isn't already the
@@ -895,7 +917,7 @@ export function EmployeeReportDashboard() {
       rows = summary.workOrders.map((wo) => [
         wo.workOrder,
         wo.operationsCount,
-        wo.totalQty,
+        wo.orderQty ?? "",
         wo.pieceRate != null ? Number(wo.pieceRate.toFixed(2)) : "",
         wo.incentive != null ? Number(wo.incentive.toFixed(2)) : "",
         wo.plan != null ? Number(wo.plan.toFixed(2)) : "",
@@ -1993,7 +2015,7 @@ export function EmployeeReportDashboard() {
                               {wo.operationsCount}
                             </td>
                             <td className="py-2.5 px-3 text-center font-bold text-slate-800">
-                              {wo.totalQty.toLocaleString()}
+                              {wo.orderQty != null ? wo.orderQty.toLocaleString() : "—"}
                             </td>
                             <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
                               {wo.pieceRate != null
@@ -2022,7 +2044,7 @@ export function EmployeeReportDashboard() {
                             Total ({summary.workOrders.length} Work Orders)
                           </td>
                           <td className="py-2.5 px-3 text-center text-slate-900">
-                            {summary.totalQty.toLocaleString()}
+                            {workOrderQtyTotal.toLocaleString()}
                           </td>
                           <td className="py-2.5 px-3 text-right text-slate-700">
                             {formatAmount(
@@ -3587,7 +3609,7 @@ export function EmployeeReportDashboard() {
                                     {wo.operationsCount}
                                   </td>
                                   <td className="text-center font-bold">
-                                    {wo.totalQty.toLocaleString()}
+                                    {wo.orderQty != null ? wo.orderQty.toLocaleString() : "—"}
                                   </td>
                                   <td className="text-right">
                                     {wo.pieceRate != null
@@ -3619,7 +3641,7 @@ export function EmployeeReportDashboard() {
                                   Orders)
                                 </td>
                                 <td className="text-center">
-                                  {summary.totalQty.toLocaleString()}
+                                  {workOrderQtyTotal.toLocaleString()}
                                 </td>
                                 <td className="text-right">
                                   {formatAmount(
