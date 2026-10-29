@@ -9,8 +9,8 @@ export function normalizeCutNo(value: unknown): string {
 
 // SQL equivalent of normalizeCutNo for a column/expression. Strips spaces,
 // tabs and non-breaking spaces (the whitespace that realistically ends up in
-// typed/pasted cut numbers).
-function normalizedCutSql(expr: string): string {
+// typed/pasted cut numbers). Compare it against a normalizeCutNo()'d param.
+export function normalizedCutSql(expr: string): string {
   return `UPPER(REPLACE(REPLACE(REPLACE(${expr}, N' ', N''), NCHAR(9), N''), NCHAR(160), N''))`;
 }
 

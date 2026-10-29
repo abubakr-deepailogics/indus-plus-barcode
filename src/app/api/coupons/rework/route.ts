@@ -1,4 +1,5 @@
 import { getPool, sql, cutDetailByFilter, styleBulletinByFilter } from "@/lib/db";
+import { normalizeCutNo, normalizedCutSql } from "@/lib/cut-number";
 
 // Rework coupon lookup: scoped to one work order + cut + bundle (bundle ids
 // aren't unique across work orders, same reasoning as /api/open-order).
@@ -16,7 +17,7 @@ export async function GET(request: Request) {
   }
 
   // Cut # is alphanumeric; Bundle_Id is a numeric column — validate + coerce it.
-  const cut = cutRaw.trim();
+  const cut = normalizeCutNo(cutRaw);
   const bundleId = Number(bundleIdRaw);
   if (!Number.isFinite(bundleId)) {
     return Response.json(
@@ -35,7 +36,7 @@ export async function GET(request: Request) {
       .input("bundleId", sql.Int, bundleId)
       .query(
         cutDetailByFilter(
-          "[Work Order #] = @wo AND [Cut #] = @cut AND [Bundle Id] = @bundleId",
+          `[Work Order #] = @wo AND [Bundle Id] = @bundleId AND ${normalizedCutSql("CAST([Cut #] AS NVARCHAR(50))")} = @cut`,
         ),
       );
 

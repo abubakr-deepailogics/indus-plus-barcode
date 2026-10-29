@@ -6,6 +6,7 @@ import {
   STYLE_BULLETIN_TABLE,
   STYLE_BULLETIN_SNAPSHOT_TABLE,
 } from "@/lib/db";
+import { normalizeCutNo, normalizedCutSql } from "@/lib/cut-number";
 import { isCouponDepartment } from "@/lib/department-classification";
 
 export const dynamic = "force-dynamic";
@@ -152,18 +153,18 @@ export async function GET(request: Request) {
         .request()
         .input("wo", sql.NVarChar, wo.trim())
         .input("department", sql.NVarChar, department)
-        .input("q", sql.NVarChar, `%${query.trim()}%`).query(`
+        .input("q", sql.NVarChar, `%${normalizeCutNo(query)}%`).query(`
           SELECT CutNo FROM (
             SELECT DISTINCT CutNo
             FROM dbo.QrCode_Coupon
             WHERE WorkOrder = @wo
               AND CutNo IS NOT NULL
               AND CutNo <> ''
-              AND CutNo LIKE @q
+              AND ${normalizedCutSql("CutNo")} LIKE @q
               AND IsDeleted = 0
               AND Department = @department
           ) t
-          ORDER BY LEN(CutNo), CutNo
+          ORDER BY LEN(${normalizedCutSql("CutNo")}), ${normalizedCutSql("CutNo")}
         `);
 
       return Response.json(result.recordset.map((r) => String(r.CutNo)));

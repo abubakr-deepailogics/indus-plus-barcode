@@ -25,6 +25,7 @@ import type {
   SavedWashingCutRecord,
 } from "../types";
 import { ModulePageHeader } from "@/components/ModulePageHeader";
+import { normalizeCutNo } from "@/lib/cut-number";
 
 const cellInputClassName =
   "w-full h-full px-2.5 py-2 text-center bg-transparent text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:bg-white rounded-lg transition-all";
@@ -310,7 +311,7 @@ export function WashingCutReportView() {
 
   const uniqueCutsCount = useMemo(() => {
     const cuts = new Set(
-      rows.map((r) => r.cut.trim()).filter((c) => c !== ""),
+      rows.map((r) => normalizeCutNo(r.cut)).filter((c) => c !== ""),
     );
     return cuts.size;
   }, [rows]);

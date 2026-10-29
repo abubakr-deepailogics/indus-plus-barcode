@@ -36,6 +36,7 @@ import {
   type EmployeeGroupDimension,
   type SearchDimension,
 } from "@/features/wages/services/employee-grouping.service";
+import { normalizeCutNo } from "@/lib/cut-number";
 import {
   fetchEmployeeSearchSuggestions,
   fetchOperationSearchSuggestions,
@@ -805,7 +806,7 @@ export function EmployeeReportDashboard() {
         c.couponCode?.toLowerCase().includes(q) ||
         c.workOrder?.toLowerCase().includes(q) ||
         c.bundleNo?.toLowerCase().includes(q) ||
-        c.cutNo?.toLowerCase().includes(q) ||
+        (!!normalizeCutNo(q) && normalizeCutNo(c.cutNo).includes(normalizeCutNo(q))) ||
         c.operationName?.toLowerCase().includes(q) ||
         c.operationCode?.toLowerCase().includes(q) ||
         c.section?.toLowerCase().includes(q) ||
