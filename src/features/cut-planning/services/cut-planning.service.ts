@@ -14,6 +14,7 @@ import type {
   SaveCutPlanningPayload,
   SizeQuantities,
 } from "../types";
+import { calculateRequiredFabricMetres } from "./calculated-requirement";
 
 const SOURCE_TABLE = "dbo.S_WorkOrderSizeWiseQtyViewPITS";
 const MAX_PLANS = 250;
@@ -290,7 +291,7 @@ function planSignature(plan: CutPlanRow) {
     markerPlies: plan.markerPlies,
     shrinkage: plan.shrinkage.trim(),
     shade: plan.shade.trim(),
-    calculatedRequired: plan.calculatedRequired,
+    calculatedRequired: calculateRequiredFabricMetres(plan.markerLengthM, plan.markerPlies),
     markerWidthCm: plan.markerWidthCm,
     markerLengthM: plan.markerLengthM,
   });
@@ -314,8 +315,12 @@ export async function saveCutPlanning(payload: SaveCutPlanningPayload, userEmail
   if (!Array.isArray(payload.plans)) throw new Error("Planning rows are required.");
   if (payload.plans.length === 0) throw new Error("At least one planning row is required. Use the row removal controls instead of saving a blank plan.");
   if (payload.plans.length > MAX_PLANS) throw new Error(`A maximum of ${MAX_PLANS} planning rows can be saved at once.`);
-  payload.plans.forEach(validatePlan);
-  await validatePlanningRowsAgainstErp(workOrder, payload.plans);
+  const plans = payload.plans.map((plan) => ({
+    ...plan,
+    calculatedRequired: calculateRequiredFabricMetres(plan.markerLengthM, plan.markerPlies),
+  }));
+  plans.forEach(validatePlan);
+  await validatePlanningRowsAgainstErp(workOrder, plans);
 
   const pool = await getPool("pitSystem");
   const transaction = new sql.Transaction(pool);
@@ -333,13 +338,13 @@ export async function saveCutPlanning(payload: SaveCutPlanningPayload, userEmail
     const lockedCurrentPlans = currentResult.recordset
       .map(normalizeSavedRow)
       .filter((plan) => lockedCutNos.has(plan.cutNo.trim().toLocaleLowerCase()));
-    const lockedSubmittedPlans = payload.plans
+    const lockedSubmittedPlans = plans
       .filter((plan) => lockedCutNos.has(plan.cutNo.trim().toLocaleLowerCase()));
     if (!samePlanSet(lockedCurrentPlans, lockedSubmittedPlans)) {
       throw new Error(generatedCutsLockedMessage(lockedCutNos));
     }
 
-    const editablePlans = payload.plans.filter(
+    const editablePlans = plans.filter(
       (plan) => !lockedCutNos.has(plan.cutNo.trim().toLocaleLowerCase()),
     );
     const deleteRequest = new sql.Request(transaction)

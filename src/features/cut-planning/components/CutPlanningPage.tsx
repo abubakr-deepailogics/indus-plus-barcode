@@ -32,6 +32,7 @@ import type {
   CutPlanningData,
   CutPlanningInseamGroup,
 } from "../types";
+import { calculateRequiredFabricMetres } from "../services/calculated-requirement";
 
 const today = () => new Date().toISOString().slice(0, 10);
 const numeric = (value: string) => {
@@ -753,7 +754,6 @@ export default function CutPlanningPage() {
     Object.values(plan.sizeQuantities).some((value) => value > 0) ||
     plan.reCutQty > 0 ||
     plan.markerPlies > 0 ||
-    plan.calculatedRequired != null ||
     plan.markerWidthCm != null ||
     plan.markerLengthM != null ||
     Boolean(
@@ -1653,17 +1653,11 @@ export default function CutPlanningPage() {
                       type="number"
                       min="0"
                       step="any"
-                      value={base?.plan.calculatedRequired ?? ""}
-                      onWheel={preventWheelChange}
-                      onChange={(event) =>
-                        updateSharedMarker(rowIndex, {
-                          calculatedRequired:
-                            event.target.value === ""
-                              ? null
-                              : numeric(event.target.value),
-                        })
-                      }
-                      className={`${cellClass} w-24 text-right`}
+                      value={calculateRequiredFabricMetres(base?.plan.markerLengthM ?? null, markerPlies) ?? ""}
+                      readOnly
+                      aria-label="Calculated required fabric in metres"
+                      title="Calculated as marker length × marker plies"
+                      className={`${cellClass} w-24 cursor-default bg-slate-50 text-right text-slate-700`}
                     />
                   </td>
                   <td {...matrixCellProps("marker-width", "p-0")}>
@@ -1908,18 +1902,11 @@ export default function CutPlanningPage() {
                           type="number"
                           min="0"
                           step="any"
-                          value={plan.calculatedRequired ?? ""}
-                          onKeyDown={(event) => addOnEnter(event, group)}
-                          onWheel={preventWheelChange}
-                          onChange={(event) =>
-                            update(index, {
-                              calculatedRequired:
-                                event.target.value === ""
-                                  ? null
-                                  : numeric(event.target.value),
-                            })
-                          }
-                          className={`${cellClass} w-24 text-right`}
+                          value={calculateRequiredFabricMetres(plan.markerLengthM, plan.markerPlies) ?? ""}
+                          readOnly
+                          aria-label="Calculated required fabric in metres"
+                          title="Calculated as marker length × marker plies"
+                          className={`${cellClass} w-24 cursor-default bg-slate-50 text-right text-slate-700`}
                         />
                       </td>
                       <td className="p-0">
@@ -2338,18 +2325,11 @@ export default function CutPlanningPage() {
                                 type="number"
                                 min="0"
                                 step="any"
-                                value={plan.calculatedRequired ?? ""}
-                                onKeyDown={(event) => addOnEnter(event, group)}
-                                onWheel={preventWheelChange}
-                                onChange={(event) =>
-                                  update(index, {
-                                    calculatedRequired:
-                                      event.target.value === ""
-                                        ? null
-                                        : numeric(event.target.value),
-                                  })
-                                }
-                                className={`${cellClass} w-24 text-right`}
+                                value={calculateRequiredFabricMetres(plan.markerLengthM, plan.markerPlies) ?? ""}
+                                readOnly
+                                aria-label="Calculated required fabric in metres"
+                                title="Calculated as marker length × marker plies"
+                                className={`${cellClass} w-24 cursor-default bg-slate-50 text-right text-slate-700`}
                               />
                             </td>
                             <td className="p-0">
