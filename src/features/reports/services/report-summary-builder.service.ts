@@ -2,7 +2,6 @@ import {
   getPool,
   sql,
   WORKERS_VIEW,
-  CUT_DETAIL_VIEW,
   CUT_DETAIL_SNAPSHOT_TABLE,
   STYLE_BULLETIN_SNAPSHOT_TABLE,
 } from "@/lib/db";
@@ -140,15 +139,28 @@ async function fetchBundleQtyByWorkOrder(
             AND WorkOrder IN (${inClause})
           GROUP BY WorkOrder
         `)
-      : await req.input("department", sql.NVarChar, department).query(`
-          SELECT
-            [Work Order #] AS WorkOrder,
-            SUM(TRY_CONVERT(decimal(18, 2), [Bundle Qty])) AS BundleQty
-          FROM ${CUT_DETAIL_VIEW}
-          WHERE IsDeleted = 0
-            AND Department = @department
-            AND [Work Order #] IN (${inClause})
-          GROUP BY [Work Order #]
+      : // The snapshot is append-only — every coupon generation inserts a
+        // fresh row per bundle and older ones aren't always soft-deleted —
+        // so sum only the latest row per (work order, bundle), same as
+        // cutDetailSnapshotByFilter's RowId = 1.
+        await req.input("department", sql.NVarChar, department).query(`
+          WITH Latest AS (
+            SELECT
+              [Work Order #] AS WorkOrder,
+              TRY_CONVERT(decimal(18, 2), [Bundle Qty]) AS BundleQty,
+              ROW_NUMBER() OVER (
+                PARTITION BY [Work Order #], CAST([Bundle Id] AS NVARCHAR(50))
+                ORDER BY InsertedAt DESC
+              ) AS rn
+            FROM ${CUT_DETAIL_SNAPSHOT_TABLE}
+            WHERE IsDeleted = 0
+              AND Department = @department
+              AND [Work Order #] IN (${inClause})
+          )
+          SELECT WorkOrder, SUM(BundleQty) AS BundleQty
+          FROM Latest
+          WHERE rn = 1
+          GROUP BY WorkOrder
         `);
 
     for (const row of result.recordset as {
@@ -558,7 +570,7 @@ export async function buildReportSummary(
         totalAmount: val || 0,
         operationsCount: 0,
         pieceRate: null, // resolved from operationRates in the final projection below
-        plan: null, // resolved from pieceRate * orderQty in the final projection below
+        plan: null, // resolved from pieceRate * bundleQty in the final projection below
         incentive: null,
         operations: new Set([opCode]),
         operationRates: new Map(rate != null ? [[opCode, rate]] : []),
@@ -712,8 +724,8 @@ export async function buildReportSummary(
         pieceRate,
         incentive,
         plan:
-          pieceRate != null && incentive != null && orderQty != null
-            ? (pieceRate + incentive) * orderQty
+          pieceRate != null && incentive != null && bundleQty != null
+            ? (pieceRate + incentive) * bundleQty
             : null,
       };
     })

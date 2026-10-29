@@ -399,10 +399,10 @@ export function groupRowsByDimension(
   });
 }
 
-// Work Order rows show the work order's Order Qty (WorkOrderReportItem.orderQty)
-// — the whole order, scanned or not — rather than what was scanned. Group
-// totals add those per-work-order quantities up. A work order with no Order
-// Qty on record counts as 0.
+// Work Order rows show the work order's total Bundle Qty
+// (WorkOrderReportItem.bundleQty) — every bundle, scanned or not — rather
+// than what was scanned. Group totals add those per-work-order quantities
+// up. A work order with no saved bundles counts as 0.
 export function withWorkOrderQty(
   groups: DimensionRowGroup[],
   qtyByWorkOrder: Map<string, number | null>,

@@ -621,19 +621,20 @@ export function EmployeeReportDashboard() {
     [employeeGroupDimension, searchGroups, couponsList],
   );
 
-  // Work Order Qty = the work order's Order Qty (scanned or not), same
-  // figure as the Cut Report's Order Qty and the Plan column's multiplier.
+  // Work Order Qty = the work order's total Bundle Qty (every bundle, scanned
+  // or not) — same figure as the Cut Report's Bundle Qty total and the Plan
+  // column's multiplier.
   const workOrderQty = useMemo(
     () =>
       new Map(
-        (summary?.workOrders ?? []).map((wo) => [wo.workOrder, wo.orderQty]),
+        (summary?.workOrders ?? []).map((wo) => [wo.workOrder, wo.bundleQty]),
       ),
     [summary],
   );
   const workOrderQtyTotal = useMemo(
     () =>
       (summary?.workOrders ?? []).reduce(
-        (acc, wo) => acc + (wo.orderQty ?? 0),
+        (acc, wo) => acc + (wo.bundleQty ?? 0),
         0,
       ),
     [summary],
@@ -918,7 +919,7 @@ export function EmployeeReportDashboard() {
       rows = summary.workOrders.map((wo) => [
         wo.workOrder,
         wo.operationsCount,
-        wo.orderQty ?? "",
+        wo.bundleQty ?? "",
         wo.pieceRate != null ? Number(wo.pieceRate.toFixed(2)) : "",
         wo.incentive != null ? Number(wo.incentive.toFixed(2)) : "",
         wo.plan != null ? Number(wo.plan.toFixed(2)) : "",
@@ -2016,7 +2017,7 @@ export function EmployeeReportDashboard() {
                               {wo.operationsCount}
                             </td>
                             <td className="py-2.5 px-3 text-center font-bold text-slate-800">
-                              {wo.orderQty != null ? wo.orderQty.toLocaleString() : "—"}
+                              {wo.bundleQty != null ? wo.bundleQty.toLocaleString() : "—"}
                             </td>
                             <td className="py-2.5 px-3 text-right font-semibold text-slate-700">
                               {wo.pieceRate != null
@@ -3610,7 +3611,7 @@ export function EmployeeReportDashboard() {
                                     {wo.operationsCount}
                                   </td>
                                   <td className="text-center font-bold">
-                                    {wo.orderQty != null ? wo.orderQty.toLocaleString() : "—"}
+                                    {wo.bundleQty != null ? wo.bundleQty.toLocaleString() : "—"}
                                   </td>
                                   <td className="text-right">
                                     {wo.pieceRate != null
