@@ -2,14 +2,11 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import useEmblaCarousel from "embla-carousel-react";
 import ExcelJS from "exceljs";
 import {
   AlertCircle,
   Check,
   ChevronDown,
-  ChevronLeft,
-  ChevronRight,
   Download,
   LoaderCircle,
   Pin,
@@ -125,44 +122,30 @@ export default function CutPlanningPage() {
   const [newMarkerRowIndex, setNewMarkerRowIndex] = useState<number | null>(
     null,
   );
-  const [activeInseamTotalIndex, setActiveInseamTotalIndex] = useState(0);
   const matrixRef = useRef<HTMLElement>(null);
   const matrixScrollRef = useRef<HTMLDivElement>(null);
   const matrixFooterRef = useRef<HTMLDivElement>(null);
-  const totalsRef = useRef<HTMLElement>(null);
-  const totalsCarouselViewportRef = useRef<HTMLDivElement>(null);
-  const totalsCarouselTransitioningRef = useRef(false);
   const fabricMenuRef = useRef<HTMLDivElement>(null);
   const bundleCutButtonRef = useRef<HTMLButtonElement>(null);
   const bundleCutMenuRef = useRef<HTMLDivElement>(null);
   const newMarkerRowRef = useRef<HTMLTableRowElement>(null);
-  const [matrixMaxHeight, setMatrixMaxHeight] = useState<number | null>(null);
+  const matrixFillerRowRef = useRef<HTMLTableRowElement>(null);
+  const [matrixHeight, setMatrixHeight] = useState<number | null>(null);
   const [pinnedMatrixColumnIds, setPinnedMatrixColumnIds] = useState<string[]>(
     [],
   );
-  const [totalsCarouselRef, totalsCarouselApi] = useEmblaCarousel({
-    align: "start",
-    duration: 25,
-    loop: true,
-  });
-  const setTotalsCarouselViewport = useCallback(
-    (node: HTMLDivElement | null) => {
-      totalsCarouselViewportRef.current = node;
-      totalsCarouselRef(node);
-    },
-    [totalsCarouselRef],
-  );
-
   useEffect(() => {
     const updateMatrixHeight = () => {
       const matrixTop = matrixRef.current?.getBoundingClientRect().top;
-      const totalsTop = totalsRef.current?.getBoundingClientRect().top;
-      if (matrixTop == null || totalsTop == null) return;
+      if (matrixTop == null) return;
       const footerHeight = matrixFooterRef.current?.offsetHeight ?? 0;
-      // Reserve both the Add marker row footer and a fixed gap above totals.
-      // Only the grid body can grow; extra rows therefore scroll inside it.
-      setMatrixMaxHeight(
-        Math.max(0, Math.floor(totalsTop - matrixTop - footerHeight - 20)),
+      // Fill the viewport below the grid's top edge, reserving the Add marker
+      // row footer and a bottom gap. Extra rows scroll inside the grid body.
+      setMatrixHeight(
+        Math.max(
+          240,
+          Math.floor(window.innerHeight - matrixTop - footerHeight - 20),
+        ),
       );
     };
 
@@ -170,7 +153,6 @@ export default function CutPlanningPage() {
     const observer = new ResizeObserver(updateMatrixHeight);
     if (matrixRef.current) observer.observe(matrixRef.current);
     if (matrixFooterRef.current) observer.observe(matrixFooterRef.current);
-    if (totalsRef.current) observer.observe(totalsRef.current);
     window.addEventListener("resize", updateMatrixHeight);
     return () => {
       observer.disconnect();
@@ -893,8 +875,15 @@ export default function CutPlanningPage() {
           }),
         ) as Record<string, number>;
 
+        const difference = Object.fromEntries(
+          sizeColumns.map((size) => [size, planned[size] - willCut[size]]),
+        ) as Record<string, number>;
+
         return {
           inseam: group.inseam,
+          willCut,
+          planned,
+          difference,
           rows: [
             { label: "Order", values: order },
             { label: "Will be cut", values: willCut },
@@ -906,51 +895,6 @@ export default function CutPlanningPage() {
       }),
     [groups, plans, sizeColumns],
   );
-  useEffect(() => {
-    if (!totalsCarouselApi) return;
-
-    const updateActiveInseam = () =>
-      setActiveInseamTotalIndex(totalsCarouselApi.selectedScrollSnap());
-    updateActiveInseam();
-    totalsCarouselApi.on("select", updateActiveInseam);
-    totalsCarouselApi.on("reInit", updateActiveInseam);
-    return () => {
-      totalsCarouselApi.off("select", updateActiveInseam);
-      totalsCarouselApi.off("reInit", updateActiveInseam);
-    };
-  }, [totalsCarouselApi]);
-
-  useEffect(() => {
-    const viewport = totalsCarouselViewportRef.current;
-    if (!viewport || !totalsCarouselApi || inseamTotals.length < 2) return;
-
-    const releaseTransition = () => {
-      totalsCarouselTransitioningRef.current = false;
-      totalsCarouselApi.off("settle", releaseTransition);
-    };
-    const handleWheel = (event: WheelEvent) => {
-      const wheelDistance =
-        Math.abs(event.deltaX) > Math.abs(event.deltaY)
-          ? event.deltaX
-          : event.deltaY;
-      if (!wheelDistance) return;
-
-      event.preventDefault();
-      if (totalsCarouselTransitioningRef.current) return;
-
-      totalsCarouselTransitioningRef.current = true;
-      totalsCarouselApi.on("settle", releaseTransition);
-      if (wheelDistance > 0) totalsCarouselApi.scrollNext();
-      else totalsCarouselApi.scrollPrev();
-    };
-
-    viewport.addEventListener("wheel", handleWheel, { passive: false });
-    return () => {
-      viewport.removeEventListener("wheel", handleWheel);
-      totalsCarouselApi.off("settle", releaseTransition);
-      totalsCarouselTransitioningRef.current = false;
-    };
-  }, [inseamTotals.length, totalsCarouselApi]);
 
   async function save() {
     if (!workOrder) {
@@ -1294,6 +1238,25 @@ export default function CutPlanningPage() {
     const timer = window.setTimeout(() => setNewMarkerRowIndex(null), 1800);
     return () => window.clearTimeout(timer);
   }, [markerRowCount, newMarkerRowIndex]);
+
+  // Pad the grid with blank marker rows until it fills the screen. Blank rows
+  // are dropped on save (see hasRowData), so this does not mark the page dirty.
+  useLayoutEffect(() => {
+    const filler = matrixFillerRowRef.current;
+    if (matrixHeight == null || groups.length === 0 || !filler) return;
+    const sampleRow = filler.parentElement?.querySelector<HTMLTableRowElement>(
+      "tr:not([aria-hidden])",
+    );
+    const rowHeight =
+      sampleRow && sampleRow !== filler ? sampleRow.offsetHeight : 49;
+    if (rowHeight <= 0) return;
+    const missingRows = Math.floor(filler.offsetHeight / rowHeight);
+    if (missingRows <= 0) return;
+    setPlans((current) => [
+      ...current,
+      ...Array.from({ length: missingRows }, () => groups.map(makePlan)).flat(),
+    ]);
+  }, [groups, markerRowCount, matrixHeight]);
   const addMarkerSetOnEnter = (event: React.KeyboardEvent<HTMLElement>) => {
     if (
       event.key !== "Enter" ||
@@ -1405,45 +1368,114 @@ export default function CutPlanningPage() {
     }
     removeMarkerSet(rowIndex);
   };
+  const matrixLeadColumns = [
+    ["date", "Date"],
+    ["marker-no", "Marker no."],
+    ["cut-no", "Cut no."],
+  ] as const;
+  const matrixDetailColumns = [
+    ["re-cut", "Re-cut"],
+    ["total", "Total"],
+    ["marker-plies", "Marker plies"],
+    ["transaction-count", "Transaction count"],
+    ["shrinkage", "Shrinkage"],
+    ["shade", "Shade"],
+    ["calculated-required", "Calculated required"],
+    ["marker-width", "Marker width (cm)"],
+    ["marker-length", "Marker length (m)"],
+    ["actions", "Actions"],
+  ] as const;
+  const inseamTotalsByInseam = new Map(
+    inseamTotals.map((entry) => [entry.inseam, entry]),
+  );
+  // Footer sums for the matrix's Total, Marker plies and Transaction count
+  // columns, using the same per-row values the matrix body displays.
+  const matrixFooterTotals = Array.from(
+    { length: markerRowCount },
+    (_, rowIndex) => rowIndex,
+  ).reduce(
+    (sums, rowIndex) => {
+      const rowTotal = groupedPlans.reduce(
+        (sum, { group, rows }) =>
+          sum +
+          group.sizeColumns.reduce(
+            (groupTotal, size) =>
+              groupTotal + (rows[rowIndex]?.plan.sizeQuantities[size] || 0),
+            0,
+          ),
+        0,
+      );
+      const markerPlies = groupedPlans[0]?.rows[rowIndex]?.plan.markerPlies || 0;
+      return {
+        total: sums.total + rowTotal,
+        markerPlies: sums.markerPlies + markerPlies,
+        transactions: sums.transactions + rowTotal * markerPlies,
+      };
+    },
+    { total: 0, markerPlies: 0, transactions: 0 },
+  );
+  // Per-size summary row (Less / Over, Will be cut, Planned) aligned with the
+  // matrix columns. The label sits in the Date column; marker detail cells are
+  // passed in because the header and footer rows lay them out differently.
+  const matrixSummaryRow = (
+    label: string,
+    cell: (
+      group: CutPlanningInseamGroup,
+      size: string,
+    ) => { value: number; className: string },
+    detailCells?: React.ReactNode,
+  ) => (
+    <tr className="text-slate-950">
+      {matrixLeadColumns.map(([columnId], index) => (
+        <th
+          key={columnId}
+          {...matrixCellProps(
+            columnId,
+            "border-b border-r border-slate-300 bg-slate-100 px-2 py-2 text-left font-semibold whitespace-nowrap",
+            "header",
+          )}
+        >
+          {index === 0 ? label : null}
+        </th>
+      ))}
+      {groups.flatMap((group) =>
+        group.sizeColumns.map((size) => {
+          const { value, className } = cell(group, size);
+          return (
+            <td
+              key={`${group.inseam}-${size}`}
+              {...matrixCellProps(
+                matrixSizeColumnId(group, size),
+                `border-b border-r border-slate-300 px-2 py-2 text-right font-semibold ${className} ${matrixInseamBoundaryClass(group, size)}`,
+              )}
+            >
+              {displayNumber(value)}
+            </td>
+          );
+        }),
+      )}
+      {detailCells}
+    </tr>
+  );
   const inseamMatrix = groups.length > 0 && (
     <section
       ref={matrixRef}
       className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm xl:mx-[calc((min(2400px,calc(100vw-3rem))-100%)/-2)] xl:w-[min(2400px,calc(100vw-3rem))]"
     >
-      <div ref={matrixScrollRef} className="overscroll-contain overflow-x-auto overflow-y-auto" style={matrixMaxHeight == null ? undefined : { maxHeight: matrixMaxHeight }}>
-        <table className="min-w-max w-full border-collapse text-xs">
+      <div ref={matrixScrollRef} className="overscroll-contain overflow-x-auto overflow-y-auto" style={matrixHeight == null ? undefined : { height: matrixHeight }}>
+        <table className="h-full min-w-max w-full border-collapse text-xs">
           <thead className="sticky top-0 z-10 bg-slate-100 text-left text-slate-600">
             <tr>
-              <th
-                rowSpan={2}
-                {...matrixCellProps(
-                  "date",
-                  "border-b border-r border-slate-300 px-2 py-3 font-semibold",
-                  "header",
-                )}
-              >
-                <span className="flex items-center gap-1">Date {matrixPinButton("date", "Date")}</span>
-              </th>
-              <th
-                rowSpan={2}
-                {...matrixCellProps(
-                  "marker-no",
-                  "border-b border-r border-slate-300 px-2 py-3 font-semibold whitespace-nowrap",
-                  "header",
-                )}
-              >
-                <span className="flex items-center gap-1">Marker no. {matrixPinButton("marker-no", "Marker no.")}</span>
-              </th>
-              <th
-                rowSpan={2}
-                {...matrixCellProps(
-                  "cut-no",
-                  "border-b border-r border-slate-300 px-2 py-3 font-semibold whitespace-nowrap",
-                  "header",
-                )}
-              >
-                <span className="flex items-center gap-1">Cut no. {matrixPinButton("cut-no", "Cut no.")}</span>
-              </th>
+              {matrixLeadColumns.map(([columnId]) => (
+                <th
+                  key={columnId}
+                  {...matrixCellProps(
+                    columnId,
+                    "border-b border-r border-slate-300 px-2 py-2",
+                    "header",
+                  )}
+                />
+              ))}
               {groups.map((group) => (
                 <th
                   key={group.inseam ?? "none"}
@@ -1454,13 +1486,54 @@ export default function CutPlanningPage() {
                 </th>
               ))}
               <th
-                colSpan={10}
+                colSpan={matrixDetailColumns.length}
                 className="border-b border-slate-300 px-2 py-2 text-center font-bold"
               >
                 Marker details
               </th>
             </tr>
+            {matrixSummaryRow(
+              "Less / Over",
+              (group, size) => {
+                const difference =
+                  inseamTotalsByInseam.get(group.inseam)?.difference[size] ?? 0;
+                return {
+                  value: difference,
+                  className:
+                    difference < 0
+                      ? totalCellBackgrounds.Less
+                      : difference > 0
+                        ? totalCellBackgrounds.Over
+                        : "bg-white",
+                };
+              },
+              matrixDetailColumns.map(([columnId, heading]) => (
+                <th
+                  key={columnId}
+                  rowSpan={3}
+                  {...matrixCellProps(
+                    columnId,
+                    "border-b border-slate-300 px-2 py-2 align-middle font-semibold whitespace-nowrap text-slate-600",
+                    "header",
+                  )}
+                >
+                  <span className="flex items-center gap-1">{heading === "Actions" ? "" : heading} {matrixPinButton(columnId, heading.toLowerCase())}</span>
+                </th>
+              )),
+            )}
             <tr>
+              {matrixLeadColumns.map(([columnId, heading]) => (
+                <th
+                  key={columnId}
+                  {...matrixCellProps(
+                    columnId,
+                    "border-b border-r border-slate-300 px-2 py-2 font-semibold whitespace-nowrap",
+                    "header",
+                  )}
+                >
+                  <span className="flex items-center gap-1">{heading} {matrixPinButton(columnId, heading)}</span>
+                </th>
+              ))}
               {groups.flatMap((group) =>
                 group.sizeColumns.map((size) => (
                   <th
@@ -1471,34 +1544,16 @@ export default function CutPlanningPage() {
                       "header",
                     )}
                   >
-                    <span className="flex items-center gap-1">{size} {matrixPinButton(matrixSizeColumnId(group, size), `size ${size}`)}</span>
+                    {/* Pin sits before the size so the label right-aligns with the Less / Over and Will be cut values. */}
+                    <span className="flex items-center justify-end gap-1">{matrixPinButton(matrixSizeColumnId(group, size), `size ${size}`)} {size}</span>
                   </th>
                 )),
               )}
-              {[
-                ["re-cut", "Re-cut"],
-                ["total", "Total"],
-                ["marker-plies", "Marker plies"],
-                ["transaction-count", "Transaction count"],
-                ["shrinkage", "Shrinkage"],
-                ["shade", "Shade"],
-                ["calculated-required", "Calculated required"],
-                ["marker-width", "Marker width (cm)"],
-                ["marker-length", "Marker length (m)"],
-                ["actions", "Actions"],
-              ].map(([columnId, heading]) => (
-                <th
-                  key={columnId}
-                  {...matrixCellProps(
-                    columnId,
-                    "border-b border-slate-300 px-2 py-2 font-semibold whitespace-nowrap",
-                    "header",
-                  )}
-                >
-                  <span className="flex items-center gap-1">{heading === "Actions" ? "" : heading} {matrixPinButton(columnId, heading.toLowerCase())}</span>
-                </th>
-              ))}
             </tr>
+            {matrixSummaryRow("Will be cut", (group, size) => ({
+              value: inseamTotalsByInseam.get(group.inseam)?.willCut[size] ?? 0,
+              className: totalCellBackgrounds["Will be cut"],
+            }))}
           </thead>
           <tbody>
             {Array.from({ length: markerRowCount }, (_, rowIndex) => {
@@ -1709,7 +1764,50 @@ export default function CutPlanningPage() {
                 </tr>
               );
             })}
+            {/* Absorbs leftover height so the grid fills the screen and the
+                Planned footer sits at the bottom even with few marker rows. */}
+            <tr ref={matrixFillerRowRef} aria-hidden="true" className="h-full">
+              <td
+                colSpan={
+                  matrixLeadColumns.length +
+                  groups.reduce((sum, group) => sum + group.sizeColumns.length, 0) +
+                  matrixDetailColumns.length
+                }
+                className="p-0"
+              />
+            </tr>
           </tbody>
+          <tfoot className="sticky bottom-0 z-10 bg-slate-100 text-slate-600">
+            {matrixSummaryRow(
+              "Planned",
+              (group, size) => ({
+                value: inseamTotalsByInseam.get(group.inseam)?.planned[size] ?? 0,
+                className: totalCellBackgrounds.Planned,
+              }),
+              matrixDetailColumns.map(([columnId]) => {
+                const footerTotal =
+                  columnId === "total"
+                    ? matrixFooterTotals.total
+                    : columnId === "marker-plies"
+                      ? matrixFooterTotals.markerPlies
+                      : columnId === "transaction-count"
+                        ? matrixFooterTotals.transactions
+                        : null;
+                return (
+                  <td
+                    key={columnId}
+                    {...matrixCellProps(
+                      columnId,
+                      "border-b border-slate-300 bg-slate-100 px-2 py-2 text-right font-bold text-slate-950",
+                      "header",
+                    )}
+                  >
+                    {footerTotal == null ? null : displayNumber(footerTotal)}
+                  </td>
+                );
+              }),
+            )}
+          </tfoot>
         </table>
       </div>
       <div
@@ -1969,7 +2067,7 @@ export default function CutPlanningPage() {
   );
   return (
     <main
-      className="cut-planning-page -mt-4 w-full space-y-3 pb-56 sm:-mt-5"
+      className="cut-planning-page -mt-4 w-full space-y-3 pb-4 sm:-mt-5"
       onKeyDown={(event) => {
         navigateGridWithArrowKeys(event);
         addMarkerSetOnEnter(event);
@@ -2391,133 +2489,6 @@ export default function CutPlanningPage() {
           )}
           {inseamCards}
           {inseamMatrix}
-          {groups.length > 0 && (
-            <section ref={totalsRef} className="fixed inset-x-4 bottom-5 z-40 mx-auto max-w-[1336px] overflow-hidden rounded-xl border border-slate-300 bg-white shadow-xl shadow-slate-950/10 sm:inset-x-6 md:inset-x-8 lg:bottom-6">
-              <div
-                ref={setTotalsCarouselViewport}
-                className="overflow-hidden"
-              >
-                <div className="flex touch-pan-y">
-                  {inseamTotals.map(({ inseam, rows }, inseamIndex) => (
-                    <div
-                      key={inseam ?? `inseam-${inseamIndex}`}
-                      className="min-w-0 flex-[0_0_100%]"
-                    >
-                  <table className="w-full table-fixed text-xs">
-                  <colgroup>
-                    <col className="w-36" />
-                    <col className="w-12" />
-                    {sizeColumns.map((size) => <col key={size} />)}
-                    <col className="w-20" />
-                  </colgroup>
-                  <thead className="border-b border-slate-200 bg-white text-slate-950 shadow-sm">
-                    <tr>
-                      <th className="bg-white px-3 py-2 text-left"> </th>
-                      <th className="px-1 py-2 text-center font-bold">Inseam</th>
-                      {sizeColumns.map((size) => (
-                        <th
-                          key={size}
-                          className="px-2 py-2 text-right font-bold"
-                        >
-                          {size}
-                        </th>
-                      ))}
-                      <th className="px-3 py-2 text-right font-bold">Total</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map(({ label, values }, rowIndex) => {
-                        const total = sizeColumns.reduce(
-                          (sum, size) => sum + (values[size] || 0),
-                          0,
-                        );
-                        return (
-                          <tr
-                            key={`${inseam ?? "none"}-${label}`}
-                            className="border-t border-slate-100 text-slate-950"
-                          >
-                            <th className="bg-white px-3 py-2 text-left font-semibold">
-                              {label}
-                            </th>
-                            {rowIndex === 0 && (
-                              <td
-                                rowSpan={rows.length}
-                                className="border-r border-slate-200 bg-slate-50 px-1 text-center align-middle font-bold text-indigo-800"
-                              >
-                                {inseam ?? "—"}
-                              </td>
-                            )}
-                            {sizeColumns.map((size) => (
-                              <td
-                                key={size}
-                                className={`px-2 py-2 text-right font-medium ${totalCellBackgrounds[label]}`}
-                              >
-                                {displayNumber(
-                                  label === "Less"
-                                    ? Math.abs(values[size] || 0)
-                                    : values[size] || 0,
-                                )}
-                              </td>
-                            ))}
-                            <td
-                              className={`px-3 py-2 text-right text-sm font-bold ${totalCellBackgrounds[label]}`}
-                            >
-                              {displayNumber(label === "Less" ? Math.abs(total) : total)}
-                            </td>
-                          </tr>
-                        );
-                      })}
-                  </tbody>
-                  {inseamTotals.length > 1 && (
-                    <tfoot className="border-t border-slate-200 bg-slate-50 text-slate-500">
-                      <tr>
-                        <td
-                          colSpan={sizeColumns.length + 3}
-                          className="px-3 py-2"
-                        >
-                          <div className="flex items-center justify-center gap-2" aria-label="Inseam pages">
-                            <button
-                              type="button"
-                              aria-label="Show previous inseam"
-                              onClick={() => totalsCarouselApi?.scrollPrev()}
-                              className="rounded p-0.5 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900"
-                            >
-                              <ChevronLeft className="size-3.5" />
-                            </button>
-                            {inseamTotals.map((total, index) => {
-                              const isActive =
-                                index === activeInseamTotalIndex;
-                              return (
-                                <button
-                                  key={`${total.inseam ?? "none"}-${index}`}
-                                  type="button"
-                                  aria-label={`Show inseam ${total.inseam ?? "unspecified"}`}
-                                  aria-current={isActive ? "true" : undefined}
-                                  onClick={() => totalsCarouselApi?.scrollTo(index)}
-                                  className={`size-2.5 rounded-full transition-colors ${isActive ? "bg-indigo-700" : "bg-slate-300 hover:bg-slate-400"}`}
-                                />
-                              );
-                            })}
-                            <button
-                              type="button"
-                              aria-label="Show next inseam"
-                              onClick={() => totalsCarouselApi?.scrollNext()}
-                              className="rounded p-0.5 text-slate-500 transition-colors hover:bg-slate-200 hover:text-slate-900"
-                            >
-                              <ChevronRight className="size-3.5" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    </tfoot>
-                  )}
-                  </table>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </section>
-          )}
         </>
       )}
       {data && groups.length > 0 && (
