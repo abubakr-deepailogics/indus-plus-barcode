@@ -15,6 +15,8 @@ import {
   Paperclip,
   Printer,
   Trash2,
+  BadgeCheck,
+  CheckCircle2,
 } from "lucide-react";
 // import type { PageSetupConfig } from "@/features/barcode-generation/types";
 // import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
@@ -35,6 +37,7 @@ import {
   type WorkOrderSearchRow,
 } from "@/components/work-order-search-modal";
 import { RequirePermission } from "@/features/auth/components/RequirePermission";
+import { useAuth } from "@/features/auth/context/auth-context";
 
 interface CutDetailRow {
   RowId: number;
@@ -52,6 +55,8 @@ interface CutDetailRow {
   Bundle_Id?: string | number;
   Bundle_Qty?: number;
   ActiveCouponCount?: number;
+  // Only approved bundles are listed in (and accepted by) Coupon Generation.
+  IsApproved?: boolean;
   Shade?: string;
   Shrinkage?: string;
 }
@@ -145,9 +150,15 @@ export default function OpenOrderPage() {
   const [deletingBundleRowId, setDeletingBundleRowId] = useState<number | null>(null);
   const [bundleDeleteError, setBundleDeleteError] = useState("");
   const [cutPendingDeletion, setCutPendingDeletion] = useState<string | null>(null);
-  const [cutToDelete, setCutToDelete] = useState("");
+  const [selectedCut, setSelectedCut] = useState("");
   const [deletingCutNo, setDeletingCutNo] = useState<string | null>(null);
   const [cutDeleteError, setCutDeleteError] = useState("");
+  const { user } = useAuth();
+  const [pendingApproval, setPendingApproval] = useState<
+    { type: "bundle"; row: CutDetailRow } | { type: "cut"; cutNo: string } | null
+  >(null);
+  const [approving, setApproving] = useState(false);
+  const [approveError, setApproveError] = useState("");
 
   const cutReportColumns = useMemo<ColumnDef<CutDetailRow>[]>(
     () => [
@@ -318,6 +329,31 @@ export default function OpenOrderPage() {
         meta: { align: "center" },
         header: "Actions",
         cell: ({ row }) => (
+          <div className="inline-flex items-center gap-1">
+          {row.original.IsApproved ? (
+            // Status tag, not a control: approved bundles are already in Coupon Generation.
+            <span
+              title="Approved: available in Coupon Generation"
+              className="inline-flex h-7 w-[5.5rem] items-center justify-center gap-1 text-[11px] font-semibold text-emerald-700"
+            >
+              <BadgeCheck className="size-3.5" />
+              Approved
+            </span>
+          ) : (
+            <button
+              type="button"
+              aria-label={`Approve bundle ${row.original.Bundle_Id ?? row.original.RowId}`}
+              title="Approve bundle for Coupon Generation"
+              onClick={() => {
+                setApproveError("");
+                setPendingApproval({ type: "bundle", row: row.original });
+              }}
+              className="inline-flex h-7 w-[5.5rem] items-center justify-center gap-1 rounded-lg bg-emerald-600 text-[11px] font-semibold text-white shadow-sm hover:bg-emerald-700"
+            >
+              <CheckCircle2 className="size-3.5" />
+              Approve
+            </button>
+          )}
           <button
             type="button"
             aria-label={`Delete bundle ${row.original.Bundle_Id ?? row.original.RowId}`}
@@ -331,10 +367,11 @@ export default function OpenOrderPage() {
           >
             <Trash2 className="size-4" />
           </button>
+          </div>
         ),
         enableSorting: false,
         enableHiding: false,
-        size: 78,
+        size: 140,
       },
     ],
     [deletingBundleRowId],
@@ -382,14 +419,21 @@ export default function OpenOrderPage() {
       .sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
     [cutDetails],
   );
+  const selectedCutUnapprovedCount = useMemo(
+    () =>
+      cutDetails.filter(
+        (row) => String(row.Cut ?? "").trim() === selectedCut && !row.IsApproved,
+      ).length,
+    [cutDetails, selectedCut],
+  );
   const selectedCutHasActiveCoupons = useMemo(
     () =>
       cutDetails.some(
         (row) =>
-          String(row.Cut ?? "").trim() === cutToDelete &&
+          String(row.Cut ?? "").trim() === selectedCut &&
           Number(row.ActiveCouponCount) > 0,
       ),
-    [cutDetails, cutToDelete],
+    [cutDetails, selectedCut],
   );
   const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
   // Operations to include in coupon generation — defaults to "all" (set
@@ -1076,7 +1120,7 @@ export default function OpenOrderPage() {
       setCutDetails((rows) => rows.filter(
         (row) => String(row.Cut ?? "").trim().toLocaleLowerCase() !== cutNo.toLocaleLowerCase(),
       ));
-      setCutToDelete("");
+      setSelectedCut("");
       setCutPendingDeletion(null);
     } catch (error) {
       setCutDeleteError(
@@ -1084,6 +1128,49 @@ export default function OpenOrderPage() {
       );
     } finally {
       setDeletingCutNo(null);
+    }
+  };
+
+  const handleApprove = async () => {
+    const approval = pendingApproval;
+    const workOrder =
+      (approval?.type === "bundle" && approval.row.Work_Order) || activeSearchQuery;
+    if (!approval || !workOrder) {
+      setApproveError("No active Work Order was found.");
+      return;
+    }
+
+    setApproving(true);
+    setApproveError("");
+    try {
+      const response = await fetch("/api/open-order/bundles", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workOrder,
+          approvedBy: user?.email || user?.displayName || "",
+          ...(approval.type === "bundle"
+            ? { reportRowId: approval.row.RowId }
+            : { cutNo: approval.cutNo }),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Unable to approve.");
+      }
+      const isApprovedRow = (row: CutDetailRow) =>
+        approval.type === "bundle"
+          ? row.RowId === approval.row.RowId
+          : String(row.Cut ?? "").trim().toLocaleLowerCase() ===
+            approval.cutNo.toLocaleLowerCase();
+      setCutDetails((rows) =>
+        rows.map((row) => (isApprovedRow(row) ? { ...row, IsApproved: true } : row)),
+      );
+      setPendingApproval(null);
+    } catch (error) {
+      setApproveError(error instanceof Error ? error.message : "Unable to approve.");
+    } finally {
+      setApproving(false);
     }
   };
 
@@ -1196,27 +1283,44 @@ export default function OpenOrderPage() {
               toolbarChildren={
                 <>
                   <select
-                    aria-label="Choose a Cut to delete all of its bundles"
-                    value={cutToDelete}
-                    onChange={(event) => setCutToDelete(event.target.value)}
+                    aria-label="Choose a Cut to approve or delete all of its bundles"
+                    value={selectedCut}
+                    onChange={(event) => setSelectedCut(event.target.value)}
                     className="rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-rose-500"
                   >
-                    <option value="">Choose Cut to delete…</option>
+                    <option value="">Choose Cut…</option>
                     {generatedCuts.map((cutNo) => (
                       <option key={cutNo} value={cutNo}>Cut {cutNo}</option>
                     ))}
                   </select>
                   <button
                     type="button"
-                    disabled={!cutToDelete || deletingCutNo !== null}
+                    disabled={!selectedCut || deletingCutNo !== null}
                     onClick={() => {
                       setCutDeleteError("");
-                      setCutPendingDeletion(cutToDelete);
+                      setCutPendingDeletion(selectedCut);
                     }}
                     className="bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 disabled:cursor-not-allowed disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     <span>Delete Cut</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!selectedCut || selectedCutUnapprovedCount === 0 || approving}
+                    title={
+                      selectedCut && selectedCutUnapprovedCount === 0
+                        ? "Every bundle in this Cut is already approved"
+                        : undefined
+                    }
+                    onClick={() => {
+                      setApproveError("");
+                      setPendingApproval({ type: "cut", cutNo: selectedCut });
+                    }}
+                    className="bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Approve Cut</span>
                   </button>
                   <button
                     type="button"
@@ -1293,6 +1397,68 @@ export default function OpenOrderPage() {
                 className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {deletingBundleRowId !== null ? "Deleting…" : "Delete bundle"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingApproval && (
+        <div
+          className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="approve-title"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 id="approve-title" className="text-base font-bold text-slate-900">
+              {pendingApproval.type === "bundle"
+                ? "Approve generated bundle?"
+                : `Approve all bundles for Cut ${pendingApproval.cutNo}?`}
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              {pendingApproval.type === "bundle" ? (
+                <>
+                  Bundle <strong>{pendingApproval.row.Bundle_Id}</strong> from Cut{" "}
+                  <strong>{pendingApproval.row.Cut}</strong> will become available in Coupon
+                  Generation.
+                </>
+              ) : (
+                <>
+                  {selectedCutUnapprovedCount} unapproved bundle
+                  {selectedCutUnapprovedCount === 1 ? "" : "s"} in this Cut will become available
+                  in Coupon Generation.
+                </>
+              )}
+            </p>
+            {approveError && (
+              <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
+                {approveError}
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={approving}
+                onClick={() => {
+                  setPendingApproval(null);
+                  setApproveError("");
+                }}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={approving}
+                onClick={handleApprove}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {approving
+                  ? "Approving…"
+                  : pendingApproval.type === "bundle"
+                    ? "Approve bundle"
+                    : "Approve Cut"}
               </button>
             </div>
           </div>

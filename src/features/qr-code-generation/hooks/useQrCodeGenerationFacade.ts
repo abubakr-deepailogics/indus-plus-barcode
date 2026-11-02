@@ -359,8 +359,9 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     }
     setIsLoadingWorkOrder(true);
     try {
+      // approved_only: sewing bundles appear here only after Cut Report approval.
       const response = await fetch(
-        `/api/open-order?work_order=${encodeURIComponent(wo)}&department=${encodeURIComponent(department)}&t=${Date.now()}`,
+        `/api/open-order?work_order=${encodeURIComponent(wo)}&department=${encodeURIComponent(department)}&approved_only=1&t=${Date.now()}`,
       );
       if (!response.ok || requestId !== workOrderRequestId.current) return;
       const data = (await response.json()) as OpenOrderResponse;

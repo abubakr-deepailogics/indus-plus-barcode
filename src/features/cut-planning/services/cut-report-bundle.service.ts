@@ -174,3 +174,132 @@ export async function softDeleteGeneratedCut(
     throw error;
   }
 }
+
+// Approval is a single conditional UPDATE: atomic without an explicit
+// transaction, idempotent (already-approved rows are left untouched), and it
+// never approves soft-deleted bundles.
+export async function approveGeneratedBundle(
+  workOrderInput: string,
+  reportRowId: number,
+  approvedBy: string,
+): Promise<{ bundleId: string; cutNo: string; alreadyApproved: boolean }> {
+  const workOrder = workOrderInput.trim();
+  if (!workOrder) throw new Error("Work Order is required.");
+  if (!Number.isSafeInteger(reportRowId) || reportRowId <= 0) {
+    throw new Error("A valid Cut Report row is required.");
+  }
+
+  const pool = await getPool("pitSystem");
+  const result = await pool
+    .request()
+    .input("workOrder", sql.NVarChar, workOrder)
+    .input("reportRowId", sql.BigInt, reportRowId)
+    .input("approvedBy", sql.NVarChar, approvedBy || "system")
+    .query(`
+      DECLARE @updated TABLE (BundleId NVARCHAR(32), CutNo NVARCHAR(100));
+
+      UPDATE dbo.SewingCutReport
+      SET IsApproved = 1, ApprovedAt = SYSUTCDATETIME(), ApprovedBy = @approvedBy
+      OUTPUT INSERTED.BundleId, INSERTED.CutNo INTO @updated
+      WHERE RowId = @reportRowId
+        AND WorkOrder = @workOrder
+        AND IsDeleted = 0
+        AND IsApproved = 0;
+
+      SELECT BundleId, CutNo, CAST(0 AS BIT) AS AlreadyApproved FROM @updated
+      UNION ALL
+      SELECT BundleId, CutNo, CAST(1 AS BIT)
+      FROM dbo.SewingCutReport
+      WHERE NOT EXISTS (SELECT 1 FROM @updated)
+        AND RowId = @reportRowId
+        AND WorkOrder = @workOrder
+        AND IsDeleted = 0;
+    `);
+  const bundle = result.recordset[0] as
+    | { BundleId: string; CutNo: string | null; AlreadyApproved: boolean }
+    | undefined;
+  if (!bundle) {
+    throw new Error("This Cut Report bundle was not found or has been deleted.");
+  }
+  return {
+    bundleId: String(bundle.BundleId),
+    cutNo: String(bundle.CutNo ?? ""),
+    alreadyApproved: Boolean(bundle.AlreadyApproved),
+  };
+}
+
+export async function approveGeneratedCut(
+  workOrderInput: string,
+  cutNoInput: string,
+  approvedBy: string,
+): Promise<{ cutNo: string; approvedCount: number; bundleCount: number }> {
+  const workOrder = workOrderInput.trim();
+  const cutNo = cutNoInput.trim();
+  if (!workOrder) throw new Error("Work Order is required.");
+  if (!cutNo) throw new Error("A Cut no. is required.");
+
+  const pool = await getPool("pitSystem");
+  // Same Cut matching as softDeleteGeneratedCut (trimmed, case-insensitive).
+  const result = await pool
+    .request()
+    .input("workOrder", sql.NVarChar, workOrder)
+    .input("cutNo", sql.NVarChar, cutNo.toLocaleLowerCase())
+    .input("approvedBy", sql.NVarChar, approvedBy || "system")
+    .query(`
+      UPDATE dbo.SewingCutReport
+      SET IsApproved = 1, ApprovedAt = SYSUTCDATETIME(), ApprovedBy = @approvedBy
+      WHERE WorkOrder = @workOrder
+        AND LOWER(LTRIM(RTRIM(CutNo))) = @cutNo
+        AND IsDeleted = 0
+        AND IsApproved = 0;
+
+      SELECT COUNT_BIG(*) AS BundleCount
+      FROM dbo.SewingCutReport
+      WHERE WorkOrder = @workOrder
+        AND LOWER(LTRIM(RTRIM(CutNo))) = @cutNo
+        AND IsDeleted = 0;
+    `);
+  const bundleCount = Number(result.recordset[0]?.BundleCount ?? 0);
+  if (bundleCount === 0) {
+    throw new Error(`No active generated bundles were found for Cut ${cutNo}.`);
+  }
+  return { cutNo, approvedCount: result.rowsAffected[0] ?? 0, bundleCount };
+}
+
+// Server-side guard for coupon generation: returns the requested sewing bundle
+// ids that are missing, deleted or not yet approved for this work order.
+export async function findUnapprovedBundleIds(
+  workOrder: string,
+  bundleIds: string[],
+): Promise<string[]> {
+  const requested = [...new Set(bundleIds.map((id) => id.trim()).filter(Boolean))];
+  if (requested.length === 0) return [];
+
+  const pool = await getPool("pitSystem");
+  const result = await pool
+    .request()
+    .input("workOrder", sql.NVarChar, workOrder.trim())
+    .input("bundleIds", sql.NVarChar(sql.MAX), JSON.stringify(requested))
+    // Until migration 056 adds IsApproved, every active bundle counts as
+    // approved (pre-approval behaviour). Dynamic SQL keeps the batch compiling
+    // on the old schema.
+    .query(`
+      DECLARE @approvalFilter NVARCHAR(100) =
+        CASE WHEN COL_LENGTH('dbo.SewingCutReport', 'IsApproved') IS NULL
+          THEN N'' ELSE N' AND report.IsApproved = 1' END;
+      DECLARE @statement NVARCHAR(MAX) = N'
+        SELECT report.BundleId
+        FROM dbo.SewingCutReport AS report
+        INNER JOIN OPENJSON(@bundleIds) WITH (BundleId NVARCHAR(32) ''$'') AS selected
+          ON selected.BundleId = report.BundleId
+        WHERE report.WorkOrder = @workOrder
+          AND report.IsDeleted = 0' + @approvalFilter;
+      EXEC sp_executesql @statement,
+        N'@workOrder NVARCHAR(4000), @bundleIds NVARCHAR(MAX)',
+        @workOrder = @workOrder, @bundleIds = @bundleIds;
+    `);
+  const approved = new Set(
+    (result.recordset as Array<{ BundleId: string }>).map(({ BundleId }) => String(BundleId)),
+  );
+  return requested.filter((id) => !approved.has(id));
+}

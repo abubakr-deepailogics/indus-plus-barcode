@@ -15,6 +15,9 @@ export async function GET(request: Request) {
   const department = (searchParams.get("department") || "")
     .trim()
     .toLowerCase();
+  // Coupon Generation passes approved_only=1 so unapproved Cut Report bundles
+  // stay hidden there; Cut Report itself lists every active bundle.
+  const approvedOnly = searchParams.get("approved_only") === "1";
 
   if (department && !isStyleBulletinDepartment(department)) {
     return Response.json(
@@ -76,15 +79,21 @@ export async function GET(request: Request) {
       const softDeleteColumns = await pitPool.request().query(`
         SELECT
           CASE WHEN COL_LENGTH('dbo.SewingCutReport', 'IsDeleted') IS NULL THEN 0 ELSE 1 END AS HasReportSoftDelete,
-          CASE WHEN COL_LENGTH('dbo.BundleGeneration', 'IsDeleted') IS NULL THEN 0 ELSE 1 END AS HasGenerationSoftDelete
+          CASE WHEN COL_LENGTH('dbo.BundleGeneration', 'IsDeleted') IS NULL THEN 0 ELSE 1 END AS HasGenerationSoftDelete,
+          CASE WHEN COL_LENGTH('dbo.SewingCutReport', 'IsApproved') IS NULL THEN 0 ELSE 1 END AS HasReportApproval
       `);
       const schema = softDeleteColumns.recordset[0] as {
         HasReportSoftDelete?: number;
         HasGenerationSoftDelete?: number;
+        HasReportApproval?: number;
       } | undefined;
+      // Migration 056 adds approval. Before it runs, every bundle is treated as
+      // approved, matching the pre-approval behaviour.
+      const hasApproval = Number(schema?.HasReportApproval) === 1;
       const activeBundlePredicates = [
         Number(schema?.HasReportSoftDelete) === 1 ? "report.IsDeleted = 0" : "",
         Number(schema?.HasGenerationSoftDelete) === 1 ? "generation.IsDeleted = 0" : "",
+        approvedOnly && hasApproval ? "report.IsApproved = 1" : "",
       ].filter(Boolean);
       const activeBundleWhere = activeBundlePredicates.length
         ? `\n          AND ${activeBundlePredicates.join("\n          AND ")}`
@@ -103,6 +112,7 @@ export async function GET(request: Request) {
           report.Shade,
           report.Shrinkage,
           COALESCE(coupons.ActiveCouponCount, 0) AS ActiveCouponCount,
+          ${hasApproval ? "CAST(report.IsApproved AS BIT)" : "CAST(1 AS BIT)"} AS IsApproved,
           NULL AS MarkerWidthCm,
           NULL AS MarkerLengthM,
           generation.BundleSequence
