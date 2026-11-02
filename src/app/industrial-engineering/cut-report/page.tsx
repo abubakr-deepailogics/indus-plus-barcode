@@ -1089,7 +1089,7 @@ export default function OpenOrderPage() {
 
   return (
     <RequirePermission pageKey="cut-report">
-      <div className="no-print mx-auto flex w-full max-w-[1500px] flex-col gap-5 text-xs text-slate-700 animate-fade-in pb-16">
+      <div className="no-print mx-auto flex w-full max-w-[1500px] flex-col gap-5 text-xs text-slate-700 animate-fade-in pb-6">
         <ModulePageHeader
           eyebrow="Production / Cutting"
           title="Cut Report"
@@ -1178,6 +1178,7 @@ export default function OpenOrderPage() {
             <DataTable
               columns={cutReportColumns}
               data={cutDetails}
+              fillViewport
               csv={{
                 filename: `cut-report-${cutDetails[0]?.Work_Order || activeSearchQuery || "export"}`,
                 columns: [

@@ -1126,13 +1126,6 @@ export default function CutPlanningPage() {
   };
 
   const cellClass = "cell-input";
-  const totalCellBackgrounds: Record<string, string> = {
-    Order: "bg-[#fffbd5]",
-    "Will be cut": "bg-[#f0efff]",
-    Planned: "bg-[#f5e4f1]",
-    Less: "bg-[#ffb7c0]",
-    Over: "bg-[#59c9eb]",
-  };
   const markerRowCount = Math.max(
     0,
     ...groupedPlans.map(({ rows }) => rows.length),
@@ -1414,11 +1407,21 @@ export default function CutPlanningPage() {
     },
     { total: 0, markerPlies: 0, transactions: 0 },
   );
+  // Light row tints for the matrix summary rows. `!` keeps them above the
+  // slate background that pinned header cells get from matrixCellProps.
+  const matrixSummaryTints = {
+    lessOver: "bg-amber-50!",
+    less: "bg-rose-100! text-rose-700",
+    over: "bg-sky-100! text-sky-700",
+    willCut: "bg-indigo-50!",
+    planned: "bg-fuchsia-50!",
+  };
   // Per-size summary row (Less / Over, Will be cut, Planned) aligned with the
   // matrix columns. The label sits in the Date column; marker detail cells are
   // passed in because the header and footer rows lay them out differently.
   const matrixSummaryRow = (
     label: string,
+    rowClass: string,
     cell: (
       group: CutPlanningInseamGroup,
       size: string,
@@ -1431,7 +1434,7 @@ export default function CutPlanningPage() {
           key={columnId}
           {...matrixCellProps(
             columnId,
-            "border-b border-r border-slate-300 bg-slate-100 px-2 py-2 text-left font-semibold whitespace-nowrap",
+            `border-b border-r border-slate-300 px-2 py-2 text-left font-semibold whitespace-nowrap ${rowClass}`,
             "header",
           )}
         >
@@ -1494,6 +1497,7 @@ export default function CutPlanningPage() {
             </tr>
             {matrixSummaryRow(
               "Less / Over",
+              matrixSummaryTints.lessOver,
               (group, size) => {
                 const difference =
                   inseamTotalsByInseam.get(group.inseam)?.difference[size] ?? 0;
@@ -1501,10 +1505,10 @@ export default function CutPlanningPage() {
                   value: difference,
                   className:
                     difference < 0
-                      ? totalCellBackgrounds.Less
+                      ? matrixSummaryTints.less
                       : difference > 0
-                        ? totalCellBackgrounds.Over
-                        : "bg-white",
+                        ? matrixSummaryTints.over
+                        : matrixSummaryTints.lessOver,
                 };
               },
               matrixDetailColumns.map(([columnId, heading]) => (
@@ -1550,9 +1554,9 @@ export default function CutPlanningPage() {
                 )),
               )}
             </tr>
-            {matrixSummaryRow("Will be cut", (group, size) => ({
+            {matrixSummaryRow("Will be cut", matrixSummaryTints.willCut, (group, size) => ({
               value: inseamTotalsByInseam.get(group.inseam)?.willCut[size] ?? 0,
-              className: totalCellBackgrounds["Will be cut"],
+              className: matrixSummaryTints.willCut,
             }))}
           </thead>
           <tbody>
@@ -1675,7 +1679,7 @@ export default function CutPlanningPage() {
                           markerPlies: numeric(event.target.value),
                         })
                       }
-                      className={`${cellClass} w-20 text-right`}
+                      className={`${cellClass} w-full min-w-20 text-right`}
                     />
                   </td>
                   <td {...matrixCellProps("transaction-count", "cell-value")}>
@@ -1780,9 +1784,10 @@ export default function CutPlanningPage() {
           <tfoot className="sticky bottom-0 z-10 bg-slate-100 text-slate-600">
             {matrixSummaryRow(
               "Planned",
+              matrixSummaryTints.planned,
               (group, size) => ({
                 value: inseamTotalsByInseam.get(group.inseam)?.planned[size] ?? 0,
-                className: totalCellBackgrounds.Planned,
+                className: matrixSummaryTints.planned,
               }),
               matrixDetailColumns.map(([columnId]) => {
                 const footerTotal =
@@ -1798,7 +1803,7 @@ export default function CutPlanningPage() {
                     key={columnId}
                     {...matrixCellProps(
                       columnId,
-                      "border-b border-slate-300 bg-slate-100 px-2 py-2 text-right font-bold text-slate-950",
+                      `border-b border-slate-300 px-2 py-2 text-right font-bold text-slate-950 ${matrixSummaryTints.planned}`,
                       "header",
                     )}
                   >
