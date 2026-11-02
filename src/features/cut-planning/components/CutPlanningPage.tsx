@@ -310,12 +310,12 @@ export default function CutPlanningPage() {
       "date",
       "marker-no",
       "cut-no",
+      "marker-plies",
       ...groups.flatMap((group) =>
         group.sizeColumns.map((size) => matrixSizeColumnId(group, size)),
       ),
       "re-cut",
       "total",
-      "marker-plies",
       "transaction-count",
       "shrinkage",
       "shade",
@@ -1365,11 +1365,11 @@ export default function CutPlanningPage() {
     ["date", "Date"],
     ["marker-no", "Marker no."],
     ["cut-no", "Cut no."],
+    ["marker-plies", "Marker plies"],
   ] as const;
   const matrixDetailColumns = [
     ["re-cut", "Re-cut"],
     ["total", "Total"],
-    ["marker-plies", "Marker plies"],
     ["transaction-count", "Transaction count"],
     ["shrinkage", "Shrinkage"],
     ["shade", "Shade"],
@@ -1413,12 +1413,13 @@ export default function CutPlanningPage() {
     lessOver: "bg-amber-50!",
     less: "bg-rose-100! text-rose-700",
     over: "bg-sky-100! text-sky-700",
-    willCut: "bg-indigo-50!",
+    willCut: "bg-indigo-100! text-indigo-900",
     planned: "bg-fuchsia-50!",
   };
   // Per-size summary row (Less / Over, Will be cut, Planned) aligned with the
   // matrix columns. The label sits in the Date column; marker detail cells are
   // passed in because the header and footer rows lay them out differently.
+  // `leadTotals` fills lead columns (e.g. Marker plies) with a footer sum.
   const matrixSummaryRow = (
     label: string,
     rowClass: string,
@@ -1427,20 +1428,24 @@ export default function CutPlanningPage() {
       size: string,
     ) => { value: number; className: string },
     detailCells?: React.ReactNode,
+    leadTotals?: Partial<Record<string, number>>,
   ) => (
     <tr className="text-slate-950">
-      {matrixLeadColumns.map(([columnId], index) => (
-        <th
-          key={columnId}
-          {...matrixCellProps(
-            columnId,
-            `border-b border-r border-slate-300 px-2 py-2 text-left font-semibold whitespace-nowrap ${rowClass}`,
-            "header",
-          )}
-        >
-          {index === 0 ? label : null}
-        </th>
-      ))}
+      {matrixLeadColumns.map(([columnId], index) => {
+        const leadTotal = leadTotals?.[columnId];
+        return (
+          <th
+            key={columnId}
+            {...matrixCellProps(
+              columnId,
+              `border-b border-r border-slate-300 px-2 py-2 font-semibold whitespace-nowrap ${leadTotal == null ? "text-left" : "text-right font-bold"} ${rowClass}`,
+              "header",
+            )}
+          >
+            {index === 0 ? label : leadTotal == null ? null : displayNumber(leadTotal)}
+          </th>
+        );
+      })}
       {groups.flatMap((group) =>
         group.sizeColumns.map((size) => {
           const { value, className } = cell(group, size);
@@ -1617,6 +1622,21 @@ export default function CutPlanningPage() {
                       className={`${cellClass} w-20`}
                     />
                   </td>
+                  <td {...matrixCellProps("marker-plies", "p-0")}>
+                    <input
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={markerPlies || ""}
+                      onWheel={preventWheelChange}
+                      onChange={(event) =>
+                        updateSharedMarker(rowIndex, {
+                          markerPlies: numeric(event.target.value),
+                        })
+                      }
+                      className={`${cellClass} w-full min-w-20 text-right`}
+                    />
+                  </td>
                   {groups.flatMap((group) =>
                     group.sizeColumns.map((size) => {
                       const entry = groupedPlans.find(
@@ -1667,21 +1687,6 @@ export default function CutPlanningPage() {
                     />
                   </td>
                   <td {...matrixCellProps("total", "cell-value")}>{displayNumber(total)}</td>
-                  <td {...matrixCellProps("marker-plies", "p-0")}>
-                    <input
-                      type="number"
-                      min="0"
-                      step="any"
-                      value={markerPlies || ""}
-                      onWheel={preventWheelChange}
-                      onChange={(event) =>
-                        updateSharedMarker(rowIndex, {
-                          markerPlies: numeric(event.target.value),
-                        })
-                      }
-                      className={`${cellClass} w-full min-w-20 text-right`}
-                    />
-                  </td>
                   <td {...matrixCellProps("transaction-count", "cell-value")}>
                     {displayNumber(total * markerPlies)}
                   </td>
@@ -1793,11 +1798,9 @@ export default function CutPlanningPage() {
                 const footerTotal =
                   columnId === "total"
                     ? matrixFooterTotals.total
-                    : columnId === "marker-plies"
-                      ? matrixFooterTotals.markerPlies
-                      : columnId === "transaction-count"
-                        ? matrixFooterTotals.transactions
-                        : null;
+                    : columnId === "transaction-count"
+                      ? matrixFooterTotals.transactions
+                      : null;
                 return (
                   <td
                     key={columnId}
@@ -1811,6 +1814,7 @@ export default function CutPlanningPage() {
                   </td>
                 );
               }),
+              { "marker-plies": matrixFooterTotals.markerPlies },
             )}
           </tfoot>
         </table>
