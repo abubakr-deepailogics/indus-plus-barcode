@@ -114,6 +114,31 @@ function TableSkeleton({ columnsCount }: { columnsCount: number }) {
   );
 }
 
+// Compact read-only metadata field shown inline beside the page title.
+function HeaderField({
+  label,
+  value,
+  emphasis = false,
+}: {
+  label: string;
+  value: string | number;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        {label}
+      </span>
+      <span
+        title={String(value || "")}
+        className={`mt-1 block h-8 truncate rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs ${emphasis ? "font-bold text-indigo-700" : "font-semibold text-slate-700"}`}
+      >
+        {value || "—"}
+      </span>
+    </div>
+  );
+}
+
 export default function OpenOrderPage() {
   const [bundlePendingDeletion, setBundlePendingDeletion] =
     useState<CutDetailRow | null>(null);
@@ -1068,96 +1093,36 @@ export default function OpenOrderPage() {
         <ModulePageHeader
           eyebrow="Production / Cutting"
           title="Cut Report"
-          detail="Work-order specifications and bundle output"
           icon={Database}
           accent="indigo"
-        />
-        {/* Dynamic Metadata Cards Row */}
-        <div className="grid grid-cols-1 gap-4 animate-fade-in md:grid-cols-3">
-          {/* Card 1: Order Info */}
-          <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
-            <div>
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
-                Work Order
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowWorkOrderModal(true)}
-                className="relative mt-1.5 w-full text-left cursor-pointer"
-              >
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                <span className="block w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 hover:border-indigo-500 transition-all truncate shadow-2xs">
-                  {cutDetails[0]?.Work_Order ||
-                    activeSearchQuery ||
-                    "Search W/O..."}
+          compact
+          actions={
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(3,10rem)] xl:grid-cols-[repeat(6,10rem)]">
+              <div className="min-w-0">
+                <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  Work Order
                 </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setShowWorkOrderModal(true)}
+                  className="relative mt-1 w-full cursor-pointer text-left"
+                >
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                  <span className="block h-8 w-full truncate rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-2.5 text-xs font-semibold text-slate-900 shadow-2xs transition-all hover:border-indigo-500">
+                    {cutDetails[0]?.Work_Order ||
+                      activeSearchQuery ||
+                      "Search W/O..."}
+                  </span>
+                </button>
+              </div>
+              <HeaderField label="Sale Order No" value={cutDetails[0]?.Sale_Order_No || ""} />
+              <HeaderField label="Customer" value={cutDetails[0]?.Customer_Name || ""} />
+              <HeaderField label="Order Qty" value={styleBulletinMetadata.planQty} emphasis />
+              <HeaderField label="Fabric Code" value={cutDetails[0]?.Fabric_Code_Main_Body || ""} />
+              <HeaderField label="Wash" value={cutDetails[0]?.Wash || ""} />
             </div>
-            <div>
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
-                Sale Order No
-              </span>
-              <input
-                type="text"
-                readOnly
-                value={cutDetails[0]?.Sale_Order_No || ""}
-                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Card 2: Customer & Qty */}
-          <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
-            <div>
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
-                Customer
-              </span>
-              <input
-                type="text"
-                readOnly
-                value={cutDetails[0]?.Customer_Name || ""}
-                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:outline-none"
-              />
-            </div>
-            <div>
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
-                Order Qty
-              </span>
-              <input
-                type="text"
-                readOnly
-                value={styleBulletinMetadata.planQty}
-                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-indigo-700 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Card 3: Specifications */}
-          <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
-            <div>
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
-                Fabric Code
-              </span>
-              <input
-                type="text"
-                readOnly
-                value={cutDetails[0]?.Fabric_Code_Main_Body || ""}
-                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:outline-none"
-              />
-            </div>
-            <div>
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
-                Wash
-              </span>
-              <input
-                type="text"
-                readOnly
-                value={cutDetails[0]?.Wash || ""}
-                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:outline-none"
-              />
-            </div>
-          </div>
-        </div>
+          }
+        />
 
         {/* Main Results / Table Block */}
         {errorMsg ? (
