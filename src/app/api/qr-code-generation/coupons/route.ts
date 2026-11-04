@@ -8,7 +8,10 @@ import {
 } from "@/features/qr-code-generation/services/coupon-registration.service";
 import { snapshotWorkOrderBulletin } from "@/features/order-style-bulletin/services/style-bulletin-snapshot.service";
 import { saveManualCouponCutDetails } from "@/features/qr-code-generation/services/manual-coupon-cut-detail.service";
-import { findUnapprovedBundleIds } from "@/features/cut-planning/services/cut-report-bundle.service";
+import {
+  findUnapprovedBundleIds,
+  hasApprovedBundles,
+} from "@/features/cut-planning/services/cut-report-bundle.service";
 import {
   isCouponDepartment,
   type CouponDepartment,
@@ -111,18 +114,22 @@ export async function POST(request: Request) {
     }
   }
 
-  // Sewing bundles come from Cut Report and must be approved there first. The
-  // client list is already filtered, but never trust it: re-check in the DB.
+  // Once any of a sewing work order's Cut Report bundles is approved, Cut
+  // Report is its bundle source and every selected bundle must be approved
+  // there. Until then its bundles come from indusPlus and need no approval.
+  // The client list is already filtered, but never trust it: re-check in the DB.
   if (department === "sewing" && !manualCutDetails) {
     try {
-      const unapproved = await findUnapprovedBundleIds(
-        workOrder,
-        selectedBundles.map((bundle) => String(bundle.bundleNo ?? "")),
-      );
+      const unapproved = (await hasApprovedBundles(workOrder))
+        ? await findUnapprovedBundleIds(
+            workOrder,
+            selectedBundles.map((bundle) => String(bundle.bundleNo ?? "")),
+          )
+        : [];
       if (unapproved.length > 0) {
         return Response.json(
           {
-            error: `Approve these bundles in Cut Report before generating coupons: ${unapproved.slice(0, 10).join(", ")}${unapproved.length > 10 ? ` (+${unapproved.length - 10} more)` : ""}.`,
+            error: `Approve these bundles in Cut Report before generating coupons: ${unapproved.slice(0, 10).join(", ")}${unapproved.length > 10 ? ` (+${unapproved.length - 10} more)` : ""}. If Cut Report bundles were approved after this work order was opened, reload it.`,
           },
           { status: 409 },
         );

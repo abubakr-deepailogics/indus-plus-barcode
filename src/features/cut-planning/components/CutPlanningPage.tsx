@@ -19,6 +19,7 @@ import {
   X,
 } from "lucide-react";
 import { ModulePageHeader } from "@/components/ModulePageHeader";
+import { ColumnSortMenu } from "@/components/ui/data-table/column-sort-menu";
 import {
   WorkOrderSearchModal,
   type WorkOrderSearchRow,
@@ -30,6 +31,37 @@ import type {
   CutPlanningInseamGroup,
 } from "../types";
 import { calculateRequiredFabricMetres } from "../services/calculated-requirement";
+
+// Reorders the matrix's marker rows by Cut no. A marker row is the n-th plan
+// of every inseam, so whole rows move together and stay aligned across
+// inseams. Numeric-aware (2 < 10, 5A < 5B), stable for equal Cut nos., and
+// rows without a Cut no. (incl. the screen-filling blank rows) stay last.
+function sortMarkerRowsByCutNo(
+  plans: CutPlanRow[],
+  inseams: Array<number | null>,
+  direction: "asc" | "desc",
+): CutPlanRow[] {
+  const rowsByInseam = inseams.map((inseam) =>
+    plans.filter((plan) => plan.sourceInseam === inseam),
+  );
+  const rowCount = Math.max(0, ...rowsByInseam.map((rows) => rows.length));
+  const cutNoOf = (rowIndex: number) =>
+    rowsByInseam.map((rows) => rows[rowIndex]?.cutNo.trim() ?? "").find(Boolean) ?? "";
+  const order = Array.from({ length: rowCount }, (_, rowIndex) => rowIndex).sort((left, right) => {
+    const leftCut = cutNoOf(left);
+    const rightCut = cutNoOf(right);
+    if (!leftCut || !rightCut) return (leftCut ? -1 : rightCut ? 1 : 0) || left - right;
+    const compared = leftCut.localeCompare(rightCut, undefined, { numeric: true, sensitivity: "base" });
+    return (direction === "asc" ? compared : -compared) || left - right;
+  });
+  const inseamSet = new Set(inseams);
+  return [
+    ...order.flatMap((rowIndex) =>
+      rowsByInseam.flatMap((rows) => (rows[rowIndex] ? [rows[rowIndex]] : [])),
+    ),
+    ...plans.filter((plan) => !inseamSet.has(plan.sourceInseam)),
+  ];
+}
 
 const today = () => new Date().toISOString().slice(0, 10);
 const numeric = (value: string) => {
@@ -1130,6 +1162,12 @@ export default function CutPlanningPage() {
     0,
     ...groupedPlans.map(({ rows }) => rows.length),
   );
+  // One-off reorder (not a live sort), so a row doesn't jump away while its
+  // Cut no. is being typed. Order isn't saved: Cut Planning reloads by date.
+  const sortMarkerRowsByCut = (direction: "asc" | "desc") =>
+    setPlans((current) =>
+      sortMarkerRowsByCutNo(current, groups.map((group) => group.inseam), direction),
+    );
   const addMarkerSet = () => {
     setNewMarkerRowIndex(markerRowCount);
     setIsDirty(true);
@@ -1381,8 +1419,11 @@ export default function CutPlanningPage() {
   const inseamTotalsByInseam = new Map(
     inseamTotals.map((entry) => [entry.inseam, entry]),
   );
-  // Footer sums for the matrix's Total, Marker plies and Transaction count
-  // columns, using the same per-row values the matrix body displays.
+  // Footer sums for the matrix's Total, Marker plies, Transaction count,
+  // Calculated required and Marker width/length columns, using the same
+  // per-row values the matrix body displays (marker fields are shared per
+  // row, so they are read from the first inseam's plan). Empty marker
+  // width/length cells add nothing.
   const matrixFooterTotals = Array.from(
     { length: markerRowCount },
     (_, rowIndex) => rowIndex,
@@ -1398,15 +1439,40 @@ export default function CutPlanningPage() {
           ),
         0,
       );
-      const markerPlies = groupedPlans[0]?.rows[rowIndex]?.plan.markerPlies || 0;
+      const basePlan = groupedPlans[0]?.rows[rowIndex]?.plan;
+      const markerPlies = basePlan?.markerPlies || 0;
       return {
         total: sums.total + rowTotal,
         markerPlies: sums.markerPlies + markerPlies,
         transactions: sums.transactions + rowTotal * markerPlies,
+        calculatedRequired:
+          sums.calculatedRequired +
+          (calculateRequiredFabricMetres(basePlan?.markerLengthM ?? null, markerPlies) ?? 0),
+        markerWidthCm: sums.markerWidthCm + (basePlan?.markerWidthCm ?? 0),
+        markerLengthM: sums.markerLengthM + (basePlan?.markerLengthM ?? 0),
       };
     },
-    { total: 0, markerPlies: 0, transactions: 0 },
+    {
+      total: 0,
+      markerPlies: 0,
+      transactions: 0,
+      calculatedRequired: 0,
+      markerWidthCm: 0,
+      markerLengthM: 0,
+    },
   );
+  const matrixDetailFooterTotals: Partial<Record<string, number>> = {
+    total: matrixFooterTotals.total,
+    "transaction-count": matrixFooterTotals.transactions,
+    "calculated-required": matrixFooterTotals.calculatedRequired,
+    "marker-width": matrixFooterTotals.markerWidthCm,
+    "marker-length": matrixFooterTotals.markerLengthM,
+  };
+  const printMarkerTotals = [
+    { label: "TOTAL CALCULATED REQUIRED (M)", value: matrixFooterTotals.calculatedRequired },
+    { label: "TOTAL MARKER WIDTH (CM)", value: matrixFooterTotals.markerWidthCm },
+    { label: "TOTAL MARKER LENGTH (M)", value: matrixFooterTotals.markerLengthM },
+  ];
   // Light row tints for the matrix summary rows. `!` keeps them above the
   // slate background that pinned header cells get from matrixCellProps.
   const matrixSummaryTints = {
@@ -1540,7 +1606,19 @@ export default function CutPlanningPage() {
                     "header",
                   )}
                 >
-                  <span className="flex items-center gap-1">{heading} {matrixPinButton(columnId, heading)}</span>
+                  <span className="group/header flex items-center gap-1">
+                    {heading} {matrixPinButton(columnId, heading)}
+                    {/* Compact trigger, hover-revealed; the Cut no. inputs are
+                        sized to this header's width so columns stay aligned. */}
+                    {columnId === "cut-no" && (
+                      <ColumnSortMenu
+                        title={heading}
+                        onSortAsc={() => sortMarkerRowsByCut("asc")}
+                        onSortDesc={() => sortMarkerRowsByCut("desc")}
+                        triggerClassName="h-4 w-3 opacity-0 group-hover/header:opacity-100"
+                      />
+                    )}
+                  </span>
                 </th>
               ))}
               {groups.flatMap((group) =>
@@ -1608,7 +1686,7 @@ export default function CutPlanningPage() {
                           markerNo: event.target.value,
                         })
                       }
-                      className={`${cellClass} w-20`}
+                      className={`${cellClass} w-24`}
                     />
                   </td>
                   <td {...matrixCellProps("cut-no", "p-0")}>
@@ -1619,7 +1697,7 @@ export default function CutPlanningPage() {
                           cutNo: event.target.value,
                         })
                       }
-                      className={`${cellClass} w-20`}
+                      className={`${cellClass} w-24`}
                     />
                   </td>
                   <td {...matrixCellProps("marker-plies", "p-0")}>
@@ -1795,12 +1873,7 @@ export default function CutPlanningPage() {
                 className: matrixSummaryTints.planned,
               }),
               matrixDetailColumns.map(([columnId]) => {
-                const footerTotal =
-                  columnId === "total"
-                    ? matrixFooterTotals.total
-                    : columnId === "transaction-count"
-                      ? matrixFooterTotals.transactions
-                      : null;
+                const footerTotal = matrixDetailFooterTotals[columnId];
                 return (
                   <td
                     key={columnId}
@@ -2528,6 +2601,14 @@ export default function CutPlanningPage() {
                       <strong>{group.inseam ?? "—"}</strong>
                     </div>
                   </div>
+                  <div className="cut-planning-print-marker-totals">
+                    {printMarkerTotals.map(({ label, value }) => (
+                      <div key={label}>
+                        <span>{label}</span>
+                        <strong>{displayNumber(value)}</strong>
+                      </div>
+                    ))}
+                  </div>
                 </header>
 
                 <div className="cut-planning-print-two-inseams">
@@ -3090,6 +3171,34 @@ export default function CutPlanningPage() {
           }
           .cut-planning-print-details strong {
             overflow-wrap: anywhere;
+          }
+          .cut-planning-print-marker-totals {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            border-top: 1px solid #000;
+          }
+          .cut-planning-print-marker-totals > div {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            min-width: 0;
+            border-right: 1px solid #000;
+            font-size: 6.8pt;
+          }
+          .cut-planning-print-marker-totals > div:last-child {
+            border-right: 0;
+          }
+          .cut-planning-print-marker-totals span,
+          .cut-planning-print-marker-totals strong {
+            padding: 1.2mm 1.5mm;
+          }
+          .cut-planning-print-marker-totals span {
+            border-right: 1px solid #000;
+            font-size: 5.8pt;
+            font-weight: 700;
+          }
+          .cut-planning-print-marker-totals strong {
+            min-width: 18mm;
+            text-align: right;
           }
           .cut-planning-print-summary,
           .cut-planning-print-table {

@@ -1,5 +1,9 @@
 export type SizeQuantities = Record<string, number>;
 
+// Where a sewing work order's bundles were read from (see /api/open-order):
+// Cut Planning's generated bundles (SewingCutReport) or indusPlus's cut detail.
+export type CutDetailSource = "cut-planning" | "indus-plus";
+
 export type CutPlanRow = {
   id?: number;
   sourceInseam: number | null;

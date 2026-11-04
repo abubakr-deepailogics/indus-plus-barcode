@@ -6,6 +6,7 @@ import {
 } from "@/lib/db";
 import { isStyleBulletinDepartment } from "@/lib/department-classification";
 import { getCutPlanning } from "@/features/cut-planning/services/cut-planning.service";
+import type { CutDetailSource } from "@/features/cut-planning/types";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +17,9 @@ export async function GET(request: Request) {
     .trim()
     .toLowerCase();
   // Coupon Generation passes approved_only=1 so unapproved Cut Report bundles
-  // stay hidden there; Cut Report itself lists every active bundle.
+  // stay hidden there (and a work order with none approved falls back to
+  // indusPlus); Cut Report itself lists every active bundle (and falls back
+  // to indusPlus only when none was generated).
   const approvedOnly = searchParams.get("approved_only") === "1";
 
   if (department && !isStyleBulletinDepartment(department)) {
@@ -71,6 +74,7 @@ export async function GET(request: Request) {
     // response from today's mutable planning rows, especially after a shade
     // split changes visible Cut 5 into 5A/5B.
     let generatedBundles: Array<Record<string, unknown>> = [];
+    let generatedBundleLookupFailed = false;
     try {
       const pitPool = await getPool("pitSystem");
       // Migration 053 adds these columns. Keep the Cut Report readable while
@@ -145,8 +149,25 @@ export async function GET(request: Request) {
         });
       }
     } catch (bundleError) {
+      generatedBundleLookupFailed = true;
       console.error("Generated sewing bundle lookup failed:", bundleError);
     }
+
+    // A sewing work order reads its bundles from Cut Planning's generated
+    // bundles once it has any (Cut Report), or any approved one (Coupon
+    // Generation, approved_only); until then it reads indusPlus's cut detail.
+    // A failed generated-bundle lookup must not silently fall back to
+    // indusPlus for a work order that may already have generated bundles.
+    if (department === "sewing" && generatedBundleLookupFailed) {
+      return Response.json(
+        { error: "Unable to load Cut Planning bundles. Please try again." },
+        { status: 500 },
+      );
+    }
+    const cutDetailSource: CutDetailSource =
+      department === "sewing" && generatedBundles.length > 0
+        ? "cut-planning"
+        : "indus-plus";
 
     // Fetch Style Bulletin Header (Metadata) — this app's own write data,
     // lives on pitSystem (see db/migrations/010_order_style_bulletin_header.sql),
@@ -173,7 +194,8 @@ export async function GET(request: Request) {
 
     return Response.json({
       cutDetails:
-        department === "sewing" ? generatedBundles : cutDetailResult.recordset,
+        cutDetailSource === "cut-planning" ? generatedBundles : cutDetailResult.recordset,
+      cutDetailSource,
       styleBulletins: styleBulletinResult.recordset,
       metadata,
     });

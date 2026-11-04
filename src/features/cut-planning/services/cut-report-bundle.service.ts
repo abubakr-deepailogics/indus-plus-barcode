@@ -175,9 +175,40 @@ export async function softDeleteGeneratedCut(
   }
 }
 
-// Approval is a single conditional UPDATE: atomic without an explicit
-// transaction, idempotent (already-approved rows are left untouched), and it
-// never approves soft-deleted bundles.
+// A work order's sewing coupons come from one source only (see
+// hasApprovedBundles). The first approval switches it from indusPlus to Cut
+// Report, so it is refused once indusPlus-sourced coupons exist: no approved
+// bundle yet plus active sewing coupons means those coupons came from
+// indusPlus. Locks are held until the caller's transaction ends so a coupon
+// run cannot slip in between this check and the approval.
+async function assertNoIndusPlusCoupons(
+  transaction: sql.Transaction,
+  workOrder: string,
+): Promise<void> {
+  const result = await new sql.Request(transaction)
+    .input("workOrder", sql.NVarChar, workOrder)
+    .query(`
+      SELECT CASE WHEN
+        NOT EXISTS (
+          SELECT 1 FROM dbo.SewingCutReport WITH (UPDLOCK, HOLDLOCK)
+          WHERE WorkOrder = @workOrder AND IsDeleted = 0 AND IsApproved = 1
+        )
+        AND EXISTS (
+          SELECT 1 FROM dbo.QrCode_Coupon WITH (UPDLOCK, HOLDLOCK)
+          WHERE WorkOrder = @workOrder AND Department = 'sewing' AND IsDeleted = 0
+        )
+      THEN 1 ELSE 0 END AS IsBlocked
+    `);
+  if (Number(result.recordset[0]?.IsBlocked) === 1) {
+    throw new Error(
+      `Sewing coupons for Work Order ${workOrder} were already generated from indus-plus data. Its Cut Report bundles cannot be approved; delete those coupons first to switch it to Cut Report.`,
+    );
+  }
+}
+
+// Approval is a conditional UPDATE: idempotent (already-approved rows are left
+// untouched), and it never approves soft-deleted bundles. The transaction only
+// covers the indusPlus-coupon guard above.
 export async function approveGeneratedBundle(
   workOrderInput: string,
   reportRowId: number,
@@ -190,42 +221,50 @@ export async function approveGeneratedBundle(
   }
 
   const pool = await getPool("pitSystem");
-  const result = await pool
-    .request()
-    .input("workOrder", sql.NVarChar, workOrder)
-    .input("reportRowId", sql.BigInt, reportRowId)
-    .input("approvedBy", sql.NVarChar, approvedBy || "system")
-    .query(`
-      DECLARE @updated TABLE (BundleId NVARCHAR(32), CutNo NVARCHAR(100));
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+  try {
+    await assertNoIndusPlusCoupons(transaction, workOrder);
+    const result = await new sql.Request(transaction)
+      .input("workOrder", sql.NVarChar, workOrder)
+      .input("reportRowId", sql.BigInt, reportRowId)
+      .input("approvedBy", sql.NVarChar, approvedBy || "system")
+      .query(`
+        DECLARE @updated TABLE (BundleId NVARCHAR(32), CutNo NVARCHAR(100));
 
-      UPDATE dbo.SewingCutReport
-      SET IsApproved = 1, ApprovedAt = SYSUTCDATETIME(), ApprovedBy = @approvedBy
-      OUTPUT INSERTED.BundleId, INSERTED.CutNo INTO @updated
-      WHERE RowId = @reportRowId
-        AND WorkOrder = @workOrder
-        AND IsDeleted = 0
-        AND IsApproved = 0;
+        UPDATE dbo.SewingCutReport
+        SET IsApproved = 1, ApprovedAt = SYSUTCDATETIME(), ApprovedBy = @approvedBy
+        OUTPUT INSERTED.BundleId, INSERTED.CutNo INTO @updated
+        WHERE RowId = @reportRowId
+          AND WorkOrder = @workOrder
+          AND IsDeleted = 0
+          AND IsApproved = 0;
 
-      SELECT BundleId, CutNo, CAST(0 AS BIT) AS AlreadyApproved FROM @updated
-      UNION ALL
-      SELECT BundleId, CutNo, CAST(1 AS BIT)
-      FROM dbo.SewingCutReport
-      WHERE NOT EXISTS (SELECT 1 FROM @updated)
-        AND RowId = @reportRowId
-        AND WorkOrder = @workOrder
-        AND IsDeleted = 0;
-    `);
-  const bundle = result.recordset[0] as
-    | { BundleId: string; CutNo: string | null; AlreadyApproved: boolean }
-    | undefined;
-  if (!bundle) {
-    throw new Error("This Cut Report bundle was not found or has been deleted.");
+        SELECT BundleId, CutNo, CAST(0 AS BIT) AS AlreadyApproved FROM @updated
+        UNION ALL
+        SELECT BundleId, CutNo, CAST(1 AS BIT)
+        FROM dbo.SewingCutReport
+        WHERE NOT EXISTS (SELECT 1 FROM @updated)
+          AND RowId = @reportRowId
+          AND WorkOrder = @workOrder
+          AND IsDeleted = 0;
+      `);
+    const bundle = result.recordset[0] as
+      | { BundleId: string; CutNo: string | null; AlreadyApproved: boolean }
+      | undefined;
+    if (!bundle) {
+      throw new Error("This Cut Report bundle was not found or has been deleted.");
+    }
+    await transaction.commit();
+    return {
+      bundleId: String(bundle.BundleId),
+      cutNo: String(bundle.CutNo ?? ""),
+      alreadyApproved: Boolean(bundle.AlreadyApproved),
+    };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
   }
-  return {
-    bundleId: String(bundle.BundleId),
-    cutNo: String(bundle.CutNo ?? ""),
-    alreadyApproved: Boolean(bundle.AlreadyApproved),
-  };
 }
 
 export async function approveGeneratedCut(
@@ -239,31 +278,72 @@ export async function approveGeneratedCut(
   if (!cutNo) throw new Error("A Cut no. is required.");
 
   const pool = await getPool("pitSystem");
-  // Same Cut matching as softDeleteGeneratedCut (trimmed, case-insensitive).
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+  try {
+    await assertNoIndusPlusCoupons(transaction, workOrder);
+    // Same Cut matching as softDeleteGeneratedCut (trimmed, case-insensitive).
+    const result = await new sql.Request(transaction)
+      .input("workOrder", sql.NVarChar, workOrder)
+      .input("cutNo", sql.NVarChar, cutNo.toLocaleLowerCase())
+      .input("approvedBy", sql.NVarChar, approvedBy || "system")
+      .query(`
+        UPDATE dbo.SewingCutReport
+        SET IsApproved = 1, ApprovedAt = SYSUTCDATETIME(), ApprovedBy = @approvedBy
+        WHERE WorkOrder = @workOrder
+          AND LOWER(LTRIM(RTRIM(CutNo))) = @cutNo
+          AND IsDeleted = 0
+          AND IsApproved = 0;
+
+        SELECT COUNT_BIG(*) AS BundleCount
+        FROM dbo.SewingCutReport
+        WHERE WorkOrder = @workOrder
+          AND LOWER(LTRIM(RTRIM(CutNo))) = @cutNo
+          AND IsDeleted = 0;
+      `);
+    const bundleCount = Number(result.recordset[0]?.BundleCount ?? 0);
+    if (bundleCount === 0) {
+      throw new Error(`No active generated bundles were found for Cut ${cutNo}.`);
+    }
+    await transaction.commit();
+    return { cutNo, approvedCount: result.rowsAffected[0] ?? 0, bundleCount };
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+}
+
+// Coupon Generation's sewing data source switch: once any active bundle of the
+// work order is approved in Cut Report, Cut Report is the source; until then
+// the work order's bundles come from indusPlus.
+export async function hasApprovedBundles(workOrder: string): Promise<boolean> {
+  const trimmed = workOrder.trim();
+  if (!trimmed) return false;
+
+  const pool = await getPool("pitSystem");
   const result = await pool
     .request()
-    .input("workOrder", sql.NVarChar, workOrder)
-    .input("cutNo", sql.NVarChar, cutNo.toLocaleLowerCase())
-    .input("approvedBy", sql.NVarChar, approvedBy || "system")
+    .input("workOrder", sql.NVarChar, trimmed)
+    // Same pre-migration-056 fallback as findUnapprovedBundleIds below.
     .query(`
-      UPDATE dbo.SewingCutReport
-      SET IsApproved = 1, ApprovedAt = SYSUTCDATETIME(), ApprovedBy = @approvedBy
-      WHERE WorkOrder = @workOrder
-        AND LOWER(LTRIM(RTRIM(CutNo))) = @cutNo
-        AND IsDeleted = 0
-        AND IsApproved = 0;
-
-      SELECT COUNT_BIG(*) AS BundleCount
-      FROM dbo.SewingCutReport
-      WHERE WorkOrder = @workOrder
-        AND LOWER(LTRIM(RTRIM(CutNo))) = @cutNo
-        AND IsDeleted = 0;
+      DECLARE @approvalFilter NVARCHAR(100) =
+        CASE WHEN COL_LENGTH('dbo.SewingCutReport', 'IsApproved') IS NULL
+          THEN N'' ELSE N' AND report.IsApproved = 1' END;
+      DECLARE @statement NVARCHAR(MAX) = N'
+        SELECT CASE WHEN EXISTS (
+          SELECT 1
+          FROM dbo.SewingCutReport AS report
+          INNER JOIN dbo.BundleGeneration AS generation
+            ON generation.Id = report.BundleGenerationId
+          WHERE report.WorkOrder = @workOrder
+            AND report.IsDeleted = 0
+            AND generation.IsDeleted = 0' + @approvalFilter + N'
+        ) THEN 1 ELSE 0 END AS HasApproved';
+      EXEC sp_executesql @statement,
+        N'@workOrder NVARCHAR(4000)',
+        @workOrder = @workOrder;
     `);
-  const bundleCount = Number(result.recordset[0]?.BundleCount ?? 0);
-  if (bundleCount === 0) {
-    throw new Error(`No active generated bundles were found for Cut ${cutNo}.`);
-  }
-  return { cutNo, approvedCount: result.rowsAffected[0] ?? 0, bundleCount };
+  return Number(result.recordset[0]?.HasApproved) === 1;
 }
 
 // Server-side guard for coupon generation: returns the requested sewing bundle

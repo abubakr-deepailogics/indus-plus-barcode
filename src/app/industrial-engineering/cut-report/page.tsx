@@ -38,6 +38,8 @@ import {
 } from "@/components/work-order-search-modal";
 import { RequirePermission } from "@/features/auth/components/RequirePermission";
 import { useAuth } from "@/features/auth/context/auth-context";
+import { CutDetailSourceBadge } from "@/features/cut-planning/components/CutDetailSourceBadge";
+import type { CutDetailSource } from "@/features/cut-planning/types";
 
 interface CutDetailRow {
   RowId: number;
@@ -414,6 +416,17 @@ export default function OpenOrderPage() {
     [],
   );
   const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
+  const [cutDetailSource, setCutDetailSource] = useState<CutDetailSource | null>(null);
+  // Approve/Delete act on Cut Planning's generated bundles only; indusPlus
+  // rows are read-only here.
+  const hasGeneratedBundles = cutDetailSource === "cut-planning";
+  const visibleCutReportColumns = useMemo(
+    () =>
+      hasGeneratedBundles
+        ? cutReportColumns
+        : cutReportColumns.filter((column) => column.id !== "actions"),
+    [cutReportColumns, hasGeneratedBundles],
+  );
   const generatedCuts = useMemo(
     () => [...new Set(cutDetails.map((row) => String(row.Cut ?? "").trim()).filter(Boolean))]
       .sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
@@ -895,6 +908,8 @@ export default function OpenOrderPage() {
     setStatus("Approved");
     setRowAttachments({});
     setPreviewFile(null);
+    setCutDetailSource(null);
+    setSelectedCut("");
 
     if (!activeSearchQuery) {
       setCutDetails([]);
@@ -919,6 +934,7 @@ export default function OpenOrderPage() {
         }
         const data = await response.json();
         setCutDetails(data.cutDetails || []);
+        setCutDetailSource(data.cutDetailSource ?? null);
         setStyleBulletins(data.styleBulletins || []);
         // Do not pre-select any operations.
         setSelectedOpRowIds(new Set());
@@ -1263,7 +1279,7 @@ export default function OpenOrderPage() {
           <div className="flex flex-col gap-4 animate-fade-in">
             {/* DataTable Component */}
             <DataTable
-              columns={cutReportColumns}
+              columns={visibleCutReportColumns}
               data={cutDetails}
               fillViewport
               csv={{
@@ -1280,48 +1296,55 @@ export default function OpenOrderPage() {
                   { header: "Shrinkage", accessor: (row) => row.Shrinkage },
                 ],
               }}
+              toolbarRightChildren={
+                cutDetailSource && <CutDetailSourceBadge source={cutDetailSource} />
+              }
               toolbarChildren={
                 <>
-                  <select
-                    aria-label="Choose a Cut to approve or delete all of its bundles"
-                    value={selectedCut}
-                    onChange={(event) => setSelectedCut(event.target.value)}
-                    className="rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-rose-500"
-                  >
-                    <option value="">Choose Cut…</option>
-                    {generatedCuts.map((cutNo) => (
-                      <option key={cutNo} value={cutNo}>Cut {cutNo}</option>
-                    ))}
-                  </select>
-                  <button
-                    type="button"
-                    disabled={!selectedCut || deletingCutNo !== null}
-                    onClick={() => {
-                      setCutDeleteError("");
-                      setCutPendingDeletion(selectedCut);
-                    }}
-                    className="bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 disabled:cursor-not-allowed disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                    <span>Delete Cut</span>
-                  </button>
-                  <button
-                    type="button"
-                    disabled={!selectedCut || selectedCutUnapprovedCount === 0 || approving}
-                    title={
-                      selectedCut && selectedCutUnapprovedCount === 0
-                        ? "Every bundle in this Cut is already approved"
-                        : undefined
-                    }
-                    onClick={() => {
-                      setApproveError("");
-                      setPendingApproval({ type: "cut", cutNo: selectedCut });
-                    }}
-                    className="bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
-                  >
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>Approve Cut</span>
-                  </button>
+                  {hasGeneratedBundles && (
+                    <>
+                      <select
+                        aria-label="Choose a Cut to approve or delete all of its bundles"
+                        value={selectedCut}
+                        onChange={(event) => setSelectedCut(event.target.value)}
+                        className="rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-rose-500"
+                      >
+                        <option value="">Choose Cut…</option>
+                        {generatedCuts.map((cutNo) => (
+                          <option key={cutNo} value={cutNo}>Cut {cutNo}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        disabled={!selectedCut || deletingCutNo !== null}
+                        onClick={() => {
+                          setCutDeleteError("");
+                          setCutPendingDeletion(selectedCut);
+                        }}
+                        className="bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 disabled:cursor-not-allowed disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Delete Cut</span>
+                      </button>
+                      <button
+                        type="button"
+                        disabled={!selectedCut || selectedCutUnapprovedCount === 0 || approving}
+                        title={
+                          selectedCut && selectedCutUnapprovedCount === 0
+                            ? "Every bundle in this Cut is already approved"
+                            : undefined
+                        }
+                        onClick={() => {
+                          setApproveError("");
+                          setPendingApproval({ type: "cut", cutNo: selectedCut });
+                        }}
+                        className="bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                      >
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        <span>Approve Cut</span>
+                      </button>
+                    </>
+                  )}
                   <button
                     type="button"
                     onClick={() => window.print()}

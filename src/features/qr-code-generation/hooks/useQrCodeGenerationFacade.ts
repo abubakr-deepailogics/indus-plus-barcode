@@ -359,7 +359,8 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     }
     setIsLoadingWorkOrder(true);
     try {
-      // approved_only: sewing bundles appear here only after Cut Report approval.
+      // approved_only: a sewing work order with any approved Cut Report bundle
+      // lists only its approved Cut Report bundles; with none, indusPlus's.
       const response = await fetch(
         `/api/open-order?work_order=${encodeURIComponent(wo)}&department=${encodeURIComponent(department)}&approved_only=1&t=${Date.now()}`,
       );
