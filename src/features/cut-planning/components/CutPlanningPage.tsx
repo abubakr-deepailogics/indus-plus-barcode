@@ -813,6 +813,7 @@ export default function CutPlanningPage() {
               <th rowSpan={3}>SR</th>
               <th rowSpan={3}>TOTAL PCS</th>
               <th rowSpan={3}>SHRINKAGE</th>
+              <th rowSpan={3}>SHADE</th>
               <th rowSpan={3}>PLYS</th>
               <th rowSpan={3}>CUT #</th>
               <th rowSpan={3}>BUNDLE</th>
@@ -853,6 +854,7 @@ export default function CutPlanningPage() {
                   <td>{displayIndex + 1}</td>
                   <td>{displayPrintNumber(transactionTotal * basePlan.markerPlies)}</td>
                   <td>{basePlan.shrinkage || "-"}</td>
+                  <td>{basePlan.shade || "-"}</td>
                   <td>{displayPrintNumber(basePlan.markerPlies)}</td>
                   <td>{basePlan.cutNo || "-"}</td>
                   <td>{transactionTotal ? `1 - ${displayNumber(transactionTotal)}` : ""}</td>
