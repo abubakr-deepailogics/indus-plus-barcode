@@ -47,3 +47,26 @@ export type SaveCutPlanningPayload = {
   workOrder: string;
   plans: CutPlanRow[];
 };
+
+export type GenerateBundlesPayload = {
+  workOrder: string;
+  cutNos: string[];
+  bundleQty: number;
+  mergeCuts: boolean;
+  /** Sequence displayed in the preview; prevents confirming a stale preview. */
+  expectedNextSequence?: number;
+  /** Number of rows displayed in the preview; prevents an incomplete preview. */
+  expectedBundleCount?: number;
+  shadeAllocations?: Array<{
+    shade: string;
+    quantity: number;
+    /** The visible Cut No. for this shade, such as 5A or 5B. */
+    cutNo: string;
+  }>;
+};
+
+export type GeneratedBundle = {
+  bundleId: string;
+  bundleQty: number;
+  cutNos: string[];
+};

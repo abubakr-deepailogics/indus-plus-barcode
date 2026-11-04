@@ -14,6 +14,9 @@ import {
   Database,
   Paperclip,
   Printer,
+  Trash2,
+  BadgeCheck,
+  CheckCircle2,
 } from "lucide-react";
 // import type { PageSetupConfig } from "@/features/barcode-generation/types";
 // import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
@@ -34,9 +37,11 @@ import {
   type WorkOrderSearchRow,
 } from "@/components/work-order-search-modal";
 import { RequirePermission } from "@/features/auth/components/RequirePermission";
+import { useAuth } from "@/features/auth/context/auth-context";
 
 interface CutDetailRow {
   RowId: number;
+  DisplayRowId?: number;
   Sale_Order_No?: string;
   Customer_Name?: string;
   Work_Order?: string;
@@ -46,9 +51,12 @@ interface CutDetailRow {
   Color?: string;
   Fabric_Code_Main_Body?: string;
   Wash?: string;
-  Cut?: number;
-  Bundle_Id?: number;
+  Cut?: string | number;
+  Bundle_Id?: string | number;
   Bundle_Qty?: number;
+  ActiveCouponCount?: number;
+  // Only approved bundles are listed in (and accepted by) Coupon Generation.
+  IsApproved?: boolean;
   Shade?: string;
   Shrinkage?: string;
 }
@@ -111,11 +119,51 @@ function TableSkeleton({ columnsCount }: { columnsCount: number }) {
   );
 }
 
+// Compact read-only metadata field shown inline beside the page title.
+function HeaderField({
+  label,
+  value,
+  emphasis = false,
+}: {
+  label: string;
+  value: string | number;
+  emphasis?: boolean;
+}) {
+  return (
+    <div className="min-w-0">
+      <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+        {label}
+      </span>
+      <span
+        title={String(value || "")}
+        className={`mt-1 block h-8 truncate rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs ${emphasis ? "font-bold text-indigo-700" : "font-semibold text-slate-700"}`}
+      >
+        {value || "—"}
+      </span>
+    </div>
+  );
+}
+
 export default function OpenOrderPage() {
+  const [bundlePendingDeletion, setBundlePendingDeletion] =
+    useState<CutDetailRow | null>(null);
+  const [deletingBundleRowId, setDeletingBundleRowId] = useState<number | null>(null);
+  const [bundleDeleteError, setBundleDeleteError] = useState("");
+  const [cutPendingDeletion, setCutPendingDeletion] = useState<string | null>(null);
+  const [selectedCut, setSelectedCut] = useState("");
+  const [deletingCutNo, setDeletingCutNo] = useState<string | null>(null);
+  const [cutDeleteError, setCutDeleteError] = useState("");
+  const { user } = useAuth();
+  const [pendingApproval, setPendingApproval] = useState<
+    { type: "bundle"; row: CutDetailRow } | { type: "cut"; cutNo: string } | null
+  >(null);
+  const [approving, setApproving] = useState(false);
+  const [approveError, setApproveError] = useState("");
+
   const cutReportColumns = useMemo<ColumnDef<CutDetailRow>[]>(
     () => [
       {
-        accessorKey: "RowId",
+        accessorKey: "DisplayRowId",
         meta: { align: "center" },
         header: ({ column }) => (
           <DataTableColumnHeader
@@ -126,7 +174,7 @@ export default function OpenOrderPage() {
         ),
         cell: ({ row }) => (
           <span className="font-semibold text-slate-900">
-            {row.original.RowId}
+            {row.original.DisplayRowId ?? row.original.RowId}
           </span>
         ),
         footer: ({ table }) => (
@@ -276,8 +324,57 @@ export default function OpenOrderPage() {
         ),
         size: 80,
       },
+      {
+        id: "actions",
+        meta: { align: "center" },
+        header: "Actions",
+        cell: ({ row }) => (
+          <div className="inline-flex items-center gap-1">
+          {row.original.IsApproved ? (
+            // Status tag, not a control: approved bundles are already in Coupon Generation.
+            <span
+              title="Approved: available in Coupon Generation"
+              className="inline-flex h-7 w-[5.5rem] items-center justify-center gap-1 text-[11px] font-semibold text-emerald-700"
+            >
+              <BadgeCheck className="size-3.5" />
+              Approved
+            </span>
+          ) : (
+            <button
+              type="button"
+              aria-label={`Approve bundle ${row.original.Bundle_Id ?? row.original.RowId}`}
+              title="Approve bundle for Coupon Generation"
+              onClick={() => {
+                setApproveError("");
+                setPendingApproval({ type: "bundle", row: row.original });
+              }}
+              className="inline-flex h-7 w-[5.5rem] items-center justify-center gap-1 rounded-lg bg-emerald-600 text-[11px] font-semibold text-white shadow-sm hover:bg-emerald-700"
+            >
+              <CheckCircle2 className="size-3.5" />
+              Approve
+            </button>
+          )}
+          <button
+            type="button"
+            aria-label={`Delete bundle ${row.original.Bundle_Id ?? row.original.RowId}`}
+            title="Delete bundle"
+            disabled={deletingBundleRowId === row.original.RowId}
+            onClick={() => {
+              setBundleDeleteError("");
+              setBundlePendingDeletion(row.original);
+            }}
+            className="inline-flex size-8 items-center justify-center rounded-lg text-rose-600 hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <Trash2 className="size-4" />
+          </button>
+          </div>
+        ),
+        enableSorting: false,
+        enableHiding: false,
+        size: 140,
+      },
     ],
-    [],
+    [deletingBundleRowId],
   );
 
   const [activeSearchQuery, setActiveSearchQuery] = useState("");
@@ -317,6 +414,27 @@ export default function OpenOrderPage() {
     [],
   );
   const [cutDetails, setCutDetails] = useState<CutDetailRow[]>([]);
+  const generatedCuts = useMemo(
+    () => [...new Set(cutDetails.map((row) => String(row.Cut ?? "").trim()).filter(Boolean))]
+      .sort((left, right) => left.localeCompare(right, undefined, { numeric: true })),
+    [cutDetails],
+  );
+  const selectedCutUnapprovedCount = useMemo(
+    () =>
+      cutDetails.filter(
+        (row) => String(row.Cut ?? "").trim() === selectedCut && !row.IsApproved,
+      ).length,
+    [cutDetails, selectedCut],
+  );
+  const selectedCutHasActiveCoupons = useMemo(
+    () =>
+      cutDetails.some(
+        (row) =>
+          String(row.Cut ?? "").trim() === selectedCut &&
+          Number(row.ActiveCouponCount) > 0,
+      ),
+    [cutDetails, selectedCut],
+  );
   const [styleBulletins, setStyleBulletins] = useState<StyleBulletinRow[]>([]);
   // Operations to include in coupon generation — defaults to "all" (set
   // whenever a fresh style bulletin loads, see the fetch effect below) so
@@ -791,7 +909,7 @@ export default function OpenOrderPage() {
       setHasSearched(true);
       try {
         const response = await fetch(
-          `/api/open-order?work_order=${encodeURIComponent(activeSearchQuery)}&t=${Date.now()}`,
+          `/api/open-order?work_order=${encodeURIComponent(activeSearchQuery)}&department=sewing&t=${Date.now()}`,
         );
         if (!response.ok) {
           const errData = await response.json();
@@ -851,9 +969,14 @@ export default function OpenOrderPage() {
 
   // Dynamically derive style bulletin metadata from fetched style bulletins and cut details
   const styleBulletinMetadata = useMemo(() => {
-    const planQty =
-      cutDetails[0]?.Order_Qty_After_Add ??
-      cutDetails.reduce((acc, curr) => acc + (curr.Bundle_Qty ?? 0), 0);
+    // Sewing Cut Report is driven by generated bundles. Its Order Qty must
+    // therefore move with every newly generated bundle, rather than keeping
+    // the first Cut Planning row's transaction count.
+    const generatedBundleQty = cutDetails.reduce(
+      (acc, curr) => acc + (curr.Bundle_Qty ?? 0),
+      0,
+    );
+    const planQty = generatedBundleQty || cutDetails[0]?.Order_Qty_After_Add || 0;
 
     return {
       amNo: cutDetails[0]?.Work_Order || activeSearchQuery || "",
@@ -944,102 +1067,149 @@ export default function OpenOrderPage() {
     setShowPageSetupModal(false);
   };
 
+  const handleDeleteBundle = async () => {
+    const bundle = bundlePendingDeletion;
+    const workOrder = bundle?.Work_Order || activeSearchQuery;
+    if (!bundle || !workOrder) {
+      setBundleDeleteError("No active Work Order was found for this bundle.");
+      return;
+    }
+
+    setDeletingBundleRowId(bundle.RowId);
+    setBundleDeleteError("");
+    try {
+      const response = await fetch("/api/open-order/bundles", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workOrder, reportRowId: bundle.RowId }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Unable to delete this Cut Report bundle.");
+      }
+      setCutDetails((rows) => rows.filter((row) => row.RowId !== bundle.RowId));
+      setBundlePendingDeletion(null);
+    } catch (error) {
+      setBundleDeleteError(
+        error instanceof Error ? error.message : "Unable to delete this Cut Report bundle.",
+      );
+    } finally {
+      setDeletingBundleRowId(null);
+    }
+  };
+
+  const handleDeleteCut = async () => {
+    const cutNo = cutPendingDeletion;
+    if (!cutNo || !activeSearchQuery) {
+      setCutDeleteError("No active Work Order or Cut was found.");
+      return;
+    }
+
+    setDeletingCutNo(cutNo);
+    setCutDeleteError("");
+    try {
+      const response = await fetch("/api/open-order/bundles", {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workOrder: activeSearchQuery, cutNo }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Unable to delete the generated cut.");
+      }
+      setCutDetails((rows) => rows.filter(
+        (row) => String(row.Cut ?? "").trim().toLocaleLowerCase() !== cutNo.toLocaleLowerCase(),
+      ));
+      setSelectedCut("");
+      setCutPendingDeletion(null);
+    } catch (error) {
+      setCutDeleteError(
+        error instanceof Error ? error.message : "Unable to delete the generated cut.",
+      );
+    } finally {
+      setDeletingCutNo(null);
+    }
+  };
+
+  const handleApprove = async () => {
+    const approval = pendingApproval;
+    const workOrder =
+      (approval?.type === "bundle" && approval.row.Work_Order) || activeSearchQuery;
+    if (!approval || !workOrder) {
+      setApproveError("No active Work Order was found.");
+      return;
+    }
+
+    setApproving(true);
+    setApproveError("");
+    try {
+      const response = await fetch("/api/open-order/bundles", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workOrder,
+          approvedBy: user?.email || user?.displayName || "",
+          ...(approval.type === "bundle"
+            ? { reportRowId: approval.row.RowId }
+            : { cutNo: approval.cutNo }),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || "Unable to approve.");
+      }
+      const isApprovedRow = (row: CutDetailRow) =>
+        approval.type === "bundle"
+          ? row.RowId === approval.row.RowId
+          : String(row.Cut ?? "").trim().toLocaleLowerCase() ===
+            approval.cutNo.toLocaleLowerCase();
+      setCutDetails((rows) =>
+        rows.map((row) => (isApprovedRow(row) ? { ...row, IsApproved: true } : row)),
+      );
+      setPendingApproval(null);
+    } catch (error) {
+      setApproveError(error instanceof Error ? error.message : "Unable to approve.");
+    } finally {
+      setApproving(false);
+    }
+  };
+
   return (
     <RequirePermission pageKey="cut-report">
-      <div className="no-print mx-auto flex w-full max-w-[1500px] flex-col gap-5 text-xs text-slate-700 animate-fade-in pb-16">
+      <div className="no-print mx-auto flex w-full max-w-[1500px] flex-col gap-5 text-xs text-slate-700 animate-fade-in pb-6">
         <ModulePageHeader
           eyebrow="Production / Cutting"
           title="Cut Report"
-          detail="Work-order specifications and bundle output"
           icon={Database}
           accent="indigo"
-        />
-        {/* Dynamic Metadata Cards Row */}
-        <div className="grid grid-cols-1 gap-4 animate-fade-in md:grid-cols-3">
-          {/* Card 1: Order Info */}
-          <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
-            <div>
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
-                Work Order
-              </span>
-              <button
-                type="button"
-                onClick={() => setShowWorkOrderModal(true)}
-                className="relative mt-1.5 w-full text-left cursor-pointer"
-              >
-                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                <span className="block w-full pl-9 pr-3 py-2 rounded-xl border border-slate-200 bg-white text-xs font-semibold text-slate-900 hover:border-indigo-500 transition-all truncate shadow-2xs">
-                  {cutDetails[0]?.Work_Order ||
-                    activeSearchQuery ||
-                    "Search W/O..."}
+          compact
+          actions={
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-[repeat(3,10rem)] xl:grid-cols-[repeat(6,10rem)]">
+              <div className="min-w-0">
+                <span className="block text-[10px] font-semibold uppercase tracking-wider text-slate-500">
+                  Work Order
                 </span>
-              </button>
+                <button
+                  type="button"
+                  onClick={() => setShowWorkOrderModal(true)}
+                  className="relative mt-1 w-full cursor-pointer text-left"
+                >
+                  <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                  <span className="block h-8 w-full truncate rounded-lg border border-slate-200 bg-white py-1.5 pl-8 pr-2.5 text-xs font-semibold text-slate-900 shadow-2xs transition-all hover:border-indigo-500">
+                    {cutDetails[0]?.Work_Order ||
+                      activeSearchQuery ||
+                      "Search W/O..."}
+                  </span>
+                </button>
+              </div>
+              <HeaderField label="Sale Order No" value={cutDetails[0]?.Sale_Order_No || ""} />
+              <HeaderField label="Customer" value={cutDetails[0]?.Customer_Name || ""} />
+              <HeaderField label="Order Qty" value={styleBulletinMetadata.planQty} emphasis />
+              <HeaderField label="Fabric Code" value={cutDetails[0]?.Fabric_Code_Main_Body || ""} />
+              <HeaderField label="Wash" value={cutDetails[0]?.Wash || ""} />
             </div>
-            <div>
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
-                Sale Order No
-              </span>
-              <input
-                type="text"
-                readOnly
-                value={cutDetails[0]?.Sale_Order_No || ""}
-                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Card 2: Customer & Qty */}
-          <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
-            <div>
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
-                Customer
-              </span>
-              <input
-                type="text"
-                readOnly
-                value={cutDetails[0]?.Customer_Name || ""}
-                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:outline-none"
-              />
-            </div>
-            <div>
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
-                Order Qty
-              </span>
-              <input
-                type="text"
-                readOnly
-                value={cutDetails[0]?.Order_Qty_After_Add || ""}
-                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-bold text-indigo-700 focus:outline-none"
-              />
-            </div>
-          </div>
-
-          {/* Card 3: Specifications */}
-          <div className="flex flex-col gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm">
-            <div>
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
-                Fabric Code
-              </span>
-              <input
-                type="text"
-                readOnly
-                value={cutDetails[0]?.Fabric_Code_Main_Body || ""}
-                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:outline-none"
-              />
-            </div>
-            <div>
-              <span className="text-[10px] font-semibold text-slate-500 uppercase tracking-wider block">
-                Wash
-              </span>
-              <input
-                type="text"
-                readOnly
-                value={cutDetails[0]?.Wash || ""}
-                className="mt-1.5 w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-xs font-semibold text-slate-700 focus:outline-none"
-              />
-            </div>
-          </div>
-        </div>
+          }
+        />
 
         {/* Main Results / Table Block */}
         {errorMsg ? (
@@ -1095,10 +1265,11 @@ export default function OpenOrderPage() {
             <DataTable
               columns={cutReportColumns}
               data={cutDetails}
+              fillViewport
               csv={{
                 filename: `cut-report-${cutDetails[0]?.Work_Order || activeSearchQuery || "export"}`,
                 columns: [
-                  { header: "Row ID", accessor: (row) => row.RowId },
+                  { header: "Row ID", accessor: (row) => row.DisplayRowId ?? row.RowId },
                   { header: "Cut", accessor: (row) => row.Cut },
                   { header: "Bundle ID", accessor: (row) => row.Bundle_Id },
                   { header: "Bundle Qty", accessor: (row) => row.Bundle_Qty },
@@ -1110,15 +1281,57 @@ export default function OpenOrderPage() {
                 ],
               }}
               toolbarChildren={
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  disabled={cutDetails.length === 0}
-                  className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-[#334155] disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  <span>Print</span>
-                </button>
+                <>
+                  <select
+                    aria-label="Choose a Cut to approve or delete all of its bundles"
+                    value={selectedCut}
+                    onChange={(event) => setSelectedCut(event.target.value)}
+                    className="rounded-xl border border-rose-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 outline-none focus:border-rose-500"
+                  >
+                    <option value="">Choose Cut…</option>
+                    {generatedCuts.map((cutNo) => (
+                      <option key={cutNo} value={cutNo}>Cut {cutNo}</option>
+                    ))}
+                  </select>
+                  <button
+                    type="button"
+                    disabled={!selectedCut || deletingCutNo !== null}
+                    onClick={() => {
+                      setCutDeleteError("");
+                      setCutPendingDeletion(selectedCut);
+                    }}
+                    className="bg-white border border-rose-200 hover:bg-rose-50 text-rose-700 disabled:cursor-not-allowed disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                    <span>Delete Cut</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={!selectedCut || selectedCutUnapprovedCount === 0 || approving}
+                    title={
+                      selectedCut && selectedCutUnapprovedCount === 0
+                        ? "Every bundle in this Cut is already approved"
+                        : undefined
+                    }
+                    onClick={() => {
+                      setApproveError("");
+                      setPendingApproval({ type: "cut", cutNo: selectedCut });
+                    }}
+                    className="bg-white border border-emerald-200 hover:bg-emerald-50 text-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Approve Cut</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    disabled={cutDetails.length === 0}
+                    className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-[#334155] disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                  >
+                    <Printer className="w-3.5 h-3.5" />
+                    <span>Print</span>
+                  </button>
+                </>
               }
             />
           </div>
@@ -1133,6 +1346,173 @@ export default function OpenOrderPage() {
           onGeneratePdf={handleGeneratePdf}
           generatingPdf={generatingPdf}
         />
+      )}
+
+      {bundlePendingDeletion && (
+        <div
+          className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-bundle-title"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 id="delete-bundle-title" className="text-base font-bold text-slate-900">
+              Delete generated bundle?
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              Bundle <strong>{bundlePendingDeletion.Bundle_Id}</strong> from Cut{" "}
+              <strong>{bundlePendingDeletion.Cut}</strong> will be removed from the Cut Report.
+              Its planning allocation will be released. The cut can be edited again only if
+              no other generated bundle still uses it.
+            </p>
+            {Number(bundlePendingDeletion.ActiveCouponCount) > 0 && (
+              <p className="mt-2 text-sm text-amber-700">
+                Coupons exist for this bundle. Delete them first, then delete the bundle.
+              </p>
+            )}
+            {bundleDeleteError && (
+              <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
+                {bundleDeleteError}
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={deletingBundleRowId !== null}
+                onClick={() => {
+                  setBundlePendingDeletion(null);
+                  setBundleDeleteError("");
+                }}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={
+                  Number(bundlePendingDeletion.ActiveCouponCount) > 0 ||
+                  deletingBundleRowId !== null
+                }
+                onClick={handleDeleteBundle}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deletingBundleRowId !== null ? "Deleting…" : "Delete bundle"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {pendingApproval && (
+        <div
+          className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="approve-title"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 id="approve-title" className="text-base font-bold text-slate-900">
+              {pendingApproval.type === "bundle"
+                ? "Approve generated bundle?"
+                : `Approve all bundles for Cut ${pendingApproval.cutNo}?`}
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              {pendingApproval.type === "bundle" ? (
+                <>
+                  Bundle <strong>{pendingApproval.row.Bundle_Id}</strong> from Cut{" "}
+                  <strong>{pendingApproval.row.Cut}</strong> will become available in Coupon
+                  Generation.
+                </>
+              ) : (
+                <>
+                  {selectedCutUnapprovedCount} unapproved bundle
+                  {selectedCutUnapprovedCount === 1 ? "" : "s"} in this Cut will become available
+                  in Coupon Generation.
+                </>
+              )}
+            </p>
+            {approveError && (
+              <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
+                {approveError}
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={approving}
+                onClick={() => {
+                  setPendingApproval(null);
+                  setApproveError("");
+                }}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={approving}
+                onClick={handleApprove}
+                className="rounded-lg bg-emerald-600 px-4 py-2 text-sm font-semibold text-white hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {approving
+                  ? "Approving…"
+                  : pendingApproval.type === "bundle"
+                    ? "Approve bundle"
+                    : "Approve Cut"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {cutPendingDeletion && (
+        <div
+          className="fixed inset-0 z-[1000] flex items-center justify-center bg-slate-950/50 p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-cut-title"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl">
+            <h2 id="delete-cut-title" className="text-base font-bold text-slate-900">
+              Delete all bundles for Cut {cutPendingDeletion}?
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              This deletes every active generated bundle for this Cut in one action and releases
+              their planning allocations.
+            </p>
+            {selectedCutHasActiveCoupons && (
+              <p className="mt-2 text-sm text-amber-700">
+                Coupons exist for one or more bundles in this Cut. Delete them first, then delete the bundles.
+              </p>
+            )}
+            {cutDeleteError && (
+              <p className="mt-3 rounded-lg bg-rose-50 p-3 text-sm text-rose-700">
+                {cutDeleteError}
+              </p>
+            )}
+            <div className="mt-5 flex justify-end gap-3">
+              <button
+                type="button"
+                disabled={deletingCutNo !== null}
+                onClick={() => {
+                  setCutPendingDeletion(null);
+                  setCutDeleteError("");
+                }}
+                className="rounded-lg border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={selectedCutHasActiveCoupons || deletingCutNo !== null}
+                onClick={handleDeleteCut}
+                className="rounded-lg bg-rose-600 px-4 py-2 text-sm font-semibold text-white hover:bg-rose-700 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {deletingCutNo !== null ? "Deleting…" : "Delete all bundles"}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
 
       <WorkOrderSearchModal
@@ -1352,7 +1732,7 @@ export default function OpenOrderPage() {
                   </div>
                   <div>
                     <strong>ORDER QTY:</strong>{" "}
-                    {cutDetails[0]?.Order_Qty_After_Add || ""}
+                    {styleBulletinMetadata.planQty}
                   </div>
                 </div>
               </td>

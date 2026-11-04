@@ -54,6 +54,15 @@ function productionModuleTabs(basePath: "/sewing" | "/washing" | "/finishing") {
   ];
 }
 
+const PLANNING_TABS = [
+  { label: "Cut Planning", href: "/planning/cut-planning", hasDropdown: false },
+  { label: "Cut Report", href: "/planning/cut-report", hasDropdown: false },
+];
+
+function isPlanningPath(pathname: string) {
+  return pathname === "/planning/cut-planning" || pathname === "/planning/cut-report";
+}
+
 export default function AppShell({ children }: { children: React.ReactNode }) {
   const [isIeOpen, setIsIeOpen] = useState(false); // Dropdown closed by default
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -142,20 +151,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     // screen must leave the global workspace and open that department's
     // normal starting page, including Sewing.
     if (pathname.startsWith("/trace-employees")) {
-      router.push(
-        deptId === "sewing"
-          ? "/sewing/cut-report"
-          : `/${deptId}/style-bulletin`,
-      );
+      router.push(`/${deptId}/style-bulletin`);
       return;
     }
     if (deptId === "washing" || deptId === "finishing") {
       router.push(`/${deptId}/style-bulletin`);
     } else if (
       deptId === "sewing" &&
-      (pathname.startsWith("/washing") || pathname.startsWith("/finishing"))
+      (pathname.startsWith("/washing") ||
+        pathname.startsWith("/finishing") ||
+        isPlanningPath(pathname))
     ) {
-      router.push("/sewing/cut-report");
+      router.push("/sewing/style-bulletin");
     }
   };
 
@@ -178,22 +185,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         },
       ];
     }
+    if (isPlanningPath(pathname)) {
+      return PLANNING_TABS;
+    }
     if (department === "washing" || department === "finishing") {
       return productionModuleTabs(`/${department}`);
     }
     if (department === "sewing") {
-      return [
-        {
-          label: "Cut Planning",
-          href: "/sewing/cut-planning",
-          hasDropdown: false,
-        },
-        { label: "Cut Report", href: "/sewing/cut-report", hasDropdown: false },
-        ...productionModuleTabs("/sewing"),
-      ];
+      return productionModuleTabs("/sewing");
     }
     return [];
-  }, [department, pathname, user?.isAdmin]);
+  }, [department, pathname]);
 
   return (
     <div
@@ -225,10 +227,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           className="hidden md:flex items-center justify-center flex-1 max-w-xl mx-2"
         >
           <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 gap-1 shadow-xs">
+            <Link
+              href={workOrderHref("/planning/cut-planning")}
+              className={`px-3.5 lg:px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                isPlanningPath(pathname)
+                  ? "bg-white text-[#4f46e5] shadow-xs"
+                  : "text-[#64748b] hover:text-[#0f172a] hover:bg-slate-200/50"
+              }`}
+            >
+              Planning
+            </Link>
             {departments.map((dept) => {
               const isActive =
+                department === dept.id &&
                 !pathname.startsWith("/trace-employees") &&
-                department === dept.id;
+                !isPlanningPath(pathname);
               return (
                 <button
                   key={dept.id}
@@ -311,8 +324,19 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               Manufacturing Department
             </span>
             <div className="grid grid-cols-2 gap-1.5 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+              <Link
+                href={workOrderHref("/planning/cut-planning")}
+                onClick={() => setMobileMenuOpen(false)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center justify-center transition-all ${
+                  isPlanningPath(pathname)
+                    ? "bg-white text-[#4f46e5] shadow-xs"
+                    : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Planning
+              </Link>
               {departments.map((dept) => {
-                const isActive = department === dept.id;
+                const isActive = department === dept.id && !isPlanningPath(pathname);
                 return (
                   <button
                     key={dept.id}

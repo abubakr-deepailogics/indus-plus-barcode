@@ -8,6 +8,7 @@ import {
 } from "@/features/qr-code-generation/services/coupon-registration.service";
 import { snapshotWorkOrderBulletin } from "@/features/order-style-bulletin/services/style-bulletin-snapshot.service";
 import { saveManualCouponCutDetails } from "@/features/qr-code-generation/services/manual-coupon-cut-detail.service";
+import { findUnapprovedBundleIds } from "@/features/cut-planning/services/cut-report-bundle.service";
 import {
   isCouponDepartment,
   type CouponDepartment,
@@ -106,6 +107,31 @@ export async function POST(request: Request) {
       return Response.json(
         { error: "Manual Bundle No. values must be unique." },
         { status: 400 },
+      );
+    }
+  }
+
+  // Sewing bundles come from Cut Report and must be approved there first. The
+  // client list is already filtered, but never trust it: re-check in the DB.
+  if (department === "sewing" && !manualCutDetails) {
+    try {
+      const unapproved = await findUnapprovedBundleIds(
+        workOrder,
+        selectedBundles.map((bundle) => String(bundle.bundleNo ?? "")),
+      );
+      if (unapproved.length > 0) {
+        return Response.json(
+          {
+            error: `Approve these bundles in Cut Report before generating coupons: ${unapproved.slice(0, 10).join(", ")}${unapproved.length > 10 ? ` (+${unapproved.length - 10} more)` : ""}.`,
+          },
+          { status: 409 },
+        );
+      }
+    } catch (error) {
+      console.error("Cut Report approval check failed:", error);
+      return Response.json(
+        { error: "Unable to verify Cut Report approval. Please try again." },
+        { status: 500 },
       );
     }
   }

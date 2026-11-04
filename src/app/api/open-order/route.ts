@@ -5,6 +5,7 @@ import {
   styleBulletinByFilter,
 } from "@/lib/db";
 import { isStyleBulletinDepartment } from "@/lib/department-classification";
+import { getCutPlanning } from "@/features/cut-planning/services/cut-planning.service";
 
 export const dynamic = "force-dynamic";
 
@@ -14,6 +15,9 @@ export async function GET(request: Request) {
   const department = (searchParams.get("department") || "")
     .trim()
     .toLowerCase();
+  // Coupon Generation passes approved_only=1 so unapproved Cut Report bundles
+  // stay hidden there; Cut Report itself lists every active bundle.
+  const approvedOnly = searchParams.get("approved_only") === "1";
 
   if (department && !isStyleBulletinDepartment(department)) {
     return Response.json(
@@ -62,16 +66,91 @@ export async function GET(request: Request) {
         }),
     ]);
 
+    // Sewing bundles are generated from Cut Planning in PIT. SewingCutReport
+    // is the immutable generation-time record: do not reconstruct this
+    // response from today's mutable planning rows, especially after a shade
+    // split changes visible Cut 5 into 5A/5B.
+    let generatedBundles: Array<Record<string, unknown>> = [];
+    try {
+      const pitPool = await getPool("pitSystem");
+      // Migration 053 adds these columns. Keep the Cut Report readable while
+      // that migration is being rolled out, rather than treating an old schema
+      // as if the work order had no generated bundles.
+      const softDeleteColumns = await pitPool.request().query(`
+        SELECT
+          CASE WHEN COL_LENGTH('dbo.SewingCutReport', 'IsDeleted') IS NULL THEN 0 ELSE 1 END AS HasReportSoftDelete,
+          CASE WHEN COL_LENGTH('dbo.BundleGeneration', 'IsDeleted') IS NULL THEN 0 ELSE 1 END AS HasGenerationSoftDelete,
+          CASE WHEN COL_LENGTH('dbo.SewingCutReport', 'IsApproved') IS NULL THEN 0 ELSE 1 END AS HasReportApproval
+      `);
+      const schema = softDeleteColumns.recordset[0] as {
+        HasReportSoftDelete?: number;
+        HasGenerationSoftDelete?: number;
+        HasReportApproval?: number;
+      } | undefined;
+      // Migration 056 adds approval. Before it runs, every bundle is treated as
+      // approved, matching the pre-approval behaviour.
+      const hasApproval = Number(schema?.HasReportApproval) === 1;
+      const activeBundlePredicates = [
+        Number(schema?.HasReportSoftDelete) === 1 ? "report.IsDeleted = 0" : "",
+        Number(schema?.HasGenerationSoftDelete) === 1 ? "generation.IsDeleted = 0" : "",
+        approvedOnly && hasApproval ? "report.IsApproved = 1" : "",
+      ].filter(Boolean);
+      const activeBundleWhere = activeBundlePredicates.length
+        ? `\n          AND ${activeBundlePredicates.join("\n          AND ")}`
+        : "";
+      const generatedResult = await pitPool.request().input("wo", sql.NVarChar, workOrder).query(`
+        SELECT
+          report.RowId,
+          ROW_NUMBER() OVER (ORDER BY generation.BundleSequence) AS DisplayRowId,
+          report.WorkOrder AS Work_Order,
+          report.CutNo AS Cut,
+          report.BundleId AS Bundle_Id,
+          report.BundleQty AS Bundle_Qty,
+          report.Inseam,
+          report.Size,
+          report.Color,
+          report.Shade,
+          report.Shrinkage,
+          COALESCE(coupons.ActiveCouponCount, 0) AS ActiveCouponCount,
+          ${hasApproval ? "CAST(report.IsApproved AS BIT)" : "CAST(1 AS BIT)"} AS IsApproved,
+          NULL AS MarkerWidthCm,
+          NULL AS MarkerLengthM,
+          generation.BundleSequence
+        FROM dbo.SewingCutReport AS report
+        INNER JOIN dbo.BundleGeneration AS generation
+          ON generation.Id = report.BundleGenerationId
+        LEFT JOIN (
+          SELECT BundleNo, COUNT_BIG(*) AS ActiveCouponCount
+          FROM dbo.QrCode_Coupon
+          WHERE WorkOrder = @wo
+            AND Department = 'sewing'
+            AND IsDeleted = 0
+          GROUP BY BundleNo
+        ) AS coupons
+          ON coupons.BundleNo = report.BundleId
+        WHERE report.WorkOrder = @wo
+          ${activeBundleWhere}
+        ORDER BY generation.BundleSequence
+      `);
+      generatedBundles = generatedResult.recordset;
+      if (generatedBundles.length > 0) {
+        const planning = await getCutPlanning(workOrder);
+        generatedBundles = generatedBundles.map((bundle) => {
+          return {
+            ...bundle,
+            Customer_Name: planning.metadata?.customerName ?? "",
+            Fabric_Code_Main_Body:
+              planning.metadata?.accessItems.map((item) => item.itemName).join(", ") ?? "",
+          };
+        });
+      }
+    } catch (bundleError) {
+      console.error("Generated sewing bundle lookup failed:", bundleError);
+    }
+
     // Fetch Style Bulletin Header (Metadata) — this app's own write data,
     // lives on pitSystem (see db/migrations/010_order_style_bulletin_header.sql),
     // not the read-only indusPlus/ERP connection.
-    if (department && styleBulletinResult.recordset.length === 0) {
-      return Response.json(
-        { error: "This Work Order has no operations for the selected department." },
-        { status: 404 },
-      );
-    }
-
     let metadata = null;
     try {
       const pitPool = await getPool("pitSystem");
@@ -93,7 +172,8 @@ export async function GET(request: Request) {
     }
 
     return Response.json({
-      cutDetails: cutDetailResult.recordset,
+      cutDetails:
+        department === "sewing" ? generatedBundles : cutDetailResult.recordset,
       styleBulletins: styleBulletinResult.recordset,
       metadata,
     });

@@ -7,6 +7,7 @@ import {
   getCouponCodesForPairs,
   registerCoupons,
 } from "@/features/qr-code-generation/services/coupon-registration.service";
+import { snapshotWorkOrderBulletin } from "@/features/order-style-bulletin/services/style-bulletin-snapshot.service";
 import {
   isCouponDepartment,
   type CouponDepartment,
@@ -86,13 +87,25 @@ export async function POST(request: Request) {
     // add rows. Batched (see coupon-registration.service) so thousands
     // of coupons don't mean thousands of round trips.
     const cards = buildCouponCards(selectedBundles, selectedOperations);
+    const generationId = randomUUID();
     await registerCoupons(
       pool,
       workOrder,
       cards,
       generatedBy || "system",
-      randomUUID(),
+      generationId,
       undefined,
+      department as CouponDepartment,
+    );
+    // Printing can be the first coupon-generation action. Snapshot every
+    // requested pair here, including a retry after an earlier interrupted
+    // print, so registered coupons never remain unenrichable.
+    await snapshotWorkOrderBulletin(
+      workOrder,
+      selectedOperations.map((operation) => operation.opNo),
+      selectedBundles.map((bundle) => bundle.bundleNo),
+      generatedBy || "system",
+      generationId,
       department as CouponDepartment,
     );
 

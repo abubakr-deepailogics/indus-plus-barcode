@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   useReactTable,
   getCoreRowModel,
@@ -33,6 +33,9 @@ interface DataTableProps<TData, TValue> {
   toolbarChildren?: React.ReactNode;
   toolbarRightChildren?: React.ReactNode;
   maxHeight?: string;
+  // Size the scroll area to end at the bottom of the viewport (measured from
+  // where the table actually starts) instead of using `maxHeight`.
+  fillViewport?: boolean;
   showColumnsDropdown?: boolean;
   // When provided, renders an "Export" button in the toolbar that downloads
   // the currently filtered/sorted rows (i.e. exactly what's on screen) as CSV.
@@ -49,9 +52,38 @@ export function DataTable<TData, TValue>({
   toolbarChildren,
   toolbarRightChildren,
   maxHeight = "max-h-[370px]",
+  fillViewport = false,
   showColumnsDropdown = true,
   csv,
 }: DataTableProps<TData, TValue>) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [viewportHeight, setViewportHeight] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (!fillViewport) return;
+    const update = () => {
+      const scrollArea = scrollRef.current;
+      if (!scrollArea) return;
+      // Document-relative top so the result doesn't depend on page scroll.
+      const top = scrollArea.getBoundingClientRect().top + window.scrollY;
+      const bottomGap = 24;
+      setViewportHeight(
+        Math.max(240, Math.floor(window.innerHeight - top - bottomGap)),
+      );
+    };
+    update();
+    // Toolbar/filter panel changes above the table move its top edge.
+    const observer = new ResizeObserver(update);
+    if (scrollRef.current?.parentElement?.parentElement) {
+      observer.observe(scrollRef.current.parentElement.parentElement);
+    }
+    window.addEventListener("resize", update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("resize", update);
+    };
+    // isLoading swaps in the skeleton (no scroll area), so re-measure after it.
+  }, [fillViewport, isLoading]);
   const [sorting, setSorting] = useState<SortingState>([]);
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({});
   const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]);
@@ -265,7 +297,11 @@ export function DataTable<TData, TValue>({
 
       <div className="bg-white border border-[#e2e8f0] rounded-2xl shadow-sm overflow-hidden">
         {/* Directly define the vertical scrollable viewport without wrapper divs that block sticky positioning */}
-        <div className={`overflow-auto ${maxHeight}`}>
+        <div
+          ref={scrollRef}
+          className={`overflow-auto ${fillViewport ? "" : maxHeight}`}
+          style={fillViewport && viewportHeight != null ? { maxHeight: viewportHeight } : undefined}
+        >
           <table 
             className="text-left border-collapse min-w-max text-xs text-[#334155]"
             style={{

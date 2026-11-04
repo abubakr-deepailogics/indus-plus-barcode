@@ -139,6 +139,14 @@ async function fetchBundleQtyByWorkOrder(
             AND WorkOrder IN (${inClause})
           GROUP BY WorkOrder
         `)
+      : department === "sewing"
+        ? await req.query(`
+          SELECT WorkOrder, SUM(BundleQty) AS BundleQty
+          FROM dbo.SewingCutReport
+          WHERE IsDeleted = 0
+            AND WorkOrder IN (${inClause})
+          GROUP BY WorkOrder
+        `)
       : // The snapshot is append-only — every coupon generation inserts a
         // fresh row per bundle and older ones aren't always soft-deleted —
         // so sum only the latest row per (work order, bundle), same as
