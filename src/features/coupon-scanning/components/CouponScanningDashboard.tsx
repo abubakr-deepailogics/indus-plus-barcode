@@ -5,7 +5,6 @@ import { useCouponScanning } from "@/features/coupon-scanning/hooks/useCouponSca
 import { InformationPanel } from "@/features/coupon-scanning/components/InformationPanel";
 import { ScanningDetailsTable } from "@/features/coupon-scanning/components/ScanningDetailsTable";
 import { ScanModals } from "@/features/coupon-scanning/components/ScanModals";
-import { useConfirmNavigation } from "@/lib/use-confirm-navigation";
 import { useAuth } from "@/features/auth/context/auth-context";
 import { format } from "date-fns";
 import { ScanLine } from "lucide-react";
@@ -16,10 +15,6 @@ export function CouponScanningDashboard() {
   const { can } = useAuth();
   const canScan = can("coupon-scanning", "create");
 
-  useConfirmNavigation(
-    true,
-    "Are you sure you want to leave the Coupon Scanning page? Any unsaved scanning data will be lost.",
-  );
   const {
     employeeCode,
     employeeName,

@@ -26,14 +26,15 @@ export function ScanningDetailsTable(props: Facade) {
     checkingAttendance,
   } = props;
 
-  // Sequential flow: Employee Code -> Dated -> attendance check
+  // Sequential flow: Dated -> Employee Code -> attendance check
   // (InformationPanel) -> this scanner field. All three must hold before a
   // scan means anything (who scanned it, when, and that they were actually
   // present that day), so this field stays disabled until they do. Each
   // step can only ever be reached after the one before it is already
   // satisfied (they're gated the same way, in InformationPanel), so the
-  // hand-off to this field is triggered from there — on the Dated input's
-  // blur, or an explicit calendar pick — not from a reactive effect here.
+  // hand-off to this field is triggered from there — on selecting an
+  // employee, or committing a Dated change while one is already selected —
+  // not from a reactive effect here.
   // An effect keyed on this "ready" boolean fires the instant a
   // still-being-typed date happens to parse as valid, stealing focus out
   // of the Dated field mid-keystroke; committing the hand-off only where
@@ -162,10 +163,10 @@ export function ScanningDetailsTable(props: Facade) {
           type="text"
           autoComplete="off"
           placeholder={
-            !isEmployeeCodeFilled
-              ? "Select an Employee Code first"
-              : !dated
-                ? "Enter a Date first"
+            !dated
+              ? "Enter a Date first"
+              : !isEmployeeCodeFilled
+                ? "Select an Employee Code first"
                 : checkingAttendance
                   ? "Checking attendance…"
                   : isEmployeePresent === false
