@@ -422,14 +422,19 @@ export interface CouponListFilters {
 // exact matches (section comes from a dropdown of distinct values, see
 // /api/coupons/suggestions?type=section). Applies the same inputs+conditions
 // to whichever request object is passed in, so paginated and full-set
-// queries stay in sync.
+// queries stay in sync. An empty workOrder searches every work order
+// (Coupon Tracing's cross-work-order lookup) — only use it with paginated
+// queries, never listAllCoupons.
 function applyCouponFilters(
   request: sql.Request,
   workOrder: string,
   filters: CouponListFilters,
 ) {
-  const conditions = ["c.WorkOrder = @workOrder", "c.IsDeleted = 0"];
-  request.input("workOrder", sql.NVarChar, workOrder);
+  const conditions = ["c.IsDeleted = 0"];
+  if (workOrder) {
+    conditions.push("c.WorkOrder = @workOrder");
+    request.input("workOrder", sql.NVarChar, workOrder);
+  }
   if (filters.department) {
     conditions.push("c.Department = @department");
     request.input("department", sql.NVarChar, filters.department);
@@ -483,29 +488,40 @@ function applyCouponFilters(
 // These fetch each side separately and get merged into the coupon rows in
 // JS instead.
 
-// A work order's whole bulletin is small (one op list), so this is one
-// query regardless of how many coupon rows are being paged/listed.
+const opNameKey = (workOrder: string, opNo: string) =>
+  `${workOrder}|${opNo}`;
+
+// Op names keyed by work order + op code — the same op code can carry a
+// different name on another work order's bulletin, and a cross-work-order
+// listing mixes several. Callers pass the distinct work orders of the rows
+// being returned (at most one page's worth, or the one traced work order).
 async function fetchOpNamesByOpNo(
-  workOrder: string,
+  workOrders: string[],
   department: CouponDepartment = "sewing",
 ): Promise<Map<string, string>> {
+  if (workOrders.length === 0) return new Map();
   const pool = await getPool("pitSystem");
-  const result = await pool.request()
-    .input("wo", sql.NVarChar, workOrder)
-    .input("department", sql.NVarChar, department)
-    .query(`
+  const request = pool.request().input("department", sql.NVarChar, department);
+  const woParams = workOrders.map((wo, i) => {
+    request.input(`wo${i}`, sql.NVarChar, wo);
+    return `@wo${i}`;
+  });
+  const result = await request.query(`
       WITH Latest AS (
-        SELECT [Operation Code] AS OpNo, [Operation Name] AS OpName,
+        SELECT [Order No] AS WorkOrder, [Operation Code] AS OpNo, [Operation Name] AS OpName,
           ROW_NUMBER() OVER (
-            PARTITION BY [Operation Code] ORDER BY InsertedAt DESC
+            PARTITION BY [Order No], [Operation Code] ORDER BY InsertedAt DESC
           ) AS rn
         FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
-        WHERE [Order No] = @wo AND Department = @department AND IsDeleted = 0
+        WHERE [Order No] IN (${woParams.join(", ")}) AND Department = @department AND IsDeleted = 0
       )
-      SELECT OpNo, OpName FROM Latest WHERE rn = 1
+      SELECT WorkOrder, OpNo, OpName FROM Latest WHERE rn = 1
     `);
   return new Map(
-    result.recordset.map((r) => [r.OpNo as string, r.OpName as string]),
+    result.recordset.map((r) => [
+      opNameKey(r.WorkOrder as string, r.OpNo as string),
+      r.OpName as string,
+    ]),
   );
 }
 
@@ -514,6 +530,10 @@ async function fetchOpNamesByOpNo(
 // never get close, but listAllCoupons is unpaginated so this stays correct
 // even if it did.
 const EMPLOYEE_CODE_CHUNK_SIZE = 500;
+
+function distinctWorkOrders(rows: { WorkOrder: string }[]): string[] {
+  return [...new Set(rows.map((row) => row.WorkOrder).filter(Boolean))];
+}
 
 function distinctEmployeeCodes(
   rows: { EmployeeCode?: string | null }[],
@@ -547,14 +567,16 @@ async function fetchEmployeeNamesById(
   return names;
 }
 
-function attachNames<T extends { OpNo: string; EmployeeCode?: string | null }>(
+function attachNames<
+  T extends { WorkOrder: string; OpNo: string; EmployeeCode?: string | null },
+>(
   rows: T[],
   opNames: Map<string, string>,
   employeeNames: Map<number, string>,
 ): (T & { OpName: string | null; EmployeeName: string | null })[] {
   return rows.map((row) => ({
     ...row,
-    OpName: opNames.get(row.OpNo) ?? null,
+    OpName: opNames.get(opNameKey(row.WorkOrder, row.OpNo)) ?? null,
     EmployeeName: row.EmployeeCode
       ? (employeeNames.get(Number(row.EmployeeCode)) ?? null)
       : null,
@@ -577,7 +599,7 @@ export async function listCoupons(
   const countRequest = pool.request();
   applyCouponFilters(countRequest, workOrder, filters);
 
-  const [dataResult, countResult, opNames] = await Promise.all([
+  const [dataResult, countResult] = await Promise.all([
     request
       .input("offset", sql.Int, (page - 1) * pageSize)
       .input("pageSize", sql.Int, pageSize).query(`
@@ -587,17 +609,20 @@ export async function listCoupons(
           c.ScannedAt, c.SystemScannedAt
         FROM dbo.QrCode_Coupon c
         WHERE ${where}
-        ORDER BY c.CouponCode
+        ORDER BY c.WorkOrder, c.CouponCode
         OFFSET @offset ROWS FETCH NEXT @pageSize ROWS ONLY
       `),
     countRequest.query(
       `SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon c WHERE ${where}`,
     ),
-    fetchOpNamesByOpNo(workOrder, filters.department),
   ]);
-  const employeeNames = await fetchEmployeeNamesById(
-    distinctEmployeeCodes(dataResult.recordset),
-  );
+  const [opNames, employeeNames] = await Promise.all([
+    fetchOpNamesByOpNo(
+      distinctWorkOrders(dataResult.recordset),
+      filters.department,
+    ),
+    fetchEmployeeNamesById(distinctEmployeeCodes(dataResult.recordset)),
+  ]);
   return {
     rows: attachNames(dataResult.recordset, opNames, employeeNames),
     total: countResult.recordset[0].total,
@@ -623,7 +648,7 @@ export async function listAllCoupons(
       WHERE ${where}
       ORDER BY c.CouponCode
     `),
-    fetchOpNamesByOpNo(workOrder, filters.department),
+    fetchOpNamesByOpNo(workOrder ? [workOrder] : [], filters.department),
   ]);
   const employeeNames = await fetchEmployeeNamesById(
     distinctEmployeeCodes(result.recordset),

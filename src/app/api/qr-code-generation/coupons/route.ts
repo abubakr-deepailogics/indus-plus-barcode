@@ -209,8 +209,10 @@ export async function POST(request: Request) {
   });
 }
 
-// Paginated list of a work order's registered coupons — a work order can
-// have thousands, so this is always page-scoped, never a full dump.
+// Paginated list of registered coupons — a work order can have thousands,
+// so this is always page-scoped, never a full dump. Without work_order it
+// lists every work order's coupons (Coupon Tracing's default view); cut/
+// bundle ranges are per-work-order numbering, so they still require one.
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = searchParams.get("work_order") || "";
@@ -232,8 +234,11 @@ export async function GET(request: Request) {
     .trim()
     .toLowerCase();
 
-  if (!workOrder) {
-    return Response.json({ error: "work_order is required." }, { status: 400 });
+  if (!workOrder && (fromBundle || toBundle || fromCut || toCut)) {
+    return Response.json(
+      { error: "Cut and bundle ranges require a work_order." },
+      { status: 400 },
+    );
   }
   if (!isCouponDepartment(department)) {
     return Response.json(

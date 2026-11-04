@@ -2,7 +2,13 @@
 
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import React, { useCallback, useState, useEffect, useMemo } from "react";
+import React, {
+  useCallback,
+  useState,
+  useEffect,
+  useMemo,
+  useRef,
+} from "react";
 import {
   Search,
   Download,
@@ -13,6 +19,7 @@ import {
   X,
   Eraser,
   SlidersHorizontal,
+  ClipboardList,
 } from "lucide-react";
 import { format } from "date-fns";
 import { printPdf } from "@/lib/print";
@@ -69,13 +76,27 @@ const SCANNED_OPTIONS = [
   { value: "false", label: "Not scanned" },
 ] as const;
 
+const EMPTY_DRAFT_FILTER = {
+  workOrder: "",
+  fromBundle: "",
+  toBundle: "",
+  opNo: "",
+  section: "",
+  scanned: "" as (typeof SCANNED_OPTIONS)[number]["value"],
+  fromCut: "",
+  toCut: "",
+  employeeCode: "",
+  employeeName: "",
+};
+
 export default function CouponTracingPage() {
   const { department } = useDepartment();
   const [errorMsg, setErrorMsg] = useState("");
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
 
-  // Individual coupons for the traced work order — always fetched one page
-  // at a time (a work order can have thousands of coupons).
+  // Coupons for the traced work order, or — when no work order is picked —
+  // every work order matching the other filters. Always fetched one page at
+  // a time (a work order alone can have thousands of coupons).
   const [tracedWorkOrder, setTracedWorkOrder] = useState("");
   const [coupons, setCoupons] = useState<CouponRow[]>([]);
   const [couponTotal, setCouponTotal] = useState(0);
@@ -96,20 +117,14 @@ export default function CouponTracingPage() {
   const [showCodeTypeModal, setShowCodeTypeModal] = useState(false);
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
-  // Draft copy of the filter fields, edited while the modal is open — the
-  // real (applied) filters above only change when "Apply Filters" is
-  // clicked, so typing/picking in the modal never re-queries the table.
-  const [draftFilter, setDraftFilter] = useState({
-    fromBundle: "",
-    toBundle: "",
-    opNo: "",
-    section: "",
-    scanned: "" as (typeof SCANNED_OPTIONS)[number]["value"],
-    fromCut: "",
-    toCut: "",
-    employeeCode: "",
-    employeeName: "",
-  });
+  // Draft copy of the filter fields (work order included), edited while the
+  // modal is open — the real (applied) filters above only change when
+  // "Apply Filters" is clicked, so typing/picking in the modal never
+  // re-queries the table.
+  const [draftFilter, setDraftFilter] = useState(EMPTY_DRAFT_FILTER);
+  // Ignores responses from superseded fetches (filters changed or page
+  // flipped while an earlier request was still in flight).
+  const couponRequestIdRef = useRef(0);
   const [selectedCoupons, setSelectedCoupons] = useState<Set<string>>(
     new Set(),
   );
@@ -145,10 +160,11 @@ export default function CouponTracingPage() {
   const fetchOpSuggestions = async (
     query: string,
   ): Promise<OperationSuggestion[]> => {
-    if (!tracedWorkOrder) return [];
+    const workOrder = draftFilter.workOrder;
+    if (!workOrder) return [];
     try {
       const response = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=operation&query=${encodeURIComponent(query)}&only_generated=true&department=${encodeURIComponent(department)}`,
+        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=operation&query=${encodeURIComponent(query)}&only_generated=true&department=${encodeURIComponent(department)}`,
       );
       if (response.ok) {
         return await response.json();
@@ -160,10 +176,11 @@ export default function CouponTracingPage() {
   };
 
   const fetchBundleSuggestions = async (query: string): Promise<string[]> => {
-    if (!tracedWorkOrder) return [];
+    const workOrder = draftFilter.workOrder;
+    if (!workOrder) return [];
     try {
       const response = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(tracedWorkOrder)}&type=bundle&query=${encodeURIComponent(query)}&only_generated=true&department=${encodeURIComponent(department)}`,
+        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=bundle&query=${encodeURIComponent(query)}&only_generated=true&department=${encodeURIComponent(department)}`,
       );
       if (response.ok) {
         return await response.json();
@@ -174,74 +191,76 @@ export default function CouponTracingPage() {
     return [];
   };
 
-  const fetchSectionOptions = async (workOrder: string) => {
-    if (!workOrder) {
-      setSectionOptions([]);
-      return;
-    }
-    try {
-      const response = await fetch(
-        `/api/coupons/suggestions?wo=${encodeURIComponent(workOrder)}&type=section&department=${encodeURIComponent(department)}`,
-      );
-      setSectionOptions(response.ok ? await response.json() : []);
-    } catch (err) {
-      console.error("Section suggestions fetch error:", err);
-      setSectionOptions([]);
-    }
-  };
-
-  const fetchCoupons = async (workOrder: string, page: number) => {
-    setCouponsLoading(true);
-    setErrorMsg("");
-    try {
-      const params = new URLSearchParams({
-        work_order: workOrder,
-        page: String(page),
-        page_size: String(COUPON_PAGE_SIZE),
-        department,
-      });
+  // Cut and bundle numbers restart per work order, so those ranges only
+  // apply (and are only sent) while a work order is traced.
+  // Applied filters as query params — shared by the table, CSV export and
+  // PDF so all three always describe the same coupon set.
+  const filterQuery = useMemo(() => {
+    const params = new URLSearchParams({ department });
+    if (tracedWorkOrder) {
+      params.set("work_order", tracedWorkOrder);
       if (fromBundleFilter.trim())
         params.set("from_bundle", fromBundleFilter.trim());
       if (toBundleFilter.trim()) params.set("to_bundle", toBundleFilter.trim());
-      if (opFilter.trim()) params.set("op_no", opFilter.trim());
-      if (sectionFilter) params.set("section", sectionFilter);
-      if (scannedFilter) params.set("is_scanned", scannedFilter);
       if (fromCutFilter.trim()) params.set("from_cut", fromCutFilter.trim());
       if (toCutFilter.trim()) params.set("to_cut", toCutFilter.trim());
-      if (employeeFilter.trim())
-        params.set("employee_code", employeeFilter.trim());
-      const res = await fetch(`/api/qr-code-generation/coupons?${params}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed to load coupons.");
-      setCoupons(data.coupons || []);
-      setCouponTotal(data.total || 0);
-    } catch (err) {
-      setErrorMsg(
-        err instanceof Error ? err.message : "An unexpected error occurred.",
-      );
-      setCoupons([]);
-      setCouponTotal(0);
-    } finally {
-      setCouponsLoading(false);
     }
-  };
+    if (opFilter.trim()) params.set("op_no", opFilter.trim());
+    if (sectionFilter) params.set("section", sectionFilter);
+    if (scannedFilter) params.set("is_scanned", scannedFilter);
+    if (employeeFilter.trim())
+      params.set("employee_code", employeeFilter.trim());
+    return params.toString();
+  }, [
+    department,
+    tracedWorkOrder,
+    fromBundleFilter,
+    toBundleFilter,
+    fromCutFilter,
+    toCutFilter,
+    opFilter,
+    sectionFilter,
+    scannedFilter,
+    employeeFilter,
+  ]);
 
+  const fetchCoupons = useCallback(
+    async (page: number) => {
+      const requestId = ++couponRequestIdRef.current;
+      setCouponsLoading(true);
+      setErrorMsg("");
+      try {
+        const params = new URLSearchParams(filterQuery);
+        params.set("page", String(page));
+        params.set("page_size", String(COUPON_PAGE_SIZE));
+        const res = await fetch(`/api/qr-code-generation/coupons?${params}`);
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok) throw new Error(data.error || "Failed to load coupons.");
+        if (requestId !== couponRequestIdRef.current) return;
+        setCoupons(data.coupons || []);
+        setCouponTotal(data.total || 0);
+      } catch (err) {
+        if (requestId !== couponRequestIdRef.current) return;
+        setErrorMsg(
+          err instanceof Error ? err.message : "An unexpected error occurred.",
+        );
+        setCoupons([]);
+        setCouponTotal(0);
+      } finally {
+        if (requestId === couponRequestIdRef.current) setCouponsLoading(false);
+      }
+    },
+    [filterQuery],
+  );
+
+  // Switching to a different work order (or none) drops the cut/bundle
+  // ranges, which only mean something within one work order.
   const runTrace = (workOrder: string) => {
     setTracedWorkOrder(workOrder);
-    setCouponPage(1);
     setFromCutFilter("");
     setToCutFilter("");
     setFromBundleFilter("");
     setToBundleFilter("");
-    setEmployeeFilter("");
-    setEmployeeFilterName("");
-    setSelectedCoupons(new Set());
-    fetchSectionOptions(workOrder);
-    if (workOrder) fetchCoupons(workOrder, 1);
-    else {
-      setCoupons([]);
-      setCouponTotal(0);
-    }
   };
 
   // Shared Work Order search: seeds this page's trace from the global/URL
@@ -255,6 +274,8 @@ export default function CouponTracingPage() {
     runTrace(workOrder);
     setWorkOrder(workOrder);
   };
+
+  const clearTracedWorkOrder = () => commitTrace("");
 
   const toggleCouponSelection = (couponCode: string) => {
     setSelectedCoupons((prev) => {
@@ -371,7 +392,7 @@ export default function CouponTracingPage() {
   // has to walk every page matching the current filters rather than just
   // dumping whatever page is on screen.
   const handleExportCsv = useCallback(async () => {
-    if (!tracedWorkOrder || couponTotal === 0) return;
+    if (couponTotal === 0) return;
 
     const pageSize = 200;
     const totalPages = Math.max(1, Math.ceil(couponTotal / pageSize));
@@ -379,33 +400,20 @@ export default function CouponTracingPage() {
 
     try {
       for (let page = 1; page <= totalPages; page++) {
-        const params = new URLSearchParams({
-          work_order: tracedWorkOrder,
-          page: String(page),
-          page_size: String(pageSize),
-          department,
-        });
-        if (fromBundleFilter.trim())
-          params.set("from_bundle", fromBundleFilter.trim());
-        if (toBundleFilter.trim())
-          params.set("to_bundle", toBundleFilter.trim());
-        if (opFilter.trim()) params.set("op_no", opFilter.trim());
-        if (sectionFilter) params.set("section", sectionFilter);
-        if (scannedFilter) params.set("is_scanned", scannedFilter);
-        if (fromCutFilter.trim()) params.set("from_cut", fromCutFilter.trim());
-        if (toCutFilter.trim()) params.set("to_cut", toCutFilter.trim());
-        if (employeeFilter.trim())
-          params.set("employee_code", employeeFilter.trim());
+        const params = new URLSearchParams(filterQuery);
+        params.set("page", String(page));
+        params.set("page_size", String(pageSize));
         const res = await fetch(`/api/qr-code-generation/coupons?${params}`);
-        const data = await res.json();
+        const data = await res.json().catch(() => ({}));
         if (!res.ok)
           throw new Error(data.error || "Failed to load coupons for export.");
         allCoupons.push(...(data.coupons || []));
       }
 
       downloadCsv(
-        `coupon-tracing-${tracedWorkOrder}`,
+        `coupon-tracing-${tracedWorkOrder || "all-work-orders"}`,
         [
+          "Work Order",
           "Cut No",
           "Bundle No",
           "Section",
@@ -418,6 +426,7 @@ export default function CouponTracingPage() {
           "Created At",
         ],
         allCoupons.map((c) => [
+          c.WorkOrder,
           c.CutNo || "",
           c.BundleNo,
           c.Section || "",
@@ -435,19 +444,7 @@ export default function CouponTracingPage() {
         err instanceof Error ? err.message : "Failed to export coupons.",
       );
     }
-  }, [
-    tracedWorkOrder,
-    couponTotal,
-    fromBundleFilter,
-    toBundleFilter,
-    opFilter,
-    sectionFilter,
-    scannedFilter,
-    fromCutFilter,
-    toCutFilter,
-    employeeFilter,
-    department,
-  ]);
+  }, [couponTotal, filterQuery, tracedWorkOrder]);
 
   const couponPageCount = Math.max(
     1,
@@ -455,6 +452,7 @@ export default function CouponTracingPage() {
   );
 
   const activeFilterCount = [
+    tracedWorkOrder,
     fromBundleFilter.trim(),
     toBundleFilter.trim(),
     opFilter.trim(),
@@ -496,6 +494,7 @@ export default function CouponTracingPage() {
 
   const openFiltersModal = () => {
     setDraftFilter({
+      workOrder: tracedWorkOrder,
       fromBundle: fromBundleFilter,
       toBundle: toBundleFilter,
       opNo: opFilter,
@@ -509,34 +508,49 @@ export default function CouponTracingPage() {
     setShowFilters(true);
   };
 
+  // Picking (or clearing) the draft work order resets the fields tied to
+  // the previous one: cut/bundle ranges, and the section, whose options are
+  // reloaded for the new scope.
+  const setDraftWorkOrder = (workOrder: string) => {
+    setDraftFilter((prev) =>
+      prev.workOrder === workOrder
+        ? prev
+        : {
+            ...prev,
+            workOrder,
+            fromBundle: "",
+            toBundle: "",
+            fromCut: "",
+            toCut: "",
+            section: "",
+          },
+    );
+  };
+
   const applyDraftFilters = () => {
-    setFromBundleFilter(draftFilter.fromBundle);
-    setToBundleFilter(draftFilter.toBundle);
+    const workOrder = draftFilter.workOrder.trim();
+    if (workOrder !== tracedWorkOrder) {
+      setTracedWorkOrder(workOrder);
+      setWorkOrder(workOrder);
+    }
+    setFromBundleFilter(workOrder ? draftFilter.fromBundle : "");
+    setToBundleFilter(workOrder ? draftFilter.toBundle : "");
+    setFromCutFilter(workOrder ? draftFilter.fromCut : "");
+    setToCutFilter(workOrder ? draftFilter.toCut : "");
     setOpFilter(draftFilter.opNo);
     setSectionFilter(draftFilter.section);
     setScannedFilter(draftFilter.scanned);
-    setFromCutFilter(draftFilter.fromCut);
-    setToCutFilter(draftFilter.toCut);
     setEmployeeFilter(draftFilter.employeeCode);
     setEmployeeFilterName(draftFilter.employeeName);
     setShowFilters(false);
   };
 
   const clearDraftFilters = () => {
-    setDraftFilter({
-      fromBundle: "",
-      toBundle: "",
-      opNo: "",
-      section: "",
-      scanned: "",
-      fromCut: "",
-      toCut: "",
-      employeeCode: "",
-      employeeName: "",
-    });
+    setDraftFilter(EMPTY_DRAFT_FILTER);
   };
 
   const draftFilterCount = [
+    draftFilter.workOrder,
     draftFilter.fromBundle.trim(),
     draftFilter.toBundle.trim(),
     draftFilter.opNo.trim(),
@@ -547,9 +561,40 @@ export default function CouponTracingPage() {
     draftFilter.employeeCode.trim(),
   ].filter(Boolean).length;
 
+
+  // Section options follow the modal's draft work order — that order's
+  // sections, or every section in the department when none is picked.
+  useEffect(() => {
+    if (!showFilters) return;
+    let cancelled = false;
+    const params = new URLSearchParams({ type: "section", department });
+    if (draftFilter.workOrder) params.set("wo", draftFilter.workOrder);
+    fetch(`/api/coupons/suggestions?${params}`)
+      .then((response) => (response.ok ? response.json() : []))
+      .then((sections: string[]) => {
+        if (!cancelled) setSectionOptions(sections);
+      })
+      .catch((err) => {
+        console.error("Section suggestions fetch error:", err);
+        if (!cancelled) setSectionOptions([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [showFilters, draftFilter.workOrder, department]);
+
+  // Print, selection and Unscan / Delete act on one work order's coupons
+  // only; a cross-work-order listing is read-only (view + CSV export).
+  const canActOnCoupons =
+    Boolean(tracedWorkOrder) &&
+    can("coupon-tracing-unscan", "create") &&
+    can("coupon-tracing", "delete");
+  const tableColumnCount =
+    10 + (canActOnCoupons ? 1 : 0) + (tracedWorkOrder ? 0 : 1);
+
   const goToCouponPage = (page: number) => {
     setCouponPage(page);
-    fetchCoupons(tracedWorkOrder, page);
+    fetchCoupons(page);
   };
 
   // Same filters as the table, sent straight to the PDF route — no filter
@@ -557,56 +602,20 @@ export default function CouponTracingPage() {
   // the PDF on request; nothing is generated or stored ahead of the click.
   const couponPdfUrl = useMemo(() => {
     if (!tracedWorkOrder) return "";
-    const params = new URLSearchParams({
-      work_order: tracedWorkOrder,
-      department,
-    });
-    if (fromBundleFilter.trim())
-      params.set("from_bundle", fromBundleFilter.trim());
-    if (toBundleFilter.trim()) params.set("to_bundle", toBundleFilter.trim());
-    if (opFilter.trim()) params.set("op_no", opFilter.trim());
-    if (sectionFilter) params.set("section", sectionFilter);
-    if (scannedFilter) params.set("is_scanned", scannedFilter);
-    if (fromCutFilter.trim()) params.set("from_cut", fromCutFilter.trim());
-    if (toCutFilter.trim()) params.set("to_cut", toCutFilter.trim());
-    if (employeeFilter.trim())
-      params.set("employee_code", employeeFilter.trim());
+    const params = new URLSearchParams(filterQuery);
     params.set("layout", pageSetup.layout);
     if (pageSetup.codeType) params.set("code_type", pageSetup.codeType);
     return `/api/qr-code-generation/coupons/pdf?${params}`;
-  }, [
-    tracedWorkOrder,
-    department,
-    fromBundleFilter,
-    toBundleFilter,
-    opFilter,
-    sectionFilter,
-    scannedFilter,
-    fromCutFilter,
-    toCutFilter,
-    employeeFilter,
-    pageSetup.layout,
-    pageSetup.codeType,
-  ]);
+  }, [tracedWorkOrder, filterQuery, pageSetup.layout, pageSetup.codeType]);
 
-  // Any filter change re-queries from page 1 — old page N may no longer
-  // exist once the row count shrinks.
+  // Any work order/filter change re-queries from page 1 — old page N may no
+  // longer exist once the row count shrinks. With nothing selected this
+  // lists every generated coupon across all work orders (paginated).
   useEffect(() => {
-    if (!tracedWorkOrder) return;
     setCouponPage(1);
     setSelectedCoupons(new Set());
-    fetchCoupons(tracedWorkOrder, 1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    fromBundleFilter,
-    toBundleFilter,
-    opFilter,
-    sectionFilter,
-    scannedFilter,
-    fromCutFilter,
-    toCutFilter,
-    employeeFilter,
-  ]);
+    fetchCoupons(1);
+  }, [fetchCoupons]);
 
   return (
     <RequirePermission pageKey="coupon-tracing">
@@ -617,21 +626,40 @@ export default function CouponTracingPage() {
           detail="Work-order history, scan status and coupon actions"
           icon={Search}
           accent="indigo"
+          actions={
+            <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+              {tracedWorkOrder && (
+                <span className="inline-flex max-w-full items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 py-1.5 pl-3 pr-1.5 text-xs font-semibold text-indigo-800">
+                  <ClipboardList className="size-3.5 shrink-0" />
+                  <span className="truncate">W/O {tracedWorkOrder}</span>
+                  <button
+                    type="button"
+                    onClick={clearTracedWorkOrder}
+                    title="Unselect work order"
+                    aria-label="Unselect work order"
+                    className="flex size-5 shrink-0 items-center justify-center rounded-lg text-indigo-500 transition-colors hover:bg-indigo-100 hover:text-indigo-800"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                </span>
+              )}
+              <button
+                type="button"
+                onClick={openFiltersModal}
+                title="Work order and coupon filters"
+                className="inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition-all hover:bg-indigo-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/40"
+              >
+                <SlidersHorizontal className="size-4" />
+                Filters
+                {activeFilterCount > 0 && (
+                  <span className="inline-flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1.5 text-[10px] font-black text-indigo-700">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+            </div>
+          }
         />
-        <div className="rounded-2xl border border-slate-200/80 bg-white p-4 shadow-sm md:p-5">
-          <div className="flex items-stretch gap-3">
-            <button
-              type="button"
-              onClick={() => setShowWorkOrderModal(true)}
-              className="relative flex-grow text-left cursor-pointer"
-            >
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-              <span className="block w-full truncate rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-xs font-semibold text-slate-800 transition-colors hover:border-indigo-500">
-                {tracedWorkOrder || "Search Work Order..."}
-              </span>
-            </button>
-          </div>
-        </div>
 
         {errorMsg && (
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-2xl p-4 text-xs font-semibold">
@@ -639,20 +667,22 @@ export default function CouponTracingPage() {
           </div>
         )}
 
-        {/* Individual coupons generated for the traced work order — server-
-          paginated (page/page_size against IX_QrCode_Coupon_WorkOrder) so
-          a work order with thousands of coupons never loads them all at
-          once. */}
-        {tracedWorkOrder && (
-          <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-4 py-3.5 md:px-5">
-              <h3 className="text-sm font-semibold text-slate-900">
-                Coupons for {tracedWorkOrder}
-              </h3>
-              <div className="flex items-center gap-3">
-                <span className="text-[11px] font-semibold text-slate-500">
-                  {couponTotal.toLocaleString()} total
-                </span>
+        {/* Coupons for the traced work order, or across every work order
+          when none is picked — server-paginated so thousands of coupons
+          never load at once. Print and Unscan / Delete stay scoped to a
+          single work order. */}
+        <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
+          <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-4 py-3.5 md:px-5">
+            <h3 className="text-sm font-semibold text-slate-900">
+              {tracedWorkOrder
+                ? `Coupons for ${tracedWorkOrder}`
+                : "Coupons across all work orders"}
+            </h3>
+            <div className="flex items-center gap-3">
+              <span className="text-[11px] font-semibold text-slate-500">
+                {couponTotal.toLocaleString()} total
+              </span>
+              {tracedWorkOrder && (
                 <button
                   onClick={() => setShowCodeTypeModal(true)}
                   disabled={couponTotal === 0}
@@ -665,54 +695,37 @@ export default function CouponTracingPage() {
                   <Download className="w-3.5 h-3.5" />
                   Print
                 </button>
-                <CsvExportButton
-                  onExport={handleExportCsv}
-                  disabled={couponTotal === 0}
-                />
-                <button
-                  type="button"
-                  onClick={openFiltersModal}
-                  title="Show coupon filters"
-                  className={`relative flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold text-xs border transition-all ${
-                    activeFilterCount > 0
-                      ? "bg-indigo-50 text-indigo-700 border-indigo-200 hover:bg-indigo-100"
-                      : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
-                  }`}
-                >
-                  <SlidersHorizontal className="w-3.5 h-3.5" />
-                  Filter
-                  {activeFilterCount > 0 && (
-                    <span className="ml-0.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-indigo-600 px-1 text-[9px] font-black text-white">
-                      {activeFilterCount}
-                    </span>
-                  )}
-                </button>
-                {can("coupon-tracing-unscan", "create") &&
-                  can("coupon-tracing", "delete") && (
-                    <button
-                      onClick={() => setShowDeleteModal(true)}
-                      title={
-                        selectedCoupons.size > 0
-                          ? "Unscan or delete the selected coupons"
-                          : "Unscan or delete coupons matching the active filters"
-                      }
-                      className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold text-xs bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 transition-all"
-                    >
-                      <Eraser className="w-3.5 h-3.5" />
-                      Unscan / Delete
-                      {selectedCoupons.size > 0 && (
-                        <span className="ml-0.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-amber-600 px-1 text-[9px] font-black text-white">
-                          {selectedCoupons.size}
-                        </span>
-                      )}
-                    </button>
-                  )}
-              </div>
+              )}
+              <CsvExportButton
+                onExport={handleExportCsv}
+                disabled={couponTotal === 0}
+              />
+              {canActOnCoupons && (
+                  <button
+                    onClick={() => setShowDeleteModal(true)}
+                    title={
+                      selectedCoupons.size > 0
+                        ? "Unscan or delete the selected coupons"
+                        : "Unscan or delete coupons matching the active filters"
+                    }
+                    className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl font-semibold text-xs bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200 transition-all"
+                  >
+                    <Eraser className="w-3.5 h-3.5" />
+                    Unscan / Delete
+                    {selectedCoupons.size > 0 && (
+                      <span className="ml-0.5 inline-flex min-w-4 h-4 items-center justify-center rounded-full bg-amber-600 px-1 text-[9px] font-black text-white">
+                        {selectedCoupons.size}
+                      </span>
+                    )}
+                  </button>
+                )}
             </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50/80 border-b border-slate-200">
-                  <tr>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead className="bg-slate-50/80 border-b border-slate-200">
+                <tr>
+                  {canActOnCoupons && (
                     <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center w-8">
                       <input
                         type="checkbox"
@@ -727,163 +740,170 @@ export default function CouponTracingPage() {
                         className="w-3.5 h-3.5 rounded border-slate-300 accent-indigo-600 cursor-pointer"
                       />
                     </th>
-                    <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">
-                      Cut No
-                    </th>
-                    <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">
-                      Bundle No
-                    </th>
-                    <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left">
-                      Section
-                    </th>
-                    <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left">
-                      Operation Name
-                    </th>
+                  )}
+                  {!tracedWorkOrder && (
                     <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left whitespace-nowrap">
-                      Emp Code
+                      Work Order
                     </th>
-                    <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left">
-                      Emp Name
-                    </th>
-                    <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center">
-                      Scanned
-                    </th>
-                    <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left w-28 min-w-[100px] max-w-[120px]">
-                      Scan By
-                    </th>
-                    <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left whitespace-nowrap">
-                      Scan Date
-                    </th>
-                    <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left whitespace-nowrap">
-                      Created At
-                    </th>
+                  )}
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">
+                    Cut No
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center whitespace-nowrap">
+                    Bundle No
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left">
+                    Section
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left">
+                    Operation Name
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left whitespace-nowrap">
+                    Emp Code
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left">
+                    Emp Name
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-center">
+                    Scanned
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left w-28 min-w-[100px] max-w-[120px]">
+                    Scan By
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left whitespace-nowrap">
+                    Scan Date
+                  </th>
+                  <th className="px-3 py-3 text-[10px] font-semibold text-slate-500 uppercase tracking-wider text-left whitespace-nowrap">
+                    Created At
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {couponsLoading ? (
+                  <tr>
+                    <td
+                      colSpan={tableColumnCount}
+                      className="px-4 py-6 text-center text-slate-400 font-semibold"
+                    >
+                      Loading…
+                    </td>
                   </tr>
-                </thead>
-                <tbody>
-                  {couponsLoading ? (
-                    <tr>
-                      <td
-                        colSpan={11}
-                        className="px-4 py-6 text-center text-slate-400 font-semibold"
-                      >
-                        Loading…
-                      </td>
-                    </tr>
-                  ) : coupons.length === 0 ? (
-                    <tr>
-                      <td
-                        colSpan={11}
-                        className="px-4 py-6 text-center text-slate-400 font-semibold"
-                      >
-                        No coupons match
-                        {fromBundleFilter ||
-                        toBundleFilter ||
-                        opFilter ||
-                        sectionFilter ||
-                        scannedFilter ||
-                        employeeFilter
-                          ? " these filters"
-                          : " this work order yet"}
-                        .
-                      </td>
-                    </tr>
-                  ) : (
-                    coupons.map((c) => (
-                      <tr
-                        key={c.CouponCode}
-                        className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
-                      >
+                ) : coupons.length === 0 ? (
+                  <tr>
+                    <td
+                      colSpan={tableColumnCount}
+                      className="px-4 py-6 text-center text-slate-400 font-semibold"
+                    >
+                      {activeFilterCount > (tracedWorkOrder ? 1 : 0)
+                        ? "No coupons match these filters."
+                        : "No coupons generated for this work order yet."}
+                    </td>
+                  </tr>
+                ) : (
+                  coupons.map((c) => (
+                    <tr
+                      key={`${c.WorkOrder}|${c.CouponCode}`}
+                      className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60 transition-colors"
+                    >
+                      {canActOnCoupons && (
                         <td className="px-3 py-2.5 text-center">
                           <input
                             type="checkbox"
                             checked={selectedCoupons.has(c.CouponCode)}
-                            onChange={() => toggleCouponSelection(c.CouponCode)}
+                            onChange={() =>
+                              toggleCouponSelection(c.CouponCode)
+                            }
                             aria-label={`Select coupon ${c.CouponCode}`}
                             className="w-3.5 h-3.5 rounded border-slate-300 accent-indigo-600 cursor-pointer"
                           />
                         </td>
-                        <td className="px-3 py-2.5 text-slate-800 text-center font-bold text-indigo-700 whitespace-nowrap">
-                          {c.CutNo || "—"}
+                      )}
+                      {!tracedWorkOrder && (
+                        <td className="px-3 py-2.5 text-left font-semibold text-slate-900 whitespace-nowrap">
+                          {c.WorkOrder}
                         </td>
-                        <td className="px-3 py-2.5 text-slate-800 text-center font-mono whitespace-nowrap">
-                          {c.BundleNo}
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-800 text-left">
-                          {c.Section || "—"}
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-800 text-left font-medium">
-                          {c.OpName || c.OpNo}
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-800 text-left font-mono whitespace-nowrap">
-                          {c.EmployeeCode || "—"}
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-800 text-left font-medium">
-                          {c.EmployeeName || "—"}
-                        </td>
-                        <td className="px-3 py-2.5 text-center">
-                          {c.IsScanned ? (
-                            <span
-                              className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700"
-                              title="Scanned"
-                            >
-                              <Check className="w-4 h-4 stroke-[2.5]" />
-                            </span>
-                          ) : (
-                            <span
-                              className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-slate-400"
-                              title="Not scanned"
-                            >
-                              <X className="w-4 h-4 stroke-[2.5]" />
-                            </span>
-                          )}
-                        </td>
-                        <td
-                          className="px-3 py-2.5 text-slate-800 text-left font-medium w-28 min-w-[100px] max-w-[120px] break-all leading-tight text-[11px]"
-                          title={c.ScanBy || undefined}
-                        >
-                          {c.ScanBy || "—"}
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-800 text-left whitespace-nowrap">
-                          {c.ScannedAt
-                            ? format(new Date(c.ScannedAt), "dd/MM/yyyy")
-                            : "—"}
-                        </td>
-                        <td className="px-3 py-2.5 text-slate-800 text-left whitespace-nowrap">
-                          {format(new Date(c.InsertedAt), "dd/MM/yyyy")}
-                        </td>
-                      </tr>
-                    ))
-                  )}
-                </tbody>
-              </table>
-            </div>
-            {couponTotal > 0 && (
-              <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 bg-slate-50/70">
-                <span className="text-[11px] font-semibold text-slate-500">
-                  Page {couponPage} of {couponPageCount}
-                </span>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => goToCouponPage(couponPage - 1)}
-                    disabled={couponPage <= 1 || couponsLoading}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                  >
-                    <ChevronLeft className="w-3.5 h-3.5" />
-                    Prev
-                  </button>
-                  <button
-                    onClick={() => goToCouponPage(couponPage + 1)}
-                    disabled={couponPage >= couponPageCount || couponsLoading}
-                    className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
-                  >
-                    Next
-                    <ChevronRight className="w-3.5 h-3.5" />
-                  </button>
-                </div>
-              </div>
-            )}
+                      )}
+                      <td className="px-3 py-2.5 text-slate-800 text-center font-bold text-indigo-700 whitespace-nowrap">
+                        {c.CutNo || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 text-center font-mono whitespace-nowrap">
+                        {c.BundleNo}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 text-left">
+                        {c.Section || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 text-left font-medium">
+                        {c.OpName || c.OpNo}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 text-left font-mono whitespace-nowrap">
+                        {c.EmployeeCode || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 text-left font-medium">
+                        {c.EmployeeName || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-center">
+                        {c.IsScanned ? (
+                          <span
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-emerald-100 text-emerald-700"
+                            title="Scanned"
+                          >
+                            <Check className="w-4 h-4 stroke-[2.5]" />
+                          </span>
+                        ) : (
+                          <span
+                            className="inline-flex items-center justify-center w-6 h-6 rounded-full bg-slate-100 text-slate-400"
+                            title="Not scanned"
+                          >
+                            <X className="w-4 h-4 stroke-[2.5]" />
+                          </span>
+                        )}
+                      </td>
+                      <td
+                        className="px-3 py-2.5 text-slate-800 text-left font-medium w-28 min-w-[100px] max-w-[120px] break-all leading-tight text-[11px]"
+                        title={c.ScanBy || undefined}
+                      >
+                        {c.ScanBy || "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 text-left whitespace-nowrap">
+                        {c.ScannedAt
+                          ? format(new Date(c.ScannedAt), "dd/MM/yyyy")
+                          : "—"}
+                      </td>
+                      <td className="px-3 py-2.5 text-slate-800 text-left whitespace-nowrap">
+                        {format(new Date(c.InsertedAt), "dd/MM/yyyy")}
+                      </td>
+                    </tr>
+                  ))
+                )}
+              </tbody>
+            </table>
           </div>
-        )}
+          {couponTotal > 0 && (
+            <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200 bg-slate-50/70">
+              <span className="text-[11px] font-semibold text-slate-500">
+                Page {couponPage} of {couponPageCount}
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => goToCouponPage(couponPage - 1)}
+                  disabled={couponPage <= 1 || couponsLoading}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  <ChevronLeft className="w-3.5 h-3.5" />
+                  Prev
+                </button>
+                <button
+                  onClick={() => goToCouponPage(couponPage + 1)}
+                  disabled={couponPage >= couponPageCount || couponsLoading}
+                  className="flex items-center gap-1 px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 font-semibold text-xs hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed transition-all"
+                >
+                  Next
+                  <ChevronRight className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {showFilters && (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/40 p-4 backdrop-blur-sm animate-fade-in">
@@ -920,11 +940,13 @@ export default function CouponTracingPage() {
                       Active Scope
                     </div>
                     <div className="mt-0.5 text-[11px] font-semibold text-slate-600">
-                      {draftFilterCount === 0
-                        ? "All coupons for the traced work order"
-                        : `${draftFilterCount} filter${
-                            draftFilterCount === 1 ? "" : "s"
-                          } selected`}
+                      {draftFilter.workOrder
+                        ? `Work order ${draftFilter.workOrder}`
+                        : "All work orders with generated coupons"}
+                      {draftFilterCount > 0 &&
+                        ` · ${draftFilterCount} filter${
+                          draftFilterCount === 1 ? "" : "s"
+                        }`}
                     </div>
                   </div>
                   <button
@@ -939,95 +961,140 @@ export default function CouponTracingPage() {
                 </div>
 
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <label className="space-y-1.5">
+                  <div className="space-y-1.5 sm:col-span-2">
                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                      From Cut
+                      Work Order
                     </span>
-                    <input
-                      type="text"
-                      placeholder="From Cut"
-                      value={draftFilter.fromCut}
-                      onChange={(e) =>
-                        setDraftFilter((prev) => ({
-                          ...prev,
-                          fromCut: e.target.value,
-                        }))
-                      }
-                      className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all placeholder-slate-400 focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
-                    />
-                  </label>
+                    <div className="flex items-stretch gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowWorkOrderModal(true)}
+                        className="relative flex-grow cursor-pointer text-left"
+                      >
+                        <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                        <span
+                          className={`block w-full truncate rounded-xl border border-[#e2e8f0] bg-white py-2.5 pl-9 pr-3 text-xs font-semibold shadow-sm transition-colors hover:border-[#4f46e5] ${
+                            draftFilter.workOrder
+                              ? "text-slate-800"
+                              : "text-slate-400"
+                          }`}
+                        >
+                          {draftFilter.workOrder ||
+                            "All work orders — click to pick one"}
+                        </span>
+                      </button>
+                      {draftFilter.workOrder && (
+                        <button
+                          type="button"
+                          onClick={() => setDraftWorkOrder("")}
+                          title="Unselect work order"
+                          aria-label="Unselect work order"
+                          className="flex w-10 shrink-0 items-center justify-center rounded-xl border border-[#e2e8f0] bg-white text-slate-500 shadow-sm transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-600"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
 
-                  <label className="space-y-1.5">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                      To Cut
-                    </span>
-                    <input
-                      type="text"
-                      placeholder="To Cut"
-                      value={draftFilter.toCut}
-                      onChange={(e) =>
-                        setDraftFilter((prev) => ({
-                          ...prev,
-                          toCut: e.target.value,
-                        }))
-                      }
-                      className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all placeholder-slate-400 focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
-                    />
-                  </label>
+                  {draftFilter.workOrder ? (
+                    <>
+                    <label className="space-y-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                        From Cut
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="From Cut"
+                        value={draftFilter.fromCut}
+                        onChange={(e) =>
+                          setDraftFilter((prev) => ({
+                            ...prev,
+                            fromCut: e.target.value,
+                          }))
+                        }
+                        className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all placeholder-slate-400 focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
+                      />
+                    </label>
 
-                  <label className="space-y-1.5">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                      From Bundle
-                    </span>
-                    <Autocomplete<string>
-                      value={draftFilter.fromBundle}
-                      onChange={(value) =>
-                        setDraftFilter((prev) => ({
-                          ...prev,
-                          fromBundle: value,
-                        }))
-                      }
-                      onSelect={(value) =>
-                        setDraftFilter((prev) => ({
-                          ...prev,
-                          fromBundle: value,
-                        }))
-                      }
-                      fetchSuggestions={fetchBundleSuggestions}
-                      renderSuggestion={(item) => <span>{item}</span>}
-                      getSuggestionValue={(item) => item}
-                      minChars={0}
-                      placeholder="From Bundle"
-                      inputClassName="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all placeholder-slate-400 focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
-                    />
-                  </label>
+                    <label className="space-y-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                        To Cut
+                      </span>
+                      <input
+                        type="text"
+                        placeholder="To Cut"
+                        value={draftFilter.toCut}
+                        onChange={(e) =>
+                          setDraftFilter((prev) => ({
+                            ...prev,
+                            toCut: e.target.value,
+                          }))
+                        }
+                        className="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all placeholder-slate-400 focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
+                      />
+                    </label>
 
-                  <label className="space-y-1.5">
-                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
-                      To Bundle
-                    </span>
-                    <Autocomplete<string>
-                      value={draftFilter.toBundle}
-                      onChange={(value) =>
-                        setDraftFilter((prev) => ({
-                          ...prev,
-                          toBundle: value,
-                        }))
-                      }
-                      onSelect={(value) =>
-                        setDraftFilter((prev) => ({
-                          ...prev,
-                          toBundle: value,
-                        }))
-                      }
-                      fetchSuggestions={fetchBundleSuggestions}
-                      renderSuggestion={(item) => <span>{item}</span>}
-                      getSuggestionValue={(item) => item}
-                      minChars={0}
-                      placeholder="To Bundle"
-                      inputClassName="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all placeholder-slate-400 focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
-                    />
-                  </label>
+                    <label className="space-y-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                        From Bundle
+                      </span>
+                      <Autocomplete<string>
+                        value={draftFilter.fromBundle}
+                        onChange={(value) =>
+                          setDraftFilter((prev) => ({
+                            ...prev,
+                            fromBundle: value,
+                          }))
+                        }
+                        onSelect={(value) =>
+                          setDraftFilter((prev) => ({
+                            ...prev,
+                            fromBundle: value,
+                          }))
+                        }
+                        fetchSuggestions={fetchBundleSuggestions}
+                        renderSuggestion={(item) => <span>{item}</span>}
+                        getSuggestionValue={(item) => item}
+                        minChars={0}
+                        placeholder="From Bundle"
+                        inputClassName="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all placeholder-slate-400 focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
+                      />
+                    </label>
+
+                    <label className="space-y-1.5">
+                      <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                        To Bundle
+                      </span>
+                      <Autocomplete<string>
+                        value={draftFilter.toBundle}
+                        onChange={(value) =>
+                          setDraftFilter((prev) => ({
+                            ...prev,
+                            toBundle: value,
+                          }))
+                        }
+                        onSelect={(value) =>
+                          setDraftFilter((prev) => ({
+                            ...prev,
+                            toBundle: value,
+                          }))
+                        }
+                        fetchSuggestions={fetchBundleSuggestions}
+                        renderSuggestion={(item) => <span>{item}</span>}
+                        getSuggestionValue={(item) => item}
+                        minChars={0}
+                        placeholder="To Bundle"
+                        inputClassName="w-full rounded-xl border border-[#e2e8f0] bg-white px-3 py-2.5 text-xs font-semibold text-slate-800 shadow-sm transition-all placeholder-slate-400 focus:border-[#4f46e5] focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10"
+                      />
+                    </label>
+                    </>
+                  ) : (
+                    <p className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-2.5 text-[11px] font-semibold text-slate-500 sm:col-span-2">
+                      Cut and bundle ranges are available after you pick a
+                      work order.
+                    </p>
+                  )}
 
                   <label className="space-y-1.5">
                     <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
@@ -1203,7 +1270,7 @@ export default function CouponTracingPage() {
             onDone={() => {
               setShowDeleteModal(false);
               setSelectedCoupons(new Set());
-              fetchCoupons(tracedWorkOrder, couponPage);
+              fetchCoupons(couponPage);
             }}
           />
         )}
@@ -1212,7 +1279,7 @@ export default function CouponTracingPage() {
           open={showWorkOrderModal}
           onClose={() => setShowWorkOrderModal(false)}
           onSelect={(row) => {
-            commitTrace(row.workOrder);
+            setDraftWorkOrder(row.workOrder);
             setShowWorkOrderModal(false);
           }}
           fetchRows={fetchWorkOrderRows}

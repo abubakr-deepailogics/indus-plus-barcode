@@ -19,7 +19,9 @@ export async function GET(request: Request) {
   const onlyGenerated = searchParams.get("only_generated") === "true";
   const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
 
-  if (!wo) {
+  // Sections are a short global list, so the Coupon Tracing filter can
+  // offer them before a work order is picked; every other type is per-WO.
+  if (!wo && type !== "section") {
     return Response.json(
       { error: "Work Order parameter is required." },
       { status: 400 },
@@ -134,13 +136,14 @@ export async function GET(request: Request) {
       // Sourced from QrCode_Coupon (not the style bulletin) — Section is
       // whatever was recorded on the coupon at generation time, so the
       // filter's options always match what's actually in this work order's
-      // coupons rather than the full style bulletin's section list.
+      // coupons rather than the full style bulletin's section list. No wo →
+      // every section used on this department's coupons.
       const pool = await getPool("pitSystem");
       const result = await pool.request().input("wo", sql.NVarChar, wo.trim()).input("department", sql.NVarChar, department)
         .query(`
           SELECT DISTINCT Section
           FROM dbo.QrCode_Coupon
-          WHERE WorkOrder = @wo AND Section IS NOT NULL AND Section <> '' AND IsDeleted = 0 AND Department = @department
+          WHERE ${wo.trim() ? "WorkOrder = @wo AND" : ""} Section IS NOT NULL AND Section <> '' AND IsDeleted = 0 AND Department = @department
           ORDER BY Section
         `);
 
