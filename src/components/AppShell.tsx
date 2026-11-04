@@ -9,23 +9,46 @@ import { useWorkOrder } from "@/lib/work-order-context";
 import {
   ChevronDown,
   Scissors,
-  Layers, FileText, BarChart3, ChevronRight,
+  Layers,
+  FileText,
+  BarChart3,
+  ChevronRight,
   Menu,
   X,
   ScanLine,
   Search as SearchIcon,
   RotateCcw,
   Users,
-  ClipboardCheck
+  ClipboardCheck,
 } from "lucide-react";
 
 function productionModuleTabs(basePath: "/sewing" | "/washing" | "/finishing") {
   return [
-    { label: "Style Bulletin", href: `${basePath}/style-bulletin`, hasDropdown: false },
-    { label: "Coupon Generation", href: `${basePath}/coupon-generation`, hasDropdown: false },
-    { label: "Coupon Scanning", href: `${basePath}/coupon-scanning`, hasDropdown: false },
-    { label: "Coupon Tracing", href: `${basePath}/coupon-tracing`, hasDropdown: false },
-    { label: "Rework Coupon", href: `${basePath}/rework-coupon`, hasDropdown: false },
+    {
+      label: "Style Bulletin",
+      href: `${basePath}/style-bulletin`,
+      hasDropdown: false,
+    },
+    {
+      label: "Coupon Generation",
+      href: `${basePath}/coupon-generation`,
+      hasDropdown: false,
+    },
+    {
+      label: "Coupon Scanning",
+      href: `${basePath}/coupon-scanning`,
+      hasDropdown: false,
+    },
+    {
+      label: "Coupon Tracing",
+      href: `${basePath}/coupon-tracing`,
+      hasDropdown: false,
+    },
+    {
+      label: "Rework Coupon",
+      href: `${basePath}/rework-coupon`,
+      hasDropdown: false,
+    },
     { label: "Reports", href: `${basePath}/reports`, hasDropdown: false },
     { label: "Wages", href: `${basePath}/reports/wages`, hasDropdown: false },
   ];
@@ -39,7 +62,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") as "light" | "dark" | null;
-    const initialTheme = savedTheme || (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const initialTheme =
+      savedTheme ||
+      (window.matchMedia("(prefers-color-scheme: dark)").matches
+        ? "dark"
+        : "light");
     if (initialTheme !== "light") {
       // eslint-disable-next-line react-hooks/set-state-in-effect
       setTheme(initialTheme);
@@ -95,7 +122,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (pathname.startsWith("/washing") && department !== "washing") {
       setDepartment("washing");
-    } else if (pathname.startsWith("/finishing") && department !== "finishing") {
+    } else if (
+      pathname.startsWith("/finishing") &&
+      department !== "finishing"
+    ) {
       setDepartment("finishing");
     } else if (
       (pathname.startsWith("/sewing") ||
@@ -136,8 +166,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   const currentNavTabs = useMemo(() => {
     if (pathname.startsWith("/trace-employees")) {
       return [
-        { label: "Employee Cards", href: "/trace-employees", hasDropdown: false },
-        { label: "Trace Report", href: "/trace-employees?tab=reports", hasDropdown: false },
+        {
+          label: "Employee Cards",
+          href: "/trace-employees",
+          hasDropdown: false,
+        },
+        {
+          label: "Trace Report",
+          href: "/trace-employees?tab=reports",
+          hasDropdown: false,
+        },
       ];
     }
     if (department === "washing" || department === "finishing") {
@@ -145,7 +183,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     }
     if (department === "sewing") {
       return [
-        { label: "Cut Planning", href: "/sewing/cut-planning", hasDropdown: false },
+        {
+          label: "Cut Planning",
+          href: "/sewing/cut-planning",
+          hasDropdown: false,
+        },
         { label: "Cut Report", href: "/sewing/cut-report", hasDropdown: false },
         ...productionModuleTabs("/sewing"),
       ];
@@ -154,7 +196,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [department, pathname, user?.isAdmin]);
 
   return (
-    <div data-client-brand className="min-h-screen bg-[#f8fafc] text-[#1e293b] flex flex-col font-sans selection:bg-indigo-100 selection:text-indigo-900">
+    <div
+      data-client-brand
+      className="min-h-screen bg-[#f8fafc] text-[#1e293b] flex flex-col font-sans selection:bg-indigo-100 selection:text-indigo-900"
+    >
       {/* Primary Header */}
       <header className="no-print sticky top-0 z-50 bg-white border-b border-[#f1f5f9] px-4 sm:px-6 py-2.5 sm:py-3 flex items-center justify-between shadow-xs gap-3">
         {/* Logo block */}
@@ -165,16 +210,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             className="w-9 h-9 sm:w-10 sm:h-10 object-contain group-hover:scale-105 transition-transform duration-200"
           />
           <div className="flex flex-col">
-            <span className="text-sm font-bold text-[#0f172a] leading-tight tracking-tight">Indus Plus Ltd</span>
-            <span className="text-[10px] text-[#64748b] leading-none">INDUS PLUS LIMITED</span>
+            <span className="text-sm font-bold text-[#0f172a] leading-tight tracking-tight">
+              Indus Plus Ltd
+            </span>
+            <span className="text-[10px] text-[#64748b] leading-none">
+              INDUS PLUS LIMITED
+            </span>
           </div>
         </Link>
 
         {/* Center: Manufacturing Department Items (Sewing, Washing, Finishing, GDP) */}
-        <nav aria-label="Department Navigation" className="hidden md:flex items-center justify-center flex-1 max-w-xl mx-2">
+        <nav
+          aria-label="Department Navigation"
+          className="hidden md:flex items-center justify-center flex-1 max-w-xl mx-2"
+        >
           <div className="flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200/80 gap-1 shadow-xs">
             {departments.map((dept) => {
-              const isActive = !pathname.startsWith("/trace-employees") && department === dept.id;
+              const isActive =
+                !pathname.startsWith("/trace-employees") &&
+                department === dept.id;
               return (
                 <button
                   key={dept.id}
@@ -194,12 +248,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <Link
               href="/trace-employees"
               className={`inline-flex items-center gap-1.5 px-3.5 lg:px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-              pathname.startsWith("/trace-employees")
-                ? "bg-white text-[#4f46e5] shadow-xs"
-                : "text-[#64748b] hover:text-[#0f172a] hover:bg-slate-200/50"
-            }`}
+                pathname.startsWith("/trace-employees")
+                  ? "bg-white text-[#4f46e5] shadow-xs"
+                  : "text-[#64748b] hover:text-[#0f172a] hover:bg-slate-200/50"
+              }`}
             >
-              Trace Employees
+              Employees
             </Link>
           </div>
         </nav>
@@ -221,7 +275,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               {initials}
             </div>
             <div className="hidden lg:flex flex-col text-left">
-              <span className="text-xs font-semibold text-[#0f172a] leading-tight">{displayName}</span>
+              <span className="text-xs font-semibold text-[#0f172a] leading-tight">
+                {displayName}
+              </span>
               <span className="text-[10px] text-[#64748b]">{user?.email}</span>
             </div>
             <button
@@ -238,7 +294,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             className="p-2 text-[#64748b] hover:text-[#0f172a] hover:bg-[#f1f5f9] rounded-lg md:hidden transition-colors cursor-pointer"
             aria-label="Toggle Menu"
           >
-            {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+            {mobileMenuOpen ? (
+              <X className="w-5 h-5" />
+            ) : (
+              <Menu className="w-5 h-5" />
+            )}
           </button>
         </div>
       </header>
@@ -277,7 +337,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               onClick={() => setMobileMenuOpen(false)}
               className="mt-2 flex items-center justify-between rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700"
             >
-              <span className="flex items-center gap-2"><ClipboardCheck className="size-3.5 text-indigo-700" />Trace Employees</span>
+              <span className="flex items-center gap-2">
+                <ClipboardCheck className="size-3.5 text-indigo-700" />
+                Trace Employees
+              </span>
               <ChevronRight className="size-3.5 text-slate-400" />
             </Link>
           </div>
@@ -288,7 +351,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               onClick={() => setMobileMenuOpen(false)}
               className="flex items-center justify-between rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs font-semibold text-indigo-700"
             >
-              <span className="flex items-center gap-2"><Users className="size-3.5" />Manage Users</span>
+              <span className="flex items-center gap-2">
+                <Users className="size-3.5" />
+                Manage Users
+              </span>
               <ChevronRight className="size-3.5" />
             </Link>
           )}
@@ -302,14 +368,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 {currentNavTabs.map((tab, idx) => (
                   <Link
                     key={idx}
-                  href={tab.href.startsWith("/trace-employees") ? tab.href : workOrderHref(tab.href)}
+                    href={
+                      tab.href.startsWith("/trace-employees")
+                        ? tab.href
+                        : workOrderHref(tab.href)
+                    }
                     onClick={() => setMobileMenuOpen(false)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center justify-between ${
-                      (tab.href === "/trace-employees?tab=reports"
-                        ? pathname === "/trace-employees" && searchParams.get("tab") === "reports"
-                        : tab.href === "/trace-employees"
-                          ? pathname === "/trace-employees" && searchParams.get("tab") !== "reports"
-                          : pathname === tab.href)
+                      (
+                        tab.href === "/trace-employees?tab=reports"
+                          ? pathname === "/trace-employees" &&
+                            searchParams.get("tab") === "reports"
+                          : tab.href === "/trace-employees"
+                            ? pathname === "/trace-employees" &&
+                              searchParams.get("tab") !== "reports"
+                            : pathname === tab.href
+                      )
                         ? "bg-indigo-50 text-[#4f46e5] font-bold"
                         : "text-slate-700 hover:bg-slate-50"
                     }`}
@@ -330,13 +404,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           {currentNavTabs.length > 0 ? (
             <div className="flex items-center gap-1.5 min-w-max">
               {currentNavTabs.map((tab, idx) => {
-                const isTabActive = tab.href !== "#"
-                  ? tab.href === "/trace-employees?tab=reports"
-                    ? pathname === "/trace-employees" && searchParams.get("tab") === "reports"
-                    : tab.href === "/trace-employees"
-                      ? pathname === "/trace-employees" && searchParams.get("tab") !== "reports"
-                      : pathname === tab.href
-                  : (tab.label === "Industrial Engineering" && isIeOpen);
+                const isTabActive =
+                  tab.href !== "#"
+                    ? tab.href === "/trace-employees?tab=reports"
+                      ? pathname === "/trace-employees" &&
+                        searchParams.get("tab") === "reports"
+                      : tab.href === "/trace-employees"
+                        ? pathname === "/trace-employees" &&
+                          searchParams.get("tab") !== "reports"
+                        : pathname === tab.href
+                    : tab.label === "Industrial Engineering" && isIeOpen;
 
                 const content = (
                   <>
@@ -344,7 +421,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     {tab.hasDropdown && (
                       <ChevronDown
                         className={`w-3.5 h-3.5 transition-transform duration-200 ${
-                          isTabActive && isIeOpen ? "rotate-180 text-[#4f46e5]" : "text-[#94a3b8]"
+                          isTabActive && isIeOpen
+                            ? "rotate-180 text-[#4f46e5]"
+                            : "text-[#94a3b8]"
                         }`}
                       />
                     )}
@@ -360,12 +439,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 return (
                   <div key={idx} className="relative">
                     {tab.href !== "#" ? (
-                      <Link href={tab.href.startsWith("/trace-employees") ? tab.href : workOrderHref(tab.href)} className={className}>
+                      <Link
+                        href={
+                          tab.href.startsWith("/trace-employees")
+                            ? tab.href
+                            : workOrderHref(tab.href)
+                        }
+                        className={className}
+                      >
                         {content}
                       </Link>
                     ) : (
                       <button
-                        ref={tab.label === "Industrial Engineering" ? triggerRef : undefined}
+                        ref={
+                          tab.label === "Industrial Engineering"
+                            ? triggerRef
+                            : undefined
+                        }
                         onClick={() => {
                           if (tab.label === "Industrial Engineering") {
                             setIsIeOpen(!isIeOpen);
@@ -391,10 +481,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             ref={dropdownRef}
             className="absolute left-6 mt-3 w-[720px] bg-white rounded-2xl shadow-2xl border border-[#e2e8f0] p-6 grid grid-cols-2 divide-x divide-[#f1f5f9] gap-0 animate-fade-in z-50"
           >
-            
             {/* LEFT COLUMN: BULLETIN & CUTTING and STITCHING */}
             <div className="pr-6 flex flex-col gap-6">
-              
               {/* SECTION: BULLETIN & CUTTING */}
               <div className="flex flex-col gap-2">
                 <h4 className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider mb-2">
@@ -450,8 +538,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 >
                   <span className="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center">
                     {/* Spool / Cup representation */}
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 3h12M8 3v18M16 3v18M6 21h12M6 8h12M6 12h12M6 16h12" />
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      className="w-4 h-4"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M6 3h12M8 3v18M16 3v18M6 21h12M6 8h12M6 12h12M6 16h12"
+                      />
                     </svg>
                   </span>
                   <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
@@ -476,8 +574,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
                 >
                   <span className="w-8 h-8 rounded-lg bg-purple-50 text-purple-500 flex items-center justify-center">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 3h12M8 3v18M16 3v18M6 21h12M6 8h12M6 12h12M6 16h12" />
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      className="w-4 h-4"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M6 3h12M8 3v18M16 3v18M6 21h12M6 8h12M6 12h12M6 16h12"
+                      />
                     </svg>
                   </span>
                   <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
@@ -485,12 +593,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   </span>
                 </Link>
               </div>
-
             </div>
 
             {/* RIGHT COLUMN: FINISHING, G.D.P & G.W.P, and ANALYSIS */}
             <div className="pl-6 flex flex-col gap-6">
-              
               {/* SECTION: FINISHING */}
               <div className="flex flex-col gap-2">
                 <h4 className="text-[10px] font-bold text-[#94a3b8] uppercase tracking-wider mb-2">
@@ -634,8 +740,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   className="flex items-center gap-3 p-1.5 rounded-xl hover:bg-[#f8fafc] group transition-colors"
                 >
                   <span className="w-8 h-8 rounded-lg bg-orange-50 text-orange-500 flex items-center justify-center">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" className="w-4 h-4">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M6 3h12M8 3v18M16 3v18M6 21h12M6 8h12M6 12h12M6 16h12" />
+                    <svg
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.5"
+                      className="w-4 h-4"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M6 3h12M8 3v18M16 3v18M6 21h12M6 8h12M6 12h12M6 16h12"
+                      />
                     </svg>
                   </span>
                   <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
@@ -682,7 +798,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     <ClipboardCheck className="w-4 h-4" />
                   </span>
                   <span className="text-xs font-semibold text-[#475569] group-hover:text-[#0f172a] transition-colors leading-snug">
-                    Trace Employees
+                    Employees
                   </span>
                 </Link>
                 <Link
@@ -701,16 +817,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   <ChevronRight className="w-3.5 h-3.5 text-[#94a3b8] mr-1" />
                 </Link>
               </div>
-
             </div>
-
           </div>
         )}
       </nav>
 
       {/* Main Content Area */}
       <main className="flex-1 max-w-[1400px] w-full mx-auto p-6 md:p-8 relative">
-        {department === "sewing" || department === "washing" || department === "finishing" ? (
+        {department === "sewing" ||
+        department === "washing" ||
+        department === "finishing" ? (
           children
         ) : (
           <div className="flex flex-col items-center justify-center min-h-[380px] text-center p-8 bg-white rounded-2xl border border-dashed border-slate-200 shadow-xs">
@@ -721,7 +837,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               {department} Department
             </h3>
             <p className="text-xs text-slate-500 max-w-sm">
-              Module navigation is ready. Forms and reports for {department} will be added here as needed.
+              Module navigation is ready. Forms and reports for {department}{" "}
+              will be added here as needed.
             </p>
           </div>
         )}
