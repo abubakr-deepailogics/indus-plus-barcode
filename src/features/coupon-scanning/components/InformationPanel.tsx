@@ -152,11 +152,12 @@ export function InformationPanel(props: Facade) {
         ? format(new Date(dated), "dd-MM-yyyy")
         : "";
 
-  // Dated is gated on Employee Code — same "disabled until the field
+  // Employee Code is gated on Dated — same "disabled until the field
   // before it is filled" convention as From Cut/To Cut/Bundle No/Operation
   // No below (those gate on Work Order). Part of the sequential
-  // Employee Code -> Dated -> Coupon Scanning flow (the scanning field
+  // Dated -> Employee Code -> Coupon Scanning flow (the scanning field
   // itself is gated on both, in ScanningDetailsTable).
+  const isDatedFilled = !!dated;
   const isEmployeeCodeFilled = !!employeeCode.trim();
 
   // Hands off focus to the scanner field (a sibling component, hence the
@@ -165,10 +166,10 @@ export function InformationPanel(props: Facade) {
   // onChange above. Committing on every keystroke there (instead of just
   // on a final valid value) is what previously stole focus out from under
   // the user mid-type, the instant a partial date happened to parse valid.
-  // Attendance is verified right here too — this is the one moment the
-  // Employee Code -> Dated -> Coupon Scanning chain completes, so it's the
-  // natural place to check and, if the employee is present, move on;
-  // verifyAttendance itself raises the blocking error if they're not.
+  // Attendance is re-verified here when the date changes after an employee
+  // is already selected (selecting an employee verifies on its own, in
+  // handleSelectWorker); verifyAttendance raises the blocking error if
+  // they're not present.
   const focusScannerIfReady = async () => {
     if (!isEmployeeCodeFilled || !dated) return;
     const present = await verifyAttendance();
@@ -215,35 +216,87 @@ export function InformationPanel(props: Facade) {
         <div className="flex flex-col gap-3">
           {/* Row 1 */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Employee Code */}
-            <div className="flex flex-col gap-0.5 relative">
+            {/* Dated */}
+            <div className="flex flex-col gap-0.5">
               <span className="font-bold text-[#475569] text-[10px] uppercase">
-                Employee Code <span className="text-red-500">*</span>
+                Dated <span className="text-red-500">*</span>
               </span>
-              <Autocomplete<Worker>
-                value={employeeCode}
-                onChange={setEmployeeCode}
-                onSelect={handleSelectWorker}
-                fetchSuggestions={fetchWorkerSuggestions}
-                renderSuggestion={(worker) => (
-                  <>
-                    <div>
-                      <span className="text-[#4f46e5] font-bold mr-2">
-                        {worker.EmployeeID}
-                      </span>
-                      <span>{worker.FirstName?.trim()}</span>
-                    </div>
-                    <span className="text-[9px] text-slate-400 font-medium bg-slate-100 px-1.5 py-0.5 rounded uppercase">
-                      {worker.ParentDepartment || "Worker"}
-                    </span>
-                  </>
-                )}
-                getSuggestionValue={(worker) => String(worker.EmployeeID)}
-                placeholder="Enter Employee Code"
-                inputClassName="w-full px-3 py-1 rounded-lg border border-[#e2e8f0] text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all bg-white"
-                onKeyDown={handleEmployeeCodeKeyDown}
-                minChars={0}
-              />
+              <div className="relative flex items-center w-full">
+                <input
+                  type="text"
+                  placeholder="DD-MM-YYYY"
+                  value={displayValue}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setTypedValue(val);
+                    if (!val.trim()) {
+                      setDated("");
+                      return;
+                    }
+                    const parsed = parseDateString(val);
+                    if (parsed && isValidSelectedDate(parsed, lockedRanges)) {
+                      setDated(format(parsed, "yyyy-MM-dd"));
+                    } else {
+                      setDated("");
+                    }
+                  }}
+                  onBlur={focusScannerIfReady}
+                  aria-invalid={isInvalid}
+                  className="w-full pl-3 pr-8 py-1 rounded-lg border text-xs font-semibold placeholder-slate-400 focus:outline-none aria-invalid:border-red-500 aria-invalid:ring-red-500/10 transition-all h-[26px] bg-white text-slate-800 border-[#e2e8f0] focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
+                />
+                <Popover actionsRef={datePopoverActionsRef}>
+                  <PopoverTrigger className="absolute right-2 p-1 hover:bg-slate-100 rounded-md cursor-pointer flex items-center justify-center">
+                    <CalendarIcon className="w-3.5 h-3.5 text-slate-400" />
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0 bg-white" align="start">
+                    <Calendar
+                      mode="single"
+                      captionLayout="dropdown"
+                      selected={dated ? new Date(dated) : undefined}
+                      onSelect={(date) => {
+                        if (date) {
+                          const iso = format(date, "yyyy-MM-dd");
+                          setDated(iso);
+                          setTypedValue(null);
+                          // Picking a date is "done" — close the calendar
+                          // immediately rather than leaving it open.
+                          datePopoverActionsRef.current?.close();
+                          // An explicit pick, not a keystroke — safe to verify
+                          // and hand off focus right away when an employee is
+                          // already selected (verifyAttendance is a no-op
+                          // otherwise). `iso` is passed explicitly rather than
+                          // relying on the `dated` state, which won't reflect
+                          // setDated above until the next render.
+                          void verifyAttendance(iso).then((present) => {
+                            if (present) {
+                              document.getElementById("scanner-input")?.focus();
+                            }
+                          });
+                        } else {
+                          setDated("");
+                          setTypedValue(null);
+                        }
+                      }}
+                      disabled={(date) => !isValidSelectedDate(date, lockedRanges)}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
+              {lockedWage && (
+                <span className="text-[10px] font-bold text-red-600">
+                  Wages generated ({lockedWage.title}) — scanning locked
+                </span>
+              )}
+              {checkingAttendance && (
+                <span className="text-[10px] font-semibold text-slate-400">
+                  Checking attendance…
+                </span>
+              )}
+              {!checkingAttendance && isEmployeePresent === false && (
+                <span className="text-[10px] font-bold text-red-600">
+                  Not present on this date
+                </span>
+              )}
             </div>
 
             {/* Employee Name */}
@@ -291,104 +344,42 @@ export function InformationPanel(props: Facade) {
 
           {/* Row 2 */}
           <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            {/* Dated */}
-            <div className="flex flex-col gap-0.5">
+            {/* Employee Code */}
+            <div className="flex flex-col gap-0.5 relative">
               <span
-                className={`font-bold text-[10px] uppercase transition-colors ${!isEmployeeCodeFilled ? "text-slate-400" : "text-[#475569]"}`}
+                className={`font-bold text-[10px] uppercase transition-colors ${!isDatedFilled ? "text-slate-400" : "text-[#475569]"}`}
               >
-                Dated
+                Employee Code <span className="text-red-500">*</span>
               </span>
-              <div className="relative flex items-center w-full">
-                <input
-                  type="text"
-                  placeholder={
-                    isEmployeeCodeFilled
-                      ? "DD-MM-YYYY"
-                      : "Enter Employee Code first"
-                  }
-                  value={displayValue}
-                  onChange={(e) => {
-                    const val = e.target.value;
-                    setTypedValue(val);
-                    if (!val.trim()) {
-                      setDated("");
-                      return;
-                    }
-                    const parsed = parseDateString(val);
-                    if (parsed && isValidSelectedDate(parsed, lockedRanges)) {
-                      setDated(format(parsed, "yyyy-MM-dd"));
-                    } else {
-                      setDated("");
-                    }
-                  }}
-                  onBlur={focusScannerIfReady}
-                  aria-invalid={isInvalid}
-                  disabled={!isEmployeeCodeFilled}
-                  className={`w-full pl-3 pr-8 py-1 rounded-lg border text-xs font-semibold placeholder-slate-400 focus:outline-none aria-invalid:border-red-500 aria-invalid:ring-red-500/10 transition-all h-[26px] ${
-                    !isEmployeeCodeFilled
-                      ? "bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200"
-                      : "bg-white text-slate-800 border-[#e2e8f0] focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
-                  }`}
-                />
-                <Popover actionsRef={datePopoverActionsRef}>
-                  <PopoverTrigger
-                    disabled={!isEmployeeCodeFilled}
-                    className="absolute right-2 p-1 hover:bg-slate-100 rounded-md cursor-pointer flex items-center justify-center disabled:cursor-not-allowed disabled:hover:bg-transparent"
-                  >
-                    <CalendarIcon
-                      className={`w-3.5 h-3.5 ${!isEmployeeCodeFilled ? "text-slate-300" : "text-slate-400"}`}
-                    />
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0 bg-white" align="start">
-                    <Calendar
-                      mode="single"
-                      captionLayout="dropdown"
-                      selected={dated ? new Date(dated) : undefined}
-                      onSelect={(date) => {
-                        if (date) {
-                          const iso = format(date, "yyyy-MM-dd");
-                          setDated(iso);
-                          setTypedValue(null);
-                          // Picking a date is "done" — close the calendar
-                          // immediately rather than leaving it open.
-                          datePopoverActionsRef.current?.close();
-                          // An explicit pick, not a keystroke — safe to verify
-                          // and hand off focus right away (isEmployeeCodeFilled
-                          // is already guaranteed true, since the trigger that
-                          // opens this calendar is disabled otherwise). `iso`
-                          // is passed explicitly rather than relying on the
-                          // `dated` state, which won't reflect setDated above
-                          // until the next render.
-                          void verifyAttendance(iso).then((present) => {
-                            if (present) {
-                              document.getElementById("scanner-input")?.focus();
-                            }
-                          });
-                        } else {
-                          setDated("");
-                          setTypedValue(null);
-                        }
-                      }}
-                      disabled={(date) => !isValidSelectedDate(date, lockedRanges)}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
-              {lockedWage && (
-                <span className="text-[10px] font-bold text-red-600">
-                  Wages generated ({lockedWage.title}) — scanning locked
-                </span>
-              )}
-              {checkingAttendance && (
-                <span className="text-[10px] font-semibold text-slate-400">
-                  Checking attendance…
-                </span>
-              )}
-              {!checkingAttendance && isEmployeePresent === false && (
-                <span className="text-[10px] font-bold text-red-600">
-                  Not present on this date
-                </span>
-              )}
+              <Autocomplete<Worker>
+                value={employeeCode}
+                onChange={setEmployeeCode}
+                onSelect={handleSelectWorker}
+                fetchSuggestions={fetchWorkerSuggestions}
+                renderSuggestion={(worker) => (
+                  <>
+                    <div>
+                      <span className="text-[#4f46e5] font-bold mr-2">
+                        {worker.EmployeeID}
+                      </span>
+                      <span>{worker.FirstName?.trim()}</span>
+                    </div>
+                    <span className="text-[9px] text-slate-400 font-medium bg-slate-100 px-1.5 py-0.5 rounded uppercase">
+                      {worker.ParentDepartment || "Worker"}
+                    </span>
+                  </>
+                )}
+                getSuggestionValue={(worker) => String(worker.EmployeeID)}
+                disabled={!isDatedFilled}
+                placeholder={isDatedFilled ? "Enter Employee Code" : "Enter a Date first"}
+                inputClassName={`w-full px-3 py-1 rounded-lg border text-xs font-semibold placeholder-slate-400 focus:outline-none transition-all ${
+                  !isDatedFilled
+                    ? "bg-slate-50 text-slate-400 cursor-not-allowed border-slate-200"
+                    : "bg-white text-slate-800 border-[#e2e8f0] focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5]"
+                }`}
+                onKeyDown={handleEmployeeCodeKeyDown}
+                minChars={0}
+              />
             </div>
 
             {/* Shift */}

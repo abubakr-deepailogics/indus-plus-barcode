@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { format } from "date-fns";
 import { useAuth } from "@/features/auth/context/auth-context";
 import { useDepartment } from "@/lib/department-context";
 import {
@@ -141,8 +140,8 @@ export function useCouponScanning() {
   //
   // Accepts optional date/employee-code overrides: a caller that just called
   // setDated/setEmployeeCode synchronously (e.g. picking a date from the
-  // calendar, or selecting a worker — which stamps in today's date and
-  // verifies in the same call) would otherwise read the pre-update values
+  // calendar, or selecting a worker — which verifies against the already-
+  // chosen date in the same call) would otherwise read the pre-update values
   // from this closure, since the state update hasn't re-rendered yet —
   // passing the just-set values sidesteps that.
   const verifyAttendance = useCallback(
@@ -696,9 +695,11 @@ export function useCouponScanning() {
     setDesignation(worker.DesignationName || "");
     setSection(worker.DepartmentName || "");
 
-    const today = format(new Date(), "yyyy-MM-dd");
-    setDated(today);
-    void verifyAttendance(today, empCode);
+    // Date is picked first now — keep it and check the new employee's
+    // attendance on it; hand off to the scanner once they're present.
+    void verifyAttendance(undefined, empCode).then((present) => {
+      if (present) document.getElementById("scanner-input")?.focus();
+    });
 
     // Fetch dynamic scan stats
     try {
