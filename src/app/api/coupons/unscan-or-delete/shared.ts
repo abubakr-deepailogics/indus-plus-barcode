@@ -10,6 +10,7 @@ import { readScanDateRange, scanDateConditions } from "@/lib/scan-date-range";
 
 export interface CouponFilter {
   department: CouponDepartment;
+  // "" = every work order in the department (cut/bundle ranges then rejected).
   workOrder: string;
   fromBundle: string;
   toBundle: string;
@@ -29,10 +30,15 @@ export function readCouponFilter(
 ): CouponFilter | { error: string } {
   const workOrder = String(source.workOrder ?? "").trim();
   const department = String(source.department ?? "sewing").trim().toLowerCase();
-  if (!workOrder) {
-    return { error: "Missing required field: workOrder." };
-  }
   if (!isCouponDepartment(department)) return { error: "Invalid department." };
+  // Cut and bundle numbers restart per work order, so their ranges only mean
+  // something within one (same rule as Coupon Tracing's list).
+  const hasRange = ["fromBundle", "toBundle", "fromCut", "toCut"].some((key) =>
+    String(source[key] ?? "").trim(),
+  );
+  if (!workOrder && hasRange) {
+    return { error: "Cut and bundle ranges require a work order." };
+  }
   const scannedValue = String(source.isScanned ?? "").trim();
   const couponCodes = Array.isArray(source.couponCodes)
     ? source.couponCodes.map((c) => String(c).trim()).filter(Boolean)
@@ -99,13 +105,17 @@ export async function findMatchingCoupons(
   pool: Awaited<ReturnType<typeof getPool>>,
   filter: CouponFilter,
 ): Promise<MatchedCoupon[]> {
+  // Without a work order the match spans every work order in the department.
+  // Coupon codes embed the work order's digits, so selected codes still
+  // identify single coupons there.
+  const workOrderCondition = filter.workOrder ? "WorkOrder = @workOrder AND " : "";
   if (filter.couponCodes && filter.couponCodes.length > 0) {
     const rows: MatchedCoupon[] = [];
     for (const batch of chunk(filter.couponCodes, IN_LIST_CHUNK_SIZE)) {
       const request = pool
         .request()
-        .input("workOrder", sql.NVarChar, filter.workOrder)
         .input("department", sql.NVarChar, filter.department);
+      if (filter.workOrder) request.input("workOrder", sql.NVarChar, filter.workOrder);
       const placeholders = batch.map((code, i) => {
         request.input(`code${i}`, sql.NVarChar, code);
         return `@code${i}`;
@@ -113,7 +123,7 @@ export async function findMatchingCoupons(
       const result = await request.query(`
         SELECT ${MATCH_COLUMNS}
         FROM dbo.QrCode_Coupon
-        WHERE WorkOrder = @workOrder AND Department = @department AND IsDeleted = 0
+        WHERE ${workOrderCondition}Department = @department AND IsDeleted = 0
           AND CouponCode IN (${placeholders.join(", ")})
       `);
       rows.push(...(result.recordset as MatchedCoupon[]));
@@ -123,9 +133,12 @@ export async function findMatchingCoupons(
 
   const request = pool
     .request()
-    .input("workOrder", sql.NVarChar, filter.workOrder)
     .input("department", sql.NVarChar, filter.department);
-  const conditions = ["WorkOrder = @workOrder", "Department = @department", "IsDeleted = 0"];
+  const conditions = ["Department = @department", "IsDeleted = 0"];
+  if (filter.workOrder) {
+    request.input("workOrder", sql.NVarChar, filter.workOrder);
+    conditions.unshift("WorkOrder = @workOrder");
+  }
   if (filter.fromBundle) {
     request.input("fromBundle", sql.NVarChar, filter.fromBundle);
     conditions.push(

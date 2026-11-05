@@ -37,6 +37,7 @@ interface MatchCounts {
   totalCount: number;
   scannedCount: number;
   unscannedCount: number;
+  workOrderCount: number;
 }
 
 interface UnscanOrDeleteCouponModalProps {
@@ -168,6 +169,7 @@ export function UnscanOrDeleteCouponModal({
           totalCount: Number(data.totalCount) || 0,
           scannedCount: Number(data.scannedCount) || 0,
           unscannedCount: Number(data.unscannedCount) || 0,
+          workOrderCount: Number(data.workOrderCount) || 0,
         });
         setStep("confirm");
       } catch (err) {
@@ -277,9 +279,15 @@ export function UnscanOrDeleteCouponModal({
                   Active Scope
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-700">
-                    W/O: {filters.workOrder}
-                  </span>
+                  {filters.workOrder ? (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2 py-1 text-[10px] font-semibold text-slate-700">
+                      W/O: {filters.workOrder}
+                    </span>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2 py-1 text-[10px] font-bold text-red-700">
+                      All work orders ({matchCounts.workOrderCount})
+                    </span>
+                  )}
                   {hasFilters ? (
                     entries.map((entry) => (
                       <span
@@ -291,11 +299,31 @@ export function UnscanOrDeleteCouponModal({
                     ))
                   ) : (
                     <span className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-white px-2 py-1 text-[10px] font-semibold text-red-700">
-                      Entire work order
+                      {filters.workOrder ? "Entire work order" : "Every coupon in this department"}
                     </span>
                   )}
                 </div>
               </div>
+
+              {!filters.workOrder && (
+                <div className="mb-4 flex w-full items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2.5 text-left text-xs font-semibold leading-relaxed text-red-700">
+                  <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                  {matchCounts.workOrderCount === 1 ? (
+                    <span>
+                      No work order is selected, so this searched every work
+                      order. All matching coupons belong to{" "}
+                      <strong>1 work order</strong>.
+                    </span>
+                  ) : (
+                    <span>
+                      No work order is selected. This applies to matching
+                      coupons across{" "}
+                      <strong>{matchCounts.workOrderCount} work orders</strong>
+                      , not just one.
+                    </span>
+                  )}
+                </div>
+              )}
 
               <p className="text-sm text-slate-800 font-medium mb-5 text-left leading-relaxed">
                 {confirmAction === "unscan" && (

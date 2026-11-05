@@ -1,11 +1,18 @@
 import { getPool, sql } from "@/lib/db";
 import { softDeleteCoupons } from "@/features/qr-code-generation/services/coupon-registration.service";
 import { logCouponActionHistory } from "@/features/qr-code-generation/services/coupon-history.service";
-import { readCouponFilter, findMatchingCoupons, chunk, IN_LIST_CHUNK_SIZE } from "../shared";
+import {
+  readCouponFilter,
+  findMatchingCoupons,
+  chunk,
+  IN_LIST_CHUNK_SIZE,
+  type MatchedCoupon,
+} from "../shared";
 
 export const dynamic = "force-dynamic";
 
-// Bulk-delete by filter (Work Order required, Cut/Bundle/Operation each
+// Bulk-delete by filter (Work Order optional — omitted means every work
+// order in the department; Cut/Bundle ranges need one; other filters each
 // optional and narrowing) — the "delete" half of what used to be one
 // combined unscan-or-delete action, now its own route. Only ever touches
 // coupons that are CURRENTLY unscanned in this same request's fresh match
@@ -38,6 +45,75 @@ export const dynamic = "force-dynamic";
 // returns a plain JSON error response — the stream only starts once
 // there's actually a matched batch to work through.
 const PROGRESS_CHUNK_SIZE = 200; // matches logCouponActionHistory's own ROWS_PER_CHUNK
+
+// Snapshot cascade for one work order's just-deleted coupons (see the module
+// comment above for the rule).
+async function cascadeSnapshotDeletes(
+  pool: Awaited<ReturnType<typeof getPool>>,
+  workOrder: string,
+  coupons: MatchedCoupon[],
+  by: string,
+) {
+  const opNos = [...new Set(coupons.map((m) => m.OpNo))];
+  const bundleNos = [...new Set(coupons.map((m) => m.BundleNo))];
+  const cascades: Promise<unknown>[] = [];
+
+  for (const opBatch of chunk(opNos, IN_LIST_CHUNK_SIZE)) {
+    const req = pool
+      .request()
+      .input("deletedBy", sql.NVarChar, by)
+      .input("wo", sql.NVarChar, workOrder);
+    const inClause = opBatch
+      .map((op, i) => {
+        req.input(`op${i}`, sql.NVarChar, op);
+        return `@op${i}`;
+      })
+      .join(", ");
+    cascades.push(
+      req.query(`
+        UPDATE sb
+        SET sb.IsDeleted = 1, sb.DeletedAt = SYSUTCDATETIME(), sb.DeletedBy = @deletedBy
+        FROM dbo.StyleBullettinInt sb
+        WHERE sb.[Order No] = @wo
+          AND sb.[Operation Code] IN (${inClause})
+          AND sb.IsDeleted = 0
+          AND NOT EXISTS (
+            SELECT 1 FROM dbo.QrCode_Coupon c
+            WHERE c.WorkOrder = @wo AND c.OpNo = sb.[Operation Code] AND c.IsDeleted = 0
+          )
+      `),
+    );
+  }
+
+  for (const bundleBatch of chunk(bundleNos, IN_LIST_CHUNK_SIZE)) {
+    const req = pool
+      .request()
+      .input("deletedBy", sql.NVarChar, by)
+      .input("wo", sql.NVarChar, workOrder);
+    const inClause = bundleBatch
+      .map((bundle, i) => {
+        req.input(`bundle${i}`, sql.NVarChar, bundle);
+        return `@bundle${i}`;
+      })
+      .join(", ");
+    cascades.push(
+      req.query(`
+        UPDATE cd
+        SET cd.IsDeleted = 1, cd.DeletedAt = SYSUTCDATETIME(), cd.DeletedBy = @deletedBy
+        FROM dbo.SaleOrderPOCutDetailViewV1 cd
+        WHERE cd.[Work Order #] = @wo
+          AND CAST(cd.[Bundle Id] AS NVARCHAR(50)) IN (${inClause})
+          AND cd.IsDeleted = 0
+          AND NOT EXISTS (
+            SELECT 1 FROM dbo.QrCode_Coupon c
+            WHERE c.WorkOrder = @wo AND c.BundleNo = CAST(cd.[Bundle Id] AS NVARCHAR(50)) AND c.IsDeleted = 0
+          )
+      `),
+    );
+  }
+
+  await Promise.all(cascades);
+}
 
 export async function POST(request: Request) {
   const body = await request.json();
@@ -80,7 +156,6 @@ export async function POST(request: Request) {
   }
 
   const by = String(actedBy).trim();
-  const workOrder = parsed.workOrder;
   const total = unscanned.length;
   const encoder = new TextEncoder();
 
@@ -98,65 +173,17 @@ export async function POST(request: Request) {
           send({ done, total });
         }
 
-        const opNos = [...new Set(unscanned.map((m) => m.OpNo))];
-        const bundleNos = [...new Set(unscanned.map((m) => m.BundleNo))];
-        const cascades: Promise<unknown>[] = [];
-
-        for (const opBatch of chunk(opNos, IN_LIST_CHUNK_SIZE)) {
-          const req = pool
-            .request()
-            .input("deletedBy", sql.NVarChar, by)
-            .input("wo", sql.NVarChar, workOrder);
-          const inClause = opBatch
-            .map((op, i) => {
-              req.input(`op${i}`, sql.NVarChar, op);
-              return `@op${i}`;
-            })
-            .join(", ");
-          cascades.push(
-            req.query(`
-              UPDATE sb
-              SET sb.IsDeleted = 1, sb.DeletedAt = SYSUTCDATETIME(), sb.DeletedBy = @deletedBy
-              FROM dbo.StyleBullettinInt sb
-              WHERE sb.[Order No] = @wo
-                AND sb.[Operation Code] IN (${inClause})
-                AND sb.IsDeleted = 0
-                AND NOT EXISTS (
-                  SELECT 1 FROM dbo.QrCode_Coupon c
-                  WHERE c.WorkOrder = @wo AND c.OpNo = sb.[Operation Code] AND c.IsDeleted = 0
-                )
-            `),
-          );
+        // Snapshot cascade is keyed per work order; a delete without a work
+        // order filter can span many, so cascade each one separately.
+        const byWorkOrder = new Map<string, typeof unscanned>();
+        for (const coupon of unscanned) {
+          const rows = byWorkOrder.get(coupon.WorkOrder) ?? [];
+          rows.push(coupon);
+          byWorkOrder.set(coupon.WorkOrder, rows);
         }
-
-        for (const bundleBatch of chunk(bundleNos, IN_LIST_CHUNK_SIZE)) {
-          const req = pool
-            .request()
-            .input("deletedBy", sql.NVarChar, by)
-            .input("wo", sql.NVarChar, workOrder);
-          const inClause = bundleBatch
-            .map((bundle, i) => {
-              req.input(`bundle${i}`, sql.NVarChar, bundle);
-              return `@bundle${i}`;
-            })
-            .join(", ");
-          cascades.push(
-            req.query(`
-              UPDATE cd
-              SET cd.IsDeleted = 1, cd.DeletedAt = SYSUTCDATETIME(), cd.DeletedBy = @deletedBy
-              FROM dbo.SaleOrderPOCutDetailViewV1 cd
-              WHERE cd.[Work Order #] = @wo
-                AND CAST(cd.[Bundle Id] AS NVARCHAR(50)) IN (${inClause})
-                AND cd.IsDeleted = 0
-                AND NOT EXISTS (
-                  SELECT 1 FROM dbo.QrCode_Coupon c
-                  WHERE c.WorkOrder = @wo AND c.BundleNo = CAST(cd.[Bundle Id] AS NVARCHAR(50)) AND c.IsDeleted = 0
-                )
-            `),
-          );
+        for (const [workOrder, coupons] of byWorkOrder) {
+          await cascadeSnapshotDeletes(pool, workOrder, coupons, by);
         }
-
-        await Promise.all(cascades);
 
         send({
           done: total,

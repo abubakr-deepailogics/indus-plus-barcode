@@ -5,7 +5,8 @@ import { readCouponFilter, findMatchingCoupons, chunk } from "../shared";
 
 export const dynamic = "force-dynamic";
 
-// Bulk-unscan by filter (Work Order required, Cut/Bundle/Operation each
+// Bulk-unscan by filter (Work Order optional — omitted means every work
+// order in the department; Cut/Bundle ranges need one; other filters each
 // optional and narrowing) — the "unscan" half of what used to be one
 // combined unscan-or-delete action, now its own route. Only ever touches
 // coupons that are CURRENTLY scanned in this same request's fresh match

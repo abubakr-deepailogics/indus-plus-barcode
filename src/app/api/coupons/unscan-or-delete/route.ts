@@ -46,6 +46,8 @@ export async function GET(request: Request) {
       totalCount: matches.length,
       scannedCount,
       unscannedCount: matches.length - scannedCount,
+      // Lets the confirm modal spell out a cross-work-order action.
+      workOrderCount: new Set(matches.map((m) => m.WorkOrder)).size,
     });
   } catch (err: unknown) {
     console.error("Coupon status lookup error:", err);

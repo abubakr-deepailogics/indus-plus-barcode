@@ -681,10 +681,10 @@ export default function CouponTracingPage() {
     };
   }, [showFilters, draftFilter.workOrder, department]);
 
-  // Print, selection and Unscan / Delete act on one work order's coupons
-  // only; a cross-work-order listing is read-only (view + CSV export).
+  // Selection and Unscan / Delete work with or without a traced work order;
+  // without one they act across every matching work order (the confirm
+  // modal says so). Print stays scoped to one work order.
   const canActOnCoupons =
-    Boolean(tracedWorkOrder) &&
     can("coupon-tracing-unscan", "create") &&
     can("coupon-tracing", "delete");
   const tableColumnCount =
@@ -774,8 +774,8 @@ export default function CouponTracingPage() {
 
         {/* Coupons for the traced work order, or across every work order
           when none is picked — server-paginated so thousands of coupons
-          never load at once. Print and Unscan / Delete stay scoped to a
-          single work order. */}
+          never load at once. Print stays scoped to a single work order;
+          Unscan / Delete can also act across all matching work orders. */}
         <div className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm">
           <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 px-4 py-3.5 md:px-5">
             <h3 className="text-sm font-semibold text-slate-900">
