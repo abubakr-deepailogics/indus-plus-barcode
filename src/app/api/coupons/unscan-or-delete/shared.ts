@@ -1,6 +1,7 @@
 import { getPool, sql } from "@/lib/db";
 import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
 import { cutBoundSql, normalizeCutNo } from "@/lib/cut-number";
+import { readScanDateRange, scanDateConditions } from "@/lib/scan-date-range";
 
 // Shared by the three routes in this folder (GET status check, POST
 // .../unscan, POST .../delete). These filters intentionally mirror Coupon
@@ -18,6 +19,8 @@ export interface CouponFilter {
   fromCut: string;
   toCut: string;
   employeeCode: string;
+  scannedFrom?: string;
+  scannedTo?: string;
   couponCodes?: string[];
 }
 
@@ -34,6 +37,8 @@ export function readCouponFilter(
   const couponCodes = Array.isArray(source.couponCodes)
     ? source.couponCodes.map((c) => String(c).trim()).filter(Boolean)
     : undefined;
+  const scanDateRange = readScanDateRange(source.scannedFrom, source.scannedTo);
+  if ("error" in scanDateRange) return scanDateRange;
   return {
     department: department as CouponDepartment,
     workOrder,
@@ -52,6 +57,7 @@ export function readCouponFilter(
     fromCut: String(source.fromCut ?? "").trim(),
     toCut: String(source.toCut ?? "").trim(),
     employeeCode: String(source.employeeCode ?? "").trim(),
+    ...scanDateRange,
     couponCodes:
       couponCodes && couponCodes.length > 0 ? couponCodes : undefined,
   };
@@ -153,6 +159,12 @@ export async function findMatchingCoupons(
   if (filter.employeeCode) {
     request.input("employeeCode", sql.NVarChar, filter.employeeCode);
     conditions.push("EmployeeCode = @employeeCode");
+  }
+  const scanDate = scanDateConditions("ScannedAt", filter);
+  if (scanDate.length > 0) {
+    request.input("scannedFrom", sql.Date, filter.scannedFrom);
+    request.input("scannedTo", sql.Date, filter.scannedTo);
+    conditions.push(...scanDate);
   }
   const result = await request.query(`
     SELECT ${MATCH_COLUMNS}

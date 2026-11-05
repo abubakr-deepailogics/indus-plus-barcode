@@ -1,13 +1,12 @@
 "use client";
 
-import { useState, useMemo, useCallback, useRef, Fragment } from "react";
-import { format, formatDistanceToNow, subDays } from "date-fns";
+import { useState, useMemo, useCallback, Fragment } from "react";
+import { format, formatDistanceToNow } from "date-fns";
 import {
   Search,
   Ticket,
   Wallet,
   UserRound,
-  Calendar as CalendarIcon,
   ClipboardList,
   Printer,
   ChevronLeft,
@@ -20,12 +19,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { Autocomplete } from "@/components/ui/autocomplete";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import { Calendar } from "@/components/ui/calendar";
+import { DateRangePicker, formatDateRangeLabel } from "@/components/date-range-picker";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
 import {
   groupByDimension,
@@ -44,13 +38,9 @@ import {
   fetchWorkOrderSearchSuggestions,
 } from "../services/reports.service";
 import { useDepartment } from "@/lib/department-context";
-import {
-  currentPayCycleStart,
-  useReportSearch,
-} from "../hooks/useReportSearch";
+import { useReportSearch } from "../hooks/useReportSearch";
 import type {
   OperationReportItem,
-  ReportDateRange,
   ReportSearchMode,
   ReportSearchSuggestion,
   ReportSummary,
@@ -258,13 +248,7 @@ function formatTimestamp(timestamp?: string | null): string {
   }
 }
 
-function formatRangeLabel(range: ReportDateRange): string {
-  if (!range.from && !range.to) return "All time";
-  if (range.from && range.to) {
-    return `${format(range.from, "dd MMM yyyy")} – ${format(range.to, "dd MMM yyyy")}`;
-  }
-  return format((range.from ?? range.to) as Date, "dd MMM yyyy");
-}
+const formatRangeLabel = formatDateRangeLabel;
 
 function getInitials(name?: string): string {
   if (!name) return "EM";
@@ -281,22 +265,6 @@ function formatEmployeeLabel(
   if (name && name !== code) return `${name} (#${code ?? "—"})`;
   return code ? `#${code}` : name || "—";
 }
-
-const PRESETS: { label: string; range: () => ReportDateRange }[] = [
-  {
-    label: "Last 7 Days",
-    range: () => ({ from: subDays(new Date(), 6), to: new Date() }),
-  },
-  {
-    label: "Last 30 Days",
-    range: () => ({ from: subDays(new Date(), 29), to: new Date() }),
-  },
-  {
-    label: "This Month",
-    range: () => ({ from: currentPayCycleStart(), to: new Date() }),
-  },
-  { label: "All Time", range: () => ({}) },
-];
 
 const ITEMS_PER_PAGE = 15;
 
@@ -550,10 +518,6 @@ export function EmployeeReportDashboard() {
   const [couponSearch, setCouponSearch] = useState("");
   const [couponPage, setCouponPage] = useState(1);
 
-  const rangePopoverActionsRef = useRef<{
-    close: () => void;
-    unmount: () => void;
-  } | null>(null);
 
   const employeesList = summary?.employees;
   const couponsList = summary?.coupons;
@@ -1285,52 +1249,7 @@ export function EmployeeReportDashboard() {
             <span className="text-[11px] font-semibold text-slate-700">
               Tenure / Scope
             </span>
-            <Popover actionsRef={rangePopoverActionsRef}>
-              <PopoverTrigger className="flex h-10 w-full items-center gap-2 rounded-lg border border-slate-200 bg-white px-3.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-50 focus:border-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-100">
-                <CalendarIcon className="w-4 h-4 text-slate-400 shrink-0" />
-                <span className="truncate">{formatRangeLabel(dateRange)}</span>
-              </PopoverTrigger>
-              <PopoverContent className="w-auto p-0 bg-white" align="start">
-                <div className="flex flex-col gap-2 p-2.5">
-                  <div className="flex flex-wrap gap-1.5">
-                    {PRESETS.map((preset) => (
-                      <button
-                        key={preset.label}
-                        type="button"
-                        onClick={() => {
-                          applyDateRange(preset.range());
-                          rangePopoverActionsRef.current?.close();
-                        }}
-                        className="rounded-md bg-rose-50 px-2.5 py-1 text-[10px] font-semibold text-rose-800 transition-colors hover:bg-rose-100"
-                      >
-                        {preset.label}
-                      </button>
-                    ))}
-                  </div>
-                  <Calendar
-                    mode="range"
-                    captionLayout="dropdown"
-                    classNames={{
-                      selected:
-                        "bg-rose-50 text-rose-800 hover:bg-rose-100 hover:text-rose-800 shadow-sm font-bold rounded-lg scale-105 [&>button]:text-rose-800",
-                    }}
-                    selected={
-                      dateRange.from || dateRange.to
-                        ? { from: dateRange.from, to: dateRange.to }
-                        : undefined
-                    }
-                    onSelect={(range) => {
-                      const next = { from: range?.from, to: range?.to };
-                      applyDateRange(next);
-                      if (next.from && next.to) {
-                        rangePopoverActionsRef.current?.close();
-                      }
-                    }}
-                    disabled={(date) => date > new Date()}
-                  />
-                </div>
-              </PopoverContent>
-            </Popover>
+            <DateRangePicker value={dateRange} onChange={applyDateRange} />
           </div>
 
           <button

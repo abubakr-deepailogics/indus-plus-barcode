@@ -13,15 +13,9 @@ import {
   type ReportSummary,
 } from "../types";
 
-// The pay cycle runs 24th → 23rd, not the calendar month — same boundary the
-// "This Month" preset and the Order Wise/Operator Wise finance reports use
-// (see currentPayCycleStart in report-summary-builder.service.ts's callers).
-export function currentPayCycleStart(): Date {
-  const now = new Date();
-  const day = now.getDate();
-  const cycleMonth = day >= 24 ? now.getMonth() : now.getMonth() - 1;
-  return new Date(now.getFullYear(), cycleMonth, 24);
-}
+import { currentPayCycleStart } from "@/lib/pay-cycle";
+
+export { currentPayCycleStart };
 
 export function useReportSearch() {
   const { department } = useDepartment();

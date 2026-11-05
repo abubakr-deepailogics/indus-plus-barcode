@@ -17,6 +17,7 @@ import {
   type CouponDepartment,
   usesManualCouponCutDetails,
 } from "@/lib/department-classification";
+import { readScanDateRange } from "@/lib/scan-date-range";
 import type {
   BundleDetailRow,
   OperationsDetailRow,
@@ -266,6 +267,13 @@ export async function GET(request: Request) {
   const department = (searchParams.get("department") || "sewing")
     .trim()
     .toLowerCase();
+  const scanDateRange = readScanDateRange(
+    searchParams.get("scanned_from"),
+    searchParams.get("scanned_to"),
+  );
+  if ("error" in scanDateRange) {
+    return Response.json({ error: scanDateRange.error }, { status: 400 });
+  }
 
   if (!workOrder && (fromBundle || toBundle || fromCut || toCut)) {
     return Response.json(
@@ -295,6 +303,7 @@ export async function GET(request: Request) {
       toCut,
       employeeCode,
       department: department as CouponDepartment,
+      ...scanDateRange,
     });
     return Response.json({ coupons: rows, total, page, pageSize });
   } catch (err: unknown) {

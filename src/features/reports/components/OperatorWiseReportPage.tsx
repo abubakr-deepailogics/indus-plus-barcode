@@ -2,11 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { format, subDays } from "date-fns";
-import { ArrowLeft, Calendar as CalendarIcon, Loader2, Printer, Users } from "lucide-react";
+import { format } from "date-fns";
+import { ArrowLeft, Loader2, Printer, Users } from "lucide-react";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
-import { Calendar } from "@/components/ui/calendar";
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { DateRangePicker } from "@/components/date-range-picker";
 import { fetchOperatorWiseReport } from "../services/reports.service";
 import { useDepartment } from "@/lib/department-context";
 import { currentPayCycleStart } from "../hooks/useReportSearch";
@@ -18,19 +17,6 @@ function formatAmount(value: number): string {
     maximumFractionDigits: 2,
   });
 }
-
-function formatRangeLabel(range: ReportDateRange): string {
-  if (!range.from && !range.to) return "All time";
-  if (!range.from || !range.to) return format((range.from ?? range.to) as Date, "dd MMM yyyy");
-  return `${format(range.from, "dd MMM yyyy")} – ${format(range.to, "dd MMM yyyy")}`;
-}
-
-const PRESETS: { label: string; range: () => ReportDateRange }[] = [
-  { label: "Last 7 Days", range: () => ({ from: subDays(new Date(), 6), to: new Date() }) },
-  { label: "Last 30 Days", range: () => ({ from: subDays(new Date(), 29), to: new Date() }) },
-  { label: "This Month", range: () => ({ from: currentPayCycleStart(), to: new Date() }) },
-  { label: "All Time", range: () => ({}) },
-];
 
 // Standalone page, same reasoning as OrderWiseReportPage — its own screen
 // with a back arrow and a print button rather than a panel bolted onto the
@@ -92,20 +78,11 @@ export function OperatorWiseReportPage() {
             <ArrowLeft className="w-4 h-4" />
             Back
           </button>
-          <Popover>
-            <PopoverTrigger className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 transition-colors hover:border-rose-300 hover:bg-rose-50/40 focus:border-rose-500 focus:outline-none focus:ring-2 focus:ring-rose-100">
-              <CalendarIcon className="size-4 shrink-0 text-slate-400" />
-              <span>{formatRangeLabel(dateRange)}</span>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto bg-white p-0" align="start">
-              <div className="flex flex-col gap-2 p-2.5">
-                <div className="flex flex-wrap gap-1.5">
-                  {PRESETS.map((preset) => <button key={preset.label} type="button" onClick={() => setDateRange(preset.range())} className="rounded-md bg-rose-50 px-2.5 py-1 text-[10px] font-semibold text-rose-800 transition-colors hover:bg-rose-100">{preset.label}</button>)}
-                </div>
-                <Calendar mode="range" captionLayout="dropdown" selected={dateRange.from || dateRange.to ? { from: dateRange.from, to: dateRange.to } : undefined} onSelect={(range) => setDateRange({ from: range?.from, to: range?.to })} disabled={(date) => date > new Date()} classNames={{ selected: "bg-rose-50 text-rose-800 hover:bg-rose-100 hover:text-rose-800 shadow-sm font-bold rounded-lg scale-105 [&>button]:text-rose-800" }} />
-              </div>
-            </PopoverContent>
-          </Popover>
+          <DateRangePicker
+            value={dateRange}
+            onChange={setDateRange}
+            triggerClassName="h-9 w-auto px-3 font-semibold hover:border-rose-300 hover:bg-rose-50/40 focus:border-rose-500 focus:ring-rose-100"
+          />
         </div>
         {data && data.rows.length > 0 && (
           <div className="flex items-center gap-2">

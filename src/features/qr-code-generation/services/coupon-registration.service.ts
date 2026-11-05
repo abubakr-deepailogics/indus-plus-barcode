@@ -10,6 +10,7 @@ import { buildCouponCode } from "./coupon-code";
 import type { CouponCard } from "./coupon-pairing.service";
 import type { CouponDepartment } from "@/lib/department-classification";
 import { cutBoundSql, normalizeCutNo } from "@/lib/cut-number";
+import { scanDateConditions } from "@/lib/scan-date-range";
 
 // Number of TVP round trips a registration run is split into — a divisor
 // of the row count, not a fixed row-count-per-chunk. A TVP has no 2100-param
@@ -415,6 +416,9 @@ export interface CouponListFilters {
   fromCut?: string;
   toCut?: string;
   employeeCode?: string;
+  // yyyy-MM-dd scan-date bounds, already validated (see readScanDateRange).
+  scannedFrom?: string;
+  scannedTo?: string;
 }
 
 // Shared WHERE-clause builder for coupon lookups — bundleNo/opNo match by
@@ -475,6 +479,12 @@ function applyCouponFilters(
   if (filters.employeeCode) {
     conditions.push("c.EmployeeCode = @employeeCode");
     request.input("employeeCode", sql.NVarChar, filters.employeeCode);
+  }
+  const scanDate = scanDateConditions("c.ScannedAt", filters);
+  if (scanDate.length > 0) {
+    conditions.push(...scanDate);
+    request.input("scannedFrom", sql.Date, filters.scannedFrom);
+    request.input("scannedTo", sql.Date, filters.scannedTo);
   }
   return conditions.join(" AND ");
 }

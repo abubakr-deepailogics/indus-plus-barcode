@@ -24,6 +24,11 @@ import {
 import { format } from "date-fns";
 import { printPdf } from "@/lib/print";
 import { Autocomplete } from "@/components/ui/autocomplete";
+import {
+  DateRangePicker,
+  formatDateRangeLabel,
+  type DateRangeValue,
+} from "@/components/date-range-picker";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
 import { downloadCsv } from "@/lib/csv-export";
 import { fetchWorkerSuggestions } from "@/features/coupon-scanning/services/coupon-scanning.service";
@@ -87,7 +92,14 @@ const EMPTY_DRAFT_FILTER = {
   toCut: "",
   employeeCode: "",
   employeeName: "",
+  scanDate: {} as DateRangeValue,
 };
+
+// Scan-date range as the yyyy-MM-dd bounds the coupon routes accept.
+const scanDateBounds = (range: DateRangeValue) => ({
+  scannedFrom: range.from ? format(range.from, "yyyy-MM-dd") : "",
+  scannedTo: range.to ? format(range.to, "yyyy-MM-dd") : "",
+});
 
 export default function CouponTracingPage() {
   const { department } = useDepartment();
@@ -110,6 +122,8 @@ export default function CouponTracingPage() {
   const [toCutFilter, setToCutFilter] = useState("");
   const [employeeFilter, setEmployeeFilter] = useState("");
   const [employeeFilterName, setEmployeeFilterName] = useState("");
+  const [scanDateFilter, setScanDateFilter] = useState<DateRangeValue>({});
+  const { scannedFrom, scannedTo } = scanDateBounds(scanDateFilter);
   const [sectionOptions, setSectionOptions] = useState<string[]>([]);
   const [scannedFilter, setScannedFilter] =
     useState<(typeof SCANNED_OPTIONS)[number]["value"]>("");
@@ -210,9 +224,13 @@ export default function CouponTracingPage() {
     if (scannedFilter) params.set("is_scanned", scannedFilter);
     if (employeeFilter.trim())
       params.set("employee_code", employeeFilter.trim());
+    if (scannedFrom) params.set("scanned_from", scannedFrom);
+    if (scannedTo) params.set("scanned_to", scannedTo);
     return params.toString();
   }, [
     department,
+    scannedFrom,
+    scannedTo,
     tracedWorkOrder,
     fromBundleFilter,
     toBundleFilter,
@@ -461,7 +479,74 @@ export default function CouponTracingPage() {
     fromCutFilter.trim(),
     toCutFilter.trim(),
     employeeFilter.trim(),
+    scannedFrom || scannedTo,
   ].filter(Boolean).length;
+
+  // One chip per applied filter, shown beside the Filters button. Removing a
+  // chip clears just that filter, and the table re-queries. Status and
+  // Tenure always show (their defaults are filters too), removable only
+  // once changed from that default.
+  const rangeLabel = (from: string, to: string) =>
+    `${from.trim() || "Start"} – ${to.trim() || "End"}`;
+  const appliedFilterChips = [
+    tracedWorkOrder && {
+      key: "work-order",
+      label: `W/O ${tracedWorkOrder}`,
+      onRemove: clearTracedWorkOrder,
+    },
+    (fromCutFilter.trim() || toCutFilter.trim()) && {
+      key: "cut",
+      label: `Cut ${rangeLabel(fromCutFilter, toCutFilter)}`,
+      onRemove: () => {
+        setFromCutFilter("");
+        setToCutFilter("");
+      },
+    },
+    (fromBundleFilter.trim() || toBundleFilter.trim()) && {
+      key: "bundle",
+      label: `Bundle ${rangeLabel(fromBundleFilter, toBundleFilter)}`,
+      onRemove: () => {
+        setFromBundleFilter("");
+        setToBundleFilter("");
+      },
+    },
+    sectionFilter && {
+      key: "section",
+      label: sectionFilter,
+      onRemove: () => setSectionFilter(""),
+    },
+    // Always shown: "All" is the default, so it has nothing to remove.
+    {
+      key: "status",
+      label: `Status: ${SCANNED_OPTIONS.find((option) => option.value === scannedFilter)?.label ?? "All"}`,
+      onRemove: scannedFilter ? () => setScannedFilter("") : undefined,
+    },
+    opFilter.trim() && {
+      key: "operation",
+      label: `Op ${opFilter.trim()}`,
+      onRemove: () => setOpFilter(""),
+    },
+    employeeFilter.trim() && {
+      key: "operator",
+      label: employeeFilterName.trim() || employeeFilter.trim(),
+      onRemove: () => {
+        setEmployeeFilter("");
+        setEmployeeFilterName("");
+      },
+    },
+    // Always shown: "All time" is the default, so it has nothing to remove.
+    {
+      key: "scan-date",
+      label: `Tenure: ${formatDateRangeLabel(scanDateFilter)}`,
+      onRemove:
+        scanDateFilter.from || scanDateFilter.to
+          ? () => setScanDateFilter({})
+          : undefined,
+    },
+  ].filter(
+    (chip): chip is { key: string; label: string; onRemove: (() => void) | undefined } =>
+      Boolean(chip),
+  );
 
   const couponActionFilters: CouponActionFilters = useMemo(
     () => ({
@@ -475,9 +560,13 @@ export default function CouponTracingPage() {
       toCut: toCutFilter,
       employeeCode: employeeFilter,
       employeeName: employeeFilterName,
+      scannedFrom,
+      scannedTo,
       couponCodes: [...selectedCoupons],
     }),
     [
+      scannedFrom,
+      scannedTo,
       tracedWorkOrder,
       fromBundleFilter,
       toBundleFilter,
@@ -504,6 +593,7 @@ export default function CouponTracingPage() {
       toCut: toCutFilter,
       employeeCode: employeeFilter,
       employeeName: employeeFilterName,
+      scanDate: scanDateFilter,
     });
     setShowFilters(true);
   };
@@ -542,6 +632,7 @@ export default function CouponTracingPage() {
     setScannedFilter(draftFilter.scanned);
     setEmployeeFilter(draftFilter.employeeCode);
     setEmployeeFilterName(draftFilter.employeeName);
+    setScanDateFilter(draftFilter.scanDate);
     setShowFilters(false);
   };
 
@@ -559,6 +650,7 @@ export default function CouponTracingPage() {
     draftFilter.fromCut.trim(),
     draftFilter.toCut.trim(),
     draftFilter.employeeCode.trim(),
+    draftFilter.scanDate.from || draftFilter.scanDate.to,
   ].filter(Boolean).length;
 
 
@@ -628,21 +720,28 @@ export default function CouponTracingPage() {
           accent="indigo"
           actions={
             <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-              {tracedWorkOrder && (
-                <span className="inline-flex max-w-full items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 py-1.5 pl-3 pr-1.5 text-xs font-semibold text-indigo-800">
-                  <ClipboardList className="size-3.5 shrink-0" />
-                  <span className="truncate">W/O {tracedWorkOrder}</span>
-                  <button
-                    type="button"
-                    onClick={clearTracedWorkOrder}
-                    title="Unselect work order"
-                    aria-label="Unselect work order"
-                    className="flex size-5 shrink-0 items-center justify-center rounded-lg text-indigo-500 transition-colors hover:bg-indigo-100 hover:text-indigo-800"
-                  >
-                    <X className="size-3.5" />
-                  </button>
+              {appliedFilterChips.map((chip) => (
+                <span
+                  key={chip.key}
+                  className={`inline-flex max-w-full items-center gap-1.5 rounded-xl border border-indigo-200 bg-indigo-50 py-1.5 pl-3 text-xs font-semibold text-indigo-800 ${chip.onRemove ? "pr-1.5" : "pr-3"}`}
+                >
+                  {chip.key === "work-order" && (
+                    <ClipboardList className="size-3.5 shrink-0" />
+                  )}
+                  <span className="truncate">{chip.label}</span>
+                  {chip.onRemove && (
+                    <button
+                      type="button"
+                      onClick={chip.onRemove}
+                      title={`Remove ${chip.label}`}
+                      aria-label={`Remove ${chip.label} filter`}
+                      className="flex size-5 shrink-0 items-center justify-center rounded-lg text-indigo-500 transition-colors hover:bg-indigo-100 hover:text-indigo-800"
+                    >
+                      <X className="size-3.5" />
+                    </button>
+                  )}
                 </span>
-              )}
+              ))}
               <button
                 type="button"
                 onClick={openFiltersModal}
@@ -1213,6 +1312,23 @@ export default function CouponTracingPage() {
                       inputClassName="w-full px-3 py-2.5 rounded-xl border border-[#e2e8f0] bg-white text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/10 focus:border-[#4f46e5] transition-all shadow-sm"
                     />
                   </label>
+
+                  {/* Same Tenure picker as Reports; matches on scan date. */}
+                  <div className="space-y-1.5 sm:col-span-2">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-500">
+                      Tenure / Scan Date
+                    </span>
+                    <DateRangePicker
+                      value={draftFilter.scanDate}
+                      onChange={(scanDate) =>
+                        setDraftFilter((prev) => ({ ...prev, scanDate }))
+                      }
+                    />
+                    <p className="text-[10px] font-semibold text-slate-400">
+                      Filters by scan date, so unscanned coupons are hidden
+                      while a date range is set.
+                    </p>
+                  </div>
                 </div>
               </div>
 

@@ -23,6 +23,8 @@ export async function GET(request: Request) {
       fromCut: searchParams.get("fromCut"),
       toCut: searchParams.get("toCut"),
       employeeCode: searchParams.get("employeeCode"),
+      scannedFrom: searchParams.get("scannedFrom"),
+      scannedTo: searchParams.get("scannedTo"),
       couponCodes: couponCodesParam
         ? couponCodesParam.split(",").filter(Boolean)
         : undefined,

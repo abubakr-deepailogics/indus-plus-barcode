@@ -15,6 +15,7 @@ import {
   isCouponDepartment,
   type CouponDepartment,
 } from "@/lib/department-classification";
+import { readScanDateRange } from "@/lib/scan-date-range";
 import type {
   BundleDetailRow,
   CouponLayout,
@@ -64,6 +65,13 @@ export async function GET(request: Request) {
   if (!isCouponDepartment(department)) {
     return Response.json({ error: "Invalid department." }, { status: 400 });
   }
+  const scanDateRange = readScanDateRange(
+    searchParams.get("scanned_from"),
+    searchParams.get("scanned_to"),
+  );
+  if ("error" in scanDateRange) {
+    return Response.json({ error: scanDateRange.error }, { status: 400 });
+  }
 
   try {
     // Coupons live on pitSystem; bundle/op display data (cut detail, style
@@ -81,6 +89,7 @@ export async function GET(request: Request) {
       toCut,
       employeeCode,
       department: department as CouponDepartment,
+      ...scanDateRange,
     });
     if (coupons.length === 0) {
       return Response.json(

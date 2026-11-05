@@ -22,6 +22,9 @@ export type CouponActionFilters = {
   toCut: string;
   employeeCode: string;
   employeeName: string;
+  // yyyy-MM-dd scan-date bounds ("" = no bound), same as the tracing table.
+  scannedFrom: string;
+  scannedTo: string;
   couponCodes: string[];
 };
 
@@ -91,6 +94,14 @@ function filterEntries(filters: CouponActionFilters) {
       value: filters.employeeName.trim() || filters.employeeCode.trim(),
     });
   }
+  if (filters.scannedFrom || filters.scannedTo) {
+    const from = filters.scannedFrom || filters.scannedTo;
+    const to = filters.scannedTo || filters.scannedFrom;
+    entries.push({
+      label: "Scan date",
+      value: from === to ? from : `${from} - ${to}`,
+    });
+  }
   return entries;
 }
 
@@ -141,6 +152,8 @@ export function UnscanOrDeleteCouponModal({
           fromCut: filters.fromCut.trim(),
           toCut: filters.toCut.trim(),
           employeeCode: filters.employeeCode.trim(),
+          scannedFrom: filters.scannedFrom,
+          scannedTo: filters.scannedTo,
         });
         if (filters.couponCodes.length > 0) {
           params.set("couponCodes", filters.couponCodes.join(","));
