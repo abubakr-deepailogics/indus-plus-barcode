@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { format } from "date-fns";
 import { printPdf } from "@/lib/print";
+import { currentPayCycleStart } from "@/lib/pay-cycle";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import {
   DateRangePicker,
@@ -122,7 +123,11 @@ export default function CouponTracingPage() {
   const [toCutFilter, setToCutFilter] = useState("");
   const [employeeFilter, setEmployeeFilter] = useState("");
   const [employeeFilterName, setEmployeeFilterName] = useState("");
-  const [scanDateFilter, setScanDateFilter] = useState<DateRangeValue>({});
+  // Opens on "This Month" (current pay cycle), same default as the reports.
+  const [scanDateFilter, setScanDateFilter] = useState<DateRangeValue>(() => ({
+    from: currentPayCycleStart(),
+    to: new Date(),
+  }));
   const { scannedFrom, scannedTo } = scanDateBounds(scanDateFilter);
   const [sectionOptions, setSectionOptions] = useState<string[]>([]);
   const [scannedFilter, setScannedFilter] =
@@ -534,7 +539,8 @@ export default function CouponTracingPage() {
         setEmployeeFilterName("");
       },
     },
-    // Always shown: "All time" is the default, so it has nothing to remove.
+    // Always shown. Opens on This Month; × widens it to All time, which
+    // has nothing left to remove.
     {
       key: "scan-date",
       label: `Tenure: ${formatDateRangeLabel(scanDateFilter)}`,
