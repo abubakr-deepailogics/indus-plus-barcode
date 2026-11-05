@@ -1510,7 +1510,7 @@ export default function CutPlanningPage() {
             key={columnId}
             {...matrixCellProps(
               columnId,
-              `border-b border-r border-slate-300 px-2 py-2 font-semibold whitespace-nowrap ${leadTotal == null ? "text-left" : "text-right font-bold"} ${rowClass}`,
+              `border-b border-r border-slate-300 px-2 py-2 font-semibold whitespace-nowrap text-left ${leadTotal == null ? "" : "font-bold"} ${rowClass}`,
               "header",
             )}
           >
@@ -1718,7 +1718,7 @@ export default function CutPlanningPage() {
                           markerPlies: numeric(event.target.value),
                         })
                       }
-                      className={`${cellClass} w-full min-w-20 text-right`}
+                      className={`${cellClass} w-28`}
                     />
                   </td>
                   {groups.flatMap((group) =>
