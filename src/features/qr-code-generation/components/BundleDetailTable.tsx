@@ -18,6 +18,8 @@ interface BundleDetailTableProps {
   // from the DB and has to be typed in manually per row. Omitted (as on
   // the Coupon Generation page) keeps the original read-only display.
   onCutNoChange?: (id: number, value: string) => void;
+  // Shown beside the "Cutting Detail" heading (e.g. the bundles' data source).
+  headerBadge?: React.ReactNode;
 }
 
 export function BundleDetailTable({
@@ -29,6 +31,7 @@ export function BundleDetailTable({
   onAllBundlesSelChange,
   onReworkQtyBundleChange: _onReworkQtyBundleChange,
   onCutNoChange,
+  headerBadge,
 }: BundleDetailTableProps) {
   const [isCutWise, setIsCutWise] = useState(false);
   const [isSizeWise, setIsSizeWise] = useState(false);
@@ -64,11 +67,14 @@ export function BundleDetailTable({
 
   return (
     <div className="lg:col-span-6 bg-white border border-slate-200/80 rounded-2xl p-5 shadow-sm flex flex-col gap-4">
-      <div className="flex items-center justify-between border-b border-slate-100 pb-2">
-        <h3 className="text-sm font-extrabold text-indigo-700">Cutting Detail</h3>
-        <div className="flex items-center gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-slate-100 pb-2">
+        <div className="flex shrink-0 items-center gap-2">
+          <h3 className="whitespace-nowrap text-sm font-extrabold text-indigo-700">Cutting Detail</h3>
+          {headerBadge}
+        </div>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
           <div className="flex items-center gap-1.5">
-            <span className="text-[11px] font-bold text-slate-500">
+            <span className="whitespace-nowrap text-[11px] font-bold text-slate-500">
               Complete selection
             </span>
             <input
@@ -80,7 +86,7 @@ export function BundleDetailTable({
             />
           </div>
           <div className="relative flex items-center gap-1.5" ref={cutDropdownRef}>
-            <span className="text-[11px] font-bold text-slate-500">
+            <span className="whitespace-nowrap text-[11px] font-bold text-slate-500">
               Cut Wise selection
             </span>
             <input
@@ -128,7 +134,7 @@ export function BundleDetailTable({
             )}
           </div>
           <div className="relative flex items-center gap-1.5" ref={sizeDropdownRef}>
-            <span className="text-[11px] font-bold text-slate-500">
+            <span className="whitespace-nowrap text-[11px] font-bold text-slate-500">
               Size Wise selection
             </span>
             <input

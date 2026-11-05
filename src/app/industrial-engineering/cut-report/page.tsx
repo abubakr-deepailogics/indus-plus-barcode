@@ -38,7 +38,7 @@ import {
 } from "@/components/work-order-search-modal";
 import { RequirePermission } from "@/features/auth/components/RequirePermission";
 import { useAuth } from "@/features/auth/context/auth-context";
-import { CutDetailSourceBadge } from "@/features/cut-planning/components/CutDetailSourceBadge";
+import { CutDetailSourceBadge } from "@/components/cut-detail-source-badge";
 import type { CutDetailSource } from "@/features/cut-planning/types";
 
 interface CutDetailRow {

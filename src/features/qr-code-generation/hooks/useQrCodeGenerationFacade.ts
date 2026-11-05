@@ -14,6 +14,7 @@ import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { useDepartment } from "@/lib/department-context";
 import { usesManualCouponCutDetails } from "@/lib/department-classification";
 import type { WorkOrderSearchRow } from "@/components/work-order-search-modal";
+import type { CutDetailSource } from "@/features/cut-planning/types";
 
 interface WorkerItem {
   EmployeeID: number;
@@ -54,6 +55,7 @@ interface OpenOrderCutRow {
 
 interface OpenOrderResponse {
   cutDetails?: OpenOrderCutRow[];
+  cutDetailSource?: CutDetailSource;
   styleBulletins?: OpenOrderOperationRow[];
 }
 
@@ -74,6 +76,9 @@ function isZeroRateOp(op: OperationsDetailRow): boolean {
 
 interface QrCodeGenerationFacade {
   activeStyle: QrCodeStyleData;
+  // Where the loaded work order's bundles came from; null when none is
+  // loaded or the department enters its bundles manually.
+  cutDetailSource: CutDetailSource | null;
   isLoadingWorkOrder: boolean;
   showWorkOrderModal: boolean;
   setShowWorkOrderModal: (show: boolean) => void;
@@ -190,6 +195,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
   const { user, can } = useAuth();
   const canGenerate = can("coupon-generation", "create");
   const [activeStyle, setActiveStyle] = useState<QrCodeStyleData>(emptyStyle);
+  const [cutDetailSource, setCutDetailSource] = useState<CutDetailSource | null>(null);
   const workOrderRequestId = useRef(0);
   const [isLoadingWorkOrder, setIsLoadingWorkOrder] = useState(false);
   const [showWorkOrderModal, setShowWorkOrderModal] = useState(false);
@@ -352,6 +358,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
     const requestId = ++workOrderRequestId.current;
     if (!wo) {
       setActiveStyle(emptyStyle);
+      setCutDetailSource(null);
       setGeneratedPairs(new Set());
       setLastGeneratedSelectionKey("");
       setIsLoadingWorkOrder(false);
@@ -507,6 +514,9 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       }
       if (requestId !== workOrderRequestId.current) return;
       setGeneratedPairs(pairs);
+      setCutDetailSource(
+        usesManualCouponCutDetails(department) ? null : (data.cutDetailSource ?? null),
+      );
 
       setActiveStyle((prev) => ({
         ...prev,
@@ -893,6 +903,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
 
   return {
     activeStyle,
+    cutDetailSource,
     isLoadingWorkOrder,
     showWorkOrderModal,
     setShowWorkOrderModal,

@@ -11,6 +11,7 @@ import { GenerateCouponsModal } from "./GenerateCouponsModal";
 import { CodeTypeSelectionModal } from "./CodeTypeSelectionModal";
 import { Loader2, QrCode } from "lucide-react";
 import { ModulePageHeader } from "@/components/ModulePageHeader";
+import { CutDetailSourceBadge } from "@/components/cut-detail-source-badge";
 import { useDepartment } from "@/lib/department-context";
 import { usesManualCouponCutDetails } from "@/lib/department-classification";
 
@@ -114,6 +115,18 @@ export function QrCodeGenerationView() {
                   onBundleSelChange={facade.handleBundleSelChange}
                   onAllBundlesSelChange={facade.handleAllBundlesSelChange}
                   onReworkQtyBundleChange={facade.handleReworkQtyBundleChange}
+                  headerBadge={
+                    facade.cutDetailSource && (
+                      <CutDetailSourceBadge
+                        source={facade.cutDetailSource}
+                        title={
+                          facade.cutDetailSource === "cut-planning"
+                            ? "Approved bundles from Cut Planning's Cut Report for this work order."
+                            : "No Cut Report bundle is approved for this work order yet, so its cut detail is read from indus-plus."
+                        }
+                      />
+                    )
+                  }
                 />
               )}
 

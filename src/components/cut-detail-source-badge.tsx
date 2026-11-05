@@ -1,5 +1,5 @@
 import { Database, Scissors } from "lucide-react";
-import type { CutDetailSource } from "../types";
+import type { CutDetailSource } from "@/features/cut-planning/types";
 
 const SOURCE_DISPLAY: Record<
   CutDetailSource,
@@ -20,17 +20,26 @@ const SOURCE_DISPLAY: Record<
   },
 };
 
-// Compact pill telling the user which system a work order's bundles came from.
-export function CutDetailSourceBadge({ source }: { source: CutDetailSource }) {
-  const { label, title, className, Icon } = SOURCE_DISPLAY[source];
+// Compact pill telling the user which system a work order's bundles came
+// from. `title` overrides the hover text where the switch rule differs (e.g.
+// Coupon Generation switches on approved, not merely generated, bundles).
+export function CutDetailSourceBadge({
+  source,
+  title,
+}: {
+  source: CutDetailSource;
+  title?: string;
+}) {
+  const display = SOURCE_DISPLAY[source];
+  const { Icon } = display;
   return (
     <span
-      title={title}
-      className={`inline-flex h-7 items-center gap-1.5 rounded-full border px-2.5 text-[11px] font-semibold ${className}`}
+      title={title ?? display.title}
+      className={`inline-flex h-7 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 text-[11px] font-semibold ${display.className}`}
     >
       <Icon className="size-3.5" />
       <span className="font-medium opacity-70">Source:</span>
-      {label}
+      {display.label}
     </span>
   );
 }
