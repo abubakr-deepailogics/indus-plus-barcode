@@ -125,10 +125,12 @@ export function CreateEmployeeCardDialog({
       />
       <DialogContent
         data-client-brand
-        className="max-w-[calc(100%-2rem)] overflow-hidden rounded-xl border border-slate-200 bg-white p-0 shadow-2xl sm:max-w-[560px]"
+        // No overflow-hidden: the operation suggestions must be able to
+        // extend past the dialog edge. The header/footer round themselves.
+        className="max-w-[calc(100%-2rem)] rounded-xl border border-slate-200 bg-white p-0 shadow-2xl sm:max-w-[560px]"
         showCloseButton={!saving}
       >
-        <div className="border-b border-slate-200 bg-slate-50/80 px-6 py-5 sm:px-7">
+        <div className="rounded-t-xl border-b border-slate-200 bg-slate-50/80 px-6 py-5 sm:px-7">
           <DialogHeader className="flex-row items-start gap-3.5">
             <div className="flex size-11 shrink-0 items-center justify-center rounded-xl bg-slate-900 text-white shadow-sm">
               <ScanLine className="size-5" />
@@ -337,7 +339,7 @@ export function CreateEmployeeCardDialog({
                 <p>{error}</p>
               </div>
             )}
-            <DialogFooter className="-mx-6 -mb-5 rounded-none border-t border-slate-200 bg-slate-50 px-6 py-4 sm:-mx-7 sm:flex-row sm:px-7">
+            <DialogFooter className="-mx-6 -mb-5 rounded-b-xl border-t border-slate-200 bg-slate-50 px-6 py-4 sm:-mx-7 sm:flex-row sm:px-7">
               <Button
                 type="button"
                 variant="outline"

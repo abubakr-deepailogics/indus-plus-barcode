@@ -29,7 +29,9 @@ export function ColumnSortMenu({
   triggerClassName = "opacity-0 group-hover/header:opacity-100",
 }: ColumnSortMenuProps) {
   return (
-    <DropdownMenu>
+    // Non-modal: a modal menu locks page scroll, which hides the scrollbar
+    // and shifts the whole table sideways while the menu is open.
+    <DropdownMenu modal={false}>
       <DropdownMenuTrigger
         aria-label={`Column actions for ${title}`}
         className={cn(

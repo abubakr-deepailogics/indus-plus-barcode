@@ -489,15 +489,19 @@ export default function CutPlanningPage() {
     },
   ];
   const bundleCutOptions = useMemo(() => {
-    const cuts = new Map<string, number>();
+    const cuts = new Map<string, { transactionQty: number; shades: Set<string> }>();
     for (const plan of plans) {
       const cutNo = plan.cutNo.trim();
       if (!cutNo) continue;
       const transactionQty = Object.values(plan.sizeQuantities).reduce((sum, qty) => sum + qty, 0) * plan.markerPlies;
-      cuts.set(cutNo, (cuts.get(cutNo) ?? 0) + transactionQty);
+      const cut = cuts.get(cutNo) ?? { transactionQty: 0, shades: new Set<string>() };
+      cut.transactionQty += transactionQty;
+      // Blank shades show as "—" in the Cut no. menu, not "UNSHADED".
+      if (plan.shade.trim()) shadeCodes(plan.shade).forEach((shade) => cut.shades.add(shade));
+      cuts.set(cutNo, cut);
     }
     return [...cuts.entries()]
-      .map(([cutNo, transactionQty]) => ({ cutNo, transactionQty }))
+      .map(([cutNo, { transactionQty, shades }]) => ({ cutNo, transactionQty, shades: [...shades] }))
       .sort((a, b) =>
         a.cutNo.localeCompare(b.cutNo, undefined, { numeric: true }),
       );
@@ -1610,14 +1614,14 @@ export default function CutPlanningPage() {
                 >
                   <span className="group/header flex items-center gap-1">
                     {heading} {matrixPinButton(columnId, heading)}
-                    {/* Compact trigger, hover-revealed; the Cut no. inputs are
+                    {/* Compact, always-visible trigger; the Cut no. inputs are
                         sized to this header's width so columns stay aligned. */}
                     {columnId === "cut-no" && (
                       <ColumnSortMenu
                         title={heading}
                         onSortAsc={() => sortMarkerRowsByCut("asc")}
                         onSortDesc={() => sortMarkerRowsByCut("desc")}
-                        triggerClassName="h-4 w-3 opacity-0 group-hover/header:opacity-100"
+                        triggerClassName="h-4 w-3 opacity-100"
                       />
                     )}
                   </span>
@@ -2958,40 +2962,53 @@ export default function CutPlanningPage() {
               maxHeight: bundleCutMenuPosition.maxHeight,
             }}
           >
-            <div className="sticky top-0 bg-white px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-              Choose one cut
+            <div className="sticky top-0 flex items-center justify-between bg-white px-2.5 pb-1 pt-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+              <span>Cut no.</span>
+              <span>Shade</span>
             </div>
-            {bundleCutOptions.map(({ cutNo }) => (
-              <button
-                key={cutNo}
-                type="button"
-                role="option"
-                aria-selected={selectedBundleCut === cutNo}
-                onClick={() => {
-                  setSelectedBundleCut(cutNo);
-                  setShadeQuantities({});
-                  setShadeCutNos({});
-                  setShowBundlePreview(false);
-                  setBundleCutMenuOpen(false);
-                }}
-                className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2.5 text-left text-sm font-semibold transition ${
-                  selectedBundleCut === cutNo
-                    ? "bg-indigo-50 text-indigo-800"
-                    : "text-slate-700 hover:bg-slate-50"
-                }`}
-              >
-                <span
-                  className={`flex size-5 items-center justify-center rounded border text-[11px] ${
-                    selectedBundleCut === cutNo
-                      ? "border-indigo-600 bg-indigo-600 text-white"
-                      : "border-slate-300 bg-white text-transparent"
+            {bundleCutOptions.map(({ cutNo, shades }) => {
+              const selected = selectedBundleCut === cutNo;
+              return (
+                <button
+                  key={cutNo}
+                  type="button"
+                  role="option"
+                  aria-selected={selected}
+                  onClick={() => {
+                    setSelectedBundleCut(cutNo);
+                    setShadeQuantities({});
+                    setShadeCutNos({});
+                    setShowBundlePreview(false);
+                    setBundleCutMenuOpen(false);
+                  }}
+                  className={`flex w-full items-center justify-between gap-3 rounded-lg px-2.5 py-1.5 text-left text-[13px] transition ${
+                    selected
+                      ? "bg-indigo-50 font-bold text-indigo-800"
+                      : "font-semibold text-slate-700 hover:bg-slate-50"
                   }`}
                 >
-                  ✓
-                </span>
-                Cut {cutNo}
-              </button>
-            ))}
+                  <span className="truncate">Cut {cutNo}</span>
+                  {shades.length > 0 ? (
+                    <span className="flex shrink-0 flex-wrap justify-end gap-1">
+                      {shades.map((shade) => (
+                        <span
+                          key={shade}
+                          className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                            selected
+                              ? "bg-indigo-100 text-indigo-700"
+                              : "bg-slate-100 text-slate-600"
+                          }`}
+                        >
+                          {shade}
+                        </span>
+                      ))}
+                    </span>
+                  ) : (
+                    <span className="shrink-0 text-[11px] font-medium text-slate-300">—</span>
+                  )}
+                </button>
+              );
+            })}
           </div>,
           document.body,
         )}
