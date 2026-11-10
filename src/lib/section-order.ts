@@ -1,11 +1,16 @@
 // Fixed section display/sort order used across reports, wages, and cut
 // planning: Small Parts, then Back, then Front, then Assembly. No other
 // ordering (alphabetical, by amount, etc.) should be applied to sections.
-const SECTION_ORDER = ["small parts", "back", "front", "assembly"] as const;
+//
+// Matched by substring, not exact equality — real section names vary
+// ("Small Part", "Back Section", "Front Section", "Assembly", etc.), so an
+// exact-match lookup silently fails and falls through to the alphabetical
+// fallback below.
+const SECTION_ORDER = ["small part", "back", "front", "assembly"] as const;
 
 function sectionRank(section: string | null | undefined): number {
   const normalized = (section ?? "").trim().toLowerCase();
-  const index = SECTION_ORDER.indexOf(normalized as (typeof SECTION_ORDER)[number]);
+  const index = SECTION_ORDER.findIndex((name) => normalized.includes(name));
   return index === -1 ? SECTION_ORDER.length : index;
 }
 
