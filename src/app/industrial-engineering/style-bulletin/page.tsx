@@ -1278,6 +1278,10 @@ export default function OpenOrderPage() {
                     filename: `style-bulletin-${cutDetails[0]?.Work_Order || activeSearchQuery || "export"}`,
                     columns: [
                       {
+                        header: "Section",
+                        accessor: (row) => row.Section,
+                      },
+                      {
                         header: "Sequence",
                         accessor: (row) => row.Operation_Sequence,
                       },
