@@ -229,7 +229,17 @@ export default function OpenOrderPage() {
       );
     }
 
-    return result;
+    // Table rows, CSV export and the print preview all read from this same
+    // list, so sorting it here (section order, then original sequence
+    // within a section) is enough to make all three follow the fixed
+    // section order instead of raw DB row order.
+    return result
+      .slice()
+      .sort((a, b) => {
+        const sectionCompare = compareSectionOrder(a.Section, b.Section);
+        if (sectionCompare !== 0) return sectionCompare;
+        return (a.Operation_Sequence ?? 0) - (b.Operation_Sequence ?? 0);
+      });
   }, [styleBulletins, selectedSections, selectedMachines]);
 
   const [isLoading, setIsLoading] = useState(false);
