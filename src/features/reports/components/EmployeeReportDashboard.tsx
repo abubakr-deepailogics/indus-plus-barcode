@@ -21,6 +21,7 @@ import Link from "next/link";
 import { Autocomplete } from "@/components/ui/autocomplete";
 import { DateRangePicker, formatDateRangeLabel } from "@/components/date-range-picker";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
+import { compareSectionOrder } from "@/lib/section-order";
 import {
   groupByDimension,
   groupEmployeeData,
@@ -222,7 +223,7 @@ function groupSectionData(
     ).length;
     group.items.sort((a, b) => b.totalAmount - a.totalAmount);
   }
-  return groups.sort((a, b) => b.totalAmount - a.totalAmount);
+  return groups.sort((a, b) => compareSectionOrder(a.section, b.section));
 }
 
 // Sum of a nullable per-row numeric field (rate / sam) — null rows count as 0.
@@ -564,7 +565,7 @@ export function EmployeeReportDashboard() {
       seen.add(sec.section);
       groups.push({ key: sec.section, label: sec.section });
     }
-    return groups;
+    return groups.sort((a, b) => compareSectionOrder(a.key, b.key));
   }, [summary, searchDimension]);
 
   // Employees tab: only nests when the search subject isn't already the
@@ -968,6 +969,7 @@ export function EmployeeReportDashboard() {
       headers = [
         groupHeader,
         "Operation",
+        "Section",
         "Piece Rate",
         "Incentive",
         "SAM",
@@ -980,6 +982,7 @@ export function EmployeeReportDashboard() {
           rows.push([
             g.groupLabel,
             row.label,
+            row.section ?? "",
             row.rate != null ? Number(row.rate.toFixed(2)) : "",
             row.incentive != null ? Number(row.incentive.toFixed(2)) : "",
             row.sam != null ? Number(row.sam.toFixed(2)) : "",
@@ -991,6 +994,7 @@ export function EmployeeReportDashboard() {
       if (operationRowGroups.length > 0) {
         rows.push([
           "Grand Total :",
+          "",
           "",
           Number(operationRowGrandTotals.rate.toFixed(2)),
           Number(operationRowGrandTotals.incentive.toFixed(2)),
@@ -2019,6 +2023,9 @@ export function EmployeeReportDashboard() {
                           <th className="py-2.5 px-3 border-r border-slate-200">
                             Operation
                           </th>
+                          <th className="py-2.5 px-3 border-r border-slate-200">
+                            Section
+                          </th>
                           <th className="py-2.5 px-3 text-right border-r border-slate-200">
                             Piece Rate
                           </th>
@@ -2040,7 +2047,7 @@ export function EmployeeReportDashboard() {
                         {operationRowGroups.length === 0 ? (
                           <tr>
                             <td
-                              colSpan={6}
+                              colSpan={8}
                               className="py-8 text-center text-slate-400 font-medium"
                             >
                               No operations recorded for this period.
@@ -2059,6 +2066,9 @@ export function EmployeeReportDashboard() {
                                   </td>
                                   <td className="py-2 px-3 font-semibold text-slate-800 text-[11px] border-r border-slate-200">
                                     {row.label}
+                                  </td>
+                                  <td className="py-2 px-3 text-slate-700 text-[11px] border-r border-slate-200">
+                                    {row.section ?? "â€”"}
                                   </td>
                                   <td className="py-2 px-3 text-right font-mono text-slate-700 text-[11px] border-r border-slate-200">
                                     {row.rate != null
@@ -2085,7 +2095,7 @@ export function EmployeeReportDashboard() {
                                 blank: per user request, this column isn't summed. */}
                               <tr className="bg-slate-50 border-t border-b-2 border-slate-300 font-bold text-[11px] text-slate-800">
                                 <td
-                                  colSpan={2}
+                                  colSpan={3}
                                   className="py-2 px-3 text-right border-r border-slate-200"
                                 >
                                   {DIMENSION_META[operationGroupDimension].totalLabel} :
@@ -2114,7 +2124,7 @@ export function EmployeeReportDashboard() {
                         <tfoot>
                           <tr className="bg-slate-100 border-t-2 border-slate-400 font-black text-xs text-slate-900">
                             <td
-                              colSpan={2}
+                              colSpan={3}
                               className="py-2.5 px-3 text-right border-r border-slate-300"
                             >
                               Grand Total :
@@ -3615,6 +3625,7 @@ export function EmployeeReportDashboard() {
                                 {DIMENSION_META[operationGroupDimension].columnLabel}
                               </th>
                               <th>OPERATION</th>
+                              <th>SECTION</th>
                               <th className="text-right w-20">PIECE RATE</th>
                               <th className="text-right w-20">INCENTIVE</th>
                               <th className="text-right w-16">SAM</th>
@@ -3627,7 +3638,7 @@ export function EmployeeReportDashboard() {
                           <tbody>
                             {operationRowGroups.length === 0 ? (
                               <tr>
-                                <td colSpan={7} className="text-center">
+                                <td colSpan={8} className="text-center">
                                   No operations recorded for this period.
                                 </td>
                               </tr>
@@ -3642,6 +3653,7 @@ export function EmployeeReportDashboard() {
                                       <td className="font-semibold">
                                         {row.label}
                                       </td>
+                                      <td>{row.section ?? "â€”"}</td>
                                       <td className="text-right font-mono">
                                         {row.rate != null
                                           ? row.rate
@@ -3669,7 +3681,7 @@ export function EmployeeReportDashboard() {
                                   ))}
                                   <tr className="print-totals-row">
                                     <td
-                                      colSpan={2}
+                                      colSpan={3}
                                       className="text-right font-bold"
                                     >
                                       {
@@ -3707,7 +3719,7 @@ export function EmployeeReportDashboard() {
                           {operationRowGroups.length > 0 && (
                             <tfoot>
                               <tr className="print-totals-row font-bold">
-                                <td colSpan={2} className="text-right">
+                                <td colSpan={3} className="text-right">
                                   Grand Total :
                                 </td>
                                 <td className="text-right font-mono">

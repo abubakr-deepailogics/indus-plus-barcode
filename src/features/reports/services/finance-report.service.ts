@@ -10,6 +10,7 @@ import type { Department } from "@/lib/department-classification";
 import { fetchDepartmentOpTotalsByWorkOrder } from "./department-op-totals.service";
 import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import { findDummyEmployeesByCodes } from "@/features/dummy-employees/services/dummy-employees.service";
+import { compareSectionOrder } from "@/lib/section-order";
 import type {
   FinanceReportPeriod,
   OrderWiseReportResult,
@@ -384,7 +385,8 @@ export async function buildOperatorWiseReport(
       };
     })
     .sort((a, b) => {
-      if (a.section !== b.section) return a.section.localeCompare(b.section);
+      const sectionDiff = compareSectionOrder(a.section, b.section);
+      if (sectionDiff !== 0) return sectionDiff;
       return a.employeeName.localeCompare(b.employeeName);
     });
 

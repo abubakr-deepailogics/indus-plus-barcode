@@ -5,6 +5,7 @@ import type {
   EmployeeBreakdownItem,
 } from "@/features/reports/types";
 import type { EmployeeGrouped, EmployeeGroupedItem } from "../types";
+import { compareSectionOrder } from "@/lib/section-order";
 
 // Rework bundle numbers are prefixed "RW" (see rework-coupon/page.tsx's
 // assignedBundles) — no other bundle numbering scheme starts with "RW", so
@@ -289,6 +290,9 @@ export type RowDimension = "workOrder" | "operation" | "section";
 export interface DimensionRow {
   key: string;
   label: string;
+  // Operation rows need their style-bulletin section displayed alongside the
+  // operation name. Other row dimensions have no single corresponding section.
+  section: string | null;
   couponCount: number;
   totalQty: number;
   // totalQty minus coupons whose piece rate is 0 — what group totals add up
@@ -358,6 +362,7 @@ export function groupRowsByDimension(
         rowMap.set(rowKey, {
           key: rowKey,
           label: rowDimensionLabel(c, rowDimension),
+          section: rowDimension === "operation" ? c.section ?? "General" : null,
           couponCount: 1,
           totalQty: qty,
           countedQty: rate === 0 && incentive === 0 ? 0 : qty,
@@ -382,7 +387,9 @@ export function groupRowsByDimension(
     }
 
     const rows = Array.from(rowMap.values()).sort(
-      (a, b) => b.totalAmount - a.totalAmount,
+      rowDimension === "section"
+        ? (a, b) => compareSectionOrder(a.key, b.key)
+        : (a, b) => b.totalAmount - a.totalAmount,
     );
     const totalCoupons = rows.reduce((acc, r) => acc + r.couponCount, 0);
     const totalQty = rows.reduce((acc, r) => acc + r.countedQty, 0);

@@ -1,5 +1,6 @@
 import { getPool, sql } from "@/lib/db";
 import { isCouponDepartment } from "@/lib/department-classification";
+import { compareSectionOrder } from "@/lib/section-order";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ export async function GET(request: Request) {
     const sections = result.recordset
       .map((r) => String(r.Section))
       .filter((s) => !q || s.toLowerCase().includes(q))
-      .sort((a, b) => a.localeCompare(b))
+      .sort(compareSectionOrder)
       .slice(0, 12);
 
     return Response.json(sections);

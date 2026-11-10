@@ -22,6 +22,7 @@ import type {
   WorkOrderReportItem,
 } from "../types";
 import { findDummyEmployee, findDummyEmployeesByCodes } from "@/features/dummy-employees/services/dummy-employees.service";
+import { compareSectionOrder } from "@/lib/section-order";
 
 // Server-only: builds the report summary for /api/reports/summary. Kept out
 // of the route handler per the "route files stay thin" convention — this is
@@ -751,7 +752,7 @@ export async function buildReportSummary(
     .sort((a, b) => {
       if (a.workOrder !== b.workOrder)
         return a.workOrder.localeCompare(b.workOrder);
-      return b.totalAmount - a.totalAmount;
+      return compareSectionOrder(a.section, b.section);
     });
   const bundles = Array.from(bundleMap.values())
     .map((b) => ({
