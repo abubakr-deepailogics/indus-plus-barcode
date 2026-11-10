@@ -13,6 +13,7 @@ import { useAuth } from "@/features/auth/context/auth-context";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { useDepartment } from "@/lib/department-context";
 import { usesManualCouponCutDetails } from "@/lib/department-classification";
+import { compareSectionOrder } from "@/lib/section-order";
 import type { WorkOrderSearchRow } from "@/components/work-order-search-modal";
 import type { CutDetailSource } from "@/features/cut-planning/types";
 
@@ -418,18 +419,8 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
         sdl: op.Sdl_No !== undefined ? String(op.Sdl_No) : "-",
       }));
 
-      const sectionMinSeq = new Map<string, number>();
-      for (const op of operations) {
-        const seqNum = Number(op.seqNo) || 0;
-        const current = sectionMinSeq.get(op.section);
-        if (current === undefined || seqNum < current) {
-          sectionMinSeq.set(op.section, seqNum);
-        }
-      }
       operations.sort((a: OperationsDetailRow, b: OperationsDetailRow) => {
-        const sectionCompare =
-          (sectionMinSeq.get(a.section) ?? 0) -
-          (sectionMinSeq.get(b.section) ?? 0);
+        const sectionCompare = compareSectionOrder(a.section, b.section);
         if (sectionCompare !== 0) return sectionCompare;
         return (Number(a.seqNo) || 0) - (Number(b.seqNo) || 0);
       });

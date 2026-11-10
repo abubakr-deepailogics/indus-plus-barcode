@@ -9,6 +9,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import type { OperationsDetailRow } from "../types";
+import { compareSectionOrder } from "@/lib/section-order";
 
 interface OperationsDetailTableProps {
   operations: OperationsDetailRow[];
@@ -100,6 +101,9 @@ export function OperationsDetailTable({
     return [...operations].sort((a, b) => {
       if (sort.column === "seqNo") {
         return (Number(a.seqNo) - Number(b.seqNo)) * dir;
+      }
+      if (sort.column === "section") {
+        return compareSectionOrder(a.section, b.section) * dir;
       }
       return a[sort.column].localeCompare(b[sort.column], undefined, {
         numeric: true,

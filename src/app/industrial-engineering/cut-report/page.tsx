@@ -32,6 +32,7 @@ import { useGenerateCouponPdf } from "@/features/qr-code-generation/hooks/useGen
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { classifyDepartment } from "@/lib/department-classification";
+import { compareSectionOrder } from "@/lib/section-order";
 import {
   WorkOrderSearchModal,
   type WorkOrderSearchRow,
@@ -494,7 +495,7 @@ export default function OpenOrderPage() {
     const sections = styleBulletins
       .map((row) => row.Section)
       .filter(Boolean) as string[];
-    return Array.from(new Set(sections));
+    return Array.from(new Set(sections)).sort(compareSectionOrder);
   }, [styleBulletins]);
 
   const uniqueMachines = useMemo(() => {

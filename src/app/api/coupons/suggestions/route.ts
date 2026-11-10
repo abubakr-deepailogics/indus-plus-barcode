@@ -8,6 +8,7 @@ import {
 } from "@/lib/db";
 import { normalizeCutNo, normalizedCutSql } from "@/lib/cut-number";
 import { isCouponDepartment } from "@/lib/department-classification";
+import { compareSectionOrder } from "@/lib/section-order";
 
 export const dynamic = "force-dynamic";
 
@@ -144,10 +145,13 @@ export async function GET(request: Request) {
           SELECT DISTINCT Section
           FROM dbo.QrCode_Coupon
           WHERE ${wo.trim() ? "WorkOrder = @wo AND" : ""} Section IS NOT NULL AND Section <> '' AND IsDeleted = 0 AND Department = @department
-          ORDER BY Section
         `);
 
-      return Response.json(result.recordset.map((r) => r.Section as string));
+      return Response.json(
+        result.recordset
+          .map((r) => r.Section as string)
+          .sort(compareSectionOrder),
+      );
     }
 
     if (type === "cut") {
