@@ -2,6 +2,7 @@ import {
   getPool,
   sql,
   WORKERS_VIEW,
+  CUT_DETAIL_VIEW,
   CUT_DETAIL_SNAPSHOT_TABLE,
   STYLE_BULLETIN_SNAPSHOT_TABLE,
 } from "@/lib/db";
@@ -21,7 +22,10 @@ import type {
   SectionReportItem,
   WorkOrderReportItem,
 } from "../types";
-import { findDummyEmployee, findDummyEmployeesByCodes } from "@/features/dummy-employees/services/dummy-employees.service";
+import {
+  findDummyEmployee,
+  findDummyEmployeesByCodes,
+} from "@/features/dummy-employees/services/dummy-employees.service";
 import { compareSectionOrder } from "@/lib/section-order";
 
 // Server-only: builds the report summary for /api/reports/summary. Kept out
@@ -113,11 +117,76 @@ async function fetchOrderQtyByWorkOrder(
   return map;
 }
 
+async function fetchIndusPlusBundleQtyByWorkOrder(
+  req: sql.Request,
+  inClause: string,
+  department: CouponDepartment,
+): Promise<{ WorkOrder: string; BundleQty: number | null }[]> {
+  const result = await req.input("department", sql.NVarChar, department).query(`
+    WITH Latest AS (
+      SELECT
+        [Work Order #] AS WorkOrder,
+        TRY_CONVERT(decimal(18, 2), [Bundle Qty]) AS BundleQty,
+        ROW_NUMBER() OVER (
+          PARTITION BY [Work Order #], CAST([Bundle Id] AS NVARCHAR(50))
+          ORDER BY InsertedAt DESC
+        ) AS rn
+      FROM ${CUT_DETAIL_SNAPSHOT_TABLE}
+      WHERE IsDeleted = 0
+        AND Department = @department
+        AND [Work Order #] IN (${inClause})
+    )
+    SELECT WorkOrder, SUM(BundleQty) AS BundleQty
+    FROM Latest
+    WHERE rn = 1
+    GROUP BY WorkOrder
+  `);
+  return result.recordset;
+}
+
+async function fetchLiveErpBundleQtyByWorkOrder(
+  workOrders: string[],
+): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (workOrders.length === 0) return map;
+
+  const pool = await getPool("indusPlus");
+  for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
+    const req = pool.request();
+    const inClause = buildInClause(req, "wo", batch);
+    const result = await req.query(`
+      SELECT [Work Order #] AS WorkOrder,
+        SUM(TRY_CONVERT(decimal(18, 2), [Bundle Qty])) AS BundleQty
+      FROM ${CUT_DETAIL_VIEW}
+      WHERE [Work Order #] IN (${inClause})
+      GROUP BY [Work Order #]
+    `);
+    for (const row of result.recordset as {
+      WorkOrder: string;
+      BundleQty: number | null;
+    }[]) {
+      const qty = Number(row.BundleQty);
+      if (Number.isFinite(qty)) map.set(row.WorkOrder, qty);
+    }
+  }
+  return map;
+}
+
 // A Work Order's report column is intended to show the quantity actually
 // distributed into bundles, rather than its ERP order quantity. Washing and
-// Finishing store those bundles locally in CutReport; all other departments
-// use the PIT snapshot captured with coupon generation. Reports must never
-// re-read live ERP quantities after payment data has been generated.
+// Finishing store those bundles locally in CutReport; non-sewing/non-manual
+// departments use the PIT snapshot captured with coupon generation.
+// Sewing's bundle source is per-work-order instead (see hasApprovedBundles
+// in cut-report-bundle.service.ts): a work order stays on indusPlus until
+// any of its Cut Report bundles is approved, at which point Cut Report
+// (dbo.SewingCutReport) becomes its source for good. Mirror that same
+// per-work-order switch here: while unapproved, read the live ERP
+// cut-detail view (not the coupon-generation snapshot, which only has rows
+// for bundles actually included in a coupon-generation run and would
+// under-report Qty) — count its FULL bundle quantity, approved or not,
+// since ERP has no approval concept. Once switched to Cut Report, count
+// only its APPROVED bundles — an unapproved Cut Report bundle has no
+// coupons generated against it yet, so it isn't real produced quantity.
 async function fetchBundleQtyByWorkOrder(
   workOrders: string[],
   department: CouponDepartment,
@@ -126,56 +195,112 @@ async function fetchBundleQtyByWorkOrder(
   if (workOrders.length === 0) return map;
 
   const pool = await getPool("pitSystem");
+  // Resolved once (not per batch): pre-migration-056 schemas have no
+  // IsApproved column, and every active bundle counts as approved then —
+  // same fallback as hasApprovedBundles in cut-report-bundle.service.ts.
+  const hasApprovalColumn =
+    department === "sewing" && !usesManualCouponCutDetails(department)
+      ? Number(
+          (
+            await pool
+              .request()
+              .query(
+                `SELECT COL_LENGTH('dbo.SewingCutReport', 'IsApproved') AS Len`,
+              )
+          ).recordset[0]?.Len,
+        ) > 0
+      : false;
+
   for (const batch of chunk(workOrders, IN_LIST_CHUNK_SIZE)) {
+    if (usesManualCouponCutDetails(department)) {
+      const req = pool.request();
+      const inClause = buildInClause(req, "wo", batch);
+      const result = await req.input("department", sql.NVarChar, department)
+        .query(`
+        SELECT
+          WorkOrder,
+          SUM(TRY_CONVERT(decimal(18, 2), BundleQty)) AS BundleQty
+        FROM dbo.CutReport
+        WHERE IsDeleted = 0
+          AND Department = @department
+          AND WorkOrder IN (${inClause})
+        GROUP BY WorkOrder
+      `);
+      for (const row of result.recordset as {
+        WorkOrder: string;
+        BundleQty: number | null;
+      }[]) {
+        const qty = Number(row.BundleQty);
+        if (Number.isFinite(qty)) map.set(row.WorkOrder, qty);
+      }
+      continue;
+    }
+
+    if (department === "sewing") {
+      const approvedReq = pool.request();
+      const approvedInClause = buildInClause(approvedReq, "wo", batch);
+      const approvedResult = await approvedReq.query(`
+        SELECT DISTINCT report.WorkOrder
+        FROM dbo.SewingCutReport AS report
+        INNER JOIN dbo.BundleGeneration AS generation
+          ON generation.Id = report.BundleGenerationId
+        WHERE report.IsDeleted = 0
+          AND generation.IsDeleted = 0
+          AND report.WorkOrder IN (${approvedInClause})
+          ${hasApprovalColumn ? "AND report.IsApproved = 1" : ""}
+      `);
+      const approvedWorkOrders = new Set(
+        (approvedResult.recordset as { WorkOrder: string }[]).map(
+          (row) => row.WorkOrder,
+        ),
+      );
+
+      // Once switched to Cut Report, only its approved bundles count toward
+      // Qty — an unapproved bundle has no coupons generated against it (the
+      // generation route rejects unapproved bundle ids), so it isn't yet
+      // real produced/payable quantity.
+      const cutReportReq = pool.request();
+      const cutReportInClause = buildInClause(cutReportReq, "wo", batch);
+      const cutReportResult = await cutReportReq.query(`
+        SELECT WorkOrder, SUM(BundleQty) AS BundleQty
+        FROM dbo.SewingCutReport
+        WHERE IsDeleted = 0
+          AND WorkOrder IN (${cutReportInClause})
+          ${hasApprovalColumn ? "AND IsApproved = 1" : ""}
+        GROUP BY WorkOrder
+      `);
+      for (const row of cutReportResult.recordset as {
+        WorkOrder: string;
+        BundleQty: number | null;
+      }[]) {
+        if (!approvedWorkOrders.has(row.WorkOrder)) continue;
+        const qty = Number(row.BundleQty);
+        if (Number.isFinite(qty)) map.set(row.WorkOrder, qty);
+      }
+
+      const indusPlusWorkOrders = batch.filter(
+        (wo) => !approvedWorkOrders.has(wo),
+      );
+      if (indusPlusWorkOrders.length > 0) {
+        const liveErpQty =
+          await fetchLiveErpBundleQtyByWorkOrder(indusPlusWorkOrders);
+        for (const [wo, qty] of liveErpQty) map.set(wo, qty);
+      }
+      continue;
+    }
+
+    // The snapshot is append-only — every coupon generation inserts a fresh
+    // row per bundle and older ones aren't always soft-deleted — so sum
+    // only the latest row per (work order, bundle), same as
+    // cutDetailSnapshotByFilter's RowId = 1.
     const req = pool.request();
     const inClause = buildInClause(req, "wo", batch);
-    const result = usesManualCouponCutDetails(department)
-      ? await req.input("department", sql.NVarChar, department).query(`
-          SELECT
-            WorkOrder,
-            SUM(TRY_CONVERT(decimal(18, 2), BundleQty)) AS BundleQty
-          FROM dbo.CutReport
-          WHERE IsDeleted = 0
-            AND Department = @department
-            AND WorkOrder IN (${inClause})
-          GROUP BY WorkOrder
-        `)
-      : department === "sewing"
-        ? await req.query(`
-          SELECT WorkOrder, SUM(BundleQty) AS BundleQty
-          FROM dbo.SewingCutReport
-          WHERE IsDeleted = 0
-            AND WorkOrder IN (${inClause})
-          GROUP BY WorkOrder
-        `)
-      : // The snapshot is append-only — every coupon generation inserts a
-        // fresh row per bundle and older ones aren't always soft-deleted —
-        // so sum only the latest row per (work order, bundle), same as
-        // cutDetailSnapshotByFilter's RowId = 1.
-        await req.input("department", sql.NVarChar, department).query(`
-          WITH Latest AS (
-            SELECT
-              [Work Order #] AS WorkOrder,
-              TRY_CONVERT(decimal(18, 2), [Bundle Qty]) AS BundleQty,
-              ROW_NUMBER() OVER (
-                PARTITION BY [Work Order #], CAST([Bundle Id] AS NVARCHAR(50))
-                ORDER BY InsertedAt DESC
-              ) AS rn
-            FROM ${CUT_DETAIL_SNAPSHOT_TABLE}
-            WHERE IsDeleted = 0
-              AND Department = @department
-              AND [Work Order #] IN (${inClause})
-          )
-          SELECT WorkOrder, SUM(BundleQty) AS BundleQty
-          FROM Latest
-          WHERE rn = 1
-          GROUP BY WorkOrder
-        `);
-
-    for (const row of result.recordset as {
-      WorkOrder: string;
-      BundleQty: number | null;
-    }[]) {
+    const rows = await fetchIndusPlusBundleQtyByWorkOrder(
+      req,
+      inClause,
+      department,
+    );
+    for (const row of rows) {
       const qty = Number(row.BundleQty);
       if (Number.isFinite(qty)) map.set(row.WorkOrder, qty);
     }
@@ -192,8 +317,10 @@ async function fetchOperationCodesForSection(
   department: CouponDepartment,
 ): Promise<string[]> {
   const pitPool = await getPool("pitSystem");
-  const result = await pitPool.request().input("section", sql.NVarChar, section).input("department", sql.NVarChar, department)
-    .query(`
+  const result = await pitPool
+    .request()
+    .input("section", sql.NVarChar, section)
+    .input("department", sql.NVarChar, department).query(`
       SELECT DISTINCT [Operation Code] AS Operation_Code
       FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
       WHERE Section = @section AND Department = @department AND IsDeleted = 0
@@ -229,11 +356,20 @@ async function resolveSubject(
   if (mode === "employee") {
     const dummy = await findDummyEmployee(value);
     if (dummy) {
-      return { ok: true, subject: { mode: "employee", employee: {
-        EmployeeID: dummy.employeeCode, FirstName: dummy.employeeName,
-        ParentDepartment: dummy.department, DepartmentName: dummy.department,
-        DesignationName: "Tracing employee",
-      } }, boundValue: dummy.employeeCode };
+      return {
+        ok: true,
+        subject: {
+          mode: "employee",
+          employee: {
+            EmployeeID: dummy.employeeCode,
+            FirstName: dummy.employeeName,
+            ParentDepartment: dummy.department,
+            DepartmentName: dummy.department,
+            DesignationName: "Tracing employee",
+          },
+        },
+        boundValue: dummy.employeeCode,
+      };
     }
     const employeeIdNum = parseInt(value, 10);
     if (isNaN(employeeIdNum)) {
@@ -259,8 +395,10 @@ async function resolveSubject(
 
   if (mode === "workOrder") {
     const pitPool = await getPool("pitSystem");
-    const woResult = await pitPool.request().input("wo", sql.NVarChar, value).input("department", sql.NVarChar, department)
-      .query(`
+    const woResult = await pitPool
+      .request()
+      .input("wo", sql.NVarChar, value)
+      .input("department", sql.NVarChar, department).query(`
         SELECT TOP 1
           [Work Order #] AS Work_Order,
           [Customer Name] AS Customer_Name,
@@ -292,8 +430,10 @@ async function resolveSubject(
   // indusPlus's S_OperationsCatalog, which isn't carried into the snapshot,
   // so they're null here — same as an unmatched LEFT JOIN would have been.
   const pitPool = await getPool("pitSystem");
-    const opResult = await pitPool.request().input("code", sql.NVarChar, value).input("department", sql.NVarChar, department)
-    .query(`
+  const opResult = await pitPool
+    .request()
+    .input("code", sql.NVarChar, value)
+    .input("department", sql.NVarChar, department).query(`
       SELECT TOP 1 [Operation Code] AS Operation_Code, [Operation Name] AS Operation_Name,
              CAST(NULL AS NVARCHAR(50)) AS Department, CAST(NULL AS NVARCHAR(50)) AS SkillLevel
       FROM ${STYLE_BULLETIN_SNAPSHOT_TABLE}
@@ -346,7 +486,11 @@ export async function buildReportSummary(
             ? { mode: "operation", all: true }
             : { mode: "section", all: true };
   } else {
-    const subjectResult = await resolveSubject(mode, value, options.department ?? "sewing");
+    const subjectResult = await resolveSubject(
+      mode,
+      value,
+      options.department ?? "sewing",
+    );
     if (!subjectResult.ok) return subjectResult;
     subject = subjectResult.subject;
     boundValue = subjectResult.boundValue;
@@ -434,12 +578,16 @@ export async function buildReportSummary(
 
   const rows = couponResult.recordset as RawCouponRow[];
   const rawEnriched = await enrichCouponRows(rows, department);
-  const dummyEmployees = await findDummyEmployeesByCodes([...new Set(rawEnriched.map((row) => row.EmployeeCode).filter(Boolean))]);
+  const dummyEmployees = await findDummyEmployeesByCodes([
+    ...new Set(rawEnriched.map((row) => row.EmployeeCode).filter(Boolean)),
+  ]);
   // A dummy card records the same coupon trail as a real employee, but can
   // never affect earnings or incentive amounts in any standard report.
-  const enriched = rawEnriched.map((row) => dummyEmployees.has(row.EmployeeCode)
-    ? { ...row, Rate: 0, Incentive: 0, Value: 0 }
-    : row);
+  const enriched = rawEnriched.map((row) =>
+    dummyEmployees.has(row.EmployeeCode)
+      ? { ...row, Rate: 0, Incentive: 0, Value: 0 }
+      : row,
+  );
 
   const distinctWorkOrders = [...new Set(enriched.map((row) => row.WorkOrder))];
   const [orderQtyByWo, bundleQtyByWo] = await Promise.all([
@@ -719,7 +867,10 @@ export async function buildReportSummary(
           : null;
       const incentive =
         w.operationIncentives.size > 0
-          ? Array.from(w.operationIncentives.values()).reduce((a, b) => a + b, 0)
+          ? Array.from(w.operationIncentives.values()).reduce(
+              (a, b) => a + b,
+              0,
+            )
           : null;
       return {
         workOrder: w.workOrder,
@@ -784,10 +935,7 @@ export async function buildReportSummary(
     .sort((a, b) => b.totalAmount - a.totalAmount);
 
   const totalQty = Math.round(
-    enriched.reduce(
-      (sum, row) => sum + (Number(row.Qty) || 0),
-      0,
-    ),
+    enriched.reduce((sum, row) => sum + (Number(row.Qty) || 0), 0),
   );
   const avgRatePerPiece = totalQty > 0 ? totalAmount / totalQty : 0;
 
