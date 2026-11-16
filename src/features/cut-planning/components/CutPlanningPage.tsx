@@ -146,7 +146,6 @@ export default function CutPlanningPage() {
   const [showBundlePreview, setShowBundlePreview] = useState(false);
   const [bundlePreviewIdentity, setBundlePreviewIdentity] = useState<{
     nextSequence: number;
-    bundleIdPrefix: string;
   } | null>(null);
   const [selectedFabricItem, setSelectedFabricItem] = useState("");
   const [selectedFabricWorkOrder, setSelectedFabricWorkOrder] = useState("");
@@ -595,7 +594,7 @@ export default function CutPlanningPage() {
       return rows.map((row, index) => ({
         ...row,
         previewId: bundlePreviewIdentity
-          ? `${bundlePreviewIdentity.bundleIdPrefix}-${String(bundlePreviewIdentity.nextSequence + index).padStart(4, "0")}`
+          ? String(bundlePreviewIdentity.nextSequence + index).padStart(4, "0")
           : "Loading…",
         color: data?.metadata?.color || "—",
       }));
@@ -613,7 +612,7 @@ export default function CutPlanningPage() {
     return rows.map((row, index) => ({
       ...row,
       previewId: bundlePreviewIdentity
-        ? `${bundlePreviewIdentity.bundleIdPrefix}-${String(bundlePreviewIdentity.nextSequence + index).padStart(4, "0")}`
+        ? String(bundlePreviewIdentity.nextSequence + index).padStart(4, "0")
         : "Loading…",
       color: data?.metadata?.color || "—",
     }));
@@ -1227,20 +1226,17 @@ export default function CutPlanningPage() {
       );
       const body = (await response.json()) as {
         nextSequence?: number;
-        bundleIdPrefix?: string;
         error?: string;
       };
       if (
         !response.ok ||
         typeof body.nextSequence !== "number" ||
-        !Number.isSafeInteger(body.nextSequence) ||
-        !body.bundleIdPrefix
+        !Number.isSafeInteger(body.nextSequence)
       ) {
         throw new Error(body.error || "Unable to prepare the bundle preview.");
       }
       setBundlePreviewIdentity({
         nextSequence: body.nextSequence,
-        bundleIdPrefix: body.bundleIdPrefix,
       });
       setShowBundlePreview(true);
     } catch (caught) {

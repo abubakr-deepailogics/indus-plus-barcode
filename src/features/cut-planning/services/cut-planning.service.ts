@@ -423,11 +423,6 @@ export async function softDeleteCutPlanningRow(
   }
 }
 
-export function getBundleIdPrefix(workOrder: string) {
-  const digits = workOrder.replace(/\D/g, "");
-  return (digits.slice(-6) || "0").padStart(6, "0");
-}
-
 export async function getNextBundleSequence(workOrderInput: string) {
   const workOrder = workOrderInput.trim();
   if (!workOrder) return 1;
@@ -592,7 +587,7 @@ export async function generateBundles(
           INSERT INTO dbo.BundleGenerationSequence (WorkOrder, LastSequence) OUTPUT INSERTED.LastSequence AS Sequence VALUES (@workOrder, 1);
       `);
       const sequence = number(sequenceResult.recordset[0]?.Sequence);
-      const id = `${getBundleIdPrefix(workOrder)}-${String(sequence).padStart(4, "0")}`;
+      const id = String(sequence).padStart(4, "0");
       const qty = allocations.reduce((sum, item) => sum + item.qty, 0);
       if (!Number.isInteger(qty)) {
         throw new Error("Generated Bundle quantity must be a whole number. Check size quantities and Marker plies.");

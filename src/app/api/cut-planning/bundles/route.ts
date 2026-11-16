@@ -1,6 +1,5 @@
 import {
   generateBundles,
-  getBundleIdPrefix,
   getNextBundleSequence,
 } from "@/features/cut-planning/services/cut-planning.service";
 import type { GenerateBundlesPayload } from "@/features/cut-planning/types";
@@ -9,11 +8,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET(request: Request) {
   const workOrder = new URL(request.url).searchParams.get("work_order")?.trim();
-  if (!workOrder) return Response.json({ nextSequence: 1, bundleIdPrefix: "000000" });
+  if (!workOrder) return Response.json({ nextSequence: 1 });
   try {
     return Response.json({
       nextSequence: await getNextBundleSequence(workOrder),
-      bundleIdPrefix: getBundleIdPrefix(workOrder),
     });
   } catch (error) {
     console.error("Bundle preview GET error:", error);
