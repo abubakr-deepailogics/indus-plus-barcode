@@ -5,7 +5,9 @@ Or from this folder:  py -3.12 run.py dev  /  py -3.12 run.py start
 
 First run creates .venv and installs requirements.txt; later runs reinstall
 only when requirements.txt changes.
-Env overrides: HOST (default 127.0.0.1), PORT (8080), WORKERS (2, start only).
+Env overrides: HOST (default 127.0.0.1), PORT (8080), WORKERS (1, start only).
+More than 1 worker is flaky on Windows (uvicorn socket sharing: WinError 10022),
+and one worker already scans photos concurrently (run_in_threadpool in routes.py).
 """
 
 import os
@@ -42,7 +44,7 @@ def main():
         "--host", os.getenv("HOST", "127.0.0.1"),
         "--port", os.getenv("PORT", "8080"),
     ]
-    cmd += ["--reload", "--reload-dir", "app"] if mode == "dev" else ["--workers", os.getenv("WORKERS", "2")]
+    cmd += ["--reload", "--reload-dir", "app"] if mode == "dev" else ["--workers", os.getenv("WORKERS", "1")]
 
     # Ctrl+C reaches every process in the console, so uvicorn is already
     # shutting down; wait for it instead of killing it mid-way.
