@@ -11,7 +11,7 @@ const nextConfig: NextConfig = {
     "/api/qr-code-generation/pdf": ["src/assets/fonts/**/*"],
     "/api/qr-code-generation/pdf/*": ["src/assets/fonts/**/*"],
   },
-  allowedDevOrigins: ["172.16.0.21"],
+  allowedDevOrigins: ["172.16.0.21", "192.168.19.208"],
   async redirects() {
     return [
       {

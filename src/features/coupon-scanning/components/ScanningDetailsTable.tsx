@@ -202,7 +202,7 @@ export function ScanningDetailsTable(props: Facade) {
           </span>
         )}
       </div>
-      <PhotoScanPreviews previews={photoPreviews} rows={rows} onDismiss={dismissPhotoPreview} />
+      <PhotoScanPreviews previews={photoPreviews} onDismiss={dismissPhotoPreview} />
 
       {/* Scrollable table container */}
       <div

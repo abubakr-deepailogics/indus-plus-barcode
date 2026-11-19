@@ -151,9 +151,13 @@ export interface PhotoScan {
   missed: number[][][];
 }
 
+// What the server did with one code read from a photo.
+export type PhotoCodeStatus = "added" | "alreadyScanned" | "notFound";
+
 // A read photo kept on screen so the operator can see what was/wasn't read.
 export interface PhotoScanPreview {
   url: string; // object URL of the photo; unique, so it doubles as the id
   fileName: string;
   scan: PhotoScan;
+  statuses: Record<string, PhotoCodeStatus>; // by code, from this photo's scan
 }

@@ -12,6 +12,7 @@ import {
   describeFailedScans,
   couponItemToRow,
   PhotoScanPreview,
+  PhotoCodeStatus,
 } from "../types";
 import * as couponScanningService from "../services/coupon-scanning.service";
 
@@ -19,6 +20,25 @@ const EMPTY_ROW_COUNT = 10;
 
 function makeEmptyRows() {
   return Array.from({ length: EMPTY_ROW_COUNT }, (_, i) => makeEmptyRow(i + 1));
+}
+
+// What the server did with each code read from one photo, kept with the
+// photo so its boxes show that scan's outcome, not the table as it is later.
+function photoCodeStatuses(
+  codes: string[],
+  batch: { scanned: CouponApiItem[]; failed: { code: string; reason: string }[] },
+): Record<string, PhotoCodeStatus> {
+  const scanned = new Set(batch.scanned.map((item) => item.CouponCode));
+  const already = new Set(
+    batch.failed.filter((f) => f.reason === "already_scanned").map((f) => f.code),
+  );
+  const statuses: Record<string, PhotoCodeStatus> = {};
+  for (const raw of codes) {
+    const code = raw.trim();
+    if (!code) continue;
+    statuses[code] = scanned.has(code) ? "added" : already.has(code) ? "alreadyScanned" : "notFound";
+  }
+  return statuses;
 }
 
 function sumRates(items: CouponApiItem[]): number {
@@ -488,11 +508,18 @@ export function useCouponScanning() {
   // fires once the gun goes quiet.
   const FLUSH_DELAY_MS = 400;
   const pendingCodesRef = useRef<string[]>([]);
+  // Queued codes that got a new "pending" row (weren't in the table yet).
+  const pendingNewRowsRef = useRef<Set<string>>(new Set());
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Sends every queued code to the server. Resolves with the server's
+  // result, or undefined if nothing was sent or it failed (error shown).
   const flushPendingScans = useCallback(async () => {
     const codes = pendingCodesRef.current;
+    const newRows = pendingNewRowsRef.current;
     pendingCodesRef.current = [];
+    pendingNewRowsRef.current = new Set();
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
     flushTimerRef.current = null;
     if (codes.length === 0) return;
 
@@ -569,12 +596,15 @@ export function useCouponScanning() {
         if (result.failed.some((f) => f.reason === "already_scanned")) {
           playAlreadyScannedSound();
         }
-        // Drop failed codes' rows back to empty so the slot isn't stuck
-        // showing an unscanned "pending" row forever.
-        const failedCodes = new Set(result.failed.map((f) => f.code));
+        // Drop the "pending" rows this batch added for failed codes, so the
+        // slot isn't stuck showing an unscanned row forever. Rows that were
+        // already in the table (a re-scan of a scanned coupon) stay put.
+        const failedNewRows = new Set(
+          result.failed.map((f) => f.code).filter((code) => newRows.has(code)),
+        );
         setRows((prev) =>
           prev.map((row) =>
-            row.barCode && failedCodes.has(row.barCode)
+            row.barCode && failedNewRows.has(row.barCode) && !row.scanned
               ? makeEmptyRow(row.index)
               : row,
           ),
@@ -582,6 +612,7 @@ export function useCouponScanning() {
       } else {
         setScanError("");
       }
+      return result;
     } catch (err) {
       console.error("Batch scan error:", err);
       raiseError(
@@ -598,24 +629,20 @@ export function useCouponScanning() {
     activeDepartment,
   ]);
 
-  // Shared entry for gun scans and photo scans: appends new codes to the
-  // table as "pending" and queues them for the batch flush. Returns how
-  // many were actually new.
-  const enqueueCodes = (incoming: string[], flushDelayMs = FLUSH_DELAY_MS) => {
-    const inTable = new Set(rows.map((row) => row.barCode).filter(Boolean));
-    const codes = [...new Set(incoming.map((c) => c.trim()).filter(Boolean))];
-    const fresh = codes.filter((c) => !inTable.has(c));
-    const skipped = codes.length - fresh.length;
-
-    // Skip coupons already present in the table (already fetched/scanned/pending).
-    setScanError(
-      skipped === 0
-        ? ""
-        : codes.length === 1
-          ? `Coupon ${codes[0]} is already in the table.`
-          : `${skipped} coupon(s) already in the table were skipped.`,
+  // Shared entry for gun scans and photo scans: queues codes for the batch
+  // flush and appends a "pending" row for codes not in the table yet.
+  // Codes already in the table are still sent: the server decides what's
+  // already scanned, since another tab may have unscanned them since.
+  const enqueueCodes = (incoming: string[]) => {
+    const queued = new Set(pendingCodesRef.current);
+    const codes = [...new Set(incoming.map((c) => c.trim()).filter(Boolean))].filter(
+      (c) => !queued.has(c),
     );
-    if (fresh.length === 0) return 0;
+    const inTable = new Set(rows.map((row) => row.barCode).filter(Boolean));
+    const fresh = codes.filter((c) => !inTable.has(c));
+    pendingCodesRef.current.push(...codes);
+    fresh.forEach((c) => pendingNewRowsRef.current.add(c));
+    if (fresh.length === 0) return;
 
     setRows((prev) => {
       const updatedRows = [...prev];
@@ -629,11 +656,6 @@ export function useCouponScanning() {
       }
       return updatedRows;
     });
-
-    pendingCodesRef.current.push(...fresh);
-    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
-    flushTimerRef.current = setTimeout(flushPendingScans, flushDelayMs);
-    return fresh.length;
   };
 
   const handleScannerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
@@ -647,6 +669,8 @@ export function useCouponScanning() {
     setScannerInput("");
     requestAnimationFrame(() => input.focus());
     enqueueCodes([code]);
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = setTimeout(flushPendingScans, FLUSH_DELAY_MS);
   };
 
   // Photos of coupon sheets → QR codes → same queue as the gun, flushed
@@ -658,9 +682,9 @@ export function useCouponScanning() {
   const photoLoopRunningRef = useRef(false);
   const [photosPending, setPhotosPending] = useState(0);
   // The loop outlives the render that started it; read current state here.
-  const latestRef = useRef({ enqueueCodes, attendanceKey });
+  const latestRef = useRef({ enqueueCodes, flushPendingScans, attendanceKey });
   useEffect(() => {
-    latestRef.current = { enqueueCodes, attendanceKey };
+    latestRef.current = { enqueueCodes, flushPendingScans, attendanceKey };
   });
 
   const processPhotoQueue = async () => {
@@ -677,11 +701,19 @@ export function useCouponScanning() {
           } else if (result.scan.codes.length === 0) {
             raiseError(`No QR codes found in ${job.file.name}. Try a sharper, well-lit photo.`);
           } else {
-            latestRef.current.enqueueCodes(result.scan.codes, 0);
+            latestRef.current.enqueueCodes(result.scan.codes);
+            const batch = await latestRef.current.flushPendingScans();
+            if (!batch) continue; // nothing saved; the error is already shown
+            const statuses = photoCodeStatuses(result.scan.codes, batch);
+            const codeCount = Object.keys(statuses).length;
+            if (Object.values(statuses).every((s) => s === "alreadyScanned")) {
+              raiseError(`All ${codeCount} coupon(s) in ${job.file.name} are already scanned.`);
+            }
             const preview: PhotoScanPreview = {
               url: URL.createObjectURL(job.file),
               fileName: job.file.name,
               scan: result.scan,
+              statuses,
             };
             setPhotoPreviews((prev) => [preview, ...prev]);
           }
