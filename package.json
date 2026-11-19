@@ -10,6 +10,8 @@
     "prod:side": "node scripts/prod-side.mjs",
     "prod": "npm run build:prod && NODE_ENV=production next start",
     "lint": "eslint",
+    "qr:dev": "py -3.12 qr-scanner-backend/run.py dev",
+    "qr:start": "py -3.12 qr-scanner-backend/run.py start",
     "migrate": "node scripts/migrate.mjs"
   },
   "dependencies": {
