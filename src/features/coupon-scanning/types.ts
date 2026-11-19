@@ -139,3 +139,21 @@ export function couponItemToRow(
     value: String(item.Value ?? ""),
   };
 }
+
+// Result of reading a coupon-sheet photo. Corners are [x, y] points in the
+// photo's own pixel space (width × height), for drawing boxes over it.
+export interface PhotoScan {
+  codes: string[];
+  width: number;
+  height: number;
+  found: { text: string; corners: number[][] }[];
+  // Spots that look like a coupon QR but could not be decoded.
+  missed: number[][][];
+}
+
+// A read photo kept on screen so the operator can see what was/wasn't read.
+export interface PhotoScanPreview {
+  url: string; // object URL of the photo; unique, so it doubles as the id
+  fileName: string;
+  scan: PhotoScan;
+}

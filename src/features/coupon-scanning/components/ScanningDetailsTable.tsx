@@ -4,6 +4,8 @@ import { useEffect, useMemo, useRef, FocusEvent } from "react";
 import { FileText, Printer } from "lucide-react";
 import { CsvExportButton } from "@/components/ui/csv-export-button";
 import type { useCouponScanning } from "../hooks/useCouponScanning";
+import { CameraCaptureButton } from "./CameraCaptureButton";
+import { PhotoScanPreviews } from "./PhotoScanPreviews";
 
 type Facade = ReturnType<typeof useCouponScanning>;
 
@@ -13,6 +15,10 @@ export function ScanningDetailsTable(props: Facade) {
     scannerInput,
     setScannerInput,
     handleScannerKeyDown,
+    handleImageScan,
+    photosPending,
+    photoPreviews,
+    dismissPhotoPreview,
     isScanning,
     rows,
     handleRemoveRow,
@@ -181,6 +187,22 @@ export function ScanningDetailsTable(props: Facade) {
           className="w-full px-3 py-1 rounded-lg border border-slate-200 text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition-all bg-white disabled:opacity-60 disabled:cursor-not-allowed disabled:bg-slate-50"
         />
       </div>
+
+      {/* Photo scan — photograph coupon sheets; every QR on each is read.
+          Stays enabled while reading so more pages can be queued. */}
+      <div className="flex items-center gap-2">
+        <CameraCaptureButton
+          disabled={scannerDisabled}
+          photosPending={photosPending}
+          onCapture={handleImageScan}
+        />
+        {photosPending > 0 && (
+          <span className="text-[10px] font-semibold text-indigo-600" aria-live="polite">
+            Reading {photosPending} photo{photosPending > 1 ? "s" : ""}…
+          </span>
+        )}
+      </div>
+      <PhotoScanPreviews previews={photoPreviews} rows={rows} onDismiss={dismissPhotoPreview} />
 
       {/* Scrollable table container */}
       <div

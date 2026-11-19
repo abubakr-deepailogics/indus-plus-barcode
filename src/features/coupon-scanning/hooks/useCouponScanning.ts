@@ -11,6 +11,7 @@ import {
   getErrorMessage,
   describeFailedScans,
   couponItemToRow,
+  PhotoScanPreview,
 } from "../types";
 import * as couponScanningService from "../services/coupon-scanning.service";
 
@@ -86,8 +87,12 @@ export function useCouponScanning() {
   // the cascading extra render React's rules warn against.
   const attendanceKey = `${employeeCode}|${dated}`;
   const [prevAttendanceKey, setPrevAttendanceKey] = useState(attendanceKey);
+  const [photoPreviews, setPhotoPreviews] = useState<PhotoScanPreview[]>([]);
   if (attendanceKey !== prevAttendanceKey) {
     setPrevAttendanceKey(attendanceKey);
+    // Photos were read for the previous employee/date; their boxes no
+    // longer match this table.
+    setPhotoPreviews([]);
     // The "not marked present" error (raised by verifyAttendance below) was
     // about the *previous* employee/date pair specifically — it no longer
     // applies once either changes, so clear it here rather than leaving it
@@ -593,6 +598,44 @@ export function useCouponScanning() {
     activeDepartment,
   ]);
 
+  // Shared entry for gun scans and photo scans: appends new codes to the
+  // table as "pending" and queues them for the batch flush. Returns how
+  // many were actually new.
+  const enqueueCodes = (incoming: string[], flushDelayMs = FLUSH_DELAY_MS) => {
+    const inTable = new Set(rows.map((row) => row.barCode).filter(Boolean));
+    const codes = [...new Set(incoming.map((c) => c.trim()).filter(Boolean))];
+    const fresh = codes.filter((c) => !inTable.has(c));
+    const skipped = codes.length - fresh.length;
+
+    // Skip coupons already present in the table (already fetched/scanned/pending).
+    setScanError(
+      skipped === 0
+        ? ""
+        : codes.length === 1
+          ? `Coupon ${codes[0]} is already in the table.`
+          : `${skipped} coupon(s) already in the table were skipped.`,
+    );
+    if (fresh.length === 0) return 0;
+
+    setRows((prev) => {
+      const updatedRows = [...prev];
+      for (const code of fresh) {
+        const targetIndex = updatedRows.findIndex((row) => !row.barCode);
+        if (targetIndex !== -1) {
+          updatedRows[targetIndex] = { ...updatedRows[targetIndex], barCode: code };
+        } else {
+          updatedRows.push({ ...makeEmptyRow(updatedRows.length + 1), barCode: code });
+        }
+      }
+      return updatedRows;
+    });
+
+    pendingCodesRef.current.push(...fresh);
+    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
+    flushTimerRef.current = setTimeout(flushPendingScans, flushDelayMs);
+    return fresh.length;
+  };
+
   const handleScannerKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key !== "Enter" && e.key !== "Tab") return;
 
@@ -603,34 +646,73 @@ export function useCouponScanning() {
 
     setScannerInput("");
     requestAnimationFrame(() => input.focus());
+    enqueueCodes([code]);
+  };
 
-    // Skip coupons already present in the table (already fetched/scanned/pending).
-    if (rows.some((row) => row.barCode === code)) {
-      setScanError(`Coupon ${code} is already in the table.`);
-      return;
-    }
-    setScanError("");
+  // Photos of coupon sheets → QR codes → same queue as the gun, flushed
+  // immediately per photo. Photos queue up so the operator can keep shooting
+  // pages while earlier ones are still being read; they're processed one at
+  // a time, in order. Each photo remembers the employee/date it was taken
+  // for and is dropped if that changed before it was read.
+  const photoQueueRef = useRef<{ file: File; key: string }[]>([]);
+  const photoLoopRunningRef = useRef(false);
+  const [photosPending, setPhotosPending] = useState(0);
+  // The loop outlives the render that started it; read current state here.
+  const latestRef = useRef({ enqueueCodes, attendanceKey });
+  useEffect(() => {
+    latestRef.current = { enqueueCodes, attendanceKey };
+  });
 
-    setRows((prev) => {
-      const updatedRows = [...prev];
-      const targetIndex = updatedRows.findIndex((row) => !row.barCode);
-      if (targetIndex !== -1) {
-        updatedRows[targetIndex] = {
-          ...updatedRows[targetIndex],
-          barCode: code,
-        };
-      } else {
-        updatedRows.push({
-          ...makeEmptyRow(updatedRows.length + 1),
-          barCode: code,
-        });
+  const processPhotoQueue = async () => {
+    if (photoLoopRunningRef.current) return;
+    photoLoopRunningRef.current = true;
+    try {
+      let job;
+      while ((job = photoQueueRef.current.shift())) {
+        try {
+          const result = await couponScanningService.readCodesFromImage(job.file);
+          if (job.key !== latestRef.current.attendanceKey) continue;
+          if (!result.ok) {
+            raiseError(result.error);
+          } else if (result.scan.codes.length === 0) {
+            raiseError(`No QR codes found in ${job.file.name}. Try a sharper, well-lit photo.`);
+          } else {
+            latestRef.current.enqueueCodes(result.scan.codes, 0);
+            const preview: PhotoScanPreview = {
+              url: URL.createObjectURL(job.file),
+              fileName: job.file.name,
+              scan: result.scan,
+            };
+            setPhotoPreviews((prev) => [preview, ...prev]);
+          }
+        } finally {
+          setPhotosPending((n) => n - 1);
+        }
       }
-      return updatedRows;
-    });
+    } finally {
+      photoLoopRunningRef.current = false;
+    }
+  };
 
-    pendingCodesRef.current.push(code);
-    if (flushTimerRef.current) clearTimeout(flushTimerRef.current);
-    flushTimerRef.current = setTimeout(flushPendingScans, FLUSH_DELAY_MS);
+  // Free photo memory once a preview is dismissed, pushed out, or unmounted.
+  const previewUrlsRef = useRef<string[]>([]);
+  useEffect(() => {
+    const keep = new Set(photoPreviews.map((p) => p.url));
+    previewUrlsRef.current.filter((u) => !keep.has(u)).forEach((u) => URL.revokeObjectURL(u));
+    previewUrlsRef.current = [...keep];
+  }, [photoPreviews]);
+  useEffect(() => () => previewUrlsRef.current.forEach((u) => URL.revokeObjectURL(u)), []);
+
+  const dismissPhotoPreview = (url: string) =>
+    setPhotoPreviews((prev) => prev.filter((p) => p.url !== url));
+
+  const handleImageScan = (files: File[]) => {
+    if (files.length === 0) return;
+    for (const file of files) {
+      photoQueueRef.current.push({ file, key: attendanceKey });
+    }
+    setPhotosPending((n) => n + files.length);
+    void processPhotoQueue();
   };
 
   // Flush whatever's still queued if the component unmounts mid-burst
@@ -906,6 +988,10 @@ export function useCouponScanning() {
     handleFetchAndScan,
     clearForm,
     handleScannerKeyDown,
+    handleImageScan,
+    photosPending,
+    photoPreviews,
+    dismissPhotoPreview,
     handleRemoveRow,
     handleSelectWorker,
     handleEmployeeCodeKeyDown,

@@ -1,4 +1,4 @@
-import type { CouponApiItem, Worker, OperationSuggestion } from "../types";
+import type { CouponApiItem, Worker, OperationSuggestion, PhotoScan } from "../types";
 import type { CouponDepartment } from "@/lib/department-classification";
 
 async function getJson<T>(url: string): Promise<T | null> {
@@ -171,6 +171,35 @@ export async function scanCouponsBatch(params: {
     return { ok: false, error: data.error || "Failed to scan coupons." };
   }
   return { ok: true, scanned: data.scanned ?? [], failed: data.failed ?? [] };
+}
+
+// Sends a photo of a coupon sheet to /api/coupons/scan/image, which returns
+// every QR code text it can decode in the image (reading order) and where
+// the read/unreadable codes sit in the photo.
+export async function readCodesFromImage(
+  file: File,
+): Promise<{ ok: true; scan: PhotoScan } | { ok: false; error: string }> {
+  const body = new FormData();
+  body.append("file", file);
+  try {
+    const response = await fetch("/api/coupons/scan/image", { method: "POST", body });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) {
+      return { ok: false, error: data.error || "Failed to read QR codes from image." };
+    }
+    return {
+      ok: true,
+      scan: {
+        codes: Array.isArray(data.codes) ? data.codes : [],
+        width: Number(data.width) || 0,
+        height: Number(data.height) || 0,
+        found: Array.isArray(data.found) ? data.found : [],
+        missed: Array.isArray(data.missed) ? data.missed : [],
+      },
+    };
+  } catch {
+    return { ok: false, error: "Could not reach the server to read the image." };
+  }
 }
 
 export async function unscanCoupon(
