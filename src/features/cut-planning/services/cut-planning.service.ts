@@ -4,6 +4,7 @@ import {
   sql,
   STYLE_CARD_BOM_CONSUMPTION_TABLE,
 } from "@/lib/db";
+import { formatBundleId, lowestFreeSequences } from "./bundle-sequence";
 import type {
   CutPlanningData,
   CutPlanningInseamGroup,
@@ -423,14 +424,20 @@ export async function softDeleteCutPlanningRow(
   }
 }
 
-export async function getNextBundleSequence(workOrderInput: string) {
-  const workOrder = workOrderInput.trim();
-  if (!workOrder) return 1;
-  const pool = await getPool("pitSystem");
-  const result = await pool.request()
+// Bundle numbers taken by a Work Order's active bundles. New bundles get the
+// lowest free numbers (lowestFreeSequences), so a deleted 0001 is reused.
+async function readActiveBundleSequences(request: sql.Request, workOrder: string): Promise<number[]> {
+  const result = await request
     .input("workOrder", sql.NVarChar, workOrder)
-    .query("SELECT LastSequence FROM dbo.BundleGenerationSequence WHERE WorkOrder = @workOrder");
-  return Math.max(1, number(result.recordset[0]?.LastSequence) + 1);
+    .query("SELECT BundleSequence FROM dbo.BundleGeneration WHERE WorkOrder = @workOrder AND IsDeleted = 0");
+  return result.recordset.map((row) => number(row.BundleSequence));
+}
+
+export async function getActiveBundleSequences(workOrderInput: string): Promise<number[]> {
+  const workOrder = workOrderInput.trim();
+  if (!workOrder) return [];
+  const pool = await getPool("pitSystem");
+  return readActiveBundleSequences(pool.request(), workOrder);
 }
 
 export async function generateBundles(
@@ -440,12 +447,15 @@ export async function generateBundles(
   const workOrder = payload.workOrder?.trim();
   const cutNos = [...new Set((payload.cutNos ?? []).map((cut) => cut.trim()).filter(Boolean))];
   const bundleQty = number(payload.bundleQty);
-  const expectedNextSequence = payload.expectedNextSequence;
+  const expectedSequences = payload.expectedSequences;
   const expectedBundleCount = payload.expectedBundleCount;
   if (!workOrder) throw new Error("Work Order is required.");
   if (cutNos.length !== 1) throw new Error("Select exactly one Cut no.");
   if (!Number.isFinite(bundleQty) || bundleQty < 0) throw new Error("Bundle quantity cannot be negative.");
-  if (expectedNextSequence != null && (!Number.isSafeInteger(expectedNextSequence) || expectedNextSequence <= 0)) {
+  if (
+    expectedSequences != null &&
+    (!Array.isArray(expectedSequences) || !expectedSequences.every((n) => Number.isSafeInteger(n) && n > 0))
+  ) {
     throw new Error("Bundle preview sequence is invalid. Preview bundles again.");
   }
   if (expectedBundleCount != null && (!Number.isSafeInteger(expectedBundleCount) || expectedBundleCount <= 0)) {
@@ -459,16 +469,21 @@ export async function generateBundles(
   const transaction = new sql.Transaction(pool);
   await transaction.begin();
   try {
-    if (expectedNextSequence != null) {
-      const sequenceResult = await new sql.Request(transaction)
-        .input("workOrder", sql.NVarChar, workOrder)
-        .query(`
-          SELECT LastSequence
-          FROM dbo.BundleGenerationSequence WITH (UPDLOCK, HOLDLOCK)
-          WHERE WorkOrder = @workOrder
-        `);
-      const nextSequence = number(sequenceResult.recordset[0]?.LastSequence) + 1;
-      if (nextSequence !== expectedNextSequence) {
+    // One generation per Work Order at a time, held until commit/rollback,
+    // so two concurrent runs can't pick the same free number. Lock timeout
+    // stays under the 15s request timeout so this fails with a clear message.
+    await new sql.Request(transaction)
+      .input("resource", sql.NVarChar, `bundle-generation:${workOrder}`)
+      .query(`
+        DECLARE @lockResult INT;
+        EXEC @lockResult = sp_getapplock @Resource = @resource, @LockMode = 'Exclusive', @LockOwner = 'Transaction', @LockTimeout = 10000;
+        IF @lockResult < 0
+          THROW 51000, 'Another bundle generation for this Work Order is in progress. Try again in a moment.', 1;
+      `);
+    const usedSequences = new Set(await readActiveBundleSequences(new sql.Request(transaction), workOrder));
+    if (expectedSequences != null) {
+      const actual = lowestFreeSequences(usedSequences, expectedSequences.length);
+      if (actual.some((n, index) => n !== expectedSequences[index])) {
         throw new Error("Bundle preview is out of date. Preview bundles again before confirming.");
       }
     }
@@ -578,16 +593,9 @@ export async function generateBundles(
     }
 
     const createBundle = async (allocations: Array<{ sourceCutNo: string; cutNo: string; inseam: number | null; size: string; shade: string; shrinkage: string; qty: number }>) => {
-      const sequenceRequest = new sql.Request(transaction).input("workOrder", sql.NVarChar, workOrder);
-      const sequenceResult = await sequenceRequest.query(`
-        IF EXISTS (SELECT 1 FROM dbo.BundleGenerationSequence WITH (UPDLOCK, HOLDLOCK) WHERE WorkOrder = @workOrder)
-          UPDATE dbo.BundleGenerationSequence SET LastSequence = LastSequence + 1, UpdatedAt = SYSUTCDATETIME()
-          OUTPUT INSERTED.LastSequence AS Sequence WHERE WorkOrder = @workOrder;
-        ELSE
-          INSERT INTO dbo.BundleGenerationSequence (WorkOrder, LastSequence) OUTPUT INSERTED.LastSequence AS Sequence VALUES (@workOrder, 1);
-      `);
-      const sequence = number(sequenceResult.recordset[0]?.Sequence);
-      const id = String(sequence).padStart(4, "0");
+      const [sequence] = lowestFreeSequences(usedSequences, 1);
+      usedSequences.add(sequence);
+      const id = formatBundleId(sequence);
       const qty = allocations.reduce((sum, item) => sum + item.qty, 0);
       if (!Number.isInteger(qty)) {
         throw new Error("Generated Bundle quantity must be a whole number. Check size quantities and Marker plies.");

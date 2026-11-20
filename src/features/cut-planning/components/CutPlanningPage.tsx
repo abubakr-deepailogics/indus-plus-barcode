@@ -25,6 +25,7 @@ import {
   type WorkOrderSearchRow,
 } from "@/components/work-order-search-modal";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
+import { formatBundleId, lowestFreeSequences } from "@/features/cut-planning/services/bundle-sequence";
 import type {
   CutPlanRow,
   CutPlanningData,
@@ -145,7 +146,7 @@ export default function CutPlanningPage() {
   const [generatingBundles, setGeneratingBundles] = useState(false);
   const [showBundlePreview, setShowBundlePreview] = useState(false);
   const [bundlePreviewIdentity, setBundlePreviewIdentity] = useState<{
-    nextSequence: number;
+    usedSequences: number[];
   } | null>(null);
   const [selectedFabricItem, setSelectedFabricItem] = useState("");
   const [selectedFabricWorkOrder, setSelectedFabricWorkOrder] = useState("");
@@ -562,6 +563,12 @@ export default function CutPlanningPage() {
     new Set(effectiveShadeQuantities.map((allocation) => allocation.cutNo.toLocaleLowerCase())).size === effectiveShadeQuantities.length
   );
   const bundlePreview = useMemo(() => {
+    // Lowest free numbers among the Work Order's active bundles — the same
+    // numbers generateBundles will assign (see bundle-sequence.ts).
+    const previewBundleIds = (count: number) =>
+      bundlePreviewIdentity
+        ? lowestFreeSequences(bundlePreviewIdentity.usedSequences, count).map(formatBundleId)
+        : null;
     const qty = Number(bundleQty);
     if (!hasShadeSplit && (!Number.isFinite(qty) || qty <= 0)) return [];
     const sourceRows = plans.flatMap((plan) => {
@@ -591,11 +598,10 @@ export default function CutPlanningPage() {
         }
         return bundles;
       });
+      const previewIds = previewBundleIds(rows.length);
       return rows.map((row, index) => ({
         ...row,
-        previewId: bundlePreviewIdentity
-          ? String(bundlePreviewIdentity.nextSequence + index).padStart(4, "0")
-          : "Loading…",
+        previewId: previewIds?.[index] ?? "Loading…",
         color: data?.metadata?.color || "—",
       }));
     }
@@ -609,11 +615,10 @@ export default function CutPlanningPage() {
           qty: source.qty * (quantity / selectedMarkerPlies),
         })),
     );
+    const previewIds = previewBundleIds(rows.length);
     return rows.map((row, index) => ({
       ...row,
-      previewId: bundlePreviewIdentity
-        ? String(bundlePreviewIdentity.nextSequence + index).padStart(4, "0")
-        : "Loading…",
+      previewId: previewIds?.[index] ?? "Loading…",
       color: data?.metadata?.color || "—",
     }));
   }, [bundlePreviewIdentity, bundleQty, data?.metadata?.color, effectiveShadeQuantities, hasShadeSplit, plans, selectedBundleCut, selectedMarkerPlies]);
@@ -1195,7 +1200,9 @@ export default function CutPlanningPage() {
           cutNos: [selectedBundleCut],
           bundleQty: Number(bundleQty),
           mergeCuts: false,
-          expectedNextSequence: bundlePreviewIdentity?.nextSequence,
+          expectedSequences: bundlePreviewIdentity
+            ? lowestFreeSequences(bundlePreviewIdentity.usedSequences, bundlePreview.length)
+            : undefined,
           expectedBundleCount: bundlePreview.length,
           shadeAllocations: hasShadeSplit ? effectiveShadeQuantities : undefined,
         }),
@@ -1225,18 +1232,18 @@ export default function CutPlanningPage() {
         `/api/cut-planning/bundles?work_order=${encodeURIComponent(workOrder)}`,
       );
       const body = (await response.json()) as {
-        nextSequence?: number;
+        usedSequences?: unknown;
         error?: string;
       };
       if (
         !response.ok ||
-        typeof body.nextSequence !== "number" ||
-        !Number.isSafeInteger(body.nextSequence)
+        !Array.isArray(body.usedSequences) ||
+        !body.usedSequences.every((n) => Number.isSafeInteger(n))
       ) {
         throw new Error(body.error || "Unable to prepare the bundle preview.");
       }
       setBundlePreviewIdentity({
-        nextSequence: body.nextSequence,
+        usedSequences: body.usedSequences as number[],
       });
       setShowBundlePreview(true);
     } catch (caught) {
