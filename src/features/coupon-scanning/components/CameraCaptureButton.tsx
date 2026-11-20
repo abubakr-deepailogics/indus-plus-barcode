@@ -55,15 +55,34 @@ function rememberCamera(id: string) {
   }
 }
 
-// Opens the camera to photograph coupon sheets.
-// - Phones/tablets: the native camera app (file input with `capture`). It
-//   takes full-resolution photos (~12MP vs a ≤4K video frame), so more QR
-//   codes are readable, and it avoids iOS Safari's black live-preview issues.
-// - Computers: a live in-page camera with a camera picker, which stays open
-//   so several pages can be shot in a row.
+// Highest resolution the camera offers: small QR codes on a full sheet need
+// every pixel.
+const RESOLUTION = { width: { ideal: 3840 }, height: { ideal: 2160 } };
+
+// "Automatic" camera: the back camera on phones, the default webcam on
+// computers. facingMode must be `exact` — as `ideal` it is weighed against the
+// resolution ideals, so a phone's front camera can win. Webcams usually report
+// no facing mode, so `exact` fails there and we retry without it.
+async function openAutomaticCamera(): Promise<MediaStream> {
+  try {
+    return await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: { ...RESOLUTION, facingMode: { exact: "environment" } },
+    });
+  } catch (err) {
+    const name = err instanceof DOMException ? err.name : "";
+    if (name !== "OverconstrainedError" && name !== "NotFoundError") throw err;
+    return navigator.mediaDevices.getUserMedia({ audio: false, video: RESOLUTION });
+  }
+}
+
+// Opens a live in-page camera to photograph coupon sheets, with a camera
+// picker; it stays open so several pages can be shot in a row. Phones use it
+// too: the native file input's `capture` is only a hint (Android often opens
+// the front camera, iOS can show a black screen), so it can't pin the back camera.
 // Each shot is handed to onCapture immediately and read in the background.
-// Live camera access needs HTTPS or localhost; without it, computers fall
-// back to the native file input too.
+// Live camera access needs HTTPS or localhost; without it, we fall back to
+// the native file input.
 export function CameraCaptureButton({ disabled, photosPending, onCapture }: Props) {
   const [open, setOpen] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -96,17 +115,10 @@ export function CameraCaptureButton({ disabled, photosPending, onCapture }: Prop
         .catch(() => {});
     navigator.mediaDevices.addEventListener("devicechange", refreshCameras);
 
-    navigator.mediaDevices
-      .getUserMedia({
-        audio: false,
-        video: {
-          // Highest resolution the camera offers: small QR codes on a full
-          // sheet need every pixel.
-          width: { ideal: 3840 },
-          height: { ideal: 2160 },
-          ...(deviceId ? { deviceId: { exact: deviceId } } : { facingMode: { ideal: "environment" } }),
-        },
-      })
+    (deviceId
+      ? navigator.mediaDevices.getUserMedia({ audio: false, video: { ...RESOLUTION, deviceId: { exact: deviceId } } })
+      : openAutomaticCamera()
+    )
       .then((s) => {
         if (cancelled) {
           s.getTracks().forEach((t) => t.stop());
@@ -135,8 +147,7 @@ export function CameraCaptureButton({ disabled, photosPending, onCapture }: Prop
   }, [open, deviceId]);
 
   const openCamera = () => {
-    const isTouchDevice = window.matchMedia("(pointer: coarse)").matches;
-    if (isTouchDevice || !navigator.mediaDevices?.getUserMedia) {
+    if (!navigator.mediaDevices?.getUserMedia) {
       nativeCameraInputRef.current?.click();
       return;
     }
@@ -230,7 +241,7 @@ export function CameraCaptureButton({ disabled, photosPending, onCapture }: Prop
                   ))}
                 </SelectContent>
               </Select>
-              <p className="text-[11px] text-slate-500">
+              <p className="text-[11px] text-slate-500 pointer-coarse:hidden">
                 Using a phone? Connect it as a webcam (Continuity Camera on Mac, Phone Link on Windows, or an app
                 like DroidCam/Camo), then pick it here.
               </p>
@@ -253,6 +264,8 @@ export function CameraCaptureButton({ disabled, photosPending, onCapture }: Prop
                       void el.play().catch(() => {});
                     }
                   }}
+                  // iOS can ignore the early play() above; retry once frames are ready.
+                  onLoadedMetadata={(e) => void e.currentTarget.play().catch(() => {})}
                   autoPlay
                   playsInline
                   muted

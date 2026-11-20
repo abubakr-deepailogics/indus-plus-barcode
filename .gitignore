@@ -45,3 +45,6 @@ next-env.d.ts
 .venv/
 __pycache__/
 *.pyc
+
+# next dev --experimental-https self-signed certs
+/certificates
