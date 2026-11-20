@@ -1,5 +1,29 @@
 import sql from "mssql";
 
+// Attach the failing SQL text to every query error (as `err.sqlText`), so
+// server logs show WHICH query timed out or failed to parse instead of a bare
+// "Incorrect syntax near ')'" / "ETIMEOUT". Patched once on the prototype so
+// it covers pool requests and transaction requests alike. Only the SQL
+// text is logged, never parameter values: queries are parameterized, so
+// user data isn't included.
+const PATCHED = Symbol.for("indus.mssql.sqlTextOnError");
+type QueryFn = (command: string, callback?: unknown) => Promise<unknown>;
+const requestProto = sql.Request.prototype as unknown as Record<symbol, boolean> & { query: QueryFn };
+if (!requestProto[PATCHED]) {
+  const originalQuery = requestProto.query;
+  requestProto.query = function (this: unknown, command, callback) {
+    if (callback) return originalQuery.call(this, command, callback);
+    return originalQuery.call(this, command).catch((err: unknown) => {
+      if (err && typeof err === "object") {
+        // Untrimmed, so the server's `lineNumber` lines up with this text.
+        Object.assign(err, { sqlText: String(command).slice(0, 4000) });
+      }
+      throw err;
+    });
+  };
+  requestProto[PATCHED] = true;
+}
+
 // Single source of truth for which DB backs which data:
 // - indusPlus: cut report, style bulletin
 // - pitSystem: any data pushed/written (coupons, scans, etc.)
