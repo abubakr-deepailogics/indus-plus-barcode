@@ -25,7 +25,6 @@ import {
   type WorkOrderSearchRow,
 } from "@/components/work-order-search-modal";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
-import { printPdf } from "@/lib/print";
 import type {
   CutPlanRow,
   CutPlanningData,
@@ -151,7 +150,6 @@ export default function CutPlanningPage() {
   const [selectedFabricItem, setSelectedFabricItem] = useState("");
   const [selectedFabricWorkOrder, setSelectedFabricWorkOrder] = useState("");
   const [fabricMenuOpen, setFabricMenuOpen] = useState(false);
-  const [printMenuOpen, setPrintMenuOpen] = useState(false);
   const [newMarkerRowIndex, setNewMarkerRowIndex] = useState<number | null>(
     null,
   );
@@ -159,7 +157,6 @@ export default function CutPlanningPage() {
   const matrixScrollRef = useRef<HTMLDivElement>(null);
   const matrixFooterRef = useRef<HTMLDivElement>(null);
   const fabricMenuRef = useRef<HTMLDivElement>(null);
-  const printMenuRef = useRef<HTMLDivElement>(null);
   const bundleCutButtonRef = useRef<HTMLButtonElement>(null);
   const bundleCutMenuRef = useRef<HTMLDivElement>(null);
   const newMarkerRowRef = useRef<HTMLTableRowElement>(null);
@@ -198,9 +195,6 @@ export default function CutPlanningPage() {
     const closeFabricMenu = (event: PointerEvent) => {
       if (!fabricMenuRef.current?.contains(event.target as Node)) {
         setFabricMenuOpen(false);
-      }
-      if (!printMenuRef.current?.contains(event.target as Node)) {
-        setPrintMenuOpen(false);
       }
       if (
         !bundleCutButtonRef.current?.contains(event.target as Node) &&
@@ -2269,68 +2263,16 @@ export default function CutPlanningPage() {
               <span className="truncate">{workOrder || "Find work order"}</span>
               <Search className="size-4 shrink-0" />
             </button>
-            <div ref={printMenuRef} className="relative inline-flex shrink-0 items-center">
-              <button
-                type="button"
-                onClick={() => setPrintMenuOpen((open) => !open)}
-                disabled={!workOrder || groups.length === 0}
-                aria-haspopup="menu"
-                aria-expanded={printMenuOpen}
-                aria-label="Print options"
-                title="Print"
-                className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-3 text-sm font-medium text-slate-700 shadow-sm hover:border-indigo-300 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <Printer className="size-4 shrink-0" />
-                Print
-                <ChevronDown
-                  className={`size-3.5 shrink-0 text-slate-400 transition-transform ${printMenuOpen ? "rotate-180" : ""}`}
-                />
-              </button>
-              {printMenuOpen && (
-                <div
-                  role="menu"
-                  aria-label="Print options"
-                  className="absolute right-0 top-[calc(100%+0.45rem)] z-50 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-900/15"
-                >
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setPrintMenuOpen(false);
-                      window.print();
-                    }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-slate-700 hover:bg-indigo-50"
-                  >
-                    <Printer className="size-4 shrink-0 text-slate-400" />
-                    Cut Planning
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setPrintMenuOpen(false);
-                      printPdf(`/api/cut-planning/reports/cor-sheet?work_order=${encodeURIComponent(workOrder)}`);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-slate-700 hover:bg-indigo-50"
-                  >
-                    <Printer className="size-4 shrink-0 text-slate-400" />
-                    COR Sheet
-                  </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => {
-                      setPrintMenuOpen(false);
-                      printPdf(`/api/cut-planning/reports/bundling-tickets?work_order=${encodeURIComponent(workOrder)}`);
-                    }}
-                    className="flex w-full items-center gap-2 rounded-lg px-2.5 py-2 text-left text-sm font-medium text-slate-700 hover:bg-indigo-50"
-                  >
-                    <Printer className="size-4 shrink-0 text-slate-400" />
-                    Bundling Tickets
-                  </button>
-                </div>
-              )}
-            </div>
+            <button
+              type="button"
+              onClick={() => window.print()}
+              disabled={!workOrder || groups.length === 0}
+              aria-label="Print cut planning"
+              title="Print"
+              className="inline-flex size-9 items-center justify-center rounded-lg border border-slate-300 bg-white text-slate-700 shadow-sm hover:border-indigo-300 hover:bg-indigo-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Printer className="size-4" />
+            </button>
             <button
               type="button"
               onClick={exportCutPlanning}

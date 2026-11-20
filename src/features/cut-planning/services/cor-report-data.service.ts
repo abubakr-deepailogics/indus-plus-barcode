@@ -1,6 +1,6 @@
 import { getPool, sql, cutDetailByFilter } from "@/lib/db";
 import { getCutPlanning } from "./cut-planning.service";
-import type { CorReportBundleRow, CorReportMeta } from "./cor-report-pdf.service";
+import { assignSerialRanges, type CorReportBundleRow, type CorReportMeta } from "./cor-report-pdf.service";
 
 // Same generated-bundle source as /api/open-order's Cut Report branch
 // (dbo.SewingCutReport joined to dbo.BundleGeneration, active rows only),
@@ -50,7 +50,7 @@ export async function fetchCorReportData(
     | { Sale_Order_No?: string; Wash?: string; Order_Qty_After_Add?: number; Fabric_Code_Main_Body?: string }
     | undefined;
 
-  const rows: CorReportBundleRow[] = generatedResult.recordset.map((row) => ({
+  const rows: CorReportBundleRow[] = assignSerialRanges(generatedResult.recordset.map((row) => ({
     cutNo: String(row.Cut ?? ""),
     bundleNo: String(row.Bundle_Id ?? ""),
     size: String(row.Size ?? ""),
@@ -60,7 +60,7 @@ export async function fetchCorReportData(
     shrinkage: String(row.Shrinkage ?? ""),
     markerPlies: markerPliesByCutNo.get(String(row.Cut ?? "").trim().toLowerCase()) ?? null,
     bundleQty: Number(row.Bundle_Qty ?? 0),
-  }));
+  })));
 
   const willCutQtyFromPlanning = planning.inseamGroups.reduce(
     (sum, group) => sum + Object.values(group.willCutQuantities).reduce((s, qty) => s + qty, 0),

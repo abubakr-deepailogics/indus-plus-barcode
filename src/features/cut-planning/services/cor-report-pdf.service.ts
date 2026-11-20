@@ -63,6 +63,28 @@ export interface CorReportBundleRow {
   shrinkage: string;
   markerPlies: number | null;
   bundleQty: number;
+  // Piece numbers this bundle covers. Numbering runs on across bundles of the
+  // same cut + inseam + size + shade (see assignSerialRanges).
+  serialFrom: number;
+  serialTo: number;
+}
+
+export function serialRangeLabel(row: Pick<CorReportBundleRow, "serialFrom" | "serialTo" | "bundleQty">): string {
+  return row.bundleQty > 0 ? `${row.serialFrom} TO ${row.serialTo}` : "—";
+}
+
+// Rows must already be in bundle sequence order.
+export function assignSerialRanges<T extends Omit<CorReportBundleRow, "serialFrom" | "serialTo">>(
+  rows: T[],
+): Array<T & { serialFrom: number; serialTo: number }> {
+  const issued = new Map<string, number>();
+  return rows.map((row) => {
+    const key = [row.cutNo, row.inseam, row.size, row.shade].map((v) => v.trim().toLowerCase()).join("|");
+    const qty = Math.max(0, row.bundleQty);
+    const from = (issued.get(key) ?? 0) + 1;
+    issued.set(key, from - 1 + qty);
+    return { ...row, serialFrom: from, serialTo: from - 1 + qty };
+  });
 }
 
 function sortedCuts(rows: CorReportBundleRow[]): string[] {
@@ -133,7 +155,7 @@ function drawCutGroup(
 
   cutRows.forEach((row, index) => {
     const rowY = detailTop + DETAIL_ROW_HEIGHT * (index + 1);
-    const values = [String(index + 1), row.size || "—", `1 TO ${row.bundleQty}`, String(row.bundleQty), ""];
+    const values = [String(index + 1), row.size || "—", serialRangeLabel(row), String(row.bundleQty), ""];
     let cx = x;
     DETAIL_COLS.forEach((col, colIndex) => {
       doc.rect(cx, rowY, col.width, DETAIL_ROW_HEIGHT).stroke();
@@ -243,126 +265,95 @@ export async function generateCorSheetPdf(
   return done;
 }
 
-const TICKET_COLUMNS = 4;
-const TICKET_GAP = 10;
-const TICKET_HEIGHT = 118;
-const TICKET_HEADER_HEIGHT = 16;
-const TICKET_FOOTER_HEIGHT = 18;
+// Bundling ticket layout copied from the client's "BUNDLING TICKETS.xlsx":
+// each bundle gets one line of identical stickers (one per garment panel).
+// Each sticker is a 2-column Label | Value grid with W/O, CUT, B, SIZE, IL,
+// Sr, Q, Shd, Shk, and SIZE / Sr printed as black bands.
+// ponytail: fixed 7 stickers per bundle, matching the template's print area (G:Z).
+// Make it a per-style setting if panel counts differ between styles.
+const STICKERS_PER_BUNDLE = 7;
+const STICKER_GAP = 6;
+const STICKER_LABEL_WIDTH = 30;
+const STICKER_ROW_HEIGHT = 10;
+const STICKER_BAND_HEIGHT = 14;
+const BUNDLE_GAP = 8;
 
-function drawCutGuides(doc: PDFKit.PDFDocument, x: number, y: number, w: number, h: number) {
-  // Small corner tick marks just outside the card, like a cut/trim guide on
-  // a real ticket sheet — purely decorative, signals "cut along here".
-  const tick = 5;
-  doc.lineWidth(0.5).strokeColor("#94a3b8");
-  const corners: Array<[number, number, number, number, number, number]> = [
-    [x, y, -tick, 0, 0, -tick],
-    [x + w, y, tick, 0, 0, -tick],
-    [x, y + h, -tick, 0, 0, tick],
-    [x + w, y + h, tick, 0, 0, tick],
+type StickerField = { label: string; value: string; band?: boolean; lead?: boolean };
+
+function stickerFields(meta: CorReportMeta, row: CorReportBundleRow): StickerField[] {
+  return [
+    { label: "W/O", value: meta.workOrder, lead: true },
+    { label: "CUT", value: row.cutNo },
+    // Bundle IDs are "<work order>-<seq>"; W/O already has its own row.
+    { label: "B", value: row.bundleNo.split("-").pop() ?? row.bundleNo },
+    { label: "SIZE", value: row.inseam ? `${row.size}/${row.inseam}"` : row.size, band: true },
+    { label: "IL", value: row.color },
+    { label: "Sr", value: serialRangeLabel(row), band: true },
+    { label: "Q", value: String(row.bundleQty) },
+    { label: "Shd", value: row.shade },
+    { label: "Shk", value: row.shrinkage },
   ];
-  corners.forEach(([cx, cy, dx1, dy1, dx2, dy2]) => {
-    doc.moveTo(cx + dx1, cy + dy1).lineTo(cx, cy).lineTo(cx + dx2, cy + dy2).stroke();
-  });
-  doc.strokeColor(BLACK).lineWidth(0.6);
 }
 
-function drawBundlingTicket(
+const fieldHeight = (field: StickerField) =>
+  field.band || field.lead ? STICKER_BAND_HEIGHT : STICKER_ROW_HEIGHT;
+
+function drawSticker(
   doc: PDFKit.PDFDocument,
   x: number,
   y: number,
-  w: number,
-  meta: CorReportMeta,
-  row: CorReportBundleRow,
+  width: number,
+  fields: StickerField[],
 ) {
-  drawCutGuides(doc, x, y, w, TICKET_HEIGHT);
-  doc.lineWidth(0.8).strokeColor(BLACK).rect(x, y, w, TICKET_HEIGHT).stroke();
+  const valueWidth = width - STICKER_LABEL_WIDTH;
+  let rowY = y;
+  fields.forEach((field) => {
+    const height = fieldHeight(field);
+    const fontSize = field.band || field.lead ? 9 : 7;
+    if (field.band) doc.rect(x, rowY, width, height).fill(BLACK);
+    doc.lineWidth(0.4).strokeColor(BLACK);
+    doc.rect(x, rowY, STICKER_LABEL_WIDTH, height).stroke();
+    doc.rect(x + STICKER_LABEL_WIDTH, rowY, valueWidth, height).stroke();
 
-  // Header band — W/O on the left, "BUNDLE TICKET" eyebrow on the right.
-  doc.lineWidth(0.6);
-  doc.moveTo(x, y + TICKET_HEADER_HEIGHT).lineTo(x + w, y + TICKET_HEADER_HEIGHT).stroke();
-  doc.fontSize(7.5);
-  boldText(doc, `W/O ${meta.workOrder}`, x + 8, y + 4.5, { width: w * 0.6, lineBreak: false });
-  doc.fontSize(5.5);
-  doc.text("BUNDLE TICKET", x + w * 0.4, y + 5.5, {
-    width: w * 0.55,
-    align: "right",
-    lineBreak: false,
-    characterSpacing: 0.5,
-  });
-
-  // Focal point — the bundle number, large and centered, like a ticket stub.
-  const focalTop = y + TICKET_HEADER_HEIGHT + 6;
-  doc.fontSize(5.5);
-  doc.text("BUNDLE NO", x, focalTop, { width: w, align: "center", lineBreak: false, characterSpacing: 0.5 });
-  doc.fontSize(26);
-  boldText(doc, row.bundleNo, x, focalTop + 9, { width: w, align: "center", lineBreak: false });
-
-  // Dashed separator — the visual "tear here" between the stub and details.
-  const dashY = focalTop + 42;
-  doc.dash(2, { space: 2 }).lineWidth(0.6).moveTo(x + 6, dashY).lineTo(x + w - 6, dashY).stroke();
-  doc.undash();
-
-  // CUT / SIZE side by side, label over value.
-  const fieldTop = dashY + 7;
-  const halfWidth = (w - 16) / 2;
-  doc.fontSize(5.5);
-  doc.text("CUT", x + 8, fieldTop, { width: halfWidth, lineBreak: false });
-  doc.text("SIZE", x + 8 + halfWidth, fieldTop, { width: halfWidth, align: "right", lineBreak: false });
-  doc.fontSize(10);
-  boldText(doc, row.cutNo || "—", x + 8, fieldTop + 7, { width: halfWidth, lineBreak: false });
-  boldText(doc, row.size || "—", x + 8 + halfWidth, fieldTop + 7, {
-    width: halfWidth,
-    align: "right",
-    lineBreak: false,
-  });
-
-  // IL (colour/wash), full width.
-  doc.fontSize(5.5);
-  doc.text("COLOUR / IL", x + 8, fieldTop + 20, { width: w - 16, lineBreak: false });
-  doc.fontSize(8.5);
-  cellText(doc, row.color || "—", x + 5, fieldTop + 25, w - 10);
-
-  // Footer strip — the serial range, set apart with its own border.
-  const footerY = y + TICKET_HEIGHT - TICKET_FOOTER_HEIGHT;
-  doc.lineWidth(0.6).moveTo(x, footerY).lineTo(x + w, footerY).stroke();
-  doc.fontSize(8);
-  boldText(doc, `SR   1 — ${row.bundleQty}`, x, footerY + 5, {
-    width: w,
-    align: "center",
-    lineBreak: false,
+    doc.fillColor(field.band ? "#ffffff" : BLACK).fontSize(fontSize);
+    const textY = rowY + (height - fontSize * 1.15) / 2;
+    const options: PDFKit.Mixins.TextOptions = { lineBreak: false, ellipsis: true };
+    boldText(doc, field.label, x + 2, textY, { ...options, width: STICKER_LABEL_WIDTH - 4, align: "center" });
+    boldText(doc, field.value || "—", x + STICKER_LABEL_WIDTH + 3, textY, { ...options, width: valueWidth - 6 });
+    doc.fillColor(BLACK);
+    rowY += height;
   });
 }
 
-// A proper cut-and-attach ticket per bundle — header band, a large focal
-// bundle number, a dashed tear line, CUT/SIZE/Colour fields and a bordered
-// serial-range footer — tiled across the page with cut guides between
-// cards, so a full sheet of bundles prints ready to trim and attach.
 export async function generateBundlingTicketsPdf(
   meta: CorReportMeta,
   rows: CorReportBundleRow[],
 ): Promise<Buffer> {
   const doc = new PDFDocument({ size: "A4", layout: "landscape", margin: 24, font: FONT_PATH });
-  doc.lineWidth(0.6).strokeColor(BLACK).fillColor(BLACK);
+  doc.lineWidth(0.4).strokeColor(BLACK).fillColor(BLACK);
   const chunks: Buffer[] = [];
   doc.on("data", (chunk) => chunks.push(chunk));
   const done = new Promise<Buffer>((resolve) => {
     doc.on("end", () => resolve(Buffer.concat(chunks)));
   });
 
-  const pageWidth = doc.page.width - doc.page.margins.left - doc.page.margins.right;
-  const pageHeight = doc.page.height - doc.page.margins.top - doc.page.margins.bottom;
-  const ticketWidth = (pageWidth - TICKET_GAP * (TICKET_COLUMNS - 1)) / TICKET_COLUMNS;
-  const rowsPerPage = Math.max(1, Math.floor((pageHeight + TICKET_GAP) / (TICKET_HEIGHT + TICKET_GAP)));
-  const perPage = TICKET_COLUMNS * rowsPerPage;
+  const { left, top } = doc.page.margins;
+  const pageWidth = doc.page.width - left - doc.page.margins.right;
+  const pageBottom = doc.page.height - doc.page.margins.bottom;
+  const stickerWidth = (pageWidth - STICKER_GAP * (STICKERS_PER_BUNDLE - 1)) / STICKERS_PER_BUNDLE;
 
-  rows.forEach((row, index) => {
-    const indexOnPage = index % perPage;
-    if (index > 0 && indexOnPage === 0) doc.addPage();
-    const column = indexOnPage % TICKET_COLUMNS;
-    const line = Math.floor(indexOnPage / TICKET_COLUMNS);
-    const x = doc.page.margins.left + column * (ticketWidth + TICKET_GAP);
-    const y = doc.page.margins.top + line * (TICKET_HEIGHT + TICKET_GAP);
-    drawBundlingTicket(doc, x, y, ticketWidth, meta, row);
+  let y = top;
+  rows.forEach((row) => {
+    const fields = stickerFields(meta, row);
+    const stickerHeight = fields.reduce((sum, field) => sum + fieldHeight(field), 0);
+    if (y + stickerHeight > pageBottom) {
+      doc.addPage();
+      y = top;
+    }
+    for (let i = 0; i < STICKERS_PER_BUNDLE; i += 1) {
+      drawSticker(doc, left + i * (stickerWidth + STICKER_GAP), y, stickerWidth, fields);
+    }
+    y += stickerHeight + BUNDLE_GAP;
   });
 
   doc.end();

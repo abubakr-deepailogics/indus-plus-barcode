@@ -17,6 +17,7 @@ import {
   Trash2,
   BadgeCheck,
   CheckCircle2,
+  Loader2,
 } from "lucide-react";
 // import type { PageSetupConfig } from "@/features/barcode-generation/types";
 // import { PageSetupModal } from "@/features/barcode-generation/components/PageSetupModal";
@@ -31,6 +32,7 @@ import type {
 import { useGenerateCouponPdf } from "@/features/qr-code-generation/hooks/useGenerateCouponPdf";
 import { PageSetupModal } from "@/features/qr-code-generation/components/PageSetupModal";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
+import { printPdf } from "@/lib/print";
 import { classifyDepartment } from "@/lib/department-classification";
 import { compareSectionOrder } from "@/lib/section-order";
 import {
@@ -1005,6 +1007,17 @@ export default function OpenOrderPage() {
   }, [styleBulletins, cutDetails, activeSearchQuery]);
 
   const isSkeletonActive = isLoading || isTransitioning;
+  const reportWorkOrder = cutDetails[0]?.Work_Order || activeSearchQuery;
+  const [printingReport, setPrintingReport] = useState<"cor-sheet" | "bundling-tickets" | null>(null);
+  // printPdf's onLoad fires once the PDF route responds (success or error),
+  // which is when the browser print dialog takes over.
+  const printReport = (report: "cor-sheet" | "bundling-tickets") => {
+    setPrintingReport(report);
+    printPdf(
+      `/api/cut-planning/reports/${report}?work_order=${encodeURIComponent(reportWorkOrder)}`,
+      () => setPrintingReport(null),
+    );
+  };
 
   // Build the coupon-printable style data for the searched work order from
   // the already-fetched cut detail (bundles) and style bulletin (operations).
@@ -1354,6 +1367,32 @@ export default function OpenOrderPage() {
                   >
                     <Printer className="w-3.5 h-3.5" />
                     <span>Print</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => printReport("cor-sheet")}
+                    disabled={cutDetails.length === 0 || !reportWorkOrder || printingReport !== null}
+                    className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-[#334155] disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                  >
+                    {printingReport === "cor-sheet" ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Printer className="w-3.5 h-3.5" />
+                    )}
+                    <span>{printingReport === "cor-sheet" ? "Generating COR…" : "COR Sheet"}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => printReport("bundling-tickets")}
+                    disabled={cutDetails.length === 0 || !reportWorkOrder || printingReport !== null}
+                    className="bg-white border border-[#e2e8f0] hover:bg-slate-50 text-[#334155] disabled:opacity-50 py-1.5 px-3 rounded-xl font-bold transition-all shadow-sm cursor-pointer text-xs flex items-center justify-center gap-1.5"
+                  >
+                    {printingReport === "bundling-tickets" ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Printer className="w-3.5 h-3.5" />
+                    )}
+                    <span>{printingReport === "bundling-tickets" ? "Generating tickets…" : "Bundling Tickets"}</span>
                   </button>
                 </>
               }
