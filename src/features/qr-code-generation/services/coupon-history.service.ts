@@ -21,7 +21,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 }
 
 export async function logCouponActionHistory(
-  pool: sql.ConnectionPool,
+  pool: sql.ConnectionPool | sql.Transaction,
   action: "unscanned" | "deleted",
   coupons: MatchedCoupon[],
   actedBy: string,

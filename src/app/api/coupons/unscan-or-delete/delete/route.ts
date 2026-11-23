@@ -36,6 +36,14 @@ export const dynamic = "force-dynamic";
 // coupon still references that operation/bundle, the corresponding
 // snapshot row's IsDeleted stays 0 — nothing else about it changes.
 //
+// All writes (history, coupon soft-delete, snapshot cascade) run in ONE
+// transaction: either the whole batch is deleted with its snapshot cascade,
+// or nothing is. Without it, a failure after the coupons were deleted left
+// snapshot rows active with no way to retry (a retry no longer matches the
+// already-deleted coupons). Trade-off: row locks on the deleted coupons are
+// held until commit, so a concurrent scan of one of THESE coupons waits for
+// the delete to finish (then correctly sees it deleted).
+//
 // Streams newline-delimited JSON progress lines over the response body,
 // same shape/protocol as POST /api/qr-code-generation/coupons — a large
 // unscan/delete batch (the whole work order, thousands of coupons) used to
@@ -47,21 +55,27 @@ export const dynamic = "force-dynamic";
 const PROGRESS_CHUNK_SIZE = 200; // matches logCouponActionHistory's own ROWS_PER_CHUNK
 
 // Snapshot cascade for one work order's just-deleted coupons (see the module
-// comment above for the rule).
+// comment above for the rule). Scoped by Department on both sides: the
+// snapshot rows and coupons are department-owned (migration 043), and the
+// Department-leading indexes (IX_SaleOrderPOCutDetail_Department_WorkOrder_
+// Bundle_InsertedAt, UX_QrCode_Coupon_Department_WorkItem) are only seekable
+// with it — without it, plus the old CAST on [Bundle Id], this UPDATE scanned
+// and hit the 15s request timeout on large work orders.
 async function cascadeSnapshotDeletes(
-  pool: Awaited<ReturnType<typeof getPool>>,
+  tx: sql.Transaction,
+  department: string,
   workOrder: string,
   coupons: MatchedCoupon[],
   by: string,
 ) {
   const opNos = [...new Set(coupons.map((m) => m.OpNo))];
   const bundleNos = [...new Set(coupons.map((m) => m.BundleNo))];
-  const cascades: Promise<unknown>[] = [];
 
   for (const opBatch of chunk(opNos, IN_LIST_CHUNK_SIZE)) {
-    const req = pool
+    const req = tx
       .request()
       .input("deletedBy", sql.NVarChar, by)
+      .input("department", sql.NVarChar, department)
       .input("wo", sql.NVarChar, workOrder);
     const inClause = opBatch
       .map((op, i) => {
@@ -69,26 +83,29 @@ async function cascadeSnapshotDeletes(
         return `@op${i}`;
       })
       .join(", ");
-    cascades.push(
-      req.query(`
+    // Sequential, not Promise.all: a transaction is one connection, which
+    // runs one request at a time.
+    await req.query(`
         UPDATE sb
         SET sb.IsDeleted = 1, sb.DeletedAt = SYSUTCDATETIME(), sb.DeletedBy = @deletedBy
         FROM dbo.StyleBullettinInt sb
-        WHERE sb.[Order No] = @wo
+        WHERE sb.Department = @department
+          AND sb.[Order No] = @wo
           AND sb.[Operation Code] IN (${inClause})
           AND sb.IsDeleted = 0
           AND NOT EXISTS (
             SELECT 1 FROM dbo.QrCode_Coupon c
-            WHERE c.WorkOrder = @wo AND c.OpNo = sb.[Operation Code] AND c.IsDeleted = 0
+            WHERE c.Department = @department AND c.WorkOrder = @wo
+              AND c.OpNo = sb.[Operation Code] AND c.IsDeleted = 0
           )
-      `),
-    );
+      `);
   }
 
   for (const bundleBatch of chunk(bundleNos, IN_LIST_CHUNK_SIZE)) {
-    const req = pool
+    const req = tx
       .request()
       .input("deletedBy", sql.NVarChar, by)
+      .input("department", sql.NVarChar, department)
       .input("wo", sql.NVarChar, workOrder);
     const inClause = bundleBatch
       .map((bundle, i) => {
@@ -96,23 +113,21 @@ async function cascadeSnapshotDeletes(
         return `@bundle${i}`;
       })
       .join(", ");
-    cascades.push(
-      req.query(`
+    await req.query(`
         UPDATE cd
         SET cd.IsDeleted = 1, cd.DeletedAt = SYSUTCDATETIME(), cd.DeletedBy = @deletedBy
         FROM dbo.SaleOrderPOCutDetailViewV1 cd
-        WHERE cd.[Work Order #] = @wo
-          AND CAST(cd.[Bundle Id] AS NVARCHAR(50)) IN (${inClause})
+        WHERE cd.Department = @department
+          AND cd.[Work Order #] = @wo
+          AND cd.[Bundle Id] IN (${inClause})
           AND cd.IsDeleted = 0
           AND NOT EXISTS (
             SELECT 1 FROM dbo.QrCode_Coupon c
-            WHERE c.WorkOrder = @wo AND c.BundleNo = CAST(cd.[Bundle Id] AS NVARCHAR(50)) AND c.IsDeleted = 0
+            WHERE c.Department = @department AND c.WorkOrder = @wo
+              AND c.BundleNo = cd.[Bundle Id] AND c.IsDeleted = 0
           )
-      `),
-    );
+      `);
   }
-
-  await Promise.all(cascades);
 }
 
 export async function POST(request: Request) {
@@ -164,11 +179,23 @@ export async function POST(request: Request) {
       const send = (line: Record<string, unknown>) => {
         controller.enqueue(encoder.encode(JSON.stringify(line) + "\n"));
       };
+      const tx = new sql.Transaction(pool);
+      let began = false;
       try {
+        await tx.begin();
+        began = true;
         let done = 0;
         for (const batch of chunk(unscanned, PROGRESS_CHUNK_SIZE)) {
-          await logCouponActionHistory(pool, "deleted", batch, by);
-          await softDeleteCoupons(pool, batch.map((m) => m.CouponCode), by);
+          await logCouponActionHistory(tx, "deleted", batch, by);
+          const deleted = await softDeleteCoupons(tx, batch.map((m) => m.CouponCode), by);
+          if (deleted !== batch.length) {
+            // Some matched coupon was scanned or deleted by someone else
+            // since the match query — roll everything back rather than
+            // delete a partial, stale selection.
+            throw new Error(
+              "Some of the matched coupons were scanned or deleted by someone else in the meantime. Nothing was deleted — refresh and try again.",
+            );
+          }
           done += batch.length;
           send({ done, total });
         }
@@ -182,8 +209,11 @@ export async function POST(request: Request) {
           byWorkOrder.set(coupon.WorkOrder, rows);
         }
         for (const [workOrder, coupons] of byWorkOrder) {
-          await cascadeSnapshotDeletes(pool, workOrder, coupons, by);
+          await cascadeSnapshotDeletes(tx, parsed.department, workOrder, coupons, by);
         }
+
+        await tx.commit();
+        began = false;
 
         send({
           done: total,
@@ -198,11 +228,23 @@ export async function POST(request: Request) {
         // — it goes in-band as a final line instead, same as the coupon
         // generation route.
         console.error("Bulk coupon delete error:", err);
+        if (began) {
+          // May already be aborted server-side (e.g. after a timeout) — then
+          // there's nothing left to roll back.
+          await tx.rollback().catch((rollbackErr) =>
+            console.error("Bulk coupon delete rollback error:", rollbackErr),
+          );
+        }
         const message = err instanceof Error ? err.message : "Internal Server Error";
-        send({ status: "error", message });
-      } finally {
-        controller.close();
+        // Throws if the client already disconnected (which is also what
+        // aborted the loop above) — nothing left to tell it.
+        try {
+          send({ status: "error", message });
+          controller.close();
+        } catch {}
+        return;
       }
+      controller.close();
     },
   });
 

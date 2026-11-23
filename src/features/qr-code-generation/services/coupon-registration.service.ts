@@ -313,25 +313,30 @@ export async function countCoupons(
 // only place that may ever write IsDeleted/DeletedAt/DeletedBy; no route
 // calls it yet since no delete feature has been built, but any future one
 // must go through this rather than issuing its own DELETE/UPDATE.
+// Never deletes a scanned coupon. Returns how many rows were actually
+// deleted, so a caller can detect coupons scanned/deleted concurrently
+// (fewer than requested) and roll back its transaction.
 export async function softDeleteCoupons(
-  pool: sql.ConnectionPool,
+  pool: sql.ConnectionPool | sql.Transaction,
   couponCodes: string[],
   deletedBy: string,
-): Promise<void> {
+): Promise<number> {
   const codes = [...new Set(couponCodes)];
-  if (codes.length === 0) return;
+  let deleted = 0;
   for (const batch of chunk(codes, 2000)) {
     const request = pool.request();
     const placeholders = batch.map((code, i) => {
       request.input(`code${i}`, sql.NVarChar, code);
       return `@code${i}`;
     });
-    await request.input("deletedBy", sql.NVarChar, deletedBy).query(`
+    const result = await request.input("deletedBy", sql.NVarChar, deletedBy).query(`
       UPDATE dbo.QrCode_Coupon
       SET IsDeleted = 1, DeletedAt = SYSUTCDATETIME(), DeletedBy = @deletedBy
-      WHERE CouponCode IN (${placeholders.join(", ")}) AND IsDeleted = 0
+      WHERE CouponCode IN (${placeholders.join(", ")}) AND IsDeleted = 0 AND IsScanned = 0
     `);
+    deleted += result.rowsAffected[0] ?? 0;
   }
+  return deleted;
 }
 
 // Distinct (BundleNo, OpNo) pairs already registered for a work order — lets
