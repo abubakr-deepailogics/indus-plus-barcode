@@ -5,6 +5,7 @@ import {
   STYLE_CARD_BOM_CONSUMPTION_TABLE,
 } from "@/lib/db";
 import { formatBundleId, lowestFreeSequences } from "./bundle-sequence";
+import { DEFAULT_PLY_TYPE, PLY_TYPE_MAX_LENGTH } from "../types";
 import type {
   CutPlanningData,
   CutPlanningInseamGroup,
@@ -85,6 +86,12 @@ function parseQuantities(value: unknown): SizeQuantities {
   }
 }
 
+// Blank or missing (legacy NULL rows) means the default ply type, so the
+// value read, compared and saved is always the same canonical string.
+function normalizePlyType(value: unknown) {
+  return String(value ?? "").trim().replace(/\s+/g, " ") || DEFAULT_PLY_TYPE;
+}
+
 function normalizeSavedRow(row: Record<string, unknown>): CutPlanRow {
   const value = (name: string) => row[name];
   return {
@@ -96,6 +103,7 @@ function normalizeSavedRow(row: Record<string, unknown>): CutPlanRow {
     markerNo: String(value("MarkerNo") ?? ""),
     cutNo: String(value("CutNo") ?? ""),
     markerPlies: number(value("MarkerPlies")),
+    plyType: normalizePlyType(value("PlyType")),
     shrinkage: String(value("Shrinkage") ?? ""),
     shade: String(value("Shade") ?? ""),
     calculatedRequired: value("CalculatedRequired") == null ? null : number(value("CalculatedRequired")),
@@ -134,33 +142,59 @@ export async function getCutPlanning(workOrder: string): Promise<CutPlanningData
     `);
   const sourceRows = sourceRowsResult.recordset as Array<Record<string, unknown>>;
   const styleCode = String(sourceRows[0]?.StyleCode ?? "").trim();
-  const accessItemResult = styleCode
+  // The style's whole BOM (a few dozen lines): FABRIC items (main body +
+  // pocketing/piping) and Fusing trims are picked out below, and Wash is read
+  // from any line, since trims carry it too. Missing values are stored as
+  // the literal 'NULL'.
+  const bomResult = styleCode
     ? await indusPool.request()
       .input("styleCode", sql.NVarChar, styleCode)
       .query(`
         SELECT DISTINCT
-          LTRIM(RTRIM(AccessCode)) AS AccessCode,
+          UPPER(LTRIM(RTRIM(AccessCode))) AS AccessCode,
+          LTRIM(RTRIM(GroupName)) AS GroupName,
           COALESCE(
             NULLIF(LTRIM(RTRIM(ItemName)), ''),
             NULLIF(LTRIM(RTRIM(ItemCode)), '')
-          ) AS ItemName
+          ) AS ItemName,
+          TRY_CONVERT(FLOAT, NULLIF(LTRIM(RTRIM(Consumption)), 'NULL')) AS Consumption,
+          LTRIM(RTRIM(UOM)) AS UOM,
+          LTRIM(RTRIM(Wash)) AS Wash
         FROM ${STYLE_CARD_BOM_CONSUMPTION_TABLE}
         WHERE StyleCode = @styleCode
-          AND NULLIF(LTRIM(RTRIM(AccessCode)), '') IS NOT NULL
-          AND UPPER(LTRIM(RTRIM(AccessCode))) = 'FABRIC'
           AND (
             NULLIF(LTRIM(RTRIM(ItemName)), '') IS NOT NULL
             OR NULLIF(LTRIM(RTRIM(ItemCode)), '') IS NOT NULL
           )
         ORDER BY AccessCode, ItemName
       `)
-    : { recordset: [] as Array<{ AccessCode?: unknown; ItemName?: unknown }> };
-  const accessItems = accessItemResult.recordset
+    : { recordset: [] as Array<Record<string, unknown>> };
+  const bomText = (value: unknown) => {
+    const text = String(value ?? "").trim();
+    return text.toUpperCase() === "NULL" ? "" : text;
+  };
+  const bomRows = (bomResult.recordset as Array<Record<string, unknown>>)
     .map((row) => ({
-      accessCode: String(row.AccessCode ?? "").trim(),
-      itemName: String(row.ItemName ?? "").trim(),
+      accessCode: bomText(row.AccessCode),
+      groupName: bomText(row.GroupName),
+      itemName: bomText(row.ItemName),
+      consumption: row.Consumption == null || !Number.isFinite(Number(row.Consumption))
+        ? null
+        : Number(row.Consumption),
+      uom: bomText(row.UOM),
+      wash: bomText(row.Wash),
     }))
-    .filter(({ accessCode, itemName }) => accessCode && accessCode.toUpperCase() !== "NULL" && itemName);
+    .filter((row) => row.itemName);
+  const toBomItem = ({ itemName, groupName, consumption, uom }: (typeof bomRows)[number]) =>
+    ({ itemName, groupName, consumption, uom });
+  const fabricRows = bomRows.filter((row) => row.accessCode === "FABRIC");
+  const accessItems = [...new Set(fabricRows.map((row) => row.itemName))]
+    .map((itemName) => ({ accessCode: "FABRIC", itemName }));
+  const fabricItems = fabricRows.map(toBomItem);
+  const fusingItems = bomRows
+    .filter((row) => row.groupName.toUpperCase() === "FUSING")
+    .map(toBomItem);
+  const wash = bomRows.find((row) => row.wash)?.wash ?? "";
   const grouped = new Map<string, CutPlanningInseamGroup>();
   for (const row of sourceRows) {
     const size = String(row.Size ?? "").trim();
@@ -183,6 +217,9 @@ export async function getCutPlanning(workOrder: string): Promise<CutPlanningData
     workOrder: trimmedWorkOrder,
     customerName: String(first.Customer ?? ""),
     accessItems,
+    fabricItems,
+    fusingItems,
+    wash,
     workOrderDate: String(first.WorkOrderDate ?? ""),
     color: String(first.Color ?? ""),
     styleCode: String(first.StyleCode ?? ""),
@@ -192,7 +229,7 @@ export async function getCutPlanning(workOrder: string): Promise<CutPlanningData
 
   const plansResult = await pitPool.request().input("workOrder", sql.NVarChar, trimmedWorkOrder).query(`
     SELECT Id, SourceInseam, PlanDate, SizeQuantitiesJson, ReCutQty, MarkerNo, CutNo,
-      MarkerPlies, Shrinkage, Shade, CalculatedRequired, MarkerWidthCm, MarkerLengthM
+      MarkerPlies, PlyType, Shrinkage, Shade, CalculatedRequired, MarkerWidthCm, MarkerLengthM
     FROM dbo.CutPlanning
     WHERE WorkOrder = @workOrder AND IsDeleted = 0
     ORDER BY PlanDate, Id
@@ -223,6 +260,10 @@ function validatePlan(row: CutPlanRow, index: number) {
     throw new Error(`${prefix}: Inseam is invalid.`);
   }
   if (Object.keys(row.sizeQuantities).length > 100) throw new Error(`${prefix}: Too many size values.`);
+  if (row.plyType != null && typeof row.plyType !== "string") throw new Error(`${prefix}: Ply type is invalid.`);
+  if (normalizePlyType(row.plyType).length > PLY_TYPE_MAX_LENGTH) {
+    throw new Error(`${prefix}: Ply type must be ${PLY_TYPE_MAX_LENGTH} characters or fewer.`);
+  }
   if (row.planDate) {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(row.planDate) ? new Date(`${row.planDate}T00:00:00Z`) : null;
     if (!date || Number.isNaN(date.getTime()) || date.toISOString().slice(0, 10) !== row.planDate) {
@@ -290,6 +331,7 @@ function planSignature(plan: CutPlanRow) {
     markerNo: plan.markerNo.trim(),
     cutNo: plan.cutNo.trim(),
     markerPlies: plan.markerPlies,
+    plyType: normalizePlyType(plan.plyType),
     shrinkage: plan.shrinkage.trim(),
     shade: plan.shade.trim(),
     calculatedRequired: calculateRequiredFabricMetres(plan.markerLengthM, plan.markerPlies),
@@ -332,7 +374,7 @@ export async function saveCutPlanning(payload: SaveCutPlanningPayload, userEmail
       .input("workOrder", sql.NVarChar, workOrder)
       .query(`
         SELECT Id, SourceInseam, PlanDate, SizeQuantitiesJson, ReCutQty, MarkerNo, CutNo,
-          MarkerPlies, Shrinkage, Shade, CalculatedRequired, MarkerWidthCm, MarkerLengthM
+          MarkerPlies, PlyType, Shrinkage, Shade, CalculatedRequired, MarkerWidthCm, MarkerLengthM
         FROM dbo.CutPlanning
         WHERE WorkOrder = @workOrder AND IsDeleted = 0
       `);
@@ -371,14 +413,15 @@ export async function saveCutPlanning(payload: SaveCutPlanningPayload, userEmail
         .input("markerNo", sql.NVarChar, row.markerNo.trim() || null)
         .input("cutNo", sql.NVarChar, row.cutNo.trim() || null)
         .input("markerPlies", sql.Decimal(18, 3), number(row.markerPlies))
+        .input("plyType", sql.NVarChar(PLY_TYPE_MAX_LENGTH), normalizePlyType(row.plyType))
         .input("shrinkage", sql.NVarChar, row.shrinkage.trim() || null)
         .input("shade", sql.NVarChar, row.shade.trim() || null)
         .input("calculatedRequired", sql.Decimal(18, 3), row.calculatedRequired == null ? null : number(row.calculatedRequired))
         .input("markerWidthCm", sql.Decimal(18, 3), row.markerWidthCm == null ? null : number(row.markerWidthCm))
         .input("markerLengthM", sql.Decimal(18, 3), row.markerLengthM == null ? null : number(row.markerLengthM))
         .input("insertedBy", sql.NVarChar, userEmail || "system")
-        .query(`INSERT INTO dbo.CutPlanning (WorkOrder, SourceInseam, PlanDate, SizeQuantitiesJson, ReCutQty, MarkerNo, CutNo, MarkerPlies, Shrinkage, Shade, CalculatedRequired, MarkerWidthCm, MarkerLengthM, InsertedBy)
-          VALUES (@workOrder, @sourceInseam, @planDate, @quantities, @reCutQty, @markerNo, @cutNo, @markerPlies, @shrinkage, @shade, @calculatedRequired, @markerWidthCm, @markerLengthM, @insertedBy)`);
+        .query(`INSERT INTO dbo.CutPlanning (WorkOrder, SourceInseam, PlanDate, SizeQuantitiesJson, ReCutQty, MarkerNo, CutNo, MarkerPlies, PlyType, Shrinkage, Shade, CalculatedRequired, MarkerWidthCm, MarkerLengthM, InsertedBy)
+          VALUES (@workOrder, @sourceInseam, @planDate, @quantities, @reCutQty, @markerNo, @cutNo, @markerPlies, @plyType, @shrinkage, @shade, @calculatedRequired, @markerWidthCm, @markerLengthM, @insertedBy)`);
     }
     await transaction.commit();
   } catch (error) {

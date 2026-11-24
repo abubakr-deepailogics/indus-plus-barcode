@@ -2,7 +2,6 @@
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-import ExcelJS from "exceljs";
 import {
   AlertCircle,
   Check,
@@ -26,12 +25,22 @@ import {
 } from "@/components/work-order-search-modal";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { formatBundleId, lowestFreeSequences } from "@/features/cut-planning/services/bundle-sequence";
-import type {
-  CutPlanRow,
-  CutPlanningData,
-  CutPlanningInseamGroup,
+import {
+  DEFAULT_PLY_TYPE,
+  PLY_TYPE_MAX_LENGTH,
+  type CutPlanRow,
+  type CutPlanningData,
+  type CutPlanningInseamGroup,
 } from "../types";
 import { calculateRequiredFabricMetres } from "../services/calculated-requirement";
+import {
+  chunkInseamGroupsForPrint,
+  formatBomAverage,
+  pickMainFabric,
+  pickPocketingFabrics,
+} from "../services/print-header";
+import { summarizeShadeGroups } from "../services/shade-groups";
+import { buildCutPlanningWorkbook } from "../services/cut-planning-excel";
 
 // Reorders the matrix's marker rows by Cut no. A marker row is the n-th plan
 // of every inseam, so whole rows move together and stay aligned across
@@ -107,6 +116,7 @@ function makePlan(group: CutPlanningInseamGroup): CutPlanRow {
     markerNo: "",
     cutNo: "",
     markerPlies: 0,
+    plyType: DEFAULT_PLY_TYPE,
     shrinkage: "",
     shade: "",
     calculatedRequired: null,
@@ -336,6 +346,7 @@ export default function CutPlanningPage() {
       "marker-no",
       "cut-no",
       "marker-plies",
+      "ply-type",
       ...groups.flatMap((group) =>
         group.sizeColumns.map((size) => matrixSizeColumnId(group, size)),
       ),
@@ -460,27 +471,6 @@ export default function CutPlanningPage() {
     selectedFabricWorkOrder === data?.metadata?.workOrder
       ? selectedFabricItem
       : "";
-  const printHeaderDetails = [
-    { label: "DATE", value: data?.metadata?.workOrderDate ?? "" },
-    { label: "GROUP", value: materialSummaries[0]?.accessCode ?? "" },
-    { label: "ORDER #", value: data?.metadata?.workOrder ?? "" },
-    {
-      label: "STYLE",
-      value: [
-        data?.metadata?.styleNo,
-        data?.metadata?.styleCode,
-        data?.metadata?.styleName,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-    },
-    { label: "CUSTOMER", value: data?.metadata?.customerName ?? "" },
-    { label: "COLOR", value: data?.metadata?.color ?? "" },
-    {
-      label: "FABRIC",
-      value: activeFabricItem || materialSummaries[0]?.itemNames[0] || "",
-    },
-  ];
   const bundleCutOptions = useMemo(() => {
     const cuts = new Map<string, { transactionQty: number; shades: Set<string> }>();
     for (const plan of plans) {
@@ -771,6 +761,8 @@ export default function CutPlanningPage() {
     plan.markerPlies > 0 ||
     plan.markerWidthCm != null ||
     plan.markerLengthM != null ||
+    // plyType is deliberately not checked: every new row starts as
+    // DEFAULT_PLY_TYPE, so it would make blank filler rows look filled.
     Boolean(
       plan.markerNo.trim() ||
       plan.cutNo.trim() ||
@@ -897,175 +889,51 @@ export default function CutPlanningPage() {
     }
   }
 
+  // Excel twin of the print: same header, rows and colours, built from the
+  // same on-screen data (printHeader / printSheetRows / printShadeGroups).
   const exportCutPlanning = async () => {
     if (!workOrder || groupedPlans.length === 0) return;
-    const workbook = new ExcelJS.Workbook();
-    const border = { style: "thin" as const, color: { argb: "FF000000" } };
-    const headerFill = { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFF2F2F2" } };
-    const inseamFill = { type: "pattern" as const, pattern: "solid" as const, fgColor: { argb: "FFE7E6E6" } };
-    const cutGroups = new Map<string, CutPlanRow[]>();
-    plans.filter(hasRowData).forEach((plan, index) => {
-      const key = plan.cutNo.trim() ? `cut:${plan.cutNo.trim()}` : `row:${index}`;
-      const list = cutGroups.get(key) ?? [];
-      list.push(plan);
-      cutGroups.set(key, list);
-    });
-    // Excel is intentionally not constrained to the two-inseam print layout.
-    // Keep every inseam in one horizontal planning grid and one horizontal
-    // totals grid, so their headers and row labels are not repeated.
-    const exportInseams = groupedPlans;
-    const sizeColumnCount = exportInseams.reduce(
-      (sum, entry) => sum + entry.group.sizeColumns.length,
-      0,
-    );
-    const planningColumnCount = 6 + sizeColumnCount;
-    const totalsColumnCount = 1 + exportInseams.reduce(
-      (sum, entry) => sum + entry.group.sizeColumns.length + 1,
-      0,
-    );
-    const columnCount = Math.max(planningColumnCount, totalsColumnCount);
-    const sheet = workbook.addWorksheet("Cut Planning");
-    sheet.pageSetup.orientation = "landscape";
-    sheet.pageSetup.fitToPage = true;
-    sheet.pageSetup.fitToWidth = 1;
-    sheet.pageSetup.fitToHeight = 1;
-    sheet.columns = [
-      { width: 14 },
-      { width: 20 },
-      { width: 12 },
-      { width: 18 },
-      { width: 11 },
-      { width: 14 },
-      ...Array.from({ length: Math.max(0, columnCount - 6) }, () => ({ width: 8 })),
-    ];
-    sheet.mergeCells(1, 1, 1, columnCount);
-    const title = sheet.getCell(1, 1);
-    title.value = "SIZE DETAIL & CHECK LIST";
-    title.font = { name: "Calibri", bold: true, size: 14 };
-    title.alignment = { horizontal: "center" };
-    const exportDate = String(data?.metadata?.workOrderDate ?? "").split(/[ T]/)[0];
-    const metadata = [
-      ["DATE", exportDate, "ORDER #", data?.metadata?.workOrder ?? ""],
-      ["CUSTOMER", data?.metadata?.customerName ?? "", "STYLE", data?.metadata?.styleNo || data?.metadata?.styleCode || ""],
-    ];
-    metadata.forEach((row, rowIndex) => {
-      sheet.getRow(rowIndex + 2).values = row;
-      [1, 3].forEach((column) => { sheet.getCell(rowIndex + 2, column).font = { name: "Calibri", bold: true, size: 11 }; });
-    });
-    const exportFabric = activeFabricItem || materialSummaries[0]?.itemNames[0] || "";
-    sheet.getCell(4, 1).value = "FABRIC";
-    sheet.mergeCells(4, 2, 4, 4);
-    sheet.getCell(4, 2).value = exportFabric;
-
-    const startRow = 6;
-    ["SR", "TOTAL PCS", "SHRINKAGE", "PLYS", "CUT #", "BUNDLE"].forEach((label, index) => {
-      sheet.mergeCells(startRow, index + 1, startRow + 2, index + 1);
-      sheet.getCell(startRow, index + 1).value = label;
-    });
-    let startColumn = 7;
-    exportInseams.forEach(({ group }) => {
-      const endColumn = startColumn + group.sizeColumns.length - 1;
-      // Retain an individual header box for every inseam, even though all
-      // inseams now live in one horizontal Excel table.
-      sheet.mergeCells(startRow, startColumn, startRow, endColumn);
-      sheet.getCell(startRow, startColumn).value = "INSEAM";
-      sheet.mergeCells(startRow + 1, startColumn, startRow + 1, endColumn);
-      sheet.getCell(startRow + 1, startColumn).value = group.inseam ?? "-";
-      group.sizeColumns.forEach((size, index) => { sheet.getCell(startRow + 2, startColumn + index).value = size; });
-      startColumn = endColumn + 1;
-    });
-    const exportCutGroups = [...cutGroups.values()];
-    exportCutGroups.forEach((cutPlans, index) => {
-      const base = cutPlans[0];
-      const total = cutPlans.reduce((sum, plan) => sum + Object.values(plan.sizeQuantities).reduce((sizeSum, qty) => sizeSum + qty, 0), 0);
-      const row = startRow + 3 + index;
-      sheet.getRow(row).values = [index + 1, total * base.markerPlies || "", base.shrinkage || "", base.markerPlies || "", base.cutNo || "", total ? `1 - ${total}` : ""];
-      let column = 7;
-      exportInseams.forEach(({ group }) => {
-        group.sizeColumns.forEach((size) => {
-          const value = cutPlans.filter((plan) => plan.sourceInseam === group.inseam).reduce((sum, plan) => sum + (plan.sizeQuantities[size] || 0), 0);
-          sheet.getCell(row, column++).value = value || "";
-        });
+    try {
+      const workbook = buildCutPlanningWorkbook({
+        header: {
+          date: printHeader.date,
+          workOrder: printHeader.workOrder.replace(/^W\/O-/i, ""),
+          styleNo: printHeader.styleNo,
+          styleName: printHeader.styleName,
+          customer: printHeader.customer,
+          average: printAverage,
+          fabric: printHeader.fabric,
+          pocketing: printHeader.pocketing.join(", "),
+          pocketingBomAverage: printHeader.pocketingBomAverage,
+          fusing: printHeader.fusing.join(", "),
+          fusingAverage: printHeader.fusingAverage,
+          wash: printHeader.wash,
+        },
+        groups: groupedPlans.map(({ group }) => group),
+        rows: printSheetRows.map(({ basePlan, cells }) => ({
+          markerWidthCm: basePlan.markerWidthCm,
+          shrinkage: basePlan.shrinkage,
+          markerPlies: basePlan.markerPlies,
+          plyType: basePlan.plyType,
+          cutNo: basePlan.cutNo,
+          shade: basePlan.shade,
+          markerLengthM: basePlan.markerLengthM,
+          sizeQuantities: cells.map(({ plan }) => plan?.sizeQuantities),
+        })),
+        shadeGroups: printShadeGroups.rows.map((row) => row.shadeGroup),
       });
-    });
-    const totalsStartRow = startRow + 4 + exportCutGroups.length;
-    sheet.getColumn(1).width = 18;
-    let totalsColumn = 2;
-    exportInseams.forEach(({ group }) => {
-      const total = inseamTotals.find((entry) => entry.inseam === group.inseam);
-      const endColumn = totalsColumn + group.sizeColumns.length;
-      // The totals remain one table, but every inseam retains the same
-      // separate boxed header used in the planning grid.
-      sheet.mergeCells(totalsStartRow, totalsColumn, totalsStartRow, endColumn);
-      sheet.getCell(totalsStartRow, totalsColumn).value = "INSEAM";
-      sheet.mergeCells(totalsStartRow + 1, totalsColumn, totalsStartRow + 1, endColumn);
-      sheet.getCell(totalsStartRow + 1, totalsColumn).value = group.inseam ?? "-";
-      group.sizeColumns.forEach((size, index) => {
-        sheet.getCell(totalsStartRow + 2, totalsColumn + index).value = size;
-      });
-      sheet.getCell(totalsStartRow + 2, endColumn).value = "TOTAL";
-      total?.rows.filter(({ label }) => label !== "Order").forEach(({ label, values }, rowIndex) => {
-        const row = totalsStartRow + 3 + rowIndex;
-        group.sizeColumns.forEach((size, index) => {
-          const value = label === "Less" ? Math.abs(values[size] || 0) : values[size] || 0;
-          sheet.getCell(row, totalsColumn + index).value = value || "";
-        });
-        const totalValue = group.sizeColumns.reduce((sum, size) => sum + (values[size] || 0), 0);
-        sheet.getCell(row, endColumn).value = label === "Less" ? Math.abs(totalValue) || "" : totalValue || "";
-      });
-      totalsColumn = endColumn + 1;
-    });
-    inseamTotals[0]?.rows.filter(({ label }) => label !== "Order").forEach(({ label }, rowIndex) => {
-      sheet.getCell(totalsStartRow + 3 + rowIndex, 1).value = label;
-    });
-    for (let column = 1; column <= planningColumnCount; column += 1) {
-      sheet.getCell(startRow, column).fill = column <= 6 ? headerFill : inseamFill;
-      sheet.getCell(startRow + 1, column).fill = column <= 6 ? headerFill : inseamFill;
-      sheet.getCell(startRow + 2, column).fill = headerFill;
-      sheet.getCell(startRow, column).font = { name: "Calibri", bold: true, size: 11 };
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = `cut-planning-${workOrder.replace(/[^A-Za-z0-9._-]+/g, "-")}.xlsx`;
+      anchor.click();
+      URL.revokeObjectURL(url);
+    } catch (caught) {
+      console.error("Cut planning Excel export failed:", caught);
+      setError("Failed to export the Excel file.");
     }
-    for (let column = 1; column <= totalsColumnCount; column += 1) {
-      sheet.getCell(totalsStartRow, column).fill = inseamFill;
-      sheet.getCell(totalsStartRow + 1, column).fill = inseamFill;
-      sheet.getCell(totalsStartRow + 2, column).fill = headerFill;
-      [totalsStartRow, totalsStartRow + 1, totalsStartRow + 2].forEach((row) => {
-        sheet.getCell(row, column).font = { name: "Calibri", bold: true, size: 11 };
-      });
-    }
-    sheet.getRow(startRow).height = 18;
-    sheet.eachRow((row) => row.eachCell((cell) => {
-      cell.border = { top: border, left: border, bottom: border, right: border };
-      cell.alignment = { horizontal: "center", vertical: "middle" };
-      cell.font = { name: "Calibri", size: 11 };
-    }));
-    title.font = { name: "Calibri", bold: true, size: 14 };
-    metadata.forEach((_, rowIndex) => {
-      [1, 3].forEach((column) => {
-        sheet.getCell(rowIndex + 2, column).font = { name: "Calibri", bold: true, size: 11 };
-      });
-      [1, 2, 3, 4].forEach((column) => {
-        sheet.getCell(rowIndex + 2, column).alignment = { horizontal: "left", vertical: "middle" };
-      });
-    });
-    sheet.getCell(4, 1).font = { name: "Calibri", bold: true, size: 11 };
-    [1, 2].forEach((column) => {
-      sheet.getCell(4, column).alignment = { horizontal: "left", vertical: "middle", wrapText: true };
-    });
-    sheet.views = [{ showGridLines: false }];
-    sheet.getRow(1).height = 28;
-    sheet.getRow(2).height = 22;
-    sheet.getRow(3).height = 22;
-    sheet.getRow(4).height = exportFabric.length > 45 ? 38 : 22;
-    sheet.properties.defaultRowHeight = 21;
-    sheet.views = [{ showGridLines: true, zoomScale: 100 }];
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = `cut-planning-${workOrder.replace(/[^A-Za-z0-9._-]+/g, "-")}.xlsx`;
-    anchor.click();
-    URL.revokeObjectURL(url);
   };
 
   const cellClass = "cell-input";
@@ -1314,6 +1182,7 @@ export default function CutPlanningPage() {
     ["marker-no", "Marker no."],
     ["cut-no", "Cut no."],
     ["marker-plies", "Marker plies"],
+    ["ply-type", "Ply type"],
   ] as const;
   const matrixDetailColumns = [
     ["re-cut", "Re-cut"],
@@ -1414,6 +1283,50 @@ export default function CutPlanningPage() {
   const printClosingAvg = printTotalPcs > 0 && printTotalFabric > 0 ? printTotalFabric / printTotalPcs : null;
   const fixed = (value: number | null | undefined, digits: number) =>
     value == null || !Number.isFinite(value) ? "-" : value.toFixed(digits);
+  // "SIZE DETAIL & CHECK LIST" header, laid out like the Excel sheet. The
+  // fabric picked in the toolbar wins over the BOM's main-body fabric; every
+  // other FABRIC BOM item is shown as pocketing/piping.
+  const printFabricItems = data?.metadata?.fabricItems ?? [];
+  const printBomMainFabric = pickMainFabric(printFabricItems);
+  const printMainFabric =
+    activeFabricItem || printBomMainFabric?.itemName || materialSummaries[0]?.itemNames[0] || "";
+  const printAverage =
+    printFabricItems.find((item) => item.itemName === printMainFabric)?.consumption ??
+    printBomMainFabric?.consumption ??
+    null;
+  const printPocketingNames = pickPocketingFabrics(printFabricItems, printMainFabric);
+  const printFusingItems = data?.metadata?.fusingItems ?? [];
+  const printHeader = {
+    date: (data?.metadata?.workOrderDate ?? "").slice(0, 10),
+    workOrder: data?.metadata?.workOrder ?? "",
+    styleNo: data?.metadata?.styleNo || data?.metadata?.styleCode || "",
+    styleName: data?.metadata?.styleName ?? "",
+    customer: data?.metadata?.customerName ?? "",
+    fabric: printMainFabric,
+    pocketing: printPocketingNames,
+    // Excel N118 (lining line) and its BOM AVG (H118).
+    pocketingBomAverage: formatBomAverage(
+      printFabricItems.filter((item) => printPocketingNames.includes(item.itemName)),
+    ),
+    fusing: [...new Set(printFusingItems.map((item) => item.itemName))],
+    // Excel BH39 "FUSING AVG.": the fusing item's BOM consumption.
+    fusingAverage: formatBomAverage(printFusingItems),
+    wash: data?.metadata?.wash || data?.metadata?.color || "",
+  };
+  // Too many inseams to read on one sheet are continued on extra pages.
+  // Every page repeats ALL marker rows (same SR order) so rows line up
+  // across pages; only the inseam/size columns differ per page.
+  const printPages = chunkInseamGroupsForPrint(groups);
+  // Header GROUP table (calculated per shade) and the G37/G38 figures under
+  // TOTAL PCS. Uses what is on screen, like the rest of the print.
+  const printShadeGroups = summarizeShadeGroups(
+    printSheetRows.map((row) => ({
+      shade: row.basePlan.shade,
+      fabricMetres: row.fabric,
+      pcs: row.totalPcs,
+    })),
+  );
+  const printPcsDifference = printTotalQty - printTotalPcs;
   const printSizeBorder = (group: CutPlanningInseamGroup, size: string) =>
     size === group.sizeColumns[0] ? "print-inseam-start" : "";
   // Light row tints for the matrix summary rows. `!` keeps them above the
@@ -1653,6 +1566,18 @@ export default function CutPlanningPage() {
                       onChange={(event) =>
                         updateSharedMarker(rowIndex, {
                           markerPlies: numeric(event.target.value),
+                        })
+                      }
+                      className={`${cellClass} w-28`}
+                    />
+                  </td>
+                  <td {...matrixCellProps("ply-type", "p-0")}>
+                    <input
+                      value={base?.plan.plyType ?? DEFAULT_PLY_TYPE}
+                      maxLength={PLY_TYPE_MAX_LENGTH}
+                      onChange={(event) =>
+                        updateSharedMarker(rowIndex, {
+                          plyType: event.target.value,
                         })
                       }
                       className={`${cellClass} w-28`}
@@ -2518,17 +2443,112 @@ export default function CutPlanningPage() {
       )}
       {data && groups.length > 0 && (
         <div className="cut-planning-print">
-          <section className="cut-planning-print-page">
-            <header className="cut-planning-print-header">
-              <h1>SIZE DETAIL &amp; CHECK LIST</h1>
-              <div className="cut-planning-print-details">
-                {printHeaderDetails.map(({ label, value }) => (
-                  <div key={label}>
-                    <span>{label}</span>
-                    <strong>{value}</strong>
-                  </div>
-                ))}
+          {printPages.map((pageGroups, pageIndex) => {
+            const pageInseams = new Set(pageGroups.map((group) => group.inseam));
+            const isMultiPage = printPages.length > 1;
+            return (
+          <section key={pageIndex} className="cut-planning-print-page">
+            <header className="cp-header">
+              <div className="cp-header-title">
+                <span className="cp-header-date">Date: {printHeader.date}</span>
+                <h1>SIZE DETAIL &amp; CHECK LIST</h1>
+                {isMultiPage && (
+                  <span className="cp-header-page">
+                    Page {pageIndex + 1} of {printPages.length} · Inseam{" "}
+                    {pageGroups.map((group) => group.inseam ?? "-").join(", ")}
+                  </span>
+                )}
               </div>
+              <table className="cp-header-grid">
+                <colgroup>
+                  <col className="cp-hcol-groups" />
+                  <col className="cp-hcol-total" />
+                  <col className="cp-hcol-average" />
+                  <col className="cp-hcol-style" />
+                  <col />
+                  <col className="cp-hcol-fusing" />
+                  <col className="cp-hcol-wash" />
+                </colgroup>
+                <tbody>
+                  <tr>
+                    <td className="cp-h-groups" rowSpan={4}>
+                      {/* Per shade, calculated from the marker rows:
+                          FABRIC = metres used (MK length x plys), PCS = pieces cut. */}
+                      <table className="cp-shade-groups">
+                        <thead>
+                          <tr>
+                            <th>GROUP</th>
+                            <th>FABRIC</th>
+                            <th>PCS</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {printShadeGroups.rows.length > 0 ? (
+                            printShadeGroups.rows.map((row) => (
+                              <tr key={row.shadeGroup}>
+                                <td className="cp-sg-name">{row.shadeGroup}</td>
+                                <td>{displayPrintNumber(Math.round(row.fabricMetres)) || "-"}</td>
+                                <td className="cp-sg-pcs">{displayPrintNumber(row.pcs) || "-"}</td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td colSpan={3}>-</td>
+                            </tr>
+                          )}
+                        </tbody>
+                        <tfoot>
+                          <tr>
+                            <td>Total</td>
+                            <td>{displayPrintNumber(Math.round(printShadeGroups.totals.fabricMetres)) || "-"}</td>
+                            <td className="cp-sg-pcs">{displayPrintNumber(printShadeGroups.totals.pcs) || "-"}</td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </td>
+                    <th className="cp-h-label" colSpan={2}>ORDER #</th>
+                    <th className="cp-h-label">STYLE</th>
+                    <th className="cp-h-label" colSpan={2}>CUSTOMER</th>
+                    <th className="cp-h-label">PO</th>
+                  </tr>
+                  <tr>
+                    <td className="cp-h-order" colSpan={2}>
+                      {printHeader.workOrder.replace(/^W\/O-/i, "")}
+                    </td>
+                    <td className="cp-h-value">
+                      {printHeader.styleNo}
+                      {printHeader.styleName && printHeader.styleName !== printHeader.styleNo && (
+                        <small>{printHeader.styleName}</small>
+                      )}
+                    </td>
+                    <td className="cp-h-value cp-h-customer" colSpan={2}>{printHeader.customer.toUpperCase()}</td>
+                    <td className="cp-h-value" />
+                  </tr>
+                  <tr>
+                    <th className="cp-h-sublabel">TOTAL PCS</th>
+                    <th className="cp-h-sublabel">AVERAGE</th>
+                    <th className="cp-h-label">FABRIC</th>
+                    <th className="cp-h-label">POCKETING/PIPING</th>
+                    <th className="cp-h-label">FUSING</th>
+                    <th className="cp-h-label">WASH</th>
+                  </tr>
+                  <tr>
+                    {/* Excel G10 (QTY total), G37 (QTY - planned), G38 (fabric used). */}
+                    <td className="cp-h-total">
+                      {displayPrintNumber(printTotalQty) || "-"}
+                      <small className="cp-h-diff">PCS (+,-) {displayNumber(printPcsDifference)}</small>
+                      <small className="cp-h-used">
+                        {printShadeGroups.totals.fabricMetres ? Math.round(printShadeGroups.totals.fabricMetres) : "-"}
+                      </small>
+                    </td>
+                    <td className="cp-h-average">{fixed(printAverage, 2)}</td>
+                    <td className="cp-h-detail">{printHeader.fabric || "-"}</td>
+                    <td className="cp-h-detail">{printHeader.pocketing.join(", ") || "-"}</td>
+                    <td className="cp-h-detail cp-h-small">{printHeader.fusing.join(", ") || "-"}</td>
+                    <td className="cp-h-value">{printHeader.wash.toUpperCase() || "-"}</td>
+                  </tr>
+                </tbody>
+              </table>
             </header>
             <table className="cp-sheet">
               <colgroup>
@@ -2540,7 +2560,7 @@ export default function CutPlanningPage() {
                 <col className="cp-col-plytype" />
                 <col className="cp-col-cut" />
                 <col className="cp-col-bundle" />
-                {groups.flatMap((group) => group.sizeColumns.map((size) => <col key={`${group.inseam}-${size}`} />))}
+                {pageGroups.flatMap((group) => group.sizeColumns.map((size) => <col key={`${group.inseam}-${size}`} />))}
                 <col className="cp-col-fabric" />
                 <col className="cp-col-shade" />
                 <col className="cp-col-mavg" />
@@ -2555,15 +2575,22 @@ export default function CutPlanningPage() {
                   <th className="cp-head cp-red" colSpan={2}>PLYS</th>
                   <th className="cp-head cp-red">CUT #</th>
                   <th className="cp-head cp-red cp-tiny">BUNDLE</th>
-                  {inseamTotals.flatMap((total) => {
-                    const group = groups.find((entry) => entry.inseam === total.inseam);
-                    return (group?.sizeColumns ?? []).map((size) => (
-                      <th key={`bal-${group?.inseam}-${size}`} className={`cp-balance ${group ? printSizeBorder(group, size) : ""}`}>
-                        {displayNumber(total.difference[size] || 0)}
-                      </th>
-                    ));
-                  })}
-                  <th className="cp-fusing" colSpan={4}>FUSING AVG.</th>
+                  {/* Same as the Excel sheet (row 39 = QTY − planned):
+                      negative = planned more than will-cut, positive = still short. */}
+                  {pageGroups.flatMap((group) =>
+                    group.sizeColumns.map((size) => {
+                      const totals = inseamTotalsByInseam.get(group.inseam);
+                      const balance = (totals?.willCut[size] ?? 0) - (totals?.planned[size] ?? 0);
+                      return (
+                        <th key={`bal-${group.inseam}-${size}`} className={`cp-balance ${printSizeBorder(group, size)}`}>
+                          {displayNumber(balance)}
+                        </th>
+                      );
+                    }),
+                  )}
+                  <th className="cp-fusing" colSpan={4}>
+                    FUSING AVG.{printHeader.fusingAverage ? ` ${printHeader.fusingAverage}` : ""}
+                  </th>
                 </tr>
                 <tr>
                   <th className="cp-fabric-width" rowSpan={3}>
@@ -2573,7 +2600,7 @@ export default function CutPlanningPage() {
                     <span>CLOSING AVG</span>
                   </th>
                   <th className="cp-head cp-inseam-label" colSpan={2}>inseam</th>
-                  {groups.map((group) => (
+                  {pageGroups.map((group) => (
                     <th
                       key={`inseam-${group.inseam ?? "none"}`}
                       className="cp-inseam print-inseam-start"
@@ -2590,7 +2617,7 @@ export default function CutPlanningPage() {
                   </th>
                   <th className="cp-plain">{displayPrintNumber(printTotalPcs)}</th>
                   <th className="cp-plain cp-tiny">SIZE</th>
-                  {groups.flatMap((group) =>
+                  {pageGroups.flatMap((group) =>
                     group.sizeColumns.map((size) => (
                       <th key={`size-${group.inseam}-${size}`} className={`cp-plain ${printSizeBorder(group, size)}`}>{size}</th>
                     )),
@@ -2600,7 +2627,7 @@ export default function CutPlanningPage() {
                 <tr>
                   <th className="cp-qty">{displayPrintNumber(printTotalQty)}</th>
                   <th className="cp-qty cp-tiny">QTY</th>
-                  {groups.flatMap((group) =>
+                  {pageGroups.flatMap((group) =>
                     group.sizeColumns.map((size) => (
                       <th key={`qty-${group.inseam}-${size}`} className={`cp-qty ${printSizeBorder(group, size)}`}>
                         {displayPrintNumber(group.willCutQuantities[size])}
@@ -2634,10 +2661,10 @@ export default function CutPlanningPage() {
                       </td>
                       <td className="cp-bold">{row.basePlan.shrinkage}</td>
                       <td>{displayPrintNumber(row.basePlan.markerPlies)}</td>
-                      <td className="cp-tiny" />
+                      <td className="cp-plytype">{row.basePlan.plyType}</td>
                       <td>{row.basePlan.cutNo}</td>
                       <td>{row.ratioTotal ? `1 - ${displayNumber(row.ratioTotal)}` : ""}</td>
-                      {row.cells.flatMap(({ group, plan }) =>
+                      {row.cells.filter(({ group }) => pageInseams.has(group.inseam)).flatMap(({ group, plan }) =>
                         group.sizeColumns.map((size) => (
                           <td key={`${group.inseam}-${size}`} className={`cp-bold ${printSizeBorder(group, size)}`}>
                             {displayPrintNumber(plan?.sizeQuantities[size])}
@@ -2657,7 +2684,7 @@ export default function CutPlanningPage() {
                   <td />
                   <td>{displayPrintNumber(printTotalPlies)}</td>
                   <td colSpan={3} />
-                  {groups.flatMap((group) =>
+                  {pageGroups.flatMap((group) =>
                     group.sizeColumns.map((size) => (
                       <td key={`tot-${group.inseam}-${size}`} className={printSizeBorder(group, size)} />
                     )),
@@ -2667,9 +2694,33 @@ export default function CutPlanningPage() {
                   <td className="cp-mavg-cell">{fixed(printClosingAvg, 2)}</td>
                   <td />
                 </tr>
+                {/* Excel rows 117-118: pocketing lining and its BOM average.
+                    WIDTH, PC PLAN and PC C.AVG are written in by hand there too. */}
+                <tr className="cp-lining-row">
+                  <td className="cp-lining-label">LINING WIDTH</td>
+                  <td className="cp-lining-label" colSpan={3}>PC PLAN</td>
+                  <td className="cp-lining-label" colSpan={2}>BOM AVG</td>
+                  <td className="cp-lining-value" colSpan={2}>{printHeader.pocketingBomAverage || "-"}</td>
+                  <td
+                    className="cp-lining-name"
+                    colSpan={pageGroups.reduce((sum, group) => sum + group.sizeColumns.length, 0)}
+                  >
+                    {printHeader.pocketing.join(", ") || "-"}
+                  </td>
+                  <td className="cp-lining-label" colSpan={2}>PC C.AVG</td>
+                  <td colSpan={2} />
+                </tr>
               </tbody>
             </table>
+            {isMultiPage && (
+              <p className="cp-page-note">
+                TOTAL PCS, FABRIC, M.AVG, CLOSING AVG and the TOTAL row cover the whole marker row (all inseams)
+                and repeat on every page. Do not add them across pages.
+              </p>
+            )}
           </section>
+            );
+          })}
         </div>
       )}
       <WorkOrderSearchModal
@@ -2983,49 +3034,159 @@ export default function CutPlanningPage() {
             break-after: auto;
             page-break-after: auto;
           }
-          .cut-planning-print-header {
+          /* SIZE DETAIL & CHECK LIST header — colours follow the Excel sheet:
+             gold title band, blue label cells, green order #, red totals. */
+          .cp-header {
             margin-bottom: 2.5mm;
             border: 1.25px solid #000;
           }
-          .cut-planning-print-header h1 {
+          .cp-header,
+          .cp-header * {
+            -webkit-print-color-adjust: exact;
+            print-color-adjust: exact;
+          }
+          .cp-header-title {
+            position: relative;
+            border-bottom: 1px solid #000;
+            background: #ffe699;
+          }
+          .cp-header-title h1 {
             margin: 0;
-            border-bottom: 1px solid #000;
-            padding: 1.8mm 3mm;
+            padding: 1.6mm 3mm;
             text-align: center;
-            font-size: 11pt;
-            letter-spacing: 0.08em;
+            font-size: 12pt;
+            font-weight: 800;
+            letter-spacing: 0.06em;
           }
-          .cut-planning-print-details {
-            display: grid;
-            grid-template-columns: repeat(4, minmax(0, 1fr));
-          }
-          .cut-planning-print-details > div {
-            display: grid;
-            grid-template-columns: 19mm 1fr;
-            min-width: 0;
-            border-right: 1px solid #000;
-            border-bottom: 1px solid #000;
-            font-size: 6.8pt;
-          }
-          .cut-planning-print-details > div:nth-last-child(-n + 4) {
-            border-bottom: 0;
-          }
-          .cut-planning-print-details > div:nth-child(4n) {
-            border-right: 0;
-          }
-          .cut-planning-print-details span,
-          .cut-planning-print-details strong {
-            min-width: 0;
-            padding: 1.2mm 1.5mm;
-          }
-          .cut-planning-print-details span {
-            border-right: 1px solid #000;
-            font-size: 5.8pt;
+          .cp-header-date {
+            position: absolute;
+            left: 2mm;
+            bottom: 0.8mm;
+            font-size: 6.5pt;
             font-weight: 700;
-            text-transform: uppercase;
           }
-          .cut-planning-print-details strong {
+          .cp-header-page {
+            position: absolute;
+            right: 2mm;
+            bottom: 0.8mm;
+            font-size: 6.5pt;
+            font-weight: 800;
+            color: #c00000;
+          }
+          .cp-page-note {
+            margin: 1.2mm 0 0;
+            color: #c00000;
+            font-size: 6pt;
+            font-weight: 700;
+          }
+          .cp-header-grid {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+          }
+          .cp-hcol-groups { width: 46mm; }
+          .cp-hcol-total { width: 18mm; }
+          .cp-hcol-average { width: 18mm; }
+          .cp-hcol-style { width: 46mm; }
+          .cp-hcol-fusing { width: 28mm; }
+          .cp-hcol-wash { width: 34mm; }
+          .cp-header-grid .cp-h-diff,
+          .cp-header-grid .cp-h-used {
+            display: block;
+            margin-top: 0.4mm;
+            font-size: 5.5pt;
+            font-weight: 700;
+          }
+          .cp-header-grid .cp-h-diff { color: #000; }
+          .cp-header-grid .cp-h-used { color: #0000ff; }
+          .cp-header-grid > tbody > tr > th,
+          .cp-header-grid > tbody > tr > td {
+            border: 1px solid #000;
+            padding: 0.8mm 1.2mm;
+            text-align: center;
+            vertical-align: middle;
             overflow-wrap: anywhere;
+            background: #fff;
+            color: #000;
+          }
+          .cp-header-grid .cp-h-groups {
+            padding: 0;
+            vertical-align: top;
+            background: #ddebf7;
+          }
+          .cp-header-grid .cp-h-label {
+            background: #9bc2e6;
+            font-size: 8pt;
+            font-weight: 800;
+          }
+          .cp-header-grid .cp-h-sublabel {
+            background: #fff;
+            font-size: 6pt;
+            font-weight: 800;
+          }
+          .cp-header-grid .cp-h-order {
+            background: #92d050;
+            font-size: 15pt;
+            font-weight: 800;
+          }
+          .cp-header-grid .cp-h-value {
+            font-size: 9pt;
+            font-weight: 700;
+          }
+          .cp-header-grid .cp-h-value small {
+            display: block;
+            margin-top: 0.4mm;
+            font-size: 5.8pt;
+            font-weight: 500;
+          }
+          .cp-header-grid .cp-h-customer {
+            font-size: 11pt;
+          }
+          .cp-header-grid .cp-h-total {
+            color: #ff0000;
+            font-size: 11pt;
+            font-weight: 800;
+          }
+          .cp-header-grid .cp-h-average {
+            font-size: 16pt;
+            font-weight: 800;
+          }
+          .cp-header-grid .cp-h-detail {
+            font-size: 7.5pt;
+            font-weight: 700;
+            line-height: 1.15;
+          }
+          .cp-header-grid .cp-h-small {
+            font-size: 6pt;
+          }
+          .cp-shade-groups {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 6.2pt;
+          }
+          .cp-shade-groups th,
+          .cp-shade-groups td {
+            border: 0.5px solid #7f7f7f;
+            padding: 0.35mm 0.6mm;
+            text-align: center;
+            font-weight: 700;
+            background: #ddebf7;
+          }
+          .cp-shade-groups thead th {
+            background: #bdd7ee;
+            font-size: 5.8pt;
+          }
+          .cp-shade-groups .cp-sg-pcs {
+            color: #ff0000;
+            background: #fff;
+          }
+          .cp-shade-groups tfoot td {
+            border-top: 1px solid #000;
+            background: #bdd7ee;
+          }
+          .cp-shade-groups tfoot .cp-sg-pcs {
+            background: #fff;
           }
           .cut-planning-print-marker-totals {
             display: grid;
@@ -3324,6 +3485,20 @@ export default function CutPlanningPage() {
           .cp-sheet .print-inseam-start { border-left: 2px solid #000; }
           .cp-sheet .cp-total-row td {
             background: #f2f2f2;
+            font-weight: 700;
+          }
+          .cp-sheet .cp-plytype {
+            font-size: 4.8pt;
+            font-weight: 700;
+            white-space: normal;
+            overflow-wrap: anywhere;
+          }
+          .cp-sheet .cp-lining-row td { background: #f2f2f2; }
+          .cp-sheet .cp-lining-label { font-size: 5.5pt; font-weight: 700; }
+          .cp-sheet .cp-lining-value { font-weight: 700; }
+          .cp-sheet .cp-lining-name {
+            text-align: left;
+            padding-left: 1.5mm;
             font-weight: 700;
           }
           .cp-sheet .cp-total-row .cp-fabric-cell,

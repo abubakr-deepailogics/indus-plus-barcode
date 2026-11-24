@@ -4,6 +4,11 @@ export type SizeQuantities = Record<string, number>;
 // Cut Planning's generated bundles (SewingCutReport) or indusPlus's cut detail.
 export type CutDetailSource = "cut-planning" | "indus-plus";
 
+/** Ply type a new or legacy (NULL) cut-planning row gets. */
+export const DEFAULT_PLY_TYPE = "SINGLE PLY";
+/** Matches dbo.CutPlanning.PlyType NVARCHAR(50). */
+export const PLY_TYPE_MAX_LENGTH = 50;
+
 export type CutPlanRow = {
   id?: number;
   sourceInseam: number | null;
@@ -13,11 +18,21 @@ export type CutPlanRow = {
   markerNo: string;
   cutNo: string;
   markerPlies: number;
+  plyType: string;
   shrinkage: string;
   shade: string;
   calculatedRequired: number | null;
   markerWidthCm: number | null;
   markerLengthM: number | null;
+};
+
+export type CutPlanningBomItem = {
+  itemName: string;
+  groupName: string;
+  /** Per-piece consumption from the style card BOM; null when not set. */
+  consumption: number | null;
+  /** Unit of the consumption (MT, YDS, ...); empty when not set. */
+  uom: string;
 };
 
 export type CutPlanningMetadata = {
@@ -27,6 +42,12 @@ export type CutPlanningMetadata = {
     accessCode: string;
     itemName: string;
   }>;
+  /** FABRIC BOM items (main body, pocketing, piping) for the print header. */
+  fabricItems: CutPlanningBomItem[];
+  /** Fusing items from the style card BOM. */
+  fusingItems: CutPlanningBomItem[];
+  /** Wash from the style card BOM; empty when the BOM has none. */
+  wash: string;
   workOrderDate: string;
   color: string;
   styleCode: string;
