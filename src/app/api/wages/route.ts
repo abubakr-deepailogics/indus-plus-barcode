@@ -5,6 +5,8 @@ import {
 } from "@/features/wages/services/wage-builder.service";
 import { findOverlappingWage } from "@/features/wages/services/wage-lock.service";
 import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { audit, logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +16,7 @@ export const dynamic = "force-dynamic";
 //   &from=yyyy-MM-dd &to=yyyy-MM-dd  (optional date filters)
 // ?title=<text>             → wage batches whose title contains this text
 // ?from=<d> &to=<d>         → all wage batches in the date range
-export async function GET(request: Request) {
+export const GET = withRoute("/api/wages", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const wageIdStr = searchParams.get("wageId") || "";
   const employeeCode = searchParams.get("employeeCode") || "";
@@ -146,13 +148,13 @@ export async function GET(request: Request) {
 
     return Response.json({ wages });
   } catch (err: unknown) {
-    console.error("GET /api/wages error:", err);
+    logger.error("GET /api/wages error", err);
     return Response.json(
       { error: err instanceof Error ? err.message : "Internal Server Error" },
       { status: 500 },
     );
   }
-}
+});
 
 // ── POST ─────────────────────────────────────────────────────────────────────
 // Body: { title, from, to, createdBy? }
@@ -161,7 +163,7 @@ export async function GET(request: Request) {
 // every scanned coupon in the range (no client-supplied rows, no filters), so
 // what the confirm modal previewed is exactly what gets written. Scanning is
 // then locked for the tenure — see wage-lock.service.
-export async function POST(request: Request) {
+export const POST = withRoute("/api/wages", async function POST(request: Request) {
   try {
     const body = await request.json();
 
@@ -296,6 +298,17 @@ export async function POST(request: Request) {
           AND ScannedAt < DATEADD(day, 1, @toDate);
       `);
 
+    audit("wage.create", {
+      wageId,
+      title,
+      department,
+      from: fromDate,
+      to: toDate,
+      totalRows,
+      totalQty: preview.totalQty,
+      totalAmount: preview.totalAmount,
+      createdBy,
+    });
     return Response.json({
       ok: true,
       wageId,
@@ -308,18 +321,18 @@ export async function POST(request: Request) {
       message: "Wages created successfully.",
     });
   } catch (err: unknown) {
-    console.error("POST /api/wages error:", err);
+    logger.error("POST /api/wages error", err);
     return Response.json(
       { error: err instanceof Error ? err.message : "Internal Server Error" },
       { status: 500 },
     );
   }
-}
+});
 
 // ── DELETE ───────────────────────────────────────────────────────────────────
 // ?wageId=<n>  — hard-deletes the wage batch (cascade removes EmployeeWageRows)
 // and clears WageId on its coupons, which reopens the tenure for scanning.
-export async function DELETE(request: Request) {
+export const DELETE = withRoute("/api/wages", async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
   const wageIdStr = searchParams.get("wageId") || "";
   const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
@@ -362,18 +375,19 @@ export async function DELETE(request: Request) {
       return Response.json({ error: "Wage record not found." }, { status: 404 });
     }
 
+    audit("wage.delete", { wageId, department });
     return Response.json({
       ok: true,
       message: `Wage batch #${wageId} deleted — scanning reopened for its tenure.`,
     });
   } catch (err: unknown) {
-    console.error("DELETE /api/wages error:", err);
+    logger.error("DELETE /api/wages error", err);
     return Response.json(
       { error: err instanceof Error ? err.message : "Internal Server Error" },
       { status: 500 },
     );
   }
-}
+});
 
 // Detail rows come back straight from SQL; normalise the numerics so the
 // client never has to guard against mssql's decimal-as-string.

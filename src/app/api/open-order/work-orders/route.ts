@@ -6,6 +6,8 @@ import {
   OPERATIONS_CATALOG_TABLE,
 } from "@/lib/db";
 import { isStyleBulletinDepartment } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +17,7 @@ export const dynamic = "force-dynamic";
 // (single `query` string, TOP 8/12, string[] response) — this returns the
 // W/O + Customer + Sale Order No row shape the modal's table needs, filtered
 // by up to three independent fields at once.
-export async function GET(request: Request) {
+export const GET = withRoute("/api/open-order/work-orders", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = (searchParams.get("work_order") || "").trim();
   const customer = (searchParams.get("customer") || "").trim();
@@ -114,8 +116,8 @@ export async function GET(request: Request) {
 
     return Response.json(erpRows);
   } catch (err: unknown) {
-    console.error("Work orders search API error:", err);
+    logger.error("Work orders search API error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});

@@ -1,8 +1,10 @@
 import { getPool, sql, OPERATIONS_CATALOG_TABLE } from "@/lib/db";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/dummy-employees/operations", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = (searchParams.get("query") || "").trim();
   const department = (searchParams.get("department") || "").trim();
@@ -21,7 +23,7 @@ export async function GET(request: Request) {
       ORDER BY OperationCode`);
     return Response.json(result.recordset);
   } catch (error) {
-    console.error("ERP operation lookup failed:", error);
+    logger.error("ERP operation lookup failed", error);
     return Response.json({ error: "Could not load ERP operations." }, { status: 500 });
   }
-}
+});

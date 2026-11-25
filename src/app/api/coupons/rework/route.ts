@@ -1,9 +1,11 @@
 import { getPool, sql, cutDetailByFilter, styleBulletinByFilter } from "@/lib/db";
 import { normalizeCutNo, normalizedCutSql } from "@/lib/cut-number";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 // Rework coupon lookup: scoped to one work order + cut + bundle (bundle ids
 // aren't unique across work orders, same reasoning as /api/open-order).
-export async function GET(request: Request) {
+export const GET = withRoute("/api/coupons/rework", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = searchParams.get("work_order") || "";
   const cutRaw = searchParams.get("cut") || "";
@@ -50,9 +52,9 @@ export async function GET(request: Request) {
       styleBulletins: styleBulletinResult.recordset,
     });
   } catch (err: unknown) {
-    console.error("Rework coupon lookup API error:", err);
+    logger.error("Rework coupon lookup API error", err);
     const message =
       err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
-}
+});

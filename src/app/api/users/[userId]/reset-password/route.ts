@@ -1,10 +1,12 @@
 import { requireAdminSession, AuthError } from "@/lib/require-session";
 import { setUserPassword } from "@/features/auth/services/users.service";
 import { generateStrongPassword, isPasswordStrongEnough } from "@/lib/password";
+import { withRoute } from "@/lib/logger/with-route";
+import { audit, logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request, { params }: { params: Promise<{ userId: string }> }) {
+export const POST = withRoute("/api/users/[userId]/reset-password", async function POST(request: Request, { params }: { params: Promise<{ userId: string }> }) {
   try {
     await requireAdminSession();
     const { userId: userIdStr } = await params;
@@ -29,12 +31,13 @@ export async function POST(request: Request, { params }: { params: Promise<{ use
     }
 
     await setUserPassword(userId, password, true);
+    audit("user.reset_password", { targetUserId: userId, generated: !body.password });
     return Response.json({ temporaryPassword: password });
   } catch (err) {
     if (err instanceof AuthError) {
       return Response.json({ error: err.message }, { status: err.status });
     }
-    console.error("reset password failed", err);
+    logger.error("reset password failed", err);
     return Response.json({ error: "Failed to reset password." }, { status: 500 });
   }
-}
+});

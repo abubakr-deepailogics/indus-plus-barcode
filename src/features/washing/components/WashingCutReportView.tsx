@@ -26,6 +26,7 @@ import type {
 } from "../types";
 import { ModulePageHeader } from "@/components/ModulePageHeader";
 import { normalizeCutNo } from "@/lib/cut-number";
+import { clientLogger } from "@/lib/logger/client";
 
 const cellInputClassName =
   "w-full h-full px-2.5 py-2 text-center bg-transparent text-xs font-semibold text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-[#4f46e5]/20 focus:bg-white rounded-lg transition-all";
@@ -174,7 +175,7 @@ export function WashingCutReportView() {
         }
       } catch (err: unknown) {
         if (!cancelled) {
-          console.error("Washing load error:", err);
+          clientLogger.error("Washing load error", err);
           setErrorMsg(err instanceof Error ? err.message : "Failed to load data for work order.");
         }
       } finally {
@@ -443,7 +444,7 @@ export function WashingCutReportView() {
       );
       setTimeout(() => setSuccessMsg(""), 5000);
     } catch (err: unknown) {
-      console.error("Generate cut report failed:", err);
+      clientLogger.error("Generate cut report failed", err);
       setErrorMsg(
         err instanceof Error ? err.message : "Failed to generate and save cut report.",
       );

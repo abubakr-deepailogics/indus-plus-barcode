@@ -1,8 +1,10 @@
 import { searchCutPlanningWorkOrders } from "@/features/cut-planning/services/cut-planning.service";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/cut-planning/work-orders", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   try {
     return Response.json(await searchCutPlanningWorkOrders({
@@ -11,10 +13,10 @@ export async function GET(request: Request) {
       saleOrderNo: searchParams.get("sale_order_no") || "",
     }));
   } catch (error) {
-    console.error("Cut-planning work-order search error:", error);
+    logger.error("Cut-planning work-order search error", error);
     return Response.json(
       { error: error instanceof Error ? error.message : "Failed to search work orders." },
       { status: 500 },
     );
   }
-}
+});

@@ -48,3 +48,9 @@ __pycache__/
 
 # next dev --experimental-https self-signed certs
 /certificates
+
+# Server logs (see docs/logging.md)
+/logs/
+
+# Env documentation is safe to commit
+!.env.local.example

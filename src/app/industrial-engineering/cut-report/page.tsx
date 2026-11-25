@@ -43,6 +43,7 @@ import { RequirePermission } from "@/features/auth/components/RequirePermission"
 import { useAuth } from "@/features/auth/context/auth-context";
 import { CutDetailSourceBadge } from "@/components/cut-detail-source-badge";
 import type { CutDetailSource } from "@/features/cut-planning/types";
+import { clientLogger } from "@/lib/logger/client";
 
 interface CutDetailRow {
   RowId: number;
@@ -876,7 +877,7 @@ export default function OpenOrderPage() {
       setSaveSuccessMsg("Bulletin details saved successfully.");
       setTimeout(() => setSaveSuccessMsg(""), 4000);
     } catch (err: any) {
-      console.error("Save error:", err);
+      clientLogger.error("Save error", err);
       setSaveErrorMsg(err.message || "Failed to save details.");
       setTimeout(() => setSaveErrorMsg(""), 5000);
     } finally {
@@ -971,7 +972,7 @@ export default function OpenOrderPage() {
           setStatus(data.metadata.Status || "Approved");
         }
       } catch (err: unknown) {
-        console.error("Fetch error:", err);
+        clientLogger.error("Fetch error", err);
         const msg =
           err instanceof Error ? err.message : "An unexpected error occurred.";
         setErrorMsg(msg);

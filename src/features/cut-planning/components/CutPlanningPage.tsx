@@ -41,6 +41,7 @@ import {
 } from "../services/print-header";
 import { summarizeShadeGroups } from "../services/shade-groups";
 import { buildCutPlanningWorkbook } from "../services/cut-planning-excel";
+import { clientLogger } from "@/lib/logger/client";
 
 // Reorders the matrix's marker rows by Cut no. A marker row is the n-th plan
 // of every inseam, so whole rows move together and stay aligned across
@@ -931,7 +932,7 @@ export default function CutPlanningPage() {
       anchor.click();
       URL.revokeObjectURL(url);
     } catch (caught) {
-      console.error("Cut planning Excel export failed:", caught);
+      clientLogger.error("Cut planning Excel export failed", caught);
       setError("Failed to export the Excel file.");
     }
   };

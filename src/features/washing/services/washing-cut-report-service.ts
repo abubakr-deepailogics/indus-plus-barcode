@@ -5,6 +5,7 @@ import type {
   SavedWashingCutRecord,
   WashingOrderMetadata,
 } from "../types";
+import { logger } from "@/lib/logger";
 
 const ROWS_PER_CHUNK = 100;
 
@@ -38,7 +39,7 @@ export async function getWashingCutReport(workOrder: string): Promise<{
         .input("wo", sql.NVarChar, trimmedWo)
         .query(cutDetailByFilter("[Work Order #] = @wo"))
         .catch((err) => {
-          console.error("ERP cutDetailByFilter failed:", err);
+          logger.error("ERP cutDetailByFilter failed", err);
           return { recordset: [] as Record<string, unknown>[] };
         }),
       indusPool
@@ -46,7 +47,7 @@ export async function getWashingCutReport(workOrder: string): Promise<{
         .input("wo", sql.NVarChar, trimmedWo)
         .query(styleBulletinByFilter("[Order No] = @wo"))
         .catch((err) => {
-          console.error("ERP styleBulletinByFilter failed:", err);
+          logger.error("ERP styleBulletinByFilter failed", err);
           return { recordset: [] as Record<string, unknown>[] };
         }),
     ]);
@@ -65,7 +66,7 @@ export async function getWashingCutReport(workOrder: string): Promise<{
       };
     }
   } catch (erpErr) {
-    console.error("Failed fetching live ERP metadata for washing cut report:", erpErr);
+    logger.error("Failed fetching live ERP metadata for washing cut report", erpErr);
   }
 
   // 2. Fetch previously saved washing cuts from pitSystem's dedicated dbo.CutReport table

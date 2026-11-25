@@ -1,6 +1,8 @@
 import { buildReportSummary } from "@/features/reports/services/report-summary-builder.service";
 import type { ReportSearchMode } from "@/features/reports/types";
 import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +24,7 @@ const VALID_MODES: ReportSearchMode[] = [
 // `all=true` (no `value`) aggregates across every employee/work order/
 // operation for the given `by`, instead of one — the only case `value`
 // isn't required.
-export async function GET(request: Request) {
+export const GET = withRoute("/api/reports/summary", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const by = searchParams.get("by");
   const value = (searchParams.get("value") || "").trim();
@@ -63,8 +65,8 @@ export async function GET(request: Request) {
     }
     return Response.json(result.data);
   } catch (err: unknown) {
-    console.error("Report summary API error:", err);
+    logger.error("Report summary API error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});

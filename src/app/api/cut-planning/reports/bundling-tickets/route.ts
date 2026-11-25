@@ -1,9 +1,11 @@
 import { fetchCorReportData } from "@/features/cut-planning/services/cor-report-data.service";
 import { generateBundlingTicketsPdf } from "@/features/cut-planning/services/cor-report-pdf.service";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/cut-planning/reports/bundling-tickets", async function GET(request: Request) {
   const workOrder = new URL(request.url).searchParams.get("work_order")?.trim();
   if (!workOrder) {
     return Response.json({ error: "work_order is required." }, { status: 400 });
@@ -24,10 +26,10 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    console.error("Bundling tickets generation error:", error);
+    logger.error("Bundling tickets generation error", error);
     return Response.json(
       { error: error instanceof Error ? error.message : "Failed to generate bundling tickets." },
       { status: 500 },
     );
   }
-}
+});

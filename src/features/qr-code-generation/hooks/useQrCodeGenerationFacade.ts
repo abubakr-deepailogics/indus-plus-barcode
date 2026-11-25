@@ -16,6 +16,7 @@ import { usesManualCouponCutDetails } from "@/lib/department-classification";
 import { compareSectionOrder } from "@/lib/section-order";
 import type { WorkOrderSearchRow } from "@/components/work-order-search-modal";
 import type { CutDetailSource } from "@/features/cut-planning/types";
+import { clientLogger } from "@/lib/logger/client";
 
 interface WorkerItem {
   EmployeeID: number;
@@ -348,7 +349,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
           setWorkersList(workers);
         }
       } catch (err) {
-        console.error("Failed to load initial search metadata:", err);
+        clientLogger.error("Failed to load initial search metadata", err);
       }
     };
     loadInitialMetadata();
@@ -480,7 +481,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
           couponCount = String(countData.total || 0);
         }
       } catch (e) {
-        console.error("Error fetching coupon count:", e);
+        clientLogger.error("Error fetching coupon count", e);
       }
 
       // Fetch bundle/operation pairs already generated for this work order,
@@ -501,7 +502,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
           );
         }
       } catch (e) {
-        console.error("Error fetching generated pairs:", e);
+        clientLogger.error("Error fetching generated pairs", e);
       }
       if (requestId !== workOrderRequestId.current) return;
       setGeneratedPairs(pairs);
@@ -529,7 +530,7 @@ export function useQrCodeGenerationFacade(): QrCodeGenerationFacade {
       setLastGeneratedSelectionKey("");
     } catch (err) {
       if (requestId === workOrderRequestId.current) {
-        console.error("Error fetching work order details:", err);
+        clientLogger.error("Error fetching work order details", err);
       }
     } finally {
       if (requestId === workOrderRequestId.current) {

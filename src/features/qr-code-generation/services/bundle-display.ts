@@ -34,5 +34,6 @@ export function demo() {
       `bundle id ${r.id} = ${result.get(r.id)}, expected ${expected[i]}`,
     );
   });
+  // eslint-disable-next-line no-console -- self-check demo output
   console.log("bundle-display demo OK");
 }

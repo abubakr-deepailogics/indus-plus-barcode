@@ -1,9 +1,11 @@
 import { isCouponDepartment } from "@/lib/department-classification";
 import { listReworkCuttingDetails } from "@/features/rework-coupon/services/rework-entry.service";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/coupons/rework/entries", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = (searchParams.get("work_order") || "").trim();
   const department = (searchParams.get("department") || "").trim().toLowerCase();
@@ -18,10 +20,10 @@ export async function GET(request: Request) {
   try {
     return Response.json(await listReworkCuttingDetails(workOrder, department));
   } catch (error) {
-    console.error("Rework cutting-detail lookup error:", error);
+    logger.error("Rework cutting-detail lookup error", error);
     return Response.json(
       { error: "Failed to load saved rework cutting details." },
       { status: 500 },
     );
   }
-}
+});

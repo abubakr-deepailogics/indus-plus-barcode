@@ -105,5 +105,6 @@ export function demo() {
     cards.length === bundles.length * operations.length,
     `expected full cross product (${bundles.length * operations.length}), got ${cards.length}`,
   );
+  // eslint-disable-next-line no-console -- self-check demo output
   console.log("coupon-pairing demo OK:", actual);
 }

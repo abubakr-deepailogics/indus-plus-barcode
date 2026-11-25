@@ -40,6 +40,7 @@ import {
   WorkOrderSearchModal,
   type WorkOrderSearchRow,
 } from "@/components/work-order-search-modal";
+import { clientLogger } from "@/lib/logger/client";
 
 interface StyleBulletinAttachment {
   Id: number;
@@ -765,7 +766,7 @@ export default function OpenOrderPage() {
         }
       } catch (err: unknown) {
         if (cancelled) return;
-        console.error("Fetch error:", err);
+        clientLogger.error("Fetch error", err);
         const msg =
           err instanceof Error ? err.message : "An unexpected error occurred.";
         setErrorMsg(msg);

@@ -17,6 +17,8 @@ import type {
   CouponLayout,
   OperationsDetailRow,
 } from "@/features/qr-code-generation/types";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 interface GenerateRequestBody {
   workOrder: string;
@@ -35,7 +37,7 @@ interface GenerateRequestBody {
 // is persisted server-side. Coupon *identity* is still registered in
 // dbo.QrCode_Coupon (that's the durable record scan/rework rely on); the
 // rendered bytes themselves are print-and-discard, regenerated on demand.
-export async function POST(request: Request) {
+export const POST = withRoute("/api/qr-code-generation/pdf", async function POST(request: Request) {
   const body = (await request.json()) as Partial<GenerateRequestBody>;
   const {
     workOrder,
@@ -156,17 +158,17 @@ export async function POST(request: Request) {
       },
     });
   } catch (err: unknown) {
-    console.error("PDF generation error:", err);
+    logger.error("PDF generation error", err);
     const message =
       err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
-}
+});
 
 // Coupon count for a work order, shown next to the Generate button —
 // independent of any stored PDF (there isn't one); backed by
 // dbo.QrCode_Coupon directly.
-export async function GET(request: Request) {
+export const GET = withRoute("/api/qr-code-generation/pdf", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = searchParams.get("work_order") || "";
   const department = (searchParams.get("department") || "sewing")
@@ -217,9 +219,9 @@ export async function GET(request: Request) {
       generatedOpCodes,
     });
   } catch (err: unknown) {
-    console.error("Coupon count lookup error:", err);
+    logger.error("Coupon count lookup error", err);
     const message =
       err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
-}
+});

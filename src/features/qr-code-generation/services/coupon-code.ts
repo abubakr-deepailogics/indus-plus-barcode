@@ -60,5 +60,6 @@ export function demo() {
     const actual = buildCouponCode(...args);
     console.assert(actual === expected, `buildCouponCode(${args.join(", ")}) = ${actual}, expected ${expected}`);
   }
+  // eslint-disable-next-line no-console -- self-check demo output
   console.log("coupon-code demo OK");
 }

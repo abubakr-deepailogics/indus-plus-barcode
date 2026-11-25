@@ -15,6 +15,7 @@ import {
   PhotoCodeStatus,
 } from "../types";
 import * as couponScanningService from "../services/coupon-scanning.service";
+import { clientLogger } from "@/lib/logger/client";
 
 const EMPTY_ROW_COUNT = 10;
 
@@ -152,7 +153,7 @@ export function useCouponScanning() {
     const audio = alreadyScannedAudioRef.current;
     audio.currentTime = 0;
     audio.play().catch((err) => {
-      console.error("Failed to play already-scanned alert sound:", err);
+      clientLogger.error("Failed to play already-scanned alert sound", err);
     });
   }, []);
 
@@ -217,7 +218,7 @@ export function useCouponScanning() {
   // just the one being typed into) on every keystroke anywhere in the form.
   const fetchWorkerSuggestions = useCallback((query: string) => {
     return couponScanningService.fetchWorkerSuggestions(query).catch((err) => {
-      console.error("Worker suggestions fetch error:", err);
+      clientLogger.error("Worker suggestions fetch error", err);
       return [];
     });
   }, []);
@@ -226,7 +227,7 @@ export function useCouponScanning() {
     return couponScanningService
       .fetchWorkOrderSuggestions(query, activeDepartment)
       .catch((err) => {
-        console.error("WO suggestions fetch error:", err);
+        clientLogger.error("WO suggestions fetch error", err);
         return [];
       });
   }, [activeDepartment]);
@@ -237,7 +238,7 @@ export function useCouponScanning() {
       return couponScanningService
         .fetchBundleSuggestions(workOrder, query, activeDepartment)
         .catch((err) => {
-          console.error("Bundle suggestions fetch error:", err);
+          clientLogger.error("Bundle suggestions fetch error", err);
           return [];
         });
     },
@@ -250,7 +251,7 @@ export function useCouponScanning() {
       return couponScanningService
         .fetchOpSuggestions(workOrder, query, activeDepartment)
         .catch((err) => {
-          console.error("Op suggestions fetch error:", err);
+          clientLogger.error("Op suggestions fetch error", err);
           return [];
         });
     },
@@ -263,7 +264,7 @@ export function useCouponScanning() {
       return couponScanningService
         .fetchCutSuggestions(workOrder, query, activeDepartment)
         .catch((err) => {
-          console.error("Cut suggestions fetch error:", err);
+          clientLogger.error("Cut suggestions fetch error", err);
           return [];
         });
     },
@@ -440,7 +441,7 @@ export function useCouponScanning() {
       );
       setShowSuccessModal(true);
     } catch (err) {
-      console.error("Combined search and scan error:", err);
+      clientLogger.error("Combined search and scan error", err);
       setIsScanning(false);
       setErrorMessage(
         getErrorMessage(
@@ -614,7 +615,7 @@ export function useCouponScanning() {
       }
       return result;
     } catch (err) {
-      console.error("Batch scan error:", err);
+      clientLogger.error("Batch scan error", err);
       raiseError(
         getErrorMessage(err, "An unexpected error occurred while scanning."),
       );
@@ -788,7 +789,7 @@ export function useCouponScanning() {
           Math.max(0, (parseFloat(prev) || 0) - unscannedPrice).toFixed(2),
         );
       } catch (err) {
-        console.error("Unscan error:", err);
+        clientLogger.error("Unscan error", err);
         setScanError("An error occurred while unscanning the coupon.");
         return;
       }
@@ -829,7 +830,7 @@ export function useCouponScanning() {
         );
       }
     } catch (err) {
-      console.error("Failed to fetch worker scan stats:", err);
+      clientLogger.error("Failed to fetch worker scan stats", err);
     }
   };
 
@@ -853,7 +854,7 @@ export function useCouponScanning() {
         setSection("");
       }
     } catch (err) {
-      console.error("Employee fetch by code error:", err);
+      clientLogger.error("Employee fetch by code error", err);
     }
   };
 
@@ -908,7 +909,7 @@ export function useCouponScanning() {
         ),
       );
     } catch (err) {
-      console.error("Coupon lookup error:", err);
+      clientLogger.error("Coupon lookup error", err);
       setScanError(
         getErrorMessage(err, "An unexpected error occurred while scanning."),
       );

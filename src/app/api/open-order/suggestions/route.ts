@@ -1,7 +1,9 @@
 import { getPool, sql, CUT_DETAIL_VIEW, WORKERS_VIEW } from "@/lib/db";
 import { isCouponDepartment } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/open-order/suggestions", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("query") || "";
   const type = searchParams.get("type") || "work_order";
@@ -107,8 +109,8 @@ export async function GET(request: Request) {
     const suggestions = result.recordset.map((r) => r.Work_Order);
     return Response.json(suggestions);
   } catch (err: unknown) {
-    console.error("Suggestions API error:", err);
+    logger.error("Suggestions API error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});

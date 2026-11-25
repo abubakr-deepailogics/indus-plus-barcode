@@ -1,9 +1,11 @@
 import { requireAdminSession, AuthError } from "@/lib/require-session";
 import { deleteUser, updateUser } from "@/features/auth/services/users.service";
+import { withRoute } from "@/lib/logger/with-route";
+import { audit, logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function PATCH(request: Request, { params }: { params: Promise<{ userId: string }> }) {
+export const PATCH = withRoute("/api/users/[userId]", async function PATCH(request: Request, { params }: { params: Promise<{ userId: string }> }) {
   try {
     const session = await requireAdminSession();
     const { userId: userIdStr } = await params;
@@ -28,17 +30,21 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ us
     if (!updated) {
       return Response.json({ error: "User not found." }, { status: 404 });
     }
+    audit("user.update", {
+      targetUserId: userId,
+      changes: { displayName: body.displayName, isAdmin: body.isAdmin, isActive: body.isActive },
+    });
     return Response.json(updated);
   } catch (err) {
     if (err instanceof AuthError) {
       return Response.json({ error: err.message }, { status: err.status });
     }
-    console.error("update user failed", err);
+    logger.error("update user failed", err);
     return Response.json({ error: "Failed to update user." }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(request: Request, { params }: { params: Promise<{ userId: string }> }) {
+export const DELETE = withRoute("/api/users/[userId]", async function DELETE(request: Request, { params }: { params: Promise<{ userId: string }> }) {
   try {
     const session = await requireAdminSession();
     const { userId: userIdStr } = await params;
@@ -55,12 +61,13 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ u
     if (!deleted) {
       return Response.json({ error: "User not found." }, { status: 404 });
     }
+    audit("user.delete", { targetUserId: userId });
     return Response.json({ ok: true });
   } catch (err) {
     if (err instanceof AuthError) {
       return Response.json({ error: err.message }, { status: err.status });
     }
-    console.error("delete user failed", err);
+    logger.error("delete user failed", err);
     return Response.json({ error: "Failed to delete user." }, { status: 500 });
   }
-}
+});

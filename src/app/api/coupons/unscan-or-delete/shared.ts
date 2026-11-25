@@ -1,5 +1,8 @@
 import { getPool, sql } from "@/lib/db";
-import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
+import {
+  isCouponDepartment,
+  type CouponDepartment,
+} from "@/lib/department-classification";
 import { cutBoundSql, normalizeCutNo } from "@/lib/cut-number";
 import { readScanDateRange, scanDateConditions } from "@/lib/scan-date-range";
 
@@ -29,7 +32,9 @@ export function readCouponFilter(
   source: Record<string, unknown>,
 ): CouponFilter | { error: string } {
   const workOrder = String(source.workOrder ?? "").trim();
-  const department = String(source.department ?? "sewing").trim().toLowerCase();
+  const department = String(source.department ?? "sewing")
+    .trim()
+    .toLowerCase();
   if (!isCouponDepartment(department)) return { error: "Invalid department." };
   // Cut and bundle numbers restart per work order, so their ranges only mean
   // something within one (same rule as Coupon Tracing's list).
@@ -108,14 +113,17 @@ export async function findMatchingCoupons(
   // Without a work order the match spans every work order in the department.
   // Coupon codes embed the work order's digits, so selected codes still
   // identify single coupons there.
-  const workOrderCondition = filter.workOrder ? "WorkOrder = @workOrder AND " : "";
+  const workOrderCondition = filter.workOrder
+    ? "WorkOrder = @workOrder AND "
+    : "";
   if (filter.couponCodes && filter.couponCodes.length > 0) {
     const rows: MatchedCoupon[] = [];
     for (const batch of chunk(filter.couponCodes, IN_LIST_CHUNK_SIZE)) {
       const request = pool
         .request()
         .input("department", sql.NVarChar, filter.department);
-      if (filter.workOrder) request.input("workOrder", sql.NVarChar, filter.workOrder);
+      if (filter.workOrder)
+        request.input("workOrder", sql.NVarChar, filter.workOrder);
       const placeholders = batch.map((code, i) => {
         request.input(`code${i}`, sql.NVarChar, code);
         return `@code${i}`;

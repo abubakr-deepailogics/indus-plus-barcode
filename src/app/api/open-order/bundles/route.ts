@@ -4,12 +4,13 @@ import {
   softDeleteGeneratedBundle,
   softDeleteGeneratedCut,
 } from "@/features/cut-planning/services/cut-report-bundle.service";
+import { withRoute } from "@/lib/logger/with-route";
 
 export const dynamic = "force-dynamic";
 
 const errorStatus = (message: string) => (/required|valid/i.test(message) ? 400 : 409);
 
-export async function DELETE(request: Request) {
+export const DELETE = withRoute("/api/open-order/bundles", async function DELETE(request: Request) {
   try {
     const body = await request.json();
     const workOrder = typeof body?.workOrder === "string" ? body.workOrder : "";
@@ -24,11 +25,11 @@ export async function DELETE(request: Request) {
     const message = error instanceof Error ? error.message : "Unable to delete the Cut Report bundle.";
     return Response.json({ error: message }, { status: errorStatus(message) });
   }
-}
+});
 
 // Approves one bundle ({ workOrder, reportRowId }) or every active bundle of a
 // Cut ({ workOrder, cutNo }). Only approved bundles reach Coupon Generation.
-export async function PATCH(request: Request) {
+export const PATCH = withRoute("/api/open-order/bundles", async function PATCH(request: Request) {
   try {
     const body = await request.json();
     const workOrder = typeof body?.workOrder === "string" ? body.workOrder : "";
@@ -47,4 +48,4 @@ export async function PATCH(request: Request) {
     const message = error instanceof Error ? error.message : "Unable to approve the Cut Report bundle.";
     return Response.json({ error: message }, { status: errorStatus(message) });
   }
-}
+});

@@ -1,9 +1,11 @@
 import { getPool, sql } from "@/lib/db";
 import { isCouponDepartment } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/wages/suggestions", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = (searchParams.get("query") || "").trim();
   const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
@@ -30,7 +32,7 @@ export async function GET(request: Request) {
 
     return Response.json(result.recordset.map((r) => String(r.Title)));
   } catch (err: unknown) {
-    console.error("GET /api/wages/suggestions error:", err);
+    logger.error("GET /api/wages/suggestions error", err);
     return Response.json([], { status: 200 });
   }
-}
+});

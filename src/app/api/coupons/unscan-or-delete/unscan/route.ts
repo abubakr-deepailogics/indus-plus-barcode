@@ -2,6 +2,8 @@ import { getPool, sql } from "@/lib/db";
 import { logCouponActionHistory } from "@/features/qr-code-generation/services/coupon-history.service";
 import { findLockedDates } from "@/features/wages/services/wage-lock.service";
 import { readCouponFilter, findMatchingCoupons, chunk } from "../shared";
+import { withRoute } from "@/lib/logger/with-route";
+import { audit, logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -21,7 +23,7 @@ export const dynamic = "force-dynamic";
 // JSON error response.
 const PROGRESS_CHUNK_SIZE = 200; // matches logCouponActionHistory's own ROWS_PER_CHUNK
 
-export async function POST(request: Request) {
+export const POST = withRoute("/api/coupons/unscan-or-delete/unscan", async function POST(request: Request) {
   const body = await request.json();
   const parsed = readCouponFilter(body);
   if ("error" in parsed) {
@@ -79,8 +81,8 @@ export async function POST(request: Request) {
       const send = (line: Record<string, unknown>) => {
         controller.enqueue(encoder.encode(JSON.stringify(line) + "\n"));
       };
+      let done = 0;
       try {
-        let done = 0;
         for (const batch of chunk(scanned, PROGRESS_CHUNK_SIZE)) {
           await logCouponActionHistory(pool, "unscanned", batch, by);
 
@@ -103,6 +105,7 @@ export async function POST(request: Request) {
           send({ done, total });
         }
 
+        audit("coupon.bulk_unscan", { filter: parsed, actedBy: by, count: total });
         send({
           done: total,
           total,
@@ -111,7 +114,11 @@ export async function POST(request: Request) {
           unscannedCount: total,
         });
       } catch (err: unknown) {
-        console.error("Bulk coupon unscan error:", err);
+        logger.error("Bulk coupon unscan error", err);
+        // Not transactional: batches before the failure stay unscanned.
+        if (done > 0) {
+          audit("coupon.bulk_unscan_partial", { filter: parsed, actedBy: by, count: done, total });
+        }
         const message = err instanceof Error ? err.message : "Internal Server Error";
         send({ status: "error", message });
       } finally {
@@ -123,4 +130,4 @@ export async function POST(request: Request) {
   return new Response(stream, {
     headers: { "Content-Type": "application/x-ndjson" },
   });
-}
+});

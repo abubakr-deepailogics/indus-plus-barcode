@@ -5,12 +5,14 @@ import {
   STYLE_BULLETIN_TABLE,
 } from "@/lib/db";
 import { isStyleBulletinDepartment } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 // Style Bulletin's own Work Order autocomplete — queries StyleBullettinInt's
 // [Order No] column directly instead of piggybacking on Cut Report's
 // SaleOrderPOCutDetailViewV1 (see /api/open-order/suggestions), so a work
 // order only present in the style bulletin table still autocompletes here.
-export async function GET(request: Request) {
+export const GET = withRoute("/api/style-bulletin/suggestions", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = (searchParams.get("query") || "").trim();
   const department = (searchParams.get("department") || "sewing")
@@ -53,8 +55,8 @@ export async function GET(request: Request) {
 
     return Response.json(result.recordset.map((r) => r.Order_No));
   } catch (err: unknown) {
-    console.error("Style bulletin suggestions API error:", err);
+    logger.error("Style bulletin suggestions API error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});

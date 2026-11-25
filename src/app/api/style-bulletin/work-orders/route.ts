@@ -5,6 +5,8 @@ import {
   STYLE_BULLETIN_TABLE,
 } from "@/lib/db";
 import { isStyleBulletinDepartment } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +17,7 @@ export const dynamic = "force-dynamic";
 // to show up here). Distinct from /api/style-bulletin/suggestions (single
 // `query` string, TOP 8/12, string[] response) — this returns the
 // W/O + Customer + Sale Order No row shape the modal's table needs.
-export async function GET(request: Request) {
+export const GET = withRoute("/api/style-bulletin/work-orders", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = (searchParams.get("work_order") || "").trim();
   const customer = (searchParams.get("customer") || "").trim();
@@ -77,8 +79,8 @@ export async function GET(request: Request) {
 
     return Response.json(result.recordset);
   } catch (err: unknown) {
-    console.error("Style bulletin work orders search API error:", err);
+    logger.error("Style bulletin work orders search API error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});

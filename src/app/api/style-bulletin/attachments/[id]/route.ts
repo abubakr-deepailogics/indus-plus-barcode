@@ -1,10 +1,12 @@
 import { getPool, sql } from "@/lib/db";
 import { isCouponDepartment } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
 // Stream the raw file bytes for viewing/downloading a single attachment.
-export async function GET(
+export const GET = withRoute("/api/style-bulletin/attachments/[id]", async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> },
 ) {
@@ -32,8 +34,8 @@ export async function GET(
       },
     });
   } catch (err: unknown) {
-    console.error("Attachment fetch error:", err);
+    logger.error("Attachment fetch error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});

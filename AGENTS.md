@@ -36,6 +36,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
 - Secrets/config: all secrets via env vars, documented in `.env.local.example` (never commit real values in `.env`). Firebase `NEXT_PUBLIC_*` keys are client-exposed by design; MSSQL connection string is server-only, never used in client components.
 - Lint/build gates: `npm run lint` and `npm run build` must pass before considering a change done.
 
+# Logging & tracing
+
+- Never use `console.*` in `src/` (lint error). Server code: `logger`/`audit` from `@/lib/logger`. Browser code: `clientLogger` from `@/lib/logger/client`.
+- Every Route Handler export is wrapped: `export const GET = withRoute("/api/path", async function GET(request) { ... })` (from `@/lib/logger/with-route`). That gives request/duration/DB-time logs, requestId correlation and a logged 500 for unhandled errors. Throw `HttpError`/`AuthError` (`@/lib/http-error`) for clean 4xx.
+- Log errors as `logger.error("What failed", err)`. Mutations that change business data call `audit("entity.action", { ids... })` after success.
+- Full guide: `docs/logging.md`.
+
 # Testing & verification
 
 - No test framework is configured in this repo yet. Until one exists, verify changes via `npm run lint`, `npm run build`, and manually exercising the affected route/page.

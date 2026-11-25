@@ -1,5 +1,7 @@
 import { getPool, sql, STYLE_BULLETIN_SNAPSHOT_TABLE } from "@/lib/db";
 import { isCouponDepartment } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +16,7 @@ const IN_LIST_CHUNK_SIZE = 2000; // stays well under SQL Server's ~2100 paramete
 // operations with real report data behind them; names are then resolved
 // from the style bulletin (indusPlus) and matched/filtered in JS, same
 // pattern as the per-work-order variant's `only_generated` branch.
-export async function GET(request: Request) {
+export const GET = withRoute("/api/reports/operation-suggestions", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get("query") || "").trim().toLowerCase();
   const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
@@ -60,8 +62,8 @@ export async function GET(request: Request) {
 
     return Response.json(suggestions);
   } catch (err: unknown) {
-    console.error("Operation suggestions API error:", err);
+    logger.error("Operation suggestions API error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});

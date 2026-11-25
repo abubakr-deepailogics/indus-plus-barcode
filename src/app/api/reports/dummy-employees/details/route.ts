@@ -2,10 +2,12 @@ import { getPool, sql } from "@/lib/db";
 import { enrichCouponRows } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import { findDummyEmployeesByCodes } from "@/features/dummy-employees/services/dummy-employees.service";
 import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/reports/dummy-employees/details", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
   const employeeCode = (searchParams.get("employee") || "").trim();
@@ -37,7 +39,7 @@ export async function GET(request: Request) {
       totalPay: 0,
     })));
   } catch (error) {
-    console.error("Dummy employee detail report failed:", error);
+    logger.error("Dummy employee detail report failed", error);
     return Response.json({ error: "Could not load trace activity." }, { status: 500 });
   }
-}
+});

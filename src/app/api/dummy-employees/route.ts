@@ -1,21 +1,23 @@
 import { getPool, sql, OPERATIONS_CATALOG_TABLE } from "@/lib/db";
 import { createDummyEmployee, searchDummyEmployees, updateDummyEmployee } from "@/features/dummy-employees/services/dummy-employees.service";
+import { withRoute } from "@/lib/logger/with-route";
+import { audit, logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/dummy-employees", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = (searchParams.get("query") || "").trim();
   const includeInactive = searchParams.get("all") === "true";
   try {
     return Response.json(await searchDummyEmployees(query, includeInactive));
   } catch (error) {
-    console.error("Dummy employee lookup failed:", error);
+    logger.error("Dummy employee lookup failed", error);
     return Response.json({ error: "Could not load dummy employees." }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: Request) {
+export const POST = withRoute("/api/dummy-employees", async function POST(request: Request) {
   try {
     const body = await request.json();
     const employeeName = String(body.employeeName || "").trim();
@@ -31,14 +33,15 @@ export async function POST(request: Request) {
       return Response.json({ error: "The ERP operation must belong to the selected department." }, { status: 400 });
     }
     const created = await createDummyEmployee({ employeeName, department, operationCode, operationName: operation.recordset[0].OperationName ?? null, createdBy });
+    audit("dummy_employee.create", { employeeName, department, operationCode, createdBy });
     return Response.json(created, { status: 201 });
   } catch (error) {
-    console.error("Dummy employee creation failed:", error);
+    logger.error("Dummy employee creation failed", error);
     return Response.json({ error: "Could not create employee card." }, { status: 500 });
   }
-}
+});
 
-export async function PATCH(request: Request) {
+export const PATCH = withRoute("/api/dummy-employees", async function PATCH(request: Request) {
   try {
     const body = await request.json();
     const employeeCode = String(body.employeeCode || "").trim();
@@ -50,9 +53,10 @@ export async function PATCH(request: Request) {
     if (!operation.recordset[0] || String(operation.recordset[0].Department || "").toLowerCase() !== department.toLowerCase()) return Response.json({ error: "Choose an ERP operation from the selected department." }, { status: 400 });
     const updated = await updateDummyEmployee(employeeCode, { employeeName, department, operationCode, operationName: operation.recordset[0].OperationName ?? null, isActive: body.isActive !== false });
     if (!updated) return Response.json({ error: "Employee card not found." }, { status: 404 });
+    audit("dummy_employee.update", { employeeCode, employeeName, department, operationCode, isActive: body.isActive !== false });
     return Response.json(updated);
   } catch (error) {
-    console.error("Dummy employee update failed:", error);
+    logger.error("Dummy employee update failed", error);
     return Response.json({ error: "Could not update employee card." }, { status: 500 });
   }
-}
+});

@@ -5,12 +5,14 @@ import {
 } from "@/features/auth/services/user-permissions.service";
 import { ALLOWED_OPERATIONS_BY_PAGE_KEY } from "@/features/auth/permissions-schema";
 import type { PermissionDepartment, UserPermission } from "@/features/auth/types";
+import { withRoute } from "@/lib/logger/with-route";
+import { audit, logger } from "@/lib/logger";
 
 const PERMISSION_DEPARTMENTS: readonly PermissionDepartment[] = ["sewing", "washing", "finishing"];
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request, { params }: { params: Promise<{ userId: string }> }) {
+export const GET = withRoute("/api/users/[userId]/permissions", async function GET(request: Request, { params }: { params: Promise<{ userId: string }> }) {
   try {
     await requireAdminSession();
     const { userId: userIdStr } = await params;
@@ -25,12 +27,12 @@ export async function GET(request: Request, { params }: { params: Promise<{ user
     if (err instanceof AuthError) {
       return Response.json({ error: err.message }, { status: err.status });
     }
-    console.error("list user permissions failed", err);
+    logger.error("list user permissions failed", err);
     return Response.json({ error: "Failed to load permissions." }, { status: 500 });
   }
-}
+});
 
-export async function PUT(request: Request, { params }: { params: Promise<{ userId: string }> }) {
+export const PUT = withRoute("/api/users/[userId]/permissions", async function PUT(request: Request, { params }: { params: Promise<{ userId: string }> }) {
   try {
     await requireAdminSession();
     const { userId: userIdStr } = await params;
@@ -65,12 +67,16 @@ export async function PUT(request: Request, { params }: { params: Promise<{ user
     }
 
     await replacePermissionsForUser(userId, permissions);
+    audit("user.permissions_replace", {
+      targetUserId: userId,
+      permissions: permissions.map((p) => `${p.department}:${p.pageKey}:${p.operation}`),
+    });
     return Response.json({ ok: true });
   } catch (err) {
     if (err instanceof AuthError) {
       return Response.json({ error: err.message }, { status: err.status });
     }
-    console.error("update user permissions failed", err);
+    logger.error("update user permissions failed", err);
     return Response.json({ error: "Failed to update permissions." }, { status: 500 });
   }
-}
+});

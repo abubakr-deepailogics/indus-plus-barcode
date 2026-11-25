@@ -227,7 +227,12 @@ export async function registerCoupons(
   department: CouponDepartment = "sewing",
 ): Promise<RegisterCouponsResult> {
   const rows = cards.map(({ bundle, op }) => ({
-    couponCode: buildCouponCode(workOrder, bundle.bundleNo, op.opNo, department),
+    couponCode: buildCouponCode(
+      workOrder,
+      bundle.bundleNo,
+      op.opNo,
+      department,
+    ),
     bundleNo: bundle.bundleNo,
     opNo: op.opNo,
     section: op.section,
@@ -301,10 +306,9 @@ export async function countCoupons(
 ): Promise<number> {
   const request = pool.request().input("workOrder", sql.NVarChar, workOrder);
   if (department) request.input("department", sql.NVarChar, department);
-  const result = await request
-    .query(
-      `SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0${department ? " AND Department = @department" : ""}`,
-    );
+  const result = await request.query(
+    `SELECT COUNT(*) AS total FROM dbo.QrCode_Coupon WHERE WorkOrder = @workOrder AND IsDeleted = 0${department ? " AND Department = @department" : ""}`,
+  );
   return result.recordset[0].total;
 }
 
@@ -329,7 +333,8 @@ export async function softDeleteCoupons(
       request.input(`code${i}`, sql.NVarChar, code);
       return `@code${i}`;
     });
-    const result = await request.input("deletedBy", sql.NVarChar, deletedBy).query(`
+    const result = await request.input("deletedBy", sql.NVarChar, deletedBy)
+      .query(`
       UPDATE dbo.QrCode_Coupon
       SET IsDeleted = 1, DeletedAt = SYSUTCDATETIME(), DeletedBy = @deletedBy
       WHERE CouponCode IN (${placeholders.join(", ")}) AND IsDeleted = 0 AND IsScanned = 0
@@ -375,8 +380,11 @@ export async function getCouponCodesForPairs(
   const result = await pool
     .request()
     .input("workOrder", sql.NVarChar, workOrder)
-    .input("department", sql.NVarChar, department)
-    .query<{ CouponCode: string; BundleNo: string; OpNo: string }>(`
+    .input("department", sql.NVarChar, department).query<{
+    CouponCode: string;
+    BundleNo: string;
+    OpNo: string;
+  }>(`
       SELECT CouponCode, BundleNo, OpNo
       FROM dbo.QrCode_Coupon
       WHERE WorkOrder = @workOrder
@@ -503,8 +511,7 @@ function applyCouponFilters(
 // These fetch each side separately and get merged into the coupon rows in
 // JS instead.
 
-const opNameKey = (workOrder: string, opNo: string) =>
-  `${workOrder}|${opNo}`;
+const opNameKey = (workOrder: string, opNo: string) => `${workOrder}|${opNo}`;
 
 // Op names keyed by work order + op code — the same op code can carry a
 // different name on another work order's bulletin, and a cross-work-order

@@ -4,13 +4,15 @@ import {
   isCouponDepartment,
   type CouponDepartment,
 } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
 // Distinct bundle/operation pairs already generated for a work order — used
 // by the coupon generation page to enable Print for a selection that was
 // generated in an earlier session, not just the current one.
-export async function GET(request: Request) {
+export const GET = withRoute("/api/qr-code-generation/coupons/pairs", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = searchParams.get("work_order") || "";
   const department = (searchParams.get("department") || "sewing")
@@ -36,8 +38,8 @@ export async function GET(request: Request) {
     );
     return Response.json({ pairs });
   } catch (err: unknown) {
-    console.error("Generated pairs lookup error:", err);
+    logger.error("Generated pairs lookup error", err);
     const message = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
-}
+});

@@ -2,6 +2,7 @@
 
 import React from "react";
 import QRCode from "qrcode";
+import { clientLogger } from "@/lib/logger/client";
 
 interface QRCodeSVGProps {
   value: string;
@@ -29,7 +30,7 @@ export function QRCodeSVG({ value }: QRCodeSVGProps) {
       }
     }
   } catch (error) {
-    console.error("QR Generation error", error);
+    clientLogger.error("QR Generation error", error);
     hasError = true;
   }
 

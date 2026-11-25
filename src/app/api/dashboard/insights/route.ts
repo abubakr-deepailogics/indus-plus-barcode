@@ -6,6 +6,7 @@ import type {
   DepartmentInsight,
   WorkOrderInsight,
 } from "@/features/dashboard/types";
+import { withRoute } from "@/lib/logger/with-route";
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +27,7 @@ function isDepartment(value: unknown): value is DashboardDepartment {
   return typeof value === "string" && DEPARTMENTS.includes(value as DashboardDepartment);
 }
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/dashboard/insights", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const from = searchParams.get("from") ?? "";
   const to = searchParams.get("to") ?? "";
@@ -257,4 +258,4 @@ export async function GET(request: Request) {
       { status: 500 },
     );
   }
-}
+});

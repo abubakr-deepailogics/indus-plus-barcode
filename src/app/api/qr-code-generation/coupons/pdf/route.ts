@@ -21,6 +21,8 @@ import type {
   CouponLayout,
   OperationsDetailRow,
 } from "@/features/qr-code-generation/types";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 const VALID_LAYOUTS: CouponLayout[] = [
   "same-page",
@@ -37,7 +39,7 @@ const VALID_LAYOUTS: CouponLayout[] = [
 // identity, not the full row. Nothing is written back to the DB: no coupon
 // registration (these coupons already exist) and no QrCode_Pdf_Batch row —
 // this is a plain render-and-stream, not a stored batch.
-export async function GET(request: Request) {
+export const GET = withRoute("/api/qr-code-generation/coupons/pdf", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = searchParams.get("work_order") || "";
   const fromBundle = searchParams.get("from_bundle") || undefined;
@@ -280,9 +282,9 @@ export async function GET(request: Request) {
       },
     });
   } catch (err: unknown) {
-    console.error("Coupon PDF (filtered) generation error:", err);
+    logger.error("Coupon PDF (filtered) generation error", err);
     const message =
       err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
-}
+});

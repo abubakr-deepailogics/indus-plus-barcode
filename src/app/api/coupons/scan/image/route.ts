@@ -3,11 +3,12 @@ import {
   MAX_IMAGE_BYTES,
   readQrCodesFromImage,
 } from "@/features/coupon-scanning/services/qr-image-scan.service";
+import { withRoute } from "@/lib/logger/with-route";
 
 // Photo of a coupon sheet (multipart field "file") → every QR code text on it,
 // in reading order, with box corners for read and unreadable codes. Only reads the image; marking coupons scanned is still
 // done by POST /api/coupons/scan/batch.
-export async function POST(request: Request) {
+export const POST = withRoute("/api/coupons/scan/image", async function POST(request: Request) {
   let file: FormDataEntryValue | null;
   try {
     file = (await request.formData()).get("file");
@@ -30,4 +31,4 @@ export async function POST(request: Request) {
     return Response.json({ error: result.error }, { status: result.status });
   }
   return Response.json(result);
-}
+});

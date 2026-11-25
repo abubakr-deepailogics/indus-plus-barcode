@@ -9,10 +9,12 @@ import {
 import { normalizeCutNo, normalizedCutSql } from "@/lib/cut-number";
 import { isCouponDepartment } from "@/lib/department-classification";
 import { compareSectionOrder } from "@/lib/section-order";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/coupons/suggestions", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const wo = searchParams.get("wo") || "";
   const type = searchParams.get("type") || ""; // 'bundle' or 'operation'
@@ -179,8 +181,8 @@ export async function GET(request: Request) {
 
     return Response.json([]);
   } catch (err: unknown) {
-    console.error("Suggestions API error:", err);
+    logger.error("Suggestions API error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});

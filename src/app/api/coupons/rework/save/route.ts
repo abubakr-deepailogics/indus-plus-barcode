@@ -11,6 +11,8 @@ import type {
   OperationsDetailRow,
 } from "@/features/qr-code-generation/types";
 import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { audit, logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -34,7 +36,7 @@ function chunk<T>(items: T[], size: number): T[][] {
   return out;
 }
 
-export async function POST(request: Request) {
+export const POST = withRoute("/api/coupons/rework/save", async function POST(request: Request) {
   try {
     const body = (await request.json()) as Partial<SaveRequestBody>;
     const {
@@ -209,12 +211,22 @@ export async function POST(request: Request) {
         couponDepartment,
       );
     } catch (snapshotErr) {
-      console.warn("Rework operation snapshot warning:", snapshotErr);
+      logger.warn("Rework operation snapshot warning", snapshotErr);
     }
 
     // 5. Query updated total coupon count
     const couponCount = await countCoupons(pool, workOrder, couponDepartment);
 
+    audit("coupon.rework_generate", {
+      workOrder,
+      department: couponDepartment,
+      batchId,
+      insertedBy: by,
+      reworkQty,
+      bundleCount: assignedBundles.length,
+      operationCount: selectedOperations.length,
+      insertedCount,
+    });
     return Response.json({
       success: true,
       batchId,
@@ -225,9 +237,9 @@ export async function POST(request: Request) {
       bundles: assignedBundles,
     });
   } catch (err: unknown) {
-    console.error("Rework coupon save error:", err);
+    logger.error("Rework coupon save error", err);
     const message = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
-}
+});
 

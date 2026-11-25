@@ -3,10 +3,12 @@ import { requireSession, AuthError } from "@/lib/require-session";
 import { setUserPassword, verifyCurrentPassword } from "@/features/auth/services/users.service";
 import { isPasswordStrongEnough } from "@/lib/password";
 import { createSessionToken, setSessionCookie } from "@/lib/session";
+import { withRoute } from "@/lib/logger/with-route";
+import { audit, logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+export const POST = withRoute("/api/auth/change-password", async function POST(request: Request) {
   try {
     const session = await requireSession();
 
@@ -30,10 +32,12 @@ export async function POST(request: Request) {
 
     const valid = await verifyCurrentPassword(session.userId, currentPassword);
     if (!valid) {
+      audit("auth.change_password_failed", { reason: "current password incorrect" });
       return Response.json({ error: "Current password is incorrect." }, { status: 401 });
     }
 
     await setUserPassword(session.userId, newPassword, false);
+    audit("auth.change_password");
 
     const token = createSessionToken({
       userId: session.userId,
@@ -50,7 +54,7 @@ export async function POST(request: Request) {
     if (err instanceof AuthError) {
       return Response.json({ error: err.message }, { status: err.status });
     }
-    console.error("change-password failed", err);
+    logger.error("change-password failed", err);
     return Response.json({ error: "Failed to change password." }, { status: 500 });
   }
-}
+});

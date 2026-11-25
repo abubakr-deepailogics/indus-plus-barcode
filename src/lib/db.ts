@@ -1,25 +1,88 @@
 import sql from "mssql";
 
-// Attach the failing SQL text to every query error (as `err.sqlText`), so
-// server logs show WHICH query timed out or failed to parse instead of a bare
-// "Incorrect syntax near ')'" / "ETIMEOUT". Patched once on the prototype so
-// it covers pool requests and transaction requests alike. Only the SQL
-// text is logged, never parameter values: queries are parameterized, so
-// user data isn't included.
-const PATCHED = Symbol.for("indus.mssql.sqlTextOnError");
+import { logger, isLevelEnabled, loggerConfig } from "@/lib/logger";
+import { recordDbQuery } from "@/lib/logger/context";
+
+// Query tracing, patched once on the Request prototype so it covers pool
+// requests and transaction requests alike:
+// - every query's duration is added to the current request's trace
+//   (dbQueries/dbMs on the request completion log line),
+// - queries slower than LOG_SLOW_QUERY_MS are logged as warnings with SQL,
+// - at LOG_LEVEL=debug every query is logged,
+// - failing queries get the SQL text attached (as `err.sqlText`) so server
+//   logs show WHICH query timed out or failed to parse instead of a bare
+//   "Incorrect syntax near ')'" / "ETIMEOUT". Callers log the error; it is
+//   not logged here to avoid duplicates (some callers expect and swallow it).
+// Only the SQL text is logged, never parameter values: queries are
+// parameterized, so user data isn't included.
+const PATCHED = Symbol.for("indus.mssql.queryTracing.v1");
 type QueryFn = (command: string, callback?: unknown) => Promise<unknown>;
 const requestProto = sql.Request.prototype as unknown as Record<symbol, boolean> & { query: QueryFn };
+
+// Pool -> database name, so query logs say which of the 3 servers was hit.
+const POOL_NAMES_KEY = Symbol.for("indus.mssql.poolNames");
+const globalRefs = globalThis as unknown as Record<symbol, WeakMap<object, Database> | undefined>;
+const poolNames = (globalRefs[POOL_NAMES_KEY] ??= new WeakMap<object, Database>());
+
+function databaseOf(request: unknown): Database | undefined {
+  // request.parent is the pool, or a transaction whose parent is the pool.
+  let node = request as { parent?: unknown } | undefined;
+  for (let i = 0; i < 3 && node; i++) {
+    const name = poolNames.get(node as object);
+    if (name) return name;
+    node = node.parent as { parent?: unknown } | undefined;
+  }
+  return undefined;
+}
+
+function sqlPreview(command: string, max: number): string {
+  const collapsed = command.replace(/\s+/g, " ").trim();
+  return collapsed.length > max ? `${collapsed.slice(0, max)}…` : collapsed;
+}
+
+function rowCount(result: unknown): number | undefined {
+  const r = result as { recordset?: unknown[]; rowsAffected?: number[] } | undefined;
+  if (Array.isArray(r?.recordset)) return r.recordset.length;
+  if (Array.isArray(r?.rowsAffected)) return r.rowsAffected.reduce((a, b) => a + b, 0);
+  return undefined;
+}
+
 if (!requestProto[PATCHED]) {
   const originalQuery = requestProto.query;
   requestProto.query = function (this: unknown, command, callback) {
     if (callback) return originalQuery.call(this, command, callback);
-    return originalQuery.call(this, command).catch((err: unknown) => {
-      if (err && typeof err === "object") {
-        // Untrimmed, so the server's `lineNumber` lines up with this text.
-        Object.assign(err, { sqlText: String(command).slice(0, 4000) });
-      }
-      throw err;
-    });
+    const started = performance.now();
+    return originalQuery.call(this, command).then(
+      (result) => {
+        const durationMs = Math.round(performance.now() - started);
+        recordDbQuery(durationMs);
+        if (durationMs >= loggerConfig.slowQueryMs) {
+          logger.warn("Slow DB query", {
+            db: databaseOf(this),
+            durationMs,
+            rows: rowCount(result),
+            sql: sqlPreview(String(command), 2000),
+          });
+        } else if (isLevelEnabled("debug")) {
+          logger.debug("DB query", {
+            db: databaseOf(this),
+            durationMs,
+            rows: rowCount(result),
+            sql: sqlPreview(String(command), 200),
+          });
+        }
+        return result;
+      },
+      (err: unknown) => {
+        const durationMs = Math.round(performance.now() - started);
+        recordDbQuery(durationMs);
+        if (err && typeof err === "object") {
+          // Untrimmed, so the server's `lineNumber` lines up with this text.
+          Object.assign(err, { sqlText: String(command).slice(0, 4000), db: databaseOf(this), durationMs });
+        }
+        throw err;
+      },
+    );
   };
   requestProto[PATCHED] = true;
 }
@@ -53,13 +116,25 @@ export async function getPool(db: Database) {
     // objects (they're being looked up on the wrong server entirely). Each
     // key needs its own real, independent pool instance.
     const pool = new sql.ConnectionPool(connectionString);
-    pools[db] = pool.connect().catch((err) => {
-      // Don't cache a permanently-broken pool — a transient connect failure
-      // (network blip, DB briefly unreachable) would otherwise wedge this
-      // database for the rest of the process's life until restart.
-      delete pools[db];
-      throw err;
-    });
+    poolNames.set(pool, db);
+    // Without a listener, an idle-connection error would be an unhandled
+    // 'error' event. Log it; the pool replaces broken connections itself.
+    pool.on("error", (err) => logger.error("DB pool error", { db, err }));
+    const started = performance.now();
+    pools[db] = pool
+      .connect()
+      .then((connected) => {
+        logger.info("DB pool connected", { db, durationMs: Math.round(performance.now() - started) });
+        return connected;
+      })
+      .catch((err) => {
+        // Don't cache a permanently-broken pool — a transient connect failure
+        // (network blip, DB briefly unreachable) would otherwise wedge this
+        // database for the rest of the process's life until restart.
+        delete pools[db];
+        logger.error("DB pool connection failed", { db, durationMs: Math.round(performance.now() - started), err });
+        throw err;
+      });
   }
   return pools[db];
 }

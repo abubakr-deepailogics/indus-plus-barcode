@@ -1,6 +1,10 @@
 import { cookies } from "next/headers";
 import { SESSION_COOKIE_NAME, verifySessionToken, type SessionPayload } from "@/lib/session";
 import { findUserById } from "@/features/auth/services/users.service";
+import { setRequestUser } from "@/lib/logger/context";
+import { AuthError } from "@/lib/http-error";
+
+export { AuthError };
 
 // The session cookie is a signed, stateless token, so a valid signature only
 // proves it hasn't been tampered with — not that the account it names still
@@ -17,6 +21,8 @@ export async function getSession(): Promise<SessionPayload | null> {
     store.delete(SESSION_COOKIE_NAME);
     return null;
   }
+  // Attribute every subsequent log line / audit record of this request.
+  setRequestUser({ userId: session.userId, email: session.email });
   return session;
 }
 
@@ -34,12 +40,4 @@ export async function requireAdminSession(): Promise<SessionPayload> {
     throw new AuthError("Admin access required", 403);
   }
   return session;
-}
-
-export class AuthError extends Error {
-  status: number;
-  constructor(message: string, status: number) {
-    super(message);
-    this.status = status;
-  }
 }

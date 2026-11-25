@@ -9,7 +9,6 @@ import {
   isCouponDepartment,
   type CouponDepartment,
 } from "@/lib/department-classification";
-import { validateDummyEmployeeOperation } from "@/features/dummy-employees/services/dummy-employees.service";
 import { cutBoundSql, normalizeCutNo } from "@/lib/cut-number";
 
 export const dynamic = "force-dynamic";
@@ -25,82 +24,87 @@ interface CouponRow {
   CutNo: string | null;
 }
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const barcode = searchParams.get("barcode") || "";
-  const wo = searchParams.get("wo") || "";
-  const bundle = searchParams.get("bundle") || "";
-  const op = searchParams.get("op") || "";
-  const fromCut = searchParams.get("fromCut") || "";
-  const toCut = searchParams.get("toCut") || "";
-  const department = (searchParams.get("department") || "sewing")
-    .trim()
-    .toLowerCase();
+export const GET = withRoute(
+  "/api/coupons/scan",
+  async function GET(request: Request) {
+    const { searchParams } = new URL(request.url);
+    const barcode = searchParams.get("barcode") || "";
+    const wo = searchParams.get("wo") || "";
+    const bundle = searchParams.get("bundle") || "";
+    const op = searchParams.get("op") || "";
+    const fromCut = searchParams.get("fromCut") || "";
+    const toCut = searchParams.get("toCut") || "";
+    const department = (searchParams.get("department") || "sewing")
+      .trim()
+      .toLowerCase();
 
-  const employeeCode = searchParams.get("employeeCode") || "";
-  const scanBy = searchParams.get("scanBy") || "";
-  const scanDate = searchParams.get("scanDate") || "";
-  // "fetch" = lookup only, does not mark coupons as scanned in the DB
-  const mode = searchParams.get("mode") || "scan";
+    const employeeCode = searchParams.get("employeeCode") || "";
+    const scanBy = searchParams.get("scanBy") || "";
+    const scanDate = searchParams.get("scanDate") || "";
+    // "fetch" = lookup only, does not mark coupons as scanned in the DB
+    const mode = searchParams.get("mode") || "scan";
 
-  if (!barcode && !wo) {
-    return Response.json(
-      { error: "Work Order is required in the header before scanning." },
-      { status: 400 },
-    );
-  }
-  if (!isCouponDepartment(department))
-    return Response.json({ error: "Invalid department." }, { status: 400 });
-
-  try {
-    // Wages already generated for this date? The whole tenure is closed —
-    // checked once up front rather than per coupon, since the lock is a
-    // property of the scan date, not of any individual row. "fetch" mode is
-    // a read-only lookup, so it stays open; only writes are refused.
-    if (mode !== "fetch") {
-      const lock = await findWageLockForDate(
-        scanDate,
-        department as CouponDepartment,
+    if (!barcode && !wo) {
+      return Response.json(
+        { error: "Work Order is required in the header before scanning." },
+        { status: 400 },
       );
-      if (lock) {
-        return Response.json({ error: wageLockMessage(lock) }, { status: 400 });
-      }
     }
+    if (!isCouponDepartment(department))
+      return Response.json({ error: "Invalid department." }, { status: 400 });
 
-    // QrCode_Coupon lives on pitSystem; bundle/op display data (cut,
-    // size, section, rate, …) is on indusPlus — see coupon-enrichment
-    // service for why those can't be joined in one query.
-    const pool = await getPool("pitSystem");
+    try {
+      // Wages already generated for this date? The whole tenure is closed —
+      // checked once up front rather than per coupon, since the lock is a
+      // property of the scan date, not of any individual row. "fetch" mode is
+      // a read-only lookup, so it stays open; only writes are refused.
+      if (mode !== "fetch") {
+        const lock = await findWageLockForDate(
+          scanDate,
+          department as CouponDepartment,
+        );
+        if (lock) {
+          return Response.json(
+            { error: wageLockMessage(lock) },
+            { status: 400 },
+          );
+        }
+      }
 
-    // EmployeeCode/ScanBy/ScannedAt columns are ensured by db/migrations
-    // (005, 004) — not re-checked here on every request; see AGENTS.md.
+      // QrCode_Coupon lives on pitSystem; bundle/op display data (cut,
+      // size, section, rate, …) is on indusPlus — see coupon-enrichment
+      // service for why those can't be joined in one query.
+      const pool = await getPool("pitSystem");
 
-    // Cut range is matched against the coupon's own CutNo (stamped at
-    // generation), not the cut looked up from the bundle snapshot — bundle
-    // Ids can collide across ERP and Cut Planning, so the snapshot may hold
-    // a different cut for the same Id. Whitespace/case-insensitive; only
-    // applies to the wo/bundle/op path, never the barcode path.
-    const from = normalizeCutNo(fromCut);
-    const to = normalizeCutNo(toCut);
-    const cutConditions = [
-      ...(from ? [cutBoundSql("CutNo", "fromCut", "from")] : []),
-      ...(to ? [cutBoundSql("CutNo", "toCut", "to")] : []),
-    ]
-      .map((c) => `AND ${c}`)
-      .join(" ");
+      // EmployeeCode/ScanBy/ScannedAt columns are ensured by db/migrations
+      // (005, 004) — not re-checked here on every request; see AGENTS.md.
 
-    const result = await pool
-      .request()
-      .input("barcode", sql.NVarChar, barcode.trim())
-      .input("fromCut", sql.NVarChar, from)
-      .input("toCut", sql.NVarChar, to)
-      .input("wo", sql.NVarChar, wo.trim())
-      .input("bundle", sql.NVarChar, bundle.trim())
-      .input("op", sql.NVarChar, op.trim())
-      .input("department", sql.NVarChar, department)
-      .query(
-        barcode.trim() !== ""
-          ? `
+      // Cut range is matched against the coupon's own CutNo (stamped at
+      // generation), not the cut looked up from the bundle snapshot — bundle
+      // Ids can collide across ERP and Cut Planning, so the snapshot may hold
+      // a different cut for the same Id. Whitespace/case-insensitive; only
+      // applies to the wo/bundle/op path, never the barcode path.
+      const from = normalizeCutNo(fromCut);
+      const to = normalizeCutNo(toCut);
+      const cutConditions = [
+        ...(from ? [cutBoundSql("CutNo", "fromCut", "from")] : []),
+        ...(to ? [cutBoundSql("CutNo", "toCut", "to")] : []),
+      ]
+        .map((c) => `AND ${c}`)
+        .join(" ");
+
+      const result = await pool
+        .request()
+        .input("barcode", sql.NVarChar, barcode.trim())
+        .input("fromCut", sql.NVarChar, from)
+        .input("toCut", sql.NVarChar, to)
+        .input("wo", sql.NVarChar, wo.trim())
+        .input("bundle", sql.NVarChar, bundle.trim())
+        .input("op", sql.NVarChar, op.trim())
+        .input("department", sql.NVarChar, department)
+        .query(
+          barcode.trim() !== ""
+            ? `
             SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, WageId, CutNo
             FROM dbo.QrCode_Coupon WITH (NOLOCK)
             WHERE CouponCode = @barcode
@@ -108,7 +112,7 @@ export async function GET(request: Request) {
               AND Department = @department
               AND IsDeleted = 0
           `
-          : `
+            : `
             SELECT CouponCode, WorkOrder, BundleNo, OpNo, IsScanned, ScannedAt, WageId, CutNo
             FROM dbo.QrCode_Coupon WITH (NOLOCK)
             WHERE WorkOrder = @wo
@@ -118,53 +122,53 @@ export async function GET(request: Request) {
               AND IsDeleted = 0
               ${cutConditions}
           `,
+        );
+
+      const records = await enrichCouponRows(
+        result.recordset as CouponRow[],
+        department as CouponDepartment,
       );
 
-    const records = await enrichCouponRows(
-      result.recordset as CouponRow[],
-      department as CouponDepartment,
-    );
-
-    if (records.length === 0) {
-      return Response.json(
-        { error: "No matching coupon code found in the database." },
-        { status: 404 },
-      );
-    }
-
-    if (mode !== "fetch") {
-      const validation = await validateDummyEmployeeOperation(
-        employeeCode,
-        records.map((record) => String(record.OprCode || record.OpNo || "")),
-      );
-      if (validation.isDummy && !validation.allowed) {
-        return Response.json({ error: validation.error }, { status: 400 });
-      }
-    }
-
-    if (barcode) {
-      const match = records[0];
-
-      if (match.IsScanned) {
+      if (records.length === 0) {
         return Response.json(
-          { error: "This coupon barcode has already been scanned!" },
-          { status: 400 },
+          { error: "No matching coupon code found in the database." },
+          { status: 404 },
         );
       }
 
-      // Fetch-only mode: return the looked-up coupon without marking it scanned.
-      if (mode === "fetch") {
-        return Response.json(records);
+      if (mode !== "fetch") {
+        const validation = await validateDummyEmployeeOperation(
+          employeeCode,
+          records.map((record) => String(record.OprCode || record.OpNo || "")),
+        );
+        if (validation.isDummy && !validation.allowed) {
+          return Response.json({ error: validation.error }, { status: 400 });
+        }
       }
 
-      // Mark coupon as scanned in the database in a single query
-      await pool
-        .request()
-        .input("barcode", sql.NVarChar, barcode.trim())
-        .input("department", sql.NVarChar, department)
-        .input("employeeCode", sql.NVarChar, employeeCode.trim())
-        .input("scanBy", sql.NVarChar, scanBy.trim())
-        .input("scanDate", sql.NVarChar, scanDate.trim()).query(`
+      if (barcode) {
+        const match = records[0];
+
+        if (match.IsScanned) {
+          return Response.json(
+            { error: "This coupon barcode has already been scanned!" },
+            { status: 400 },
+          );
+        }
+
+        // Fetch-only mode: return the looked-up coupon without marking it scanned.
+        if (mode === "fetch") {
+          return Response.json(records);
+        }
+
+        // Mark coupon as scanned in the database in a single query
+        await pool
+          .request()
+          .input("barcode", sql.NVarChar, barcode.trim())
+          .input("department", sql.NVarChar, department)
+          .input("employeeCode", sql.NVarChar, employeeCode.trim())
+          .input("scanBy", sql.NVarChar, scanBy.trim())
+          .input("scanDate", sql.NVarChar, scanDate.trim()).query(`
           UPDATE dbo.QrCode_Coupon
           SET IsScanned = 1,
               EmployeeCode = NULLIF(@employeeCode, ''),
@@ -174,40 +178,40 @@ export async function GET(request: Request) {
           WHERE CouponCode = @barcode AND Department = @department
         `);
 
-      return Response.json(records);
-    }
+        return Response.json(records);
+      }
 
-    // If scanning via selection components (WorkOrder / Bundle)
-    const unscanned = records.filter((r) => !r.IsScanned);
+      // If scanning via selection components (WorkOrder / Bundle)
+      const unscanned = records.filter((r) => !r.IsScanned);
 
-    if (unscanned.length === 0) {
-      return Response.json(
-        {
-          error:
-            "All matching coupons for this selection have already been scanned!",
-        },
-        { status: 400 },
-      );
-    }
+      if (unscanned.length === 0) {
+        return Response.json(
+          {
+            error:
+              "All matching coupons for this selection have already been scanned!",
+          },
+          { status: 400 },
+        );
+      }
 
-    // Fetch-only mode: return the looked-up coupons without marking them scanned.
-    if (mode === "fetch") {
-      return Response.json(unscanned);
-    }
+      // Fetch-only mode: return the looked-up coupons without marking them scanned.
+      if (mode === "fetch") {
+        return Response.json(unscanned);
+      }
 
-    // Mark all matched coupons as scanned — update exactly the coupon codes
-    // returned above rather than re-deriving the conditions. Chunked to
-    // stay under SQL Server's ~2100 parameter cap for a large selection.
-    for (const batch of chunk(unscanned, 2000)) {
-      const request_ = pool.request();
-      const placeholders = batch.map((r, i) => {
-        request_.input(`code${i}`, sql.NVarChar, r.CouponCode);
-        return `@code${i}`;
-      });
-      await request_
-        .input("employeeCode", sql.NVarChar, employeeCode.trim())
-        .input("scanBy", sql.NVarChar, scanBy.trim())
-        .input("scanDate", sql.NVarChar, scanDate.trim()).query(`
+      // Mark all matched coupons as scanned — update exactly the coupon codes
+      // returned above rather than re-deriving the conditions. Chunked to
+      // stay under SQL Server's ~2100 parameter cap for a large selection.
+      for (const batch of chunk(unscanned, 2000)) {
+        const request_ = pool.request();
+        const placeholders = batch.map((r, i) => {
+          request_.input(`code${i}`, sql.NVarChar, r.CouponCode);
+          return `@code${i}`;
+        });
+        await request_
+          .input("employeeCode", sql.NVarChar, employeeCode.trim())
+          .input("scanBy", sql.NVarChar, scanBy.trim())
+          .input("scanDate", sql.NVarChar, scanDate.trim()).query(`
           UPDATE dbo.QrCode_Coupon
           SET IsScanned = 1,
               EmployeeCode = NULLIF(@employeeCode, ''),
@@ -216,12 +220,13 @@ export async function GET(request: Request) {
               SystemScannedAt = GETDATE()
           WHERE CouponCode IN (${placeholders.join(", ")}) AND Department = @department
         `);
-    }
+      }
 
-    return Response.json(unscanned);
-  } catch (err: unknown) {
-    console.error("Coupon scan validation error:", err);
-    const msg = err instanceof Error ? err.message : "Internal Server Error";
-    return Response.json({ error: msg }, { status: 500 });
-  }
-}
+      return Response.json(unscanned);
+    } catch (err: unknown) {
+      logger.error("Coupon scan validation error", err);
+      const msg = err instanceof Error ? err.message : "Internal Server Error";
+      return Response.json({ error: msg }, { status: 500 });
+    }
+  },
+);

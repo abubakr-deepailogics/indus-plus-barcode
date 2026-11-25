@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Search, X } from "lucide-react";
+import { clientLogger } from "@/lib/logger/client";
 
 export interface WorkOrderSearchRow {
   workOrder: string;
@@ -89,7 +90,7 @@ export function WorkOrderSearchModal({
         setRows(result || []);
         setActiveIndex(-1);
       } catch (err) {
-        console.error("Work order search fetch error:", err);
+        clientLogger.error("Work order search fetch error", err);
         if (!cancelled) setRows([]);
       } finally {
         if (!cancelled) setIsLoading(false);

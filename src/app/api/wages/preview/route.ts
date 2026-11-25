@@ -4,6 +4,8 @@ import {
 } from "@/features/wages/services/wage-builder.service";
 import { findOverlappingWage } from "@/features/wages/services/wage-lock.service";
 import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +13,7 @@ export const dynamic = "force-dynamic";
 // What the create-wages modal shows before locking a tenure: how many orders
 // and coupons it covers, and what it totals. Runs the same builder POST does,
 // so the confirmed numbers are the written ones.
-export async function GET(request: Request) {
+export const GET = withRoute("/api/wages/preview", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
 
   const tenure = validateTenure(searchParams.get("from"), searchParams.get("to"));
@@ -42,10 +44,10 @@ export async function GET(request: Request) {
         : null,
     });
   } catch (err: unknown) {
-    console.error("GET /api/wages/preview error:", err);
+    logger.error("GET /api/wages/preview error", err);
     return Response.json(
       { error: err instanceof Error ? err.message : "Internal Server Error" },
       { status: 500 },
     );
   }
-}
+});

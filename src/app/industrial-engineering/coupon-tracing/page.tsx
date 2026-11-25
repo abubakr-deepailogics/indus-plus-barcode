@@ -51,6 +51,7 @@ import { useAuth } from "@/features/auth/context/auth-context";
 import { RequirePermission } from "@/features/auth/components/RequirePermission";
 import { ModulePageHeader } from "@/components/ModulePageHeader";
 import { useDepartment } from "@/lib/department-context";
+import { clientLogger } from "@/lib/logger/client";
 
 interface CouponRow {
   Id: string | null;
@@ -189,7 +190,7 @@ export default function CouponTracingPage() {
         return await response.json();
       }
     } catch (err) {
-      console.error("Op suggestions fetch error:", err);
+      clientLogger.error("Op suggestions fetch error", err);
     }
     return [];
   };
@@ -205,7 +206,7 @@ export default function CouponTracingPage() {
         return await response.json();
       }
     } catch (err) {
-      console.error("Bundle suggestions fetch error:", err);
+      clientLogger.error("Bundle suggestions fetch error", err);
     }
     return [];
   };
@@ -673,7 +674,7 @@ export default function CouponTracingPage() {
         if (!cancelled) setSectionOptions(sections);
       })
       .catch((err) => {
-        console.error("Section suggestions fetch error:", err);
+        clientLogger.error("Section suggestions fetch error", err);
         if (!cancelled) setSectionOptions([]);
       });
     return () => {

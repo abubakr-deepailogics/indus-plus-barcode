@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
+import { clientLogger } from "@/lib/logger/client";
 
 interface AutocompleteProps<T> {
   value: string;
@@ -68,7 +69,7 @@ export function Autocomplete<T>({
         setSuggestions(data || []);
         setActiveIndex(-1);
       } catch (err) {
-        if (!cancelled) console.error("Autocomplete fetch error:", err);
+        if (!cancelled) clientLogger.error("Autocomplete fetch error", err);
       } finally {
         if (!cancelled) setIsLoading(false);
       }

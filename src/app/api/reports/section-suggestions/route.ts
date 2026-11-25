@@ -1,6 +1,8 @@
 import { getPool, sql } from "@/lib/db";
 import { isCouponDepartment } from "@/lib/department-classification";
 import { compareSectionOrder } from "@/lib/section-order";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -11,7 +13,7 @@ export const dynamic = "force-dynamic";
 // operation-suggestions reads Operation Code/Name from, just the Section
 // column instead. Filtered/sorted in JS, same pattern as the other
 // suggestion endpoints in this folder.
-export async function GET(request: Request) {
+export const GET = withRoute("/api/reports/section-suggestions", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const q = (searchParams.get("query") || "").trim().toLowerCase();
   const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
@@ -32,8 +34,8 @@ export async function GET(request: Request) {
 
     return Response.json(sections);
   } catch (err: unknown) {
-    console.error("Section suggestions API error:", err);
+    logger.error("Section suggestions API error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});

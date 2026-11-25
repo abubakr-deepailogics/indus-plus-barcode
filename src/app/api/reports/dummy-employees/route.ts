@@ -1,8 +1,10 @@
 import { getPool, sql } from "@/lib/db";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/reports/dummy-employees", async function GET(request: Request) {
   const department = (new URL(request.url).searchParams.get("department") || "sewing").trim().toLowerCase();
   try {
     const result = await (await getPool("pitSystem")).request().input("department", sql.NVarChar, department).query(`
@@ -18,7 +20,7 @@ export async function GET(request: Request) {
       ORDER BY lastScannedAt DESC, d.EmployeeName`);
     return Response.json(result.recordset);
   } catch (error) {
-    console.error("Dummy employee report failed:", error);
+    logger.error("Dummy employee report failed", error);
     return Response.json({ error: "Could not load the dummy employee report." }, { status: 500 });
   }
-}
+});

@@ -1,9 +1,11 @@
 import { fetchCorReportData } from "@/features/cut-planning/services/cor-report-data.service";
 import { generateCorSheetPdf } from "@/features/cut-planning/services/cor-report-pdf.service";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/cut-planning/reports/cor-sheet", async function GET(request: Request) {
   const workOrder = new URL(request.url).searchParams.get("work_order")?.trim();
   if (!workOrder) {
     return Response.json({ error: "work_order is required." }, { status: 400 });
@@ -24,10 +26,10 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
-    console.error("COR sheet generation error:", error);
+    logger.error("COR sheet generation error", error);
     return Response.json(
       { error: error instanceof Error ? error.message : "Failed to generate the COR sheet." },
       { status: 500 },
     );
   }
-}
+});

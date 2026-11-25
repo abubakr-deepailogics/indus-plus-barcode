@@ -1,9 +1,10 @@
 import { getSession } from "@/lib/require-session";
 import { getPermissionsForUser } from "@/features/auth/services/user-permissions.service";
+import { withRoute } from "@/lib/logger/with-route";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export const GET = withRoute("/api/auth/me", async function GET() {
   const session = await getSession();
   if (!session) {
     return Response.json({ user: null, permissions: null });
@@ -21,4 +22,4 @@ export async function GET() {
     },
     permissions,
   });
-}
+});

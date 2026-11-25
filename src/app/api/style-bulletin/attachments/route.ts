@@ -1,5 +1,7 @@
 import { getPool, sql } from "@/lib/db";
 import { isCouponDepartment } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { audit, logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,7 @@ async function ensureTable() {
 }
 
 // List attachments (metadata only) for a work order.
-export async function GET(request: Request) {
+export const GET = withRoute("/api/style-bulletin/attachments", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = (searchParams.get("workOrder") || "").trim();
   const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
@@ -52,14 +54,14 @@ export async function GET(request: Request) {
 
     return Response.json(result.recordset);
   } catch (err: unknown) {
-    console.error("Attachment list error:", err);
+    logger.error("Attachment list error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});
 
 // Upload a new attachment (image or PDF) for a work order.
-export async function POST(request: Request) {
+export const POST = withRoute("/api/style-bulletin/attachments", async function POST(request: Request) {
   try {
     const form = await request.formData();
     const workOrder = String(form.get("workOrder") || "").trim();
@@ -95,16 +97,24 @@ export async function POST(request: Request) {
         VALUES (@workOrder, @department, @fileName, @contentType, @fileData, @createdBy)
       `);
 
+    audit("style_bulletin.attachment_upload", {
+      attachmentId: result.recordset[0]?.Id,
+      workOrder,
+      department,
+      fileName: file.name,
+      bytes: buffer.length,
+      createdBy,
+    });
     return Response.json(result.recordset[0]);
   } catch (err: unknown) {
-    console.error("Attachment upload error:", err);
+    logger.error("Attachment upload error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});
 
 // Delete an attachment by id.
-export async function DELETE(request: Request) {
+export const DELETE = withRoute("/api/style-bulletin/attachments", async function DELETE(request: Request) {
   const { searchParams } = new URL(request.url);
   const id = searchParams.get("id") || "";
   const department = (searchParams.get("department") || "sewing").trim().toLowerCase();
@@ -116,16 +126,17 @@ export async function DELETE(request: Request) {
 
   try {
     const pool = await ensureTable();
-    await pool
+    const deleted = await pool
       .request()
       .input("id", sql.Int, Number(id))
       .input("department", sql.NVarChar, department)
       .query(`DELETE FROM dbo.StyleBulletin_Attachment WHERE Id = @id AND Department = @department`);
+    audit("style_bulletin.attachment_delete", { attachmentId: Number(id), department, rowsAffected: deleted.rowsAffected[0] });
 
     return Response.json({ ok: true });
   } catch (err: unknown) {
-    console.error("Attachment delete error:", err);
+    logger.error("Attachment delete error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});

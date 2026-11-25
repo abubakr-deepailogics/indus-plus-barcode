@@ -20,6 +20,7 @@ import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { ModulePageHeader } from "@/components/ModulePageHeader";
 import { useDepartment } from "@/lib/department-context";
 import type { ReworkEntriesResponse } from "@/features/rework-coupon/types";
+import { clientLogger } from "@/lib/logger/client";
 
 interface CutDetailRow {
   RowId: number;
@@ -279,7 +280,7 @@ export default function ReworkCouponPage() {
       setIsOpenLookup(false);
     } catch (err: unknown) {
       if (loadId !== workOrderLoadId.current) return;
-      console.error("Rework coupon fetch error:", err);
+      clientLogger.error("Rework coupon fetch error", err);
       setCutDetails([]);
       setStyleBulletins([]);
       setOperations([]);

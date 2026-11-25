@@ -7,10 +7,12 @@ import {
 import { isStyleBulletinDepartment } from "@/lib/department-classification";
 import { getCutPlanning } from "@/features/cut-planning/services/cut-planning.service";
 import type { CutDetailSource } from "@/features/cut-planning/types";
+import { withRoute } from "@/lib/logger/with-route";
+import { audit, logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/open-order", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = (searchParams.get("work_order") || "").trim();
   const department = (searchParams.get("department") || "")
@@ -64,7 +66,7 @@ export async function GET(request: Request) {
         .input("wo", sql.NVarChar, workOrder)
         .query(cutDetailByFilter("[Work Order #] = @wo"))
         .catch((err) => {
-          console.error("Cut Detail lookup failed:", err);
+          logger.error("Cut Detail lookup failed", err);
           return { recordset: [] };
         }),
     ]);
@@ -150,7 +152,7 @@ export async function GET(request: Request) {
       }
     } catch (bundleError) {
       generatedBundleLookupFailed = true;
-      console.error("Generated sewing bundle lookup failed:", bundleError);
+      logger.error("Generated sewing bundle lookup failed", bundleError);
     }
 
     // A sewing work order reads its bundles from Cut Planning's generated
@@ -186,10 +188,7 @@ export async function GET(request: Request) {
         metadata = metadataResult.recordset[0];
       }
     } catch (metadataErr) {
-      console.log(
-        "Order_StyleBulletin_Header table might not exist yet:",
-        metadataErr,
-      );
+      logger.warn("Order_StyleBulletin_Header lookup failed (table might not exist yet)", metadataErr);
     }
 
     return Response.json({
@@ -200,14 +199,14 @@ export async function GET(request: Request) {
       metadata,
     });
   } catch (err: unknown) {
-    console.error("Database API error:", err);
+    logger.error("Database API error", err);
     const message =
       err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: Request) {
+export const POST = withRoute("/api/open-order", async function POST(request: Request) {
   try {
     const body = await request.json();
     const {
@@ -293,14 +292,15 @@ export async function POST(request: Request) {
             VALUES (source.Work_Order, source.Department, @desc, @styleDesc, @styleCat, @smdNo, @finalSmdNo, @target, @targetUnitMin, @startTime, @pocSam, @pocPieceRate, @headReqd, @appDate, @appBy, @status, @forwardForApproval);
       `);
 
+    audit("style_bulletin.save_header", { workOrder, department, status, forwardForApproval, appBy });
     return Response.json({
       success: true,
       message: "Bulletin details saved successfully.",
     });
   } catch (err: unknown) {
-    console.error("Database Save API error:", err);
+    logger.error("Database Save API error", err);
     const message =
       err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
-}
+});

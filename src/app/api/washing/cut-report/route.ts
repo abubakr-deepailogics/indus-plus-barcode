@@ -5,10 +5,12 @@ import {
   softDeleteWashingCutReportRow,
 } from "@/features/washing/services/washing-cut-report-service";
 import type { SaveWashingCutReportPayload } from "@/features/washing/types";
+import { withRoute } from "@/lib/logger/with-route";
+import { audit, logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/washing/cut-report", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = searchParams.get("work_order") || "";
 
@@ -20,13 +22,13 @@ export async function GET(request: Request) {
     const data = await getWashingCutReport(workOrder);
     return Response.json(data);
   } catch (err: unknown) {
-    console.error("Washing Cut Report GET error:", err);
+    logger.error("Washing Cut Report GET error", err);
     const message = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: Request) {
+export const POST = withRoute("/api/washing/cut-report", async function POST(request: Request) {
   try {
     const body = (await request.json()) as SaveWashingCutReportPayload;
 
@@ -48,6 +50,7 @@ export async function POST(request: Request) {
     const userEmail = "system";
 
     const result = await saveWashingCutReport(body, userEmail);
+    audit("washing_cut_report.save", { workOrder: body.workOrder.trim(), insertedCount: result.insertedCount });
 
     return Response.json({
       success: true,
@@ -56,13 +59,13 @@ export async function POST(request: Request) {
       message: `Successfully saved ${result.insertedCount} washing cut detail row(s).`,
     });
   } catch (err: unknown) {
-    console.error("Washing Cut Report POST error:", err);
+    logger.error("Washing Cut Report POST error", err);
     const message = err instanceof Error ? err.message : "Failed to save washing cut details.";
     return Response.json({ error: message }, { status: 500 });
   }
-}
+});
 
-export async function DELETE(request: Request) {
+export const DELETE = withRoute("/api/washing/cut-report", async function DELETE(request: Request) {
   try {
     const body = (await request.json()) as { id?: unknown; workOrder?: unknown };
     const recordId = Number(body?.id);
@@ -79,10 +82,11 @@ export async function DELETE(request: Request) {
     }
 
     await softDeleteWashingCutReportRow(recordId, workOrder, "system");
+    audit("washing_cut_report.delete", { recordId, workOrder });
     return Response.json({ success: true });
   } catch (err: unknown) {
-    console.error("Washing Cut Report DELETE error:", err);
+    logger.error("Washing Cut Report DELETE error", err);
     const message = err instanceof Error ? err.message : "Failed to delete washing cut detail.";
     return Response.json({ error: message }, { status: 500 });
   }
-}
+});

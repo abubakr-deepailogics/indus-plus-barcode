@@ -8,6 +8,8 @@ import {
   IN_LIST_CHUNK_SIZE,
   type MatchedCoupon,
 } from "../shared";
+import { withRoute } from "@/lib/logger/with-route";
+import { audit, logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -130,7 +132,7 @@ async function cascadeSnapshotDeletes(
   }
 }
 
-export async function POST(request: Request) {
+export const POST = withRoute("/api/coupons/unscan-or-delete/delete", async function POST(request: Request) {
   const body = await request.json();
   const parsed = readCouponFilter(body);
   if ("error" in parsed) {
@@ -214,6 +216,7 @@ export async function POST(request: Request) {
 
         await tx.commit();
         began = false;
+        audit("coupon.bulk_delete", { filter: parsed, actedBy: by, count: total });
 
         send({
           done: total,
@@ -227,12 +230,12 @@ export async function POST(request: Request) {
         // error here can't fall back to a JSON error response/status code
         // — it goes in-band as a final line instead, same as the coupon
         // generation route.
-        console.error("Bulk coupon delete error:", err);
+        logger.error("Bulk coupon delete error", err);
         if (began) {
           // May already be aborted server-side (e.g. after a timeout) — then
           // there's nothing left to roll back.
           await tx.rollback().catch((rollbackErr) =>
-            console.error("Bulk coupon delete rollback error:", rollbackErr),
+            logger.error("Bulk coupon delete rollback error", rollbackErr),
           );
         }
         const message = err instanceof Error ? err.message : "Internal Server Error";
@@ -251,4 +254,4 @@ export async function POST(request: Request) {
   return new Response(stream, {
     headers: { "Content-Type": "application/x-ndjson" },
   });
-}
+});

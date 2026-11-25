@@ -1,5 +1,7 @@
 import { getPool, sql, ATTENDANCE_VIEW } from "@/lib/db";
 import { findDummyEmployee } from "@/features/dummy-employees/services/dummy-employees.service";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +10,7 @@ export const dynamic = "force-dynamic";
 // view has no present/absent flag, and a row's CheckInTime or CheckOutTime
 // can individually be null (a missed punch) without the day being absent,
 // so this deliberately doesn't require either column to be non-null.
-export async function GET(request: Request) {
+export const GET = withRoute("/api/workers/attendance", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code") || "";
   const date = searchParams.get("date") || "";
@@ -42,8 +44,8 @@ export async function GET(request: Request) {
 
     return Response.json({ present: result.recordset.length > 0 });
   } catch (err: unknown) {
-    console.error("Attendance check error:", err);
+    logger.error("Attendance check error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});

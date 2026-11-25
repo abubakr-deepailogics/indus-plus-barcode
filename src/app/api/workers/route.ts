@@ -6,10 +6,12 @@ import {
 } from "@/lib/db";
 import { fetchPieceRates } from "@/features/coupon-scanning/services/coupon-enrichment.service";
 import { findDummyEmployee, searchDummyEmployees } from "@/features/dummy-employees/services/dummy-employees.service";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/workers", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const query = searchParams.get("query") || "";
   const code = searchParams.get("code") || "";
@@ -135,8 +137,8 @@ export async function GET(request: Request) {
       RestrictedOperationCode: employee.operationCode,
     })), ...result.recordset].slice(0, 20));
   } catch (err: unknown) {
-    console.error("Workers API error:", err);
+    logger.error("Workers API error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});

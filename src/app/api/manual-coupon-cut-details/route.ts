@@ -4,10 +4,12 @@ import {
   type CouponDepartment,
 } from "@/lib/department-classification";
 import { listManualCouponCutDetails } from "@/features/qr-code-generation/services/manual-coupon-cut-detail.service";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(request: Request) {
+export const GET = withRoute("/api/manual-coupon-cut-details", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = (searchParams.get("work_order") || "").trim();
   const department = (searchParams.get("department") || "").trim().toLowerCase();
@@ -28,8 +30,8 @@ export async function GET(request: Request) {
     );
     return Response.json({ rows });
   } catch (error: unknown) {
-    console.error("Manual coupon cut-detail lookup failed:", error);
+    logger.error("Manual coupon cut-detail lookup failed", error);
     const message = error instanceof Error ? error.message : "Internal Server Error";
     return Response.json({ error: message }, { status: 500 });
   }
-}
+});

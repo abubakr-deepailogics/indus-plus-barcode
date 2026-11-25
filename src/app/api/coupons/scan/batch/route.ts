@@ -6,6 +6,8 @@ import {
 } from "@/features/wages/services/wage-lock.service";
 import { isCouponDepartment, type CouponDepartment } from "@/lib/department-classification";
 import { validateDummyEmployeeOperation } from "@/features/dummy-employees/services/dummy-employees.service";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -37,7 +39,7 @@ interface ScannedRecord {
 // were actually flipped) plus one join SELECT for full row detail — two
 // round trips total regardless of batch size, instead of one HTTP+DB round
 // trip per coupon.
-export async function POST(request: Request) {
+export const POST = withRoute("/api/coupons/scan/batch", async function POST(request: Request) {
   try {
     const body = await request.json();
     const codes: string[] = Array.isArray(body.barcodes)
@@ -136,8 +138,8 @@ export async function POST(request: Request) {
 
     return Response.json({ scanned, failed });
   } catch (err: unknown) {
-    console.error("Batch coupon scan error:", err);
+    logger.error("Batch coupon scan error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});

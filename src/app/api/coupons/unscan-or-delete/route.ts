@@ -1,5 +1,7 @@
 import { getPool } from "@/lib/db";
 import { readCouponFilter, findMatchingCoupons } from "./shared";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -8,7 +10,7 @@ export const dynamic = "force-dynamic";
 // actually changed. The two actions this feeds (unscan, delete) are separate
 // routes — see ./unscan/route.ts and ./delete/route.ts — each independently
 // re-matching against current DB state rather than trusting this snapshot.
-export async function GET(request: Request) {
+export const GET = withRoute("/api/coupons/unscan-or-delete", async function GET(request: Request) {
   try {
     const { searchParams } = new URL(request.url);
     const couponCodesParam = searchParams.get("couponCodes");
@@ -50,8 +52,8 @@ export async function GET(request: Request) {
       workOrderCount: new Set(matches.map((m) => m.WorkOrder)).size,
     });
   } catch (err: unknown) {
-    console.error("Coupon status lookup error:", err);
+    logger.error("Coupon status lookup error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});

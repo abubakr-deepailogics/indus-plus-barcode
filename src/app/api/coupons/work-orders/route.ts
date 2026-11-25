@@ -1,5 +1,7 @@
 import { getPool, sql, CUT_DETAIL_VIEW } from "@/lib/db";
 import { isCouponDepartment } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
@@ -48,7 +50,7 @@ async function fetchCutReportInfo(
 // - plain (or empty) work-order search: QrCode_Coupon resolves the list
 //   directly (the common, cheap case), then indusPlus is queried once more
 //   just to label those same ≤40 rows with Customer/Sale Order No.
-export async function GET(request: Request) {
+export const GET = withRoute("/api/coupons/work-orders", async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const workOrder = (searchParams.get("work_order") || "").trim();
   const customer = (searchParams.get("customer") || "").trim();
@@ -146,8 +148,8 @@ export async function GET(request: Request) {
 
     return Response.json(rows);
   } catch (err: unknown) {
-    console.error("Coupon work orders search API error:", err);
+    logger.error("Coupon work orders search API error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});

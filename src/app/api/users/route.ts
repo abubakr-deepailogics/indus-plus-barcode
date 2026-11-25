@@ -1,10 +1,12 @@
 import { requireAdminSession, AuthError } from "@/lib/require-session";
 import { createUser, listUsers } from "@/features/auth/services/users.service";
 import { isPasswordStrongEnough } from "@/lib/password";
+import { withRoute } from "@/lib/logger/with-route";
+import { audit, logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export const GET = withRoute("/api/users", async function GET() {
   try {
     await requireAdminSession();
     const users = await listUsers();
@@ -13,12 +15,12 @@ export async function GET() {
     if (err instanceof AuthError) {
       return Response.json({ error: err.message }, { status: err.status });
     }
-    console.error("list users failed", err);
+    logger.error("list users failed", err);
     return Response.json({ error: "Failed to load users." }, { status: 500 });
   }
-}
+});
 
-export async function POST(request: Request) {
+export const POST = withRoute("/api/users", async function POST(request: Request) {
   try {
     const session = await requireAdminSession();
 
@@ -47,6 +49,7 @@ export async function POST(request: Request) {
       { email, displayName, password, isAdmin: !!isAdmin },
       session.email,
     );
+    audit("user.create", { targetUserId: user.id, email, isAdmin: !!isAdmin });
     return Response.json(user, { status: 201 });
   } catch (err) {
     if (err instanceof AuthError) {
@@ -55,7 +58,7 @@ export async function POST(request: Request) {
     if (err instanceof Error && /already exists/i.test(err.message)) {
       return Response.json({ error: err.message }, { status: 409 });
     }
-    console.error("create user failed", err);
+    logger.error("create user failed", err);
     return Response.json({ error: "Failed to create user." }, { status: 500 });
   }
-}
+});

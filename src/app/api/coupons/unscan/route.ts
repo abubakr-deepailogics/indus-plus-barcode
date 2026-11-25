@@ -1,9 +1,11 @@
 import { getPool, sql } from "@/lib/db";
 import { isCouponDepartment } from "@/lib/department-classification";
+import { withRoute } from "@/lib/logger/with-route";
+import { audit, logger } from "@/lib/logger";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(request: Request) {
+export const POST = withRoute("/api/coupons/unscan", async function POST(request: Request) {
   try {
     const { couponCode, department } = await request.json();
 
@@ -42,10 +44,11 @@ export async function POST(request: Request) {
       );
     }
 
+    audit("coupon.unscan", { couponCode: couponCode.trim(), department: normalizedDepartment });
     return Response.json({ success: true, message: "Coupon successfully unscanned." });
   } catch (err: unknown) {
-    console.error("Coupon unscan error:", err);
+    logger.error("Coupon unscan error", err);
     const msg = err instanceof Error ? err.message : "Internal Server Error";
     return Response.json({ error: msg }, { status: 500 });
   }
-}
+});
