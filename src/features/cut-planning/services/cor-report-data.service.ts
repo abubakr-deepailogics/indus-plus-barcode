@@ -2,9 +2,9 @@ import { getPool, sql, cutDetailByFilter } from "@/lib/db";
 import { getCutPlanning } from "./cut-planning.service";
 import { assignSerialRanges, type CorReportBundleRow, type CorReportMeta } from "./cor-report-pdf.service";
 
-// Same generated-bundle source as /api/open-order's Cut Report branch
-// (dbo.SewingCutReport joined to dbo.BundleGeneration, active rows only),
-// plus Cut Planning's per-Cut Marker plies and indusPlus's cut-detail view
+// Same bundle source as /api/open-order's Cut Report branch: generated
+// bundles (dbo.SewingCutReport joined to dbo.BundleGeneration, active rows
+// only) when any exist, otherwise indusPlus's cut-detail view — plus Cut Planning's per-Cut Marker plies and indusPlus's cut-detail view
 // for header fields (Sale Order No, Wash, Order Qty) that Cut Report itself
 // doesn't carry on the generated-bundle row.
 export async function fetchCorReportData(
@@ -26,7 +26,7 @@ export async function fetchCorReportData(
       AND generation.IsDeleted = 0
     ORDER BY generation.BundleSequence
   `);
-  if (generatedResult.recordset.length === 0) return null;
+  const hasGeneratedBundles = generatedResult.recordset.length > 0;
 
   const [planning, indusPool] = await Promise.all([
     getCutPlanning(workOrder),
@@ -36,21 +36,33 @@ export async function fetchCorReportData(
     planning.plans.map((plan) => [String(plan.cutNo ?? "").trim().toLowerCase(), plan.markerPlies]),
   );
 
-  // A work order whose bundles were generated entirely inside Cut
-  // Planning/PIT (never imported into the ERP cut-detail view) returns zero
-  // rows here — Sale Order No/Wash have no other known source, so they stay
-  // blank in that case, but Will Cut Qty and Fabric fall back to Cut
-  // Planning's own data below rather than also going blank.
-  const cutDetailResult = await indusPool
+  // With generated bundles, the ERP cut-detail view only supplies header
+  // fields — a work order generated entirely inside Cut Planning/PIT returns
+  // zero rows there, so Sale Order No/Wash stay blank while Will Cut Qty and
+  // Fabric fall back to Cut Planning's own data below.
+  // Without generated bundles, Cut Report shows indusPlus's cut detail (same
+  // fallback as /api/open-order), so the bundles themselves come from there
+  // and a failed lookup must surface instead of reading as "no bundles".
+  const cutDetailQuery = indusPool
     .request()
     .input("wo", sql.NVarChar, workOrder)
-    .query(cutDetailByFilter("[Work Order #] = @wo"))
-    .catch(() => ({ recordset: [] as Array<Record<string, unknown>> }));
-  const firstCutDetail = cutDetailResult.recordset[0] as
+    .query(cutDetailByFilter("[Work Order #] = @wo"));
+  const cutDetailResult = hasGeneratedBundles
+    ? await cutDetailQuery.catch(() => ({ recordset: [] as Array<Record<string, unknown>> }))
+    : await cutDetailQuery;
+  const cutDetailRows = cutDetailResult.recordset as Array<Record<string, unknown>>;
+  const firstCutDetail = cutDetailRows[0] as
     | { Sale_Order_No?: string; Wash?: string; Order_Qty_After_Add?: number; Fabric_Code_Main_Body?: string }
     | undefined;
 
-  const rows: CorReportBundleRow[] = assignSerialRanges(generatedResult.recordset.map((row) => ({
+  // cutDetailByFilter numbers rows by Cut, Bundle_Id but doesn't ORDER the
+  // outer SELECT, so sort by RowId to get a stable bundle sequence.
+  const bundleSourceRows = hasGeneratedBundles
+    ? generatedResult.recordset
+    : [...cutDetailRows].sort((a, b) => Number(a.RowId ?? 0) - Number(b.RowId ?? 0));
+  if (bundleSourceRows.length === 0) return null;
+
+  const rows: CorReportBundleRow[] = assignSerialRanges(bundleSourceRows.map((row) => ({
     cutNo: String(row.Cut ?? ""),
     bundleNo: String(row.Bundle_Id ?? ""),
     size: String(row.Size ?? ""),

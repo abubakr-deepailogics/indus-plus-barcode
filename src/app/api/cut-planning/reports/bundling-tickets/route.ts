@@ -12,7 +12,7 @@ export async function GET(request: Request) {
     const data = await fetchCorReportData(workOrder);
     if (!data) {
       return Response.json(
-        { error: "No generated Cut Report bundles were found for this work order." },
+        { error: "No Cut Report bundles were found for this work order." },
         { status: 404 },
       );
     }
