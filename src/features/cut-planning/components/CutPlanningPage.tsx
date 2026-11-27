@@ -25,6 +25,7 @@ import {
 } from "@/components/work-order-search-modal";
 import { useWorkOrderParam } from "@/lib/use-work-order-param";
 import { formatBundleId, lowestFreeSequences } from "@/features/cut-planning/services/bundle-sequence";
+import { splitShadeCodes } from "@/features/cut-planning/services/shade-codes";
 import {
   DEFAULT_PLY_TYPE,
   PLY_TYPE_MAX_LENGTH,
@@ -86,10 +87,6 @@ const preventWheelChange = (event: React.WheelEvent<HTMLInputElement>) =>
   event.currentTarget.blur();
 const shortenFabricName = (value: string, limit = 30) =>
   value.length > limit ? `${value.slice(0, limit).trimEnd()}..` : value;
-const shadeCodes = (value: string) => {
-  const shade = value.trim().toUpperCase();
-  return /^[A-Z]{2,}$/.test(shade) ? [...new Set(shade)] : [shade || "UNSHADED"];
-};
 const matrixSizeColumnId = (group: CutPlanningInseamGroup, size: string) =>
   `size-${group.inseam ?? "none"}-${size}`;
 const matrixInseamBoundaryClass = (
@@ -480,7 +477,7 @@ export default function CutPlanningPage() {
       const cut = cuts.get(cutNo) ?? { transactionQty: 0, shades: new Set<string>() };
       cut.transactionQty += transactionQty;
       // Blank shades show as "—" in the Cut no. menu, not "UNSHADED".
-      if (plan.shade.trim()) shadeCodes(plan.shade).forEach((shade) => cut.shades.add(shade));
+      if (plan.shade.trim()) splitShadeCodes(plan.shade).forEach((shade) => cut.shades.add(shade));
       cuts.set(cutNo, cut);
     }
     return [...cuts.entries()]
@@ -526,7 +523,7 @@ export default function CutPlanningPage() {
   );
   const selectedShadeCodes = useMemo(() => [...new Set(plans
     .filter((plan) => plan.cutNo.trim() === selectedBundleCut)
-    .flatMap((plan) => shadeCodes(plan.shade)))], [plans, selectedBundleCut]);
+    .flatMap((plan) => splitShadeCodes(plan.shade)))], [plans, selectedBundleCut]);
   const requiresShadeSplit = selectedShadeCodes.length > 1;
   const effectiveShadeQuantities = useMemo(() =>
     selectedShadeCodes.map((shade) => ({

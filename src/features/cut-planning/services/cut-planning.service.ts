@@ -5,6 +5,7 @@ import {
   STYLE_CARD_BOM_CONSUMPTION_TABLE,
 } from "@/lib/db";
 import { formatBundleId, lowestFreeSequences } from "./bundle-sequence";
+import { splitShadeCodes } from "./shade-codes";
 import { DEFAULT_PLY_TYPE, PLY_TYPE_MAX_LENGTH } from "../types";
 import type {
   CutPlanningData,
@@ -117,11 +118,6 @@ function sortSizes(a: string, b: string) {
   const bsNumber = Number(b);
   if (Number.isFinite(asNumber) && Number.isFinite(bsNumber)) return asNumber - bsNumber;
   return a.localeCompare(b, undefined, { numeric: true });
-}
-
-function splitShadeCodes(value: unknown): string[] {
-  const shade = String(value ?? "").trim().toUpperCase();
-  return /^[A-Z]{2,}$/.test(shade) ? [...new Set(shade)] : [shade || "UNSHADED"];
 }
 
 export async function getCutPlanning(workOrder: string): Promise<CutPlanningData> {
